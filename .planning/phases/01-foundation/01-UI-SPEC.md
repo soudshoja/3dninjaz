@@ -2,8 +2,8 @@
 
 **Created:** 2026-04-12
 **Phase:** 01-foundation
-**Status:** Template A (Bold Ninja) selected
-**Selected Template:** A — Bold & Playful (Russo One + Chakra Petch, orange CTAs, rounded cards)
+**Status:** Deferred — user will provide design reference later
+**Selected Template:** None — build system/backend first, apply design when provided
 
 ---
 
