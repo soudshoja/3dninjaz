@@ -29,7 +29,13 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. User can reset a forgotten password via an emailed link
   4. Admin can create a product with name, description, multiple images, and individual prices for S, M, and L sizes
   5. Admin can edit, delete, and toggle any product active or inactive from the admin panel
-**Plans**: TBD
+**Plans:** 4 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Scaffold Next.js 15, install deps, create DB schema, configure Better Auth
+- [ ] 01-02-PLAN.md — Build auth UI (login, register, forgot/reset password), admin seed script
+- [ ] 01-03-PLAN.md — Admin layout, server actions, product list, category management
+- [ ] 01-04-PLAN.md — Product create/edit forms with Cloudinary upload and variant pricing
 
 ### Phase 2: Storefront + Cart
 **Goal**: Customers can browse products, read details, and build a cart — the full pre-purchase experience works end to end
@@ -72,7 +78,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/? | Not started | - |
+| 1. Foundation | 0/4 | Not started | - |
 | 2. Storefront + Cart | 0/? | Not started | - |
 | 3. Checkout + Orders | 0/? | Not started | - |
 | 4. Brand + Launch | 0/? | Not started | - |
