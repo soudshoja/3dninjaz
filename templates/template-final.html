@@ -1,0 +1,2384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Print Ninjaz - Kid Created, Kid Approved | 3D Printed Toys Malaysia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   RESET & BASE
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Nunito', sans-serif;
+  color: #1E293B;
+  background: #FFFFFF;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Fredoka', sans-serif;
+  line-height: 1.2;
+}
+
+a { text-decoration: none; color: inherit; }
+ul { list-style: none; }
+img { max-width: 100%; display: block; }
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  border: none;
+  border-radius: 12px;
+  padding: 14px 28px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn--primary {
+  background: linear-gradient(135deg, #22C55E, #16A34A);
+  color: #FFFFFF;
+  box-shadow: 0 4px 14px rgba(34, 197, 94, 0.35);
+}
+
+.btn--primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(34, 197, 94, 0.45);
+}
+
+.btn--secondary {
+  background: #FFFFFF;
+  color: #22C55E;
+  border: 2px solid #22C55E;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.btn--secondary:hover {
+  background: #F0FDF4;
+  transform: translateY(-2px);
+}
+
+.btn--small {
+  padding: 10px 20px;
+  font-size: 14px;
+  border-radius: 10px;
+}
+
+.btn--large {
+  padding: 18px 36px;
+  font-size: 18px;
+  border-radius: 14px;
+}
+
+/* ============================================================
+   NINJA CHARACTER SYSTEM
+   ============================================================ */
+.ninja {
+  position: relative;
+  display: inline-block;
+}
+
+/* --- Small 60px --- */
+.ninja--small {
+  width: 60px;
+  height: 60px;
+}
+.ninja--small .ninja__head {
+  width: 60px;
+  height: 60px;
+}
+.ninja--small .ninja__mask {
+  height: 18px;
+  top: 18px;
+}
+.ninja--small .ninja__eye {
+  width: 8px;
+  height: 6px;
+  top: 23px;
+}
+.ninja--small .ninja__eye--left { left: 14px; }
+.ninja--small .ninja__eye--right { right: 14px; }
+.ninja--small .ninja__body {
+  width: 40px;
+  height: 24px;
+  bottom: -20px;
+  left: 10px;
+  border-radius: 0 0 12px 12px;
+}
+
+/* --- Medium 100px --- */
+.ninja--medium {
+  width: 100px;
+  height: 100px;
+}
+.ninja--medium .ninja__head {
+  width: 100px;
+  height: 100px;
+}
+.ninja--medium .ninja__mask {
+  height: 30px;
+  top: 30px;
+}
+.ninja--medium .ninja__eye {
+  width: 14px;
+  height: 10px;
+  top: 38px;
+}
+.ninja--medium .ninja__eye--left { left: 22px; }
+.ninja--medium .ninja__eye--right { right: 22px; }
+.ninja--medium .ninja__body {
+  width: 66px;
+  height: 40px;
+  bottom: -32px;
+  left: 17px;
+  border-radius: 0 0 20px 20px;
+}
+
+/* --- Large 160px --- */
+.ninja--large {
+  width: 160px;
+  height: 160px;
+}
+.ninja--large .ninja__head {
+  width: 160px;
+  height: 160px;
+}
+.ninja--large .ninja__mask {
+  height: 48px;
+  top: 48px;
+}
+.ninja--large .ninja__eye {
+  width: 22px;
+  height: 16px;
+  top: 60px;
+}
+.ninja--large .ninja__eye--left { left: 36px; }
+.ninja--large .ninja__eye--right { right: 36px; }
+.ninja--large .ninja__body {
+  width: 106px;
+  height: 64px;
+  bottom: -52px;
+  left: 27px;
+  border-radius: 0 0 32px 32px;
+}
+
+/* Head */
+.ninja__head {
+  border-radius: 50%;
+  background: #1E293B;
+  position: relative;
+  overflow: visible;
+  z-index: 2;
+}
+
+/* Mask band */
+.ninja__mask {
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  z-index: 3;
+  border-radius: 4px;
+}
+
+/* Eyes */
+.ninja__eye {
+  position: absolute;
+  background: #FFFFFF;
+  z-index: 4;
+  border-radius: 50%;
+}
+
+/* Happy eyes - curved upward (squinting smile) */
+.ninja--happy .ninja__eye {
+  border-radius: 50% 50% 0 0;
+  height: 7px;
+}
+.ninja--happy.ninja--medium .ninja__eye { height: 10px; }
+.ninja--happy.ninja--large .ninja__eye { height: 14px; }
+
+/* Excited eyes - wide circles */
+.ninja--excited .ninja__eye {
+  border-radius: 50%;
+  transform: scale(1.3);
+}
+
+/* Thinking eyes - one raised */
+.ninja--thinking .ninja__eye--left {
+  transform: translateY(-3px) scale(1.1);
+}
+.ninja--thinking .ninja__eye--right {
+  transform: scale(0.85);
+}
+
+/* Waving - slight tilt */
+.ninja--waving .ninja__head {
+  transform: rotate(-5deg);
+}
+
+/* Body */
+.ninja__body {
+  position: absolute;
+  background: #1E293B;
+  z-index: 1;
+}
+
+/* Headband colors */
+.ninja--green .ninja__mask { background: linear-gradient(135deg, #22C55E, #16A34A); }
+.ninja--blue .ninja__mask { background: linear-gradient(135deg, #3B82F6, #2563EB); }
+.ninja--orange .ninja__mask { background: linear-gradient(135deg, #F59E0B, #D97706); }
+.ninja--purple .ninja__mask { background: linear-gradient(135deg, #A855F7, #7C3AED); }
+
+/* Headband tails */
+.ninja__mask::after {
+  content: '';
+  position: absolute;
+  right: -12px;
+  top: 30%;
+  width: 20px;
+  height: 60%;
+  border-radius: 0 8px 8px 0;
+  background: inherit;
+  opacity: 0.7;
+  transform: rotate(15deg);
+}
+.ninja__mask::before {
+  content: '';
+  position: absolute;
+  right: -8px;
+  top: 10%;
+  width: 16px;
+  height: 50%;
+  border-radius: 0 6px 6px 0;
+  background: inherit;
+  opacity: 0.5;
+  transform: rotate(25deg);
+}
+
+/* Arms */
+.ninja__arm {
+  position: absolute;
+  width: 12px;
+  height: 30px;
+  background: #1E293B;
+  border-radius: 6px;
+  z-index: 1;
+}
+.ninja--medium .ninja__arm { width: 14px; height: 36px; }
+.ninja--large .ninja__arm { width: 18px; height: 48px; }
+
+.ninja__arm--left {
+  bottom: -36px;
+  left: 0;
+  transform: rotate(25deg);
+  transform-origin: top center;
+}
+.ninja__arm--right {
+  bottom: -36px;
+  right: 0;
+  transform: rotate(-25deg);
+  transform-origin: top center;
+}
+
+.ninja--medium .ninja__arm--left { bottom: -50px; left: 6px; }
+.ninja--medium .ninja__arm--right { bottom: -50px; right: 6px; }
+.ninja--large .ninja__arm--left { bottom: -72px; left: 10px; }
+.ninja--large .ninja__arm--right { bottom: -72px; right: 10px; }
+
+/* Waving arm */
+.ninja--waving .ninja__arm--right {
+  transform: rotate(-70deg);
+}
+
+/* Celebrating / jumping */
+.ninja--celebrating .ninja__arm--left {
+  transform: rotate(50deg);
+}
+.ninja--celebrating .ninja__arm--right {
+  transform: rotate(-50deg);
+}
+.ninja--celebrating {
+  animation: celebrate-bounce 1.5s ease-in-out infinite;
+}
+@keyframes celebrate-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+/* Props */
+.ninja__prop {
+  position: absolute;
+  z-index: 5;
+}
+
+/* Magnifying glass prop */
+.ninja__prop--magnify {
+  width: 28px;
+  height: 28px;
+  border: 4px solid #64748B;
+  border-radius: 50%;
+  bottom: -44px;
+  right: -16px;
+}
+.ninja__prop--magnify::after {
+  content: '';
+  position: absolute;
+  width: 4px;
+  height: 14px;
+  background: #64748B;
+  bottom: -12px;
+  right: -2px;
+  transform: rotate(-45deg);
+  border-radius: 2px;
+}
+.ninja--medium .ninja__prop--magnify {
+  width: 34px; height: 34px; bottom: -58px; right: -20px;
+}
+.ninja--large .ninja__prop--magnify {
+  width: 44px; height: 44px; bottom: -78px; right: -24px; border-width: 5px;
+}
+
+/* Wrench prop */
+.ninja__prop--wrench {
+  width: 8px;
+  height: 32px;
+  background: #94A3B8;
+  bottom: -50px;
+  right: -10px;
+  border-radius: 3px;
+}
+.ninja__prop--wrench::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: -5px;
+  width: 18px;
+  height: 12px;
+  border: 3px solid #94A3B8;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+}
+.ninja--medium .ninja__prop--wrench {
+  width: 10px; height: 40px; bottom: -64px; right: -14px;
+}
+.ninja--medium .ninja__prop--wrench::before {
+  width: 22px; height: 14px; left: -6px; top: -8px;
+}
+
+/* Star prop */
+.ninja__prop--star {
+  bottom: -28px;
+  right: -20px;
+  font-size: 0;
+}
+.ninja__prop--star::before {
+  content: '';
+  display: block;
+  width: 24px;
+  height: 24px;
+  background: #F59E0B;
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+}
+.ninja--medium .ninja__prop--star { bottom: -38px; right: -26px; }
+.ninja--medium .ninja__prop--star::before { width: 32px; height: 32px; }
+.ninja--large .ninja__prop--star { bottom: -50px; right: -34px; }
+.ninja--large .ninja__prop--star::before { width: 44px; height: 44px; }
+
+/* ============================================================
+   FLOATING DECORATIVE SHAPES
+   ============================================================ */
+.float-shapes {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.float-shape {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.15;
+  animation: float-drift 6s ease-in-out infinite;
+}
+
+.float-shape--green { background: #22C55E; }
+.float-shape--blue { background: #38BDF8; }
+.float-shape--yellow { background: #F59E0B; }
+
+.float-shape--cube {
+  border-radius: 6px;
+  transform: rotate(45deg);
+}
+
+.float-shape--triangle {
+  border-radius: 0;
+  width: 0;
+  height: 0;
+  background: none;
+  border-left: 16px solid transparent;
+  border-right: 16px solid transparent;
+  border-bottom: 28px solid #22C55E;
+  opacity: 0.12;
+}
+
+@keyframes float-drift {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-12px) rotate(3deg); }
+  75% { transform: translateY(8px) rotate(-3deg); }
+}
+
+@keyframes float-drift-alt {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-18px) rotate(5deg); }
+}
+
+/* ============================================================
+   NAVIGATION
+   ============================================================ */
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: #FFFFFF;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.06);
+  padding: 0 24px;
+}
+
+.nav__inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 72px;
+}
+
+.nav__logo {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 700;
+  font-size: 26px;
+  color: #22C55E;
+  letter-spacing: -0.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav__logo-icon {
+  width: 36px;
+  height: 36px;
+  background: #1E293B;
+  border-radius: 50%;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.nav__logo-icon::before {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 11px;
+  background: linear-gradient(135deg, #22C55E, #16A34A);
+  top: 50%;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  left: -2px;
+  right: -2px;
+}
+.nav__logo-icon::after {
+  content: '';
+  position: absolute;
+  width: 7px;
+  height: 5px;
+  background: #FFFFFF;
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-80%, -50%);
+  box-shadow: 10px 0 0 #FFFFFF;
+  z-index: 2;
+}
+
+.nav__links {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.nav__link {
+  font-family: 'Nunito', sans-serif;
+  font-weight: 600;
+  font-size: 15px;
+  color: #475569;
+  transition: color 0.2s;
+  cursor: pointer;
+}
+
+.nav__link:hover {
+  color: #22C55E;
+}
+
+.nav__actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.nav__cart {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #F0FDF4;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.nav__cart:hover {
+  background: #DCFCE7;
+}
+
+/* CSS cart icon */
+.nav__cart-icon {
+  width: 22px;
+  height: 18px;
+  border: 2.5px solid #22C55E;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  position: relative;
+}
+.nav__cart-icon::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: -4px;
+  width: 28px;
+  height: 6px;
+  border: 2.5px solid #22C55E;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+}
+.nav__cart-icon::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 2px;
+  width: 5px;
+  height: 5px;
+  background: #22C55E;
+  border-radius: 50%;
+  box-shadow: 10px 0 0 #22C55E;
+}
+
+.nav__cart-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 20px;
+  height: 20px;
+  background: linear-gradient(135deg, #22C55E, #16A34A);
+  color: #FFFFFF;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ============================================================
+   HERO SECTION
+   ============================================================ */
+.hero {
+  position: relative;
+  padding: 80px 0 100px;
+  background: linear-gradient(180deg, #F0FDF4 0%, #ECFDF5 40%, #F8FAFC 100%);
+  overflow: hidden;
+}
+
+.hero .float-shapes .float-shape:nth-child(1) {
+  width: 180px; height: 180px; top: -40px; right: 10%; animation-delay: 0s;
+}
+.hero .float-shapes .float-shape:nth-child(2) {
+  width: 100px; height: 100px; bottom: 20%; left: 5%; animation-delay: 1s;
+}
+.hero .float-shapes .float-shape:nth-child(3) {
+  width: 60px; height: 60px; top: 30%; right: 35%; animation-delay: 2s;
+}
+.hero .float-shapes .float-shape:nth-child(4) {
+  width: 40px; height: 40px; bottom: 10%; right: 20%; animation-delay: 0.5s;
+}
+.hero .float-shapes .float-shape:nth-child(5) {
+  width: 24px; height: 24px; top: 20%; left: 15%; animation-delay: 3s;
+}
+
+.hero__inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  gap: 60px;
+  position: relative;
+  z-index: 2;
+}
+
+.hero__content {
+  flex: 1;
+}
+
+.hero__eyebrow {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  color: #22C55E;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 12px;
+}
+
+.hero__title {
+  font-size: 56px;
+  font-weight: 700;
+  color: #1E293B;
+  margin-bottom: 20px;
+  line-height: 1.1;
+}
+
+.hero__title span {
+  color: #22C55E;
+}
+
+.hero__text {
+  font-size: 18px;
+  color: #64748B;
+  margin-bottom: 32px;
+  max-width: 460px;
+  line-height: 1.7;
+}
+
+.hero__visual {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  min-height: 400px;
+}
+
+/* Hero ninja character - large, with "For Sale" tag */
+.hero__ninja-container {
+  position: relative;
+}
+
+.hero__for-sale {
+  position: absolute;
+  top: -20px;
+  right: -40px;
+  background: linear-gradient(135deg, #22C55E, #16A34A);
+  color: #FFFFFF;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  transform: rotate(12deg);
+  box-shadow: 0 4px 12px rgba(34,197,94,0.3);
+  z-index: 10;
+  white-space: nowrap;
+}
+
+/* Floating decorative cubes around hero ninja */
+.hero__deco {
+  position: absolute;
+  border-radius: 10px;
+  z-index: 1;
+}
+.hero__deco--1 {
+  width: 44px; height: 44px;
+  background: linear-gradient(135deg, #22C55E, #16A34A);
+  top: 10px; left: -60px;
+  transform: rotate(20deg);
+  opacity: 0.8;
+  animation: float-drift 5s ease-in-out infinite;
+}
+.hero__deco--2 {
+  width: 32px; height: 32px;
+  background: linear-gradient(135deg, #38BDF8, #3B82F6);
+  bottom: 40px; left: -40px;
+  transform: rotate(-15deg);
+  opacity: 0.7;
+  animation: float-drift-alt 4s ease-in-out infinite;
+  border-radius: 50%;
+}
+.hero__deco--3 {
+  width: 24px; height: 24px;
+  background: linear-gradient(135deg, #F59E0B, #D97706);
+  top: 60px; right: -50px;
+  transform: rotate(45deg);
+  opacity: 0.7;
+  animation: float-drift 6s ease-in-out infinite 1s;
+}
+.hero__deco--4 {
+  width: 56px; height: 56px;
+  background: linear-gradient(135deg, #38BDF8, #0EA5E9);
+  bottom: 0; right: -60px;
+  border-radius: 50%;
+  opacity: 0.6;
+  animation: float-drift-alt 7s ease-in-out infinite 0.5s;
+}
+
+/* "Platform" under hero ninja */
+.hero__platform {
+  position: absolute;
+  bottom: -70px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 200px;
+  height: 50px;
+  background: linear-gradient(180deg, #E2E8F0, #CBD5E1);
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+}
+.hero__platform::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 10%;
+  right: 10%;
+  height: 8px;
+  background: linear-gradient(135deg, #22C55E, #16A34A);
+  border-radius: 4px;
+}
+
+/* ============================================================
+   HOW IT WORKS
+   ============================================================ */
+.how-it-works {
+  padding: 100px 0;
+  background: #FFFFFF;
+  position: relative;
+}
+
+.section-title {
+  text-align: center;
+  font-size: 42px;
+  font-weight: 700;
+  color: #1E293B;
+  margin-bottom: 16px;
+}
+
+.section-subtitle {
+  text-align: center;
+  font-size: 18px;
+  color: #64748B;
+  margin-bottom: 60px;
+  max-width: 540px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.how-it-works__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+}
+
+.step-card {
+  background: #FFFFFF;
+  border-radius: 20px;
+  padding: 40px 28px 32px;
+  text-align: center;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  transition: transform 0.3s, box-shadow 0.3s;
+  position: relative;
+  overflow: visible;
+}
+
+.step-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.12);
+}
+
+.step-card__number {
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, #22C55E, #16A34A);
+  color: #FFFFFF;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(34,197,94,0.3);
+}
+
+.step-card__ninja {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 40px;
+  margin-top: 16px;
+  min-height: 130px;
+  align-items: flex-start;
+}
+
+.step-card__title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1E293B;
+  margin-bottom: 8px;
+}
+
+.step-card__text {
+  font-size: 15px;
+  color: #64748B;
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+
+.step-card__price {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 15px;
+  color: #22C55E;
+  margin-bottom: 20px;
+}
+
+/* ============================================================
+   CTA BANNER
+   ============================================================ */
+.cta-banner {
+  padding: 60px 0;
+  background: linear-gradient(135deg, #F0FDF4, #DCFCE7);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.cta-banner__title {
+  font-size: 36px;
+  font-weight: 700;
+  color: #1E293B;
+  margin-bottom: 8px;
+}
+
+.cta-banner__text {
+  font-size: 18px;
+  color: #64748B;
+  margin-bottom: 28px;
+}
+
+/* Small floating ninjas in CTA */
+.cta-banner__ninja-left {
+  position: absolute;
+  left: 8%;
+  bottom: 20px;
+  opacity: 0.4;
+}
+.cta-banner__ninja-right {
+  position: absolute;
+  right: 8%;
+  top: 20px;
+  opacity: 0.4;
+}
+
+/* ============================================================
+   FEATURED PRODUCTS
+   ============================================================ */
+.featured {
+  padding: 100px 0;
+  background: #FFFFFF;
+}
+
+.products-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
+  margin-top: 48px;
+}
+
+.product-card {
+  background: #FFFFFF;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.product-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+}
+
+.product-card__image {
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.product-card__image--green { background: linear-gradient(135deg, #F0FDF4, #DCFCE7); }
+.product-card__image--blue { background: linear-gradient(135deg, #EFF6FF, #DBEAFE); }
+.product-card__image--purple { background: linear-gradient(135deg, #FAF5FF, #F3E8FF); }
+.product-card__image--yellow { background: linear-gradient(135deg, #FFFBEB, #FEF3C7); }
+.product-card__image--pink { background: linear-gradient(135deg, #FFF1F2, #FFE4E6); }
+.product-card__image--teal { background: linear-gradient(135deg, #F0FDFA, #CCFBF1); }
+
+/* 3D object placeholders */
+.product-3d {
+  width: 100px;
+  height: 100px;
+  border-radius: 20px;
+  position: relative;
+}
+.product-3d--figurine {
+  background: linear-gradient(135deg, #22C55E, #16A34A);
+  border-radius: 50% 50% 20px 20px;
+  width: 70px;
+  height: 110px;
+}
+.product-3d--phone {
+  background: linear-gradient(135deg, #3B82F6, #2563EB);
+  border-radius: 14px;
+  width: 60px;
+  height: 100px;
+}
+.product-3d--phone::before {
+  content: '';
+  position: absolute;
+  top: 8px; left: 6px; right: 6px; bottom: 20px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 8px;
+}
+.product-3d--decor {
+  background: linear-gradient(135deg, #A855F7, #7C3AED);
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  width: 100px;
+  height: 100px;
+}
+.product-3d--gift {
+  background: linear-gradient(135deg, #F59E0B, #D97706);
+  border-radius: 12px;
+  width: 80px;
+  height: 80px;
+  position: relative;
+}
+.product-3d--gift::before {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 14px;
+  background: rgba(255,255,255,0.3);
+}
+.product-3d--gift::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 14px;
+  background: rgba(255,255,255,0.3);
+}
+.product-3d--robot {
+  background: linear-gradient(135deg, #38BDF8, #0EA5E9);
+  border-radius: 16px 16px 8px 8px;
+  width: 80px;
+  height: 100px;
+}
+.product-3d--robot::before {
+  content: '';
+  position: absolute;
+  top: 20px; left: 14px;
+  width: 16px; height: 16px;
+  background: #FFFFFF;
+  border-radius: 50%;
+  box-shadow: 24px 0 0 #FFFFFF;
+}
+.product-3d--dino {
+  background: linear-gradient(135deg, #F43F5E, #E11D48);
+  border-radius: 50% 50% 20px 20px;
+  width: 90px;
+  height: 100px;
+}
+
+.product-card__badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: linear-gradient(135deg, #22C55E, #16A34A);
+  color: #FFFFFF;
+  font-family: 'Fredoka', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 8px;
+}
+
+.product-card__info {
+  padding: 20px 24px 24px;
+}
+
+.product-card__name {
+  font-family: 'Fredoka', sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1E293B;
+  margin-bottom: 4px;
+}
+
+.product-card__category {
+  font-size: 13px;
+  color: #94A3B8;
+  margin-bottom: 12px;
+}
+
+.product-card__bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.product-card__price {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  color: #22C55E;
+}
+
+.product-card__price small {
+  font-size: 12px;
+  font-weight: 500;
+  color: #94A3B8;
+}
+
+.product-card__sizes {
+  display: flex;
+  gap: 6px;
+}
+
+.size-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 2px solid #E2E8F0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748B;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.size-badge:hover, .size-badge--active {
+  border-color: #22C55E;
+  color: #22C55E;
+  background: #F0FDF4;
+}
+
+.product-card__actions {
+  margin-top: 16px;
+}
+
+.product-card__actions .btn {
+  width: 100%;
+}
+
+/* ============================================================
+   CATEGORIES
+   ============================================================ */
+.categories {
+  padding: 60px 0 80px;
+  background: #F8FAFC;
+}
+
+.categories__chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 40px;
+}
+
+.category-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 28px;
+  background: #FFFFFF;
+  border-radius: 50px;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  color: #475569;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  cursor: pointer;
+  transition: all 0.3s;
+  border: 2px solid transparent;
+}
+
+.category-chip:hover {
+  border-color: #22C55E;
+  color: #22C55E;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(34,197,94,0.15);
+}
+
+.category-chip__icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.category-chip__icon--green { background: #DCFCE7; }
+.category-chip__icon--blue { background: #DBEAFE; }
+.category-chip__icon--purple { background: #F3E8FF; }
+.category-chip__icon--yellow { background: #FEF3C7; }
+.category-chip__icon--pink { background: #FFE4E6; }
+
+/* Mini shape inside chip icon */
+.chip-shape {
+  width: 14px;
+  height: 14px;
+}
+.chip-shape--figurine {
+  background: #22C55E;
+  border-radius: 50% 50% 4px 4px;
+  width: 10px;
+  height: 16px;
+}
+.chip-shape--phone {
+  background: #3B82F6;
+  border-radius: 3px;
+  width: 10px;
+  height: 16px;
+}
+.chip-shape--star {
+  background: #A855F7;
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+}
+.chip-shape--gift {
+  background: #F59E0B;
+  border-radius: 3px;
+}
+.chip-shape--custom {
+  background: #F43F5E;
+  border-radius: 50%;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #F43F5E;
+  background: transparent;
+  position: relative;
+}
+.chip-shape--custom::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px;
+  height: 4px;
+  background: #F43F5E;
+  border-radius: 50%;
+}
+
+/* ============================================================
+   AUTH / JOIN SECTION
+   ============================================================ */
+.auth {
+  padding: 80px 0;
+  background: linear-gradient(180deg, #F8FAFC, #F0FDF4);
+}
+
+.auth__card {
+  max-width: 480px;
+  margin: 0 auto;
+  background: #FFFFFF;
+  border-radius: 24px;
+  padding: 48px 40px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.08);
+  text-align: center;
+  position: relative;
+}
+
+.auth__ninja {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 32px;
+  min-height: 90px;
+}
+
+.auth__title {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1E293B;
+  margin-bottom: 8px;
+}
+
+.auth__subtitle {
+  font-size: 16px;
+  color: #64748B;
+  margin-bottom: 32px;
+}
+
+.auth__form {
+  text-align: left;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-label {
+  display: block;
+  font-weight: 600;
+  font-size: 14px;
+  color: #475569;
+  margin-bottom: 6px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 2px solid #E2E8F0;
+  border-radius: 12px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 15px;
+  color: #1E293B;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+  background: #F8FAFC;
+}
+
+.form-input:focus {
+  border-color: #22C55E;
+  box-shadow: 0 0 0 3px rgba(34,197,94,0.1);
+  background: #FFFFFF;
+}
+
+.form-input::placeholder {
+  color: #94A3B8;
+}
+
+.form-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.form-checkbox input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: #22C55E;
+  margin-top: 2px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.form-checkbox label {
+  font-size: 14px;
+  color: #64748B;
+  cursor: pointer;
+  line-height: 1.5;
+}
+
+.auth__form .btn {
+  width: 100%;
+  margin-top: 8px;
+}
+
+/* ============================================================
+   ADMIN DASHBOARD
+   ============================================================ */
+.admin {
+  padding: 80px 0;
+  background: #F8FAFC;
+}
+
+.admin__layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 28px;
+  margin-top: 48px;
+}
+
+/* Sidebar */
+.admin__sidebar {
+  background: #FFFFFF;
+  border-radius: 20px;
+  padding: 28px 20px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+  height: fit-content;
+}
+
+.admin__sidebar-title {
+  font-family: 'Fredoka', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #22C55E;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin__sidebar-subtitle {
+  font-size: 13px;
+  color: #94A3B8;
+  margin-bottom: 24px;
+}
+
+.admin__nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 15px;
+  color: #64748B;
+  margin-bottom: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.admin__nav-item:hover {
+  background: #F0FDF4;
+  color: #22C55E;
+}
+
+.admin__nav-item--active {
+  background: linear-gradient(135deg, #22C55E, #16A34A);
+  color: #FFFFFF;
+}
+
+.admin__nav-item--active:hover {
+  color: #FFFFFF;
+}
+
+.admin__nav-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Dashboard dot indicators */
+.dot-icon {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.dot-icon--green { background: #22C55E; }
+.dot-icon--blue { background: #3B82F6; }
+.dot-icon--purple { background: #A855F7; }
+.dot-icon--orange { background: #F59E0B; }
+.dot-icon--red { background: #F43F5E; }
+
+/* Main area */
+.admin__main {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* Stats row */
+.admin__stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
+.stat-card {
+  background: #FFFFFF;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+}
+
+.stat-card--green::before { background: linear-gradient(90deg, #22C55E, #16A34A); }
+.stat-card--blue::before { background: linear-gradient(90deg, #3B82F6, #2563EB); }
+.stat-card--purple::before { background: linear-gradient(90deg, #A855F7, #7C3AED); }
+.stat-card--orange::before { background: linear-gradient(90deg, #F59E0B, #D97706); }
+
+.stat-card__label {
+  font-size: 13px;
+  color: #94A3B8;
+  font-weight: 600;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-card__value {
+  font-family: 'Fredoka', sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+  color: #1E293B;
+  margin-bottom: 4px;
+}
+
+.stat-card__change {
+  font-size: 13px;
+  font-weight: 600;
+  color: #22C55E;
+}
+
+.stat-card__ninja {
+  position: absolute;
+  bottom: 8px;
+  right: 12px;
+  opacity: 0.15;
+}
+
+/* Orders table */
+.admin__orders {
+  background: #FFFFFF;
+  border-radius: 20px;
+  padding: 28px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+}
+
+.admin__orders-title {
+  font-family: 'Fredoka', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1E293B;
+  margin-bottom: 20px;
+}
+
+.orders-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.orders-table th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  color: #94A3B8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 12px 16px;
+  border-bottom: 2px solid #F1F5F9;
+}
+
+.orders-table td {
+  padding: 16px;
+  font-size: 14px;
+  color: #475569;
+  border-bottom: 1px solid #F1F5F9;
+}
+
+.orders-table tr:last-child td {
+  border-bottom: none;
+}
+
+.orders-table__id {
+  font-weight: 700;
+  color: #1E293B;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 50px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.status-badge--printing {
+  background: #DBEAFE;
+  color: #2563EB;
+}
+.status-badge--shipped {
+  background: #DCFCE7;
+  color: #16A34A;
+}
+.status-badge--pending {
+  background: #FEF3C7;
+  color: #D97706;
+}
+.status-badge--delivered {
+  background: #F0FDF4;
+  color: #22C55E;
+}
+
+.status-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+.footer {
+  background: linear-gradient(180deg, #F0FDF4, #DCFCE7);
+  padding: 60px 0 32px;
+}
+
+.footer__inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.footer__top {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 48px;
+  margin-bottom: 48px;
+}
+
+.footer__brand {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.footer__logo {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 700;
+  font-size: 24px;
+  color: #22C55E;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.footer__tagline {
+  font-size: 15px;
+  color: #64748B;
+  max-width: 280px;
+  line-height: 1.6;
+}
+
+.footer__made {
+  font-size: 14px;
+  color: #94A3B8;
+  margin-top: 8px;
+}
+
+.footer__whatsapp {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #22C55E, #16A34A);
+  color: #FFFFFF;
+  font-weight: 600;
+  font-size: 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.footer__whatsapp:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(34,197,94,0.3);
+}
+
+/* WhatsApp icon in CSS */
+.wa-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid #FFFFFF;
+  position: relative;
+}
+.wa-icon::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #FFFFFF;
+  border-radius: 50%;
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+  transform: rotate(-45deg);
+}
+
+.footer__col-title {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  color: #1E293B;
+  margin-bottom: 16px;
+}
+
+.footer__link {
+  display: block;
+  font-size: 14px;
+  color: #64748B;
+  padding: 6px 0;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.footer__link:hover {
+  color: #22C55E;
+}
+
+.footer__bottom {
+  border-top: 1px solid rgba(34,197,94,0.15);
+  padding-top: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.footer__copyright {
+  font-size: 14px;
+  color: #94A3B8;
+}
+
+.footer__social {
+  display: flex;
+  gap: 12px;
+}
+
+.footer__social-link {
+  width: 40px;
+  height: 40px;
+  background: #FFFFFF;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.footer__social-link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* Social icon shapes */
+.social-dot {
+  width: 8px;
+  height: 8px;
+  background: #22C55E;
+  border-radius: 50%;
+}
+.social-dot--square {
+  border-radius: 2px;
+}
+.social-dot--triangle {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 9px solid #22C55E;
+  background: none;
+}
+
+/* ============================================================
+   RESPONSIVE (desktop-first, 1200px target)
+   ============================================================ */
+@media (max-width: 1024px) {
+  .hero__inner { flex-direction: column; text-align: center; }
+  .hero__content { align-items: center; display: flex; flex-direction: column; }
+  .hero__text { margin-left: auto; margin-right: auto; }
+  .products-grid { grid-template-columns: repeat(2, 1fr); }
+  .admin__layout { grid-template-columns: 1fr; }
+  .admin__stats { grid-template-columns: repeat(2, 1fr); }
+  .footer__top { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 768px) {
+  .how-it-works__grid { grid-template-columns: 1fr; max-width: 400px; margin: 0 auto; }
+  .products-grid { grid-template-columns: 1fr; max-width: 400px; margin: 48px auto 0; }
+  .hero__title { font-size: 40px; }
+  .section-title { font-size: 32px; }
+  .nav__links { display: none; }
+  .admin__stats { grid-template-columns: 1fr; }
+  .footer__top { grid-template-columns: 1fr; gap: 32px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     NAVIGATION
+     ============================================================ -->
+<nav class="nav">
+  <div class="nav__inner">
+    <a href="#" class="nav__logo">
+      <span class="nav__logo-icon"></span>
+      PRINT NINJAZ
+    </a>
+    <ul class="nav__links">
+      <li><a href="#shop" class="nav__link">Shop</a></li>
+      <li><a href="#how-it-works" class="nav__link">How It Works</a></li>
+      <li><a href="#categories" class="nav__link">Categories</a></li>
+      <li><a href="#about" class="nav__link">About</a></li>
+      <li><a href="#contact" class="nav__link">Contact</a></li>
+    </ul>
+    <div class="nav__actions">
+      <a href="#" class="btn btn--primary btn--small">Custom 3D Orders</a>
+      <div class="nav__cart">
+        <div class="nav__cart-icon"></div>
+        <span class="nav__cart-count">3</span>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- ============================================================
+     HERO
+     ============================================================ -->
+<section class="hero">
+  <div class="float-shapes">
+    <div class="float-shape float-shape--green"></div>
+    <div class="float-shape float-shape--blue"></div>
+    <div class="float-shape float-shape--green float-shape--cube"></div>
+    <div class="float-shape float-shape--blue"></div>
+    <div class="float-shape float-shape--yellow float-shape--cube"></div>
+  </div>
+
+  <div class="hero__inner">
+    <div class="hero__content">
+      <div class="hero__eyebrow">Order Yours Today</div>
+      <h1 class="hero__title">Kid Created,<br><span>Kid Approved</span></h1>
+      <p class="hero__text">We 3D print awesome toys and take custom orders just for you! Made right here in Malaysia with love.</p>
+      <a href="#" class="btn btn--primary btn--large">Custom 3D Orders</a>
+    </div>
+
+    <div class="hero__visual">
+      <div class="hero__ninja-container">
+        <!-- Large green ninja - hero character -->
+        <div class="ninja ninja--large ninja--green ninja--excited" style="position:relative; z-index:3;">
+          <div class="ninja__head">
+            <div class="ninja__mask"></div>
+            <div class="ninja__eye ninja__eye--left"></div>
+            <div class="ninja__eye ninja__eye--right"></div>
+          </div>
+          <div class="ninja__body"></div>
+          <div class="ninja__arm ninja__arm--left"></div>
+          <div class="ninja__arm ninja__arm--right"></div>
+        </div>
+
+        <div class="hero__for-sale">For Sale!</div>
+
+        <!-- Floating deco shapes -->
+        <div class="hero__deco hero__deco--1"></div>
+        <div class="hero__deco hero__deco--2"></div>
+        <div class="hero__deco hero__deco--3"></div>
+        <div class="hero__deco hero__deco--4"></div>
+
+        <div class="hero__platform"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     HOW IT WORKS
+     ============================================================ -->
+<section class="how-it-works" id="how-it-works">
+  <div class="container">
+    <h2 class="section-title">How It Works</h2>
+    <p class="section-subtitle">Getting your dream 3D printed toy is super easy! Just 3 simple steps.</p>
+
+    <div class="how-it-works__grid">
+      <!-- Card 1: Browse -->
+      <div class="step-card">
+        <span class="step-card__number">1</span>
+        <div class="step-card__ninja">
+          <div class="ninja ninja--medium ninja--green ninja--thinking" style="position:relative;">
+            <div class="ninja__head">
+              <div class="ninja__mask"></div>
+              <div class="ninja__eye ninja__eye--left"></div>
+              <div class="ninja__eye ninja__eye--right"></div>
+            </div>
+            <div class="ninja__body"></div>
+            <div class="ninja__arm ninja__arm--left"></div>
+            <div class="ninja__arm ninja__arm--right"></div>
+            <div class="ninja__prop ninja__prop--magnify"></div>
+          </div>
+        </div>
+        <h3 class="step-card__title">Browse Our Products</h3>
+        <p class="step-card__text">Check out our awesome collection of 3D printed toys, figurines, and cool stuff!</p>
+        <p class="step-card__price">from MYR 5.00</p>
+        <a href="#" class="btn btn--primary btn--small">See More</a>
+      </div>
+
+      <!-- Card 2: We Print It -->
+      <div class="step-card">
+        <span class="step-card__number">2</span>
+        <div class="step-card__ninja">
+          <div class="ninja ninja--medium ninja--blue ninja--happy" style="position:relative;">
+            <div class="ninja__head">
+              <div class="ninja__mask"></div>
+              <div class="ninja__eye ninja__eye--left"></div>
+              <div class="ninja__eye ninja__eye--right"></div>
+            </div>
+            <div class="ninja__body"></div>
+            <div class="ninja__arm ninja__arm--left"></div>
+            <div class="ninja__arm ninja__arm--right"></div>
+            <div class="ninja__prop ninja__prop--wrench"></div>
+          </div>
+        </div>
+        <h3 class="step-card__title">We Print It For You</h3>
+        <p class="step-card__text">We'll 3D print it for you with care using the best materials. Quality guaranteed!</p>
+        <p class="step-card__price">from MYR 8.50</p>
+        <a href="#" class="btn btn--primary btn--small">See More</a>
+      </div>
+
+      <!-- Card 3: You Play! -->
+      <div class="step-card">
+        <span class="step-card__number">3</span>
+        <div class="step-card__ninja">
+          <div class="ninja ninja--medium ninja--orange ninja--celebrating ninja--excited" style="position:relative;">
+            <div class="ninja__head">
+              <div class="ninja__mask"></div>
+              <div class="ninja__eye ninja__eye--left"></div>
+              <div class="ninja__eye ninja__eye--right"></div>
+            </div>
+            <div class="ninja__body"></div>
+            <div class="ninja__arm ninja__arm--left"></div>
+            <div class="ninja__arm ninja__arm--right"></div>
+            <div class="ninja__prop ninja__prop--star"></div>
+          </div>
+        </div>
+        <h3 class="step-card__title">You Play!</h3>
+        <p class="step-card__text">Receive your awesome toy and start playing! Show it off to your friends!</p>
+        <p class="step-card__price">from MYR 3.00</p>
+        <a href="#" class="btn btn--primary btn--small">See More</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     CTA BANNER
+     ============================================================ -->
+<section class="cta-banner">
+  <div class="cta-banner__ninja-left">
+    <div class="ninja ninja--small ninja--green ninja--happy">
+      <div class="ninja__head">
+        <div class="ninja__mask"></div>
+        <div class="ninja__eye ninja__eye--left"></div>
+        <div class="ninja__eye ninja__eye--right"></div>
+      </div>
+    </div>
+  </div>
+  <div class="cta-banner__ninja-right">
+    <div class="ninja ninja--small ninja--blue ninja--excited">
+      <div class="ninja__head">
+        <div class="ninja__mask"></div>
+        <div class="ninja__eye ninja__eye--left"></div>
+        <div class="ninja__eye ninja__eye--right"></div>
+      </div>
+    </div>
+  </div>
+  <div class="container">
+    <h2 class="cta-banner__title">Ready to get your own custom toy?</h2>
+    <p class="cta-banner__text">Tell us what you want and we'll make it real with our 3D printers!</p>
+    <a href="#shop" class="btn btn--primary btn--large">Browse Our Products</a>
+  </div>
+</section>
+
+<!-- ============================================================
+     FEATURED PRODUCTS
+     ============================================================ -->
+<section class="featured" id="shop">
+  <div class="container">
+    <h2 class="section-title">Featured Products</h2>
+    <p class="section-subtitle">Check out what other kids are loving right now!</p>
+
+    <div class="products-grid">
+      <!-- Product 1 -->
+      <div class="product-card">
+        <div class="product-card__image product-card__image--green">
+          <div class="product-3d product-3d--figurine"></div>
+          <span class="product-card__badge">New</span>
+        </div>
+        <div class="product-card__info">
+          <h3 class="product-card__name">Ninja Warrior</h3>
+          <p class="product-card__category">Figurines</p>
+          <div class="product-card__bottom">
+            <span class="product-card__price"><small>from </small>MYR 15.00</span>
+            <div class="product-card__sizes">
+              <span class="size-badge size-badge--active">S</span>
+              <span class="size-badge">M</span>
+              <span class="size-badge">L</span>
+            </div>
+          </div>
+          <div class="product-card__actions">
+            <a href="#" class="btn btn--primary btn--small">Add to Cart</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Product 2 -->
+      <div class="product-card">
+        <div class="product-card__image product-card__image--blue">
+          <div class="product-3d product-3d--phone"></div>
+        </div>
+        <div class="product-card__info">
+          <h3 class="product-card__name">Phone Stand</h3>
+          <p class="product-card__category">Phone Stuff</p>
+          <div class="product-card__bottom">
+            <span class="product-card__price"><small>from </small>MYR 12.00</span>
+            <div class="product-card__sizes">
+              <span class="size-badge size-badge--active">S</span>
+              <span class="size-badge">M</span>
+            </div>
+          </div>
+          <div class="product-card__actions">
+            <a href="#" class="btn btn--primary btn--small">Add to Cart</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Product 3 -->
+      <div class="product-card">
+        <div class="product-card__image product-card__image--purple">
+          <div class="product-3d product-3d--decor"></div>
+          <span class="product-card__badge">Popular</span>
+        </div>
+        <div class="product-card__info">
+          <h3 class="product-card__name">Star Lamp</h3>
+          <p class="product-card__category">Room Decor</p>
+          <div class="product-card__bottom">
+            <span class="product-card__price"><small>from </small>MYR 25.00</span>
+            <div class="product-card__sizes">
+              <span class="size-badge size-badge--active">S</span>
+              <span class="size-badge">M</span>
+              <span class="size-badge">L</span>
+            </div>
+          </div>
+          <div class="product-card__actions">
+            <a href="#" class="btn btn--primary btn--small">Add to Cart</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Product 4 -->
+      <div class="product-card">
+        <div class="product-card__image product-card__image--yellow">
+          <div class="product-3d product-3d--gift"></div>
+        </div>
+        <div class="product-card__info">
+          <h3 class="product-card__name">Mystery Box</h3>
+          <p class="product-card__category">Cool Gifts</p>
+          <div class="product-card__bottom">
+            <span class="product-card__price"><small>from </small>MYR 20.00</span>
+            <div class="product-card__sizes">
+              <span class="size-badge size-badge--active">M</span>
+              <span class="size-badge">L</span>
+            </div>
+          </div>
+          <div class="product-card__actions">
+            <a href="#" class="btn btn--primary btn--small">Add to Cart</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Product 5 -->
+      <div class="product-card">
+        <div class="product-card__image product-card__image--teal">
+          <div class="product-3d product-3d--robot"></div>
+          <span class="product-card__badge">Cool</span>
+        </div>
+        <div class="product-card__info">
+          <h3 class="product-card__name">Mini Robot</h3>
+          <p class="product-card__category">Figurines</p>
+          <div class="product-card__bottom">
+            <span class="product-card__price"><small>from </small>MYR 18.00</span>
+            <div class="product-card__sizes">
+              <span class="size-badge size-badge--active">S</span>
+              <span class="size-badge">M</span>
+              <span class="size-badge">L</span>
+            </div>
+          </div>
+          <div class="product-card__actions">
+            <a href="#" class="btn btn--primary btn--small">Add to Cart</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Product 6 -->
+      <div class="product-card">
+        <div class="product-card__image product-card__image--pink">
+          <div class="product-3d product-3d--dino"></div>
+        </div>
+        <div class="product-card__info">
+          <h3 class="product-card__name">Baby Dino</h3>
+          <p class="product-card__category">Figurines</p>
+          <div class="product-card__bottom">
+            <span class="product-card__price"><small>from </small>MYR 22.00</span>
+            <div class="product-card__sizes">
+              <span class="size-badge">S</span>
+              <span class="size-badge size-badge--active">M</span>
+              <span class="size-badge">L</span>
+            </div>
+          </div>
+          <div class="product-card__actions">
+            <a href="#" class="btn btn--primary btn--small">Add to Cart</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     CATEGORIES
+     ============================================================ -->
+<section class="categories" id="categories">
+  <div class="container">
+    <h2 class="section-title">Shop by Category</h2>
+    <p class="section-subtitle">Find exactly what you're looking for!</p>
+
+    <div class="categories__chips">
+      <a href="#" class="category-chip">
+        <span class="category-chip__icon category-chip__icon--green"><span class="chip-shape chip-shape--figurine"></span></span>
+        Figurines
+      </a>
+      <a href="#" class="category-chip">
+        <span class="category-chip__icon category-chip__icon--blue"><span class="chip-shape chip-shape--phone"></span></span>
+        Phone Stuff
+      </a>
+      <a href="#" class="category-chip">
+        <span class="category-chip__icon category-chip__icon--purple"><span class="chip-shape chip-shape--star"></span></span>
+        Room Decor
+      </a>
+      <a href="#" class="category-chip">
+        <span class="category-chip__icon category-chip__icon--yellow"><span class="chip-shape chip-shape--gift"></span></span>
+        Cool Gifts
+      </a>
+      <a href="#" class="category-chip">
+        <span class="category-chip__icon category-chip__icon--pink"><span class="chip-shape chip-shape--custom"></span></span>
+        Custom Orders
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     AUTH / JOIN
+     ============================================================ -->
+<section class="auth" id="join">
+  <div class="container">
+    <div class="auth__card">
+      <div class="auth__ninja">
+        <div class="ninja ninja--medium ninja--purple ninja--waving ninja--happy" style="position:relative;">
+          <div class="ninja__head">
+            <div class="ninja__mask"></div>
+            <div class="ninja__eye ninja__eye--left"></div>
+            <div class="ninja__eye ninja__eye--right"></div>
+          </div>
+          <div class="ninja__body"></div>
+          <div class="ninja__arm ninja__arm--left"></div>
+          <div class="ninja__arm ninja__arm--right"></div>
+        </div>
+      </div>
+
+      <h2 class="auth__title">Join the Ninja Squad!</h2>
+      <p class="auth__subtitle">Create your account and start collecting awesome 3D printed stuff.</p>
+
+      <div class="auth__form">
+        <div class="form-group">
+          <label class="form-label" for="email">Email</label>
+          <input type="email" id="email" class="form-input" placeholder="your.email@example.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="password">Password</label>
+          <input type="password" id="password" class="form-input" placeholder="Make it a strong one!">
+        </div>
+        <div class="form-checkbox">
+          <input type="checkbox" id="pdpa">
+          <label for="pdpa">I'm cool with the rules (PDPA compliance). I agree to the Terms of Service and Privacy Policy.</label>
+        </div>
+        <a href="#" class="btn btn--primary btn--large">Join Now</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     ADMIN DASHBOARD
+     ============================================================ -->
+<section class="admin" id="admin">
+  <div class="container">
+    <h2 class="section-title">Admin Dashboard</h2>
+    <p class="section-subtitle">Ninja HQ - Where the magic happens behind the scenes.</p>
+
+    <div class="admin__layout">
+      <!-- Sidebar -->
+      <aside class="admin__sidebar">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+          <div class="ninja ninja--small ninja--green ninja--happy" style="transform:scale(0.5); transform-origin:left center;">
+            <div class="ninja__head">
+              <div class="ninja__mask"></div>
+              <div class="ninja__eye ninja__eye--left"></div>
+              <div class="ninja__eye ninja__eye--right"></div>
+            </div>
+          </div>
+        </div>
+        <h3 class="admin__sidebar-title">Ninja HQ</h3>
+        <p class="admin__sidebar-subtitle">Command Center</p>
+
+        <div class="admin__nav-item admin__nav-item--active">
+          <span class="dot-icon dot-icon--green"></span>
+          Dashboard
+        </div>
+        <div class="admin__nav-item">
+          <span class="dot-icon dot-icon--blue"></span>
+          Orders
+        </div>
+        <div class="admin__nav-item">
+          <span class="dot-icon dot-icon--purple"></span>
+          Products
+        </div>
+        <div class="admin__nav-item">
+          <span class="dot-icon dot-icon--orange"></span>
+          Customers
+        </div>
+        <div class="admin__nav-item">
+          <span class="dot-icon dot-icon--red"></span>
+          Settings
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <div class="admin__main">
+        <!-- Stats -->
+        <div class="admin__stats">
+          <div class="stat-card stat-card--green">
+            <p class="stat-card__label">Total Orders</p>
+            <p class="stat-card__value">142</p>
+            <p class="stat-card__change">+12% this week</p>
+            <div class="stat-card__ninja">
+              <div class="ninja ninja--small ninja--green ninja--happy" style="transform:scale(0.7);">
+                <div class="ninja__head">
+                  <div class="ninja__mask"></div>
+                  <div class="ninja__eye ninja__eye--left"></div>
+                  <div class="ninja__eye ninja__eye--right"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="stat-card stat-card--blue">
+            <p class="stat-card__label">Revenue</p>
+            <p class="stat-card__value">MYR 4,280</p>
+            <p class="stat-card__change">+8% this week</p>
+            <div class="stat-card__ninja">
+              <div class="ninja ninja--small ninja--blue ninja--excited" style="transform:scale(0.7);">
+                <div class="ninja__head">
+                  <div class="ninja__mask"></div>
+                  <div class="ninja__eye ninja__eye--left"></div>
+                  <div class="ninja__eye ninja__eye--right"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="stat-card stat-card--purple">
+            <p class="stat-card__label">Products</p>
+            <p class="stat-card__value">38</p>
+            <p class="stat-card__change">+3 new</p>
+            <div class="stat-card__ninja">
+              <div class="ninja ninja--small ninja--purple ninja--thinking" style="transform:scale(0.7);">
+                <div class="ninja__head">
+                  <div class="ninja__mask"></div>
+                  <div class="ninja__eye ninja__eye--left"></div>
+                  <div class="ninja__eye ninja__eye--right"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="stat-card stat-card--orange">
+            <p class="stat-card__label">Happy Ninjas</p>
+            <p class="stat-card__value">89</p>
+            <p class="stat-card__change">+15 new</p>
+            <div class="stat-card__ninja">
+              <div class="ninja ninja--small ninja--orange ninja--happy" style="transform:scale(0.7);">
+                <div class="ninja__head">
+                  <div class="ninja__mask"></div>
+                  <div class="ninja__eye ninja__eye--left"></div>
+                  <div class="ninja__eye ninja__eye--right"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Orders table -->
+        <div class="admin__orders">
+          <h3 class="admin__orders-title">Recent Orders</h3>
+          <table class="orders-table">
+            <thead>
+              <tr>
+                <th>Order ID</th>
+                <th>Customer</th>
+                <th>Product</th>
+                <th>Amount</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="orders-table__id">#NJ-1042</span></td>
+                <td>Ahmad R.</td>
+                <td>Ninja Warrior (M)</td>
+                <td>MYR 18.00</td>
+                <td><span class="status-badge status-badge--printing"><span class="status-badge__dot"></span>Printing</span></td>
+              </tr>
+              <tr>
+                <td><span class="orders-table__id">#NJ-1041</span></td>
+                <td>Sarah L.</td>
+                <td>Star Lamp (L)</td>
+                <td>MYR 35.00</td>
+                <td><span class="status-badge status-badge--shipped"><span class="status-badge__dot"></span>Shipped</span></td>
+              </tr>
+              <tr>
+                <td><span class="orders-table__id">#NJ-1040</span></td>
+                <td>Wei Ming</td>
+                <td>Custom Robot</td>
+                <td>MYR 45.00</td>
+                <td><span class="status-badge status-badge--pending"><span class="status-badge__dot"></span>Pending</span></td>
+              </tr>
+              <tr>
+                <td><span class="orders-table__id">#NJ-1039</span></td>
+                <td>Aisyah K.</td>
+                <td>Baby Dino (S)</td>
+                <td>MYR 22.00</td>
+                <td><span class="status-badge status-badge--delivered"><span class="status-badge__dot"></span>Delivered</span></td>
+              </tr>
+              <tr>
+                <td><span class="orders-table__id">#NJ-1038</span></td>
+                <td>Rajan P.</td>
+                <td>Phone Stand (M)</td>
+                <td>MYR 15.00</td>
+                <td><span class="status-badge status-badge--delivered"><span class="status-badge__dot"></span>Delivered</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     FOOTER
+     ============================================================ -->
+<footer class="footer" id="contact">
+  <div class="footer__inner">
+    <div class="footer__top">
+      <div class="footer__brand">
+        <span class="footer__logo">
+          <span class="nav__logo-icon"></span>
+          PRINT NINJAZ
+        </span>
+        <p class="footer__tagline">We 3D print awesome toys, figurines, and custom creations for kids in Malaysia. Kid created, kid approved!</p>
+        <p class="footer__made">Made with love in Malaysia</p>
+        <a href="#" class="footer__whatsapp">
+          <span class="wa-icon"></span>
+          Chat on WhatsApp
+        </a>
+      </div>
+      <div>
+        <h4 class="footer__col-title">Shop</h4>
+        <a href="#" class="footer__link">All Products</a>
+        <a href="#" class="footer__link">Figurines</a>
+        <a href="#" class="footer__link">Phone Stuff</a>
+        <a href="#" class="footer__link">Room Decor</a>
+        <a href="#" class="footer__link">Custom Orders</a>
+      </div>
+      <div>
+        <h4 class="footer__col-title">Company</h4>
+        <a href="#" class="footer__link">About Us</a>
+        <a href="#" class="footer__link">How It Works</a>
+        <a href="#" class="footer__link">Contact</a>
+        <a href="#" class="footer__link">FAQ</a>
+      </div>
+      <div>
+        <h4 class="footer__col-title">Legal</h4>
+        <a href="#" class="footer__link">Privacy Policy</a>
+        <a href="#" class="footer__link">Terms of Service</a>
+        <a href="#" class="footer__link">PDPA Notice</a>
+        <a href="#" class="footer__link">Refund Policy</a>
+      </div>
+    </div>
+
+    <div class="footer__bottom">
+      <p class="footer__copyright">Copyright 2026 Print Ninjaz. All rights reserved.</p>
+      <div class="footer__social">
+        <a href="#" class="footer__social-link"><span class="social-dot"></span></a>
+        <a href="#" class="footer__social-link"><span class="social-dot social-dot--square"></span></a>
+        <a href="#" class="footer__social-link"><span class="social-dot social-dot--triangle"></span></a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
