@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Package, FolderOpen } from "lucide-react";
+import { LayoutDashboard, Package, FolderOpen, Receipt } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
@@ -14,6 +14,7 @@ const items = [
     icon: FolderOpen,
     exact: false,
   },
+  { href: "/admin/orders", label: "Orders", icon: Receipt, exact: false },
 ];
 
 export function SidebarNav() {
