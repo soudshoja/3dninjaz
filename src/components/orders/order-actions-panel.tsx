@@ -1,6 +1,6 @@
 import { CancelRequestButton } from "@/components/orders/cancel-request-button";
 import { ReturnRequestButton } from "@/components/orders/return-request-button";
-import { RETURN_WINDOW_MS } from "@/actions/order-requests";
+import { RETURN_WINDOW_MS } from "@/lib/order-windows";
 
 /**
  * Phase 6 06-06 — server-side eligibility gate for the cancel + return

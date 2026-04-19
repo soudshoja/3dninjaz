@@ -24,9 +24,7 @@ import { orderRequests, orders } from "@/lib/db/schema";
 import { orderRequestSchema } from "@/lib/validators";
 import { requireUser } from "@/lib/auth-helpers";
 
-// 14 days from delivery (Q-06-05). Counted from orders.updatedAt at the time
-// of the delivered transition.
-export const RETURN_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+import { RETURN_WINDOW_MS } from "@/lib/order-windows";
 
 export type OrderRequestRow = {
   id: string;
