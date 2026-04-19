@@ -6,7 +6,7 @@
 <domain>
 ## Phase Boundary
 
-This phase delivers the project scaffold (Next.js 15 + Drizzle + Neon + Better Auth), the complete database schema with per-variant pricing, user authentication with admin/customer roles, and admin product CRUD with Cloudinary image upload. After this phase, admin can manage products and users can create accounts.
+This phase delivers the project scaffold (Next.js 15 + Drizzle + cPanel MySQL + Better Auth + cPanel SMTP), the complete database schema with per-variant pricing, user authentication with admin/customer roles, and admin product CRUD with local filesystem image upload (served from `public/uploads/`). After this phase, admin can manage products and users can create accounts.
 
 </domain>
 
@@ -66,9 +66,10 @@ This phase delivers the project scaffold (Next.js 15 + Drizzle + Neon + Better A
 - None yet — this phase establishes the foundational patterns
 
 ### Integration Points
-- Neon PostgreSQL connection via Drizzle ORM
-- Better Auth integration with Drizzle adapter
-- Cloudinary SDK for image uploads
+- cPanel MySQL connection via Drizzle ORM (mysql2 driver)
+- Better Auth integration with Drizzle MySQL adapter
+- Local filesystem image storage under `public/uploads/products/<id>/` (Cloudinary retired)
+- Nodemailer SMTP transport against cPanel mailbox (Resend retired)
 - Next.js 15 App Router route groups: `(store)`, `(auth)`, `(admin)`
 
 </code_context>
@@ -77,7 +78,7 @@ This phase delivers the project scaffold (Next.js 15 + Drizzle + Neon + Better A
 ## Specific Ideas
 
 - **3 design templates required:** Before any coding begins, use `/ui-ux-pro-max` to generate 3 complete template options covering store theme (colors, typography, overall feel), admin dashboard layout, and customer-facing homepage layout. User selects preferred template before implementation starts.
-- **Print Ninjaz branding:** Ninja-themed, green/blue/black color scheme, logo at `logo.jpeg` in project root
+- **3D Ninjaz branding:** Ninja-themed, green/blue/black color scheme, logo at `public/logo.png`
 - **Shopify-style simplicity:** Admin and auth flows should feel clean and simple like Shopify — not complex enterprise UI
 - **Malaysia context:** English language, MYR currency references where applicable
 

@@ -89,6 +89,17 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [ ] **REPORT-01**: Admin dashboard at `/admin` shows revenue, order count, top products, and conversion funnel for 7/30/90 day windows
 
+### Customer Account (Phase 6)
+
+- [ ] **CUST-01**: Logged-in user can open `/account` and see name, email, join date, total order count, and a loyalty-points placeholder card (zero points in v1)
+- [ ] **CUST-02**: User can change email (with Better Auth verification flow) and change password (with current-password challenge) from `/account/security`
+- [ ] **CUST-03**: User can create, edit, delete, and mark-default saved shipping addresses; addresses surface as a dropdown on `/checkout`
+- [ ] **CUST-04**: User can add a product to a wishlist from PDP and shop grid, view all wishlisted items on `/account/wishlist`, remove from wishlist, and add-to-bag from the wishlist page
+- [ ] **CUST-05**: User who has bought a product (order status paid/processing/shipped/delivered) can submit a 1-5 star rating + text review; reviews enter the Phase 5 admin moderation queue with `pending` status and appear on the product detail page once approved
+- [ ] **CUST-06**: User can download a PDF invoice (`/orders/[id]/invoice.pdf`) for any of their orders, rendered server-side via `@react-pdf/renderer` with order details + business footer
+- [ ] **CUST-07**: User can submit a cancel request (if status ∈ pending/paid and not shipped) or a return request (if status=delivered and within 14 days of delivery) via a textarea reason; admin sees the pending request on `/admin/orders/[id]` and can approve or reject
+- [ ] **CUST-08**: User can close their account via `/account/close`; closure anonymizes email, marks `deletedAt`, invalidates sessions, and preserves orders per PDPA retention (D-06 7y)
+
 ### Trust & Brand
 
 - [x] **BRAND-01**: Site uses Print Ninjaz branding (logo, ninja theme, green/blue/black colors)
@@ -122,8 +133,8 @@ Deferred to future release. Tracked but not in current roadmap.
 
 ### Social Features
 
-- **SOC-01**: User can leave reviews/ratings on products (storefront submission UI; admin moderation already shipped in Phase 5)
-- **SOC-02**: User can add products to wishlist
+- ~~**SOC-01**: User can leave reviews/ratings on products~~ → Covered by CUST-05 (Phase 6)
+- ~~**SOC-02**: User can add products to wishlist~~ → Covered by CUST-04 (Phase 6)
 
 ## Out of Scope
 
@@ -142,10 +153,14 @@ Explicitly excluded. Documented to prevent scope creep.
 | Subscription/recurring orders | Irrelevant for made-to-order 3D printed goods |
 | B2B/wholesale pricing | Out of scope for basic B2C store |
 | Product comparison | Premature for small catalog |
-| Returns management system | Handle manually via WhatsApp/email; document policy on static page |
-| Customer-side review submission UI | Deferred to future phase (Phase 5 ships admin moderation + schema only) |
+| ~~Returns management system~~ | Phase 6 CUST-07 ships customer cancel/return requests + admin approve-reject |
+| ~~Customer-side review submission UI~~ | Phase 6 CUST-05 ships buyer-gated review submission on /orders/[id] |
 | Coupon stacking | One coupon per order in v1 |
 | Shipping label printing / tracking numbers | Manual dispatch in v1 |
+| Loyalty points accrual engine | UI placeholder only in CUST-01; engine deferred to a future phase |
+| Review editing by customer | Submit-once policy; admin moderation is the only mutation path |
+| Wishlist sharing / public URLs | Private account-scoped only in v1 |
+| Auto-refund via PayPal API on approved cancel | Admin handles refund out-of-band in PayPal dashboard in v1 |
 
 ## Traceability
 
@@ -199,6 +214,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SHIP-01 | Phase 5 | Pending |
 | SETTINGS-01 | Phase 5 | Pending |
 | REPORT-01 | Phase 5 | Pending |
+| CUST-01 | Phase 6 | Pending |
+| CUST-02 | Phase 6 | Pending |
+| CUST-03 | Phase 6 | Pending |
+| CUST-04 | Phase 6 | Pending |
+| CUST-05 | Phase 6 | Pending |
+| CUST-06 | Phase 6 | Pending |
+| CUST-07 | Phase 6 | Pending |
+| CUST-08 | Phase 6 | Pending |
 | BRAND-01 | Phase 4 | Complete |
 | BRAND-02 | Phase 4 | Complete |
 | BRAND-03 | Phase 4 | Complete |
@@ -209,10 +232,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RESP-03 | Phase 4 | Complete |
 
 **Coverage:**
-- v1 requirements: 54 total (37 original + 17 Phase 5 additions)
-- Mapped to phases: 54
+- v1 requirements: 62 total (37 original + 17 Phase 5 additions + 8 Phase 6 additions)
+- Mapped to phases: 62
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-12*
-*Last updated: 2026-04-16 — Phase 5 requirements added (ADM-07..15, PROMO, INV, REV, SHIP, SETTINGS, REPORT)*
+*Last updated: 2026-04-16 — Phase 6 requirements added (CUST-01..CUST-08)*

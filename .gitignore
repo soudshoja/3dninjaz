@@ -45,3 +45,25 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local dev artifacts (screenshots, deploy scripts, playwright logs)
+/.playwright-mcp/
+/_deploy/
+/deploy-v1.tar.gz
+/coming-soon.zip
+/basilisa-*.png
+/coming-soon-*.png
+/coming-soon.zip
+/demo-*.png
+/demo-v2-*.png
+/live-*.png
+/dev.log
+# SEO audit reports (regenerate on demand)
+/seo-audit-*.md
+/seo-baseline-report.md
+# Raw image assets (use /public/ instead)
+/logo.jpeg
+/logo.png
+/logopng.png
+/ninjalogo.jpeg
+/example.jpeg
