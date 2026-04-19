@@ -10,6 +10,12 @@
   --font-sans: var(--font-body);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-heading);
+  /* Unified 3D Ninjaz palette — D-01 (Phase 2 DECISIONS.md). Mirrors src/lib/brand.ts. */
+  --color-brand-blue: var(--brand-blue);
+  --color-brand-green: var(--brand-green);
+  --color-brand-purple: var(--brand-purple);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-cream: var(--brand-cream);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,18 +55,29 @@
 }
 
 :root {
-  /* Template A: Bold Ninja color palette */
-  --color-brand-primary: #1B6B2F;
-  --color-brand-primary-light: #22C55E;
-  --color-brand-secondary: #1E40AF;
-  --color-brand-secondary-light: #3B82F6;
-  --color-brand-cta: #F97316;
-  --color-brand-surface: #F0FDF4;
-  --color-brand-text-primary: #0F172A;
+  /* Unified 3D Ninjaz palette — D-01 (Phase 2 DECISIONS.md).
+     Single source of truth across storefront AND admin surfaces.
+     Keep these in lockstep with src/lib/brand.ts. */
+  --brand-blue: #2563EB;
+  --brand-green: #84CC16;
+  --brand-purple: #8B5CF6;
+  --brand-ink: #0B1020;
+  --brand-cream: #F7FAF4;
+
+  /* Legacy aliases kept so Phase 1 admin components that reference
+     var(--color-brand-*) continue to render while we migrate them.
+     Primary→ink (dark action), CTA→green, Surface→cream, etc. */
+  --color-brand-primary: var(--brand-ink);
+  --color-brand-primary-light: var(--brand-green);
+  --color-brand-secondary: var(--brand-blue);
+  --color-brand-secondary-light: var(--brand-purple);
+  --color-brand-cta: var(--brand-green);
+  --color-brand-surface: var(--brand-cream);
+  --color-brand-text-primary: var(--brand-ink);
   --color-brand-text-muted: #475569;
   --color-brand-border: #E2E8F0;
   --color-brand-danger: #EF4444;
-  --color-brand-success: #22C55E;
+  --color-brand-success: var(--brand-green);
 
   /* shadcn defaults */
   --background: oklch(1 0 0);
