@@ -1,0 +1,224 @@
+import { redirect, notFound } from "next/navigation";
+import Link from "next/link";
+import { getSessionUser } from "@/lib/auth-helpers";
+import { getMyOrder } from "@/actions/orders";
+import { BRAND } from "@/lib/brand";
+import { formatOrderNumber } from "@/lib/orders";
+import { formatMYR } from "@/lib/format";
+import { OrderStatusBadge } from "@/components/orders/order-status-badge";
+import { OrderTimeline } from "@/components/orders/order-timeline";
+import { ResendReceiptButton } from "@/components/orders/resend-receipt-button";
+
+/**
+ * /orders/[id] — doubles as post-checkout confirmation (PAY-04) AND long-lived
+ * order detail (ORD-02).
+ *
+ * Behaviour:
+ *  - Auth gate: unauthenticated -> /login?next=/orders/[id] (D3-03).
+ *  - Ownership gate via getMyOrder (T-03-21/D3-22). Non-owner non-admin gets
+ *    the same notFound() response as a missing ID — blocks email enumeration.
+ *  - `?from=checkout` OR "paid within 2 minutes" renders the green confirmation
+ *    banner. T-03-24: spoofing the flag is cosmetic only.
+ *  - Resend-receipt button shown only for orders that have actually been paid
+ *    (paid/processing/shipped/delivered).
+ *
+ * force-dynamic because we read the session cookie and the order status may
+ * change between requests (admin updates).
+ */
+
+export const dynamic = "force-dynamic";
+
+export default async function OrderDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
+}) {
+  const user = await getSessionUser();
+  const { id } = await params;
+  if (!user) {
+    redirect(`/login?next=/orders/${id}`);
+  }
+
+  const { from } = await searchParams;
+  const row = await getMyOrder(id);
+  if (!row) notFound();
+
+  // "Just paid" shows the green banner. Either the capture action tacked
+  // `?from=checkout` on the redirect, or the order transitioned to paid
+  // less than 2 minutes ago (handles direct navigation after checkout).
+  const justPaid =
+    from === "checkout" ||
+    (row.status === "paid" &&
+      Date.now() - new Date(row.updatedAt).getTime() < 120_000);
+
+  const canResend =
+    row.status === "paid" ||
+    row.status === "processing" ||
+    row.status === "shipped" ||
+    row.status === "delivered";
+
+  return (
+    <main
+      className="min-h-screen"
+      style={{ backgroundColor: BRAND.cream, color: BRAND.ink }}
+    >
+      <div className="mx-auto max-w-3xl px-4 py-8 md:py-14">
+        {justPaid ? (
+          <div
+            className="rounded-2xl p-5 mb-6 flex items-center gap-3 flex-wrap"
+            style={{ backgroundColor: `${BRAND.green}30`, color: BRAND.ink }}
+            role="status"
+          >
+            <span className="font-bold text-lg">Payment confirmed.</span>
+            <span className="text-slate-700">
+              We&apos;ll email your receipt in a moment.
+            </span>
+          </div>
+        ) : null}
+
+        <nav className="mb-4 text-sm">
+          <Link href="/orders" className="text-slate-600 hover:text-slate-900">
+            &larr; All orders
+          </Link>
+        </nav>
+
+        <header className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="font-[var(--font-heading)] text-3xl md:text-4xl">
+              {formatOrderNumber(row.id)}
+            </h1>
+            <p className="text-slate-600 mt-1">
+              Placed {new Date(row.createdAt).toLocaleString("en-MY")}
+            </p>
+          </div>
+          <OrderStatusBadge status={row.status} />
+        </header>
+
+        <section
+          aria-labelledby="progress"
+          className="rounded-2xl p-4 md:p-6 mb-6"
+          style={{ backgroundColor: "#ffffff" }}
+        >
+          <h2
+            id="progress"
+            className="font-[var(--font-heading)] text-xl mb-4"
+          >
+            Progress
+          </h2>
+          <OrderTimeline status={row.status} />
+        </section>
+
+        <section
+          aria-labelledby="items"
+          className="rounded-2xl p-4 md:p-6 mb-6"
+          style={{ backgroundColor: "#ffffff" }}
+        >
+          <h2 id="items" className="font-[var(--font-heading)] text-xl mb-4">
+            Items
+          </h2>
+          <ul className="divide-y divide-black/10">
+            {row.items.map((i) => (
+              <li key={i.id} className="flex gap-4 py-4">
+                <div
+                  className="h-16 w-16 md:h-20 md:w-20 rounded-xl overflow-hidden shrink-0"
+                  style={{ backgroundColor: `${BRAND.blue}15` }}
+                >
+                  {i.productImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- product may be deleted
+                    <img
+                      src={i.productImage}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : null}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <Link
+                    href={`/products/${i.productSlug}`}
+                    className="font-bold truncate block hover:underline"
+                  >
+                    {i.productName}
+                  </Link>
+                  <p className="text-sm text-slate-600 mt-0.5">
+                    Size {i.size} · Qty {i.quantity} · {formatMYR(i.unitPrice)}{" "}
+                    each
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="font-[var(--font-heading)] text-lg">
+                    {formatMYR(i.lineTotal)}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-4 space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-slate-600">Subtotal</span>
+              <span>{formatMYR(row.subtotal)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-600">Shipping</span>
+              <span>{formatMYR(row.shippingCost)}</span>
+            </div>
+            <div className="flex justify-between pt-2 border-t border-black/10 font-bold text-base">
+              <span>Total</span>
+              <span>
+                {formatMYR(row.totalAmount)} {row.currency}
+              </span>
+            </div>
+          </div>
+        </section>
+
+        <section
+          aria-labelledby="ship"
+          className="rounded-2xl p-4 md:p-6 mb-6"
+          style={{ backgroundColor: "#ffffff" }}
+        >
+          <h2 id="ship" className="font-[var(--font-heading)] text-xl mb-3">
+            Shipping to
+          </h2>
+          <address className="not-italic leading-relaxed text-slate-800">
+            {row.shippingName}
+            <br />
+            {row.shippingLine1}
+            <br />
+            {row.shippingLine2 ? (
+              <>
+                {row.shippingLine2}
+                <br />
+              </>
+            ) : null}
+            {row.shippingCity} {row.shippingPostcode}
+            <br />
+            {row.shippingState}, {row.shippingCountry}
+            <br />
+            {row.shippingPhone}
+          </address>
+        </section>
+
+        {canResend ? (
+          <section
+            aria-labelledby="receipt"
+            className="rounded-2xl p-4 md:p-6"
+            style={{ backgroundColor: "#ffffff" }}
+          >
+            <h2
+              id="receipt"
+              className="font-[var(--font-heading)] text-xl mb-3"
+            >
+              Receipt
+            </h2>
+            <p className="text-slate-600 mb-4">
+              Lost the confirmation email? Resend it to{" "}
+              <strong>{row.customerEmail}</strong>.
+            </p>
+            <ResendReceiptButton orderId={row.id} />
+          </section>
+        ) : null}
+      </div>
+    </main>
+  );
+}
