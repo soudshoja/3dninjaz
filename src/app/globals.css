@@ -143,3 +143,57 @@
     font-family: var(--font-heading), sans-serif;
   }
 }
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.animate-spin-slow {
+  animation: spin-slow 14s linear infinite;
+  transform-origin: center;
+}
+
+/* Marquee (horizontal scroll) */
+@keyframes marquee-x {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee-x 28s linear infinite;
+}
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+/* Typewriter caret blink */
+@keyframes caret-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+.animate-caret {
+  animation: caret-blink 1s steps(1) infinite;
+}
+
+/* Stagger fade-in (triggered via .is-visible class on parent) */
+.stagger-item {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 600ms ease-out, transform 600ms ease-out;
+}
+.stagger-parent.is-visible .stagger-item {
+  opacity: 1;
+  transform: translateY(0);
+}
+.stagger-parent.is-visible .stagger-item:nth-child(1) { transition-delay: 0ms; }
+.stagger-parent.is-visible .stagger-item:nth-child(2) { transition-delay: 80ms; }
+.stagger-parent.is-visible .stagger-item:nth-child(3) { transition-delay: 160ms; }
+.stagger-parent.is-visible .stagger-item:nth-child(4) { transition-delay: 240ms; }
+.stagger-parent.is-visible .stagger-item:nth-child(5) { transition-delay: 320ms; }
+.stagger-parent.is-visible .stagger-item:nth-child(6) { transition-delay: 400ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin-slow { animation: none; }
+  .animate-marquee { animation: none; }
+  .animate-caret { animation: none; opacity: 1 !important; }
+  .stagger-item { opacity: 1 !important; transform: none !important; transition: none !important; }
+}

@@ -1,55 +1,58 @@
 import {
-  pgTable,
+  mysqlTable,
+  varchar,
   text,
   boolean,
-  integer,
+  int,
   decimal,
   timestamp,
-  uuid,
-} from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+  mysqlEnum,
+  json,
+} from "drizzle-orm/mysql-core";
+import { relations, sql } from "drizzle-orm";
 
 // ============================================================================
 // Better Auth Tables
-// These tables use the EXACT column names Better Auth expects.
-// Singular table names (user, session, account, verification) per Better Auth defaults.
+// Column names match Better Auth's Drizzle adapter expectations.
+// IDs are text (Better Auth generates string IDs); we use varchar(36) to fit
+// both UUID and nanoid style identifiers without wasting space.
 // ============================================================================
 
-export const user = pgTable("user", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  email: text("email").notNull().unique(),
+export const user = mysqlTable("user", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }).notNull().unique(),
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   // Better Auth admin plugin fields
-  role: text("role").notNull().default("customer"),
+  role: varchar("role", { length: 32 }).notNull().default("customer"),
   banned: boolean("banned").default(false),
   banReason: text("ban_reason"),
   banExpires: timestamp("ban_expires"),
-  // PDPA consent (D-09, AUTH-05) -- server-side timestamp, not boolean
+  // PDPA consent (D-09, AUTH-05) — server-side timestamp, not boolean
   pdpaConsentAt: timestamp("pdpa_consent_at"),
 });
 
-export const session = pgTable("session", {
-  id: text("id").primaryKey(),
+export const session = mysqlTable("session", {
+  id: varchar("id", { length: 36 }).primaryKey(),
   expiresAt: timestamp("expires_at").notNull(),
-  token: text("token").notNull().unique(),
+  token: varchar("token", { length: 255 }).notNull().unique(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-  ipAddress: text("ip_address"),
+  ipAddress: varchar("ip_address", { length: 45 }),
   userAgent: text("user_agent"),
-  userId: text("user_id")
+  userId: varchar("user_id", { length: 36 })
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
 });
 
-export const account = pgTable("account", {
-  id: text("id").primaryKey(),
-  accountId: text("account_id").notNull(),
-  providerId: text("provider_id").notNull(),
-  userId: text("user_id")
+export const account = mysqlTable("account", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  accountId: varchar("account_id", { length: 255 }).notNull(),
+  providerId: varchar("provider_id", { length: 64 }).notNull(),
+  userId: varchar("user_id", { length: 36 })
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
   accessToken: text("access_token"),
@@ -63,9 +66,9 @@ export const account = pgTable("account", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-export const verification = pgTable("verification", {
-  id: text("id").primaryKey(),
-  identifier: text("identifier").notNull(),
+export const verification = mysqlTable("verification", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  identifier: varchar("identifier", { length: 255 }).notNull(),
   value: text("value").notNull(),
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -76,34 +79,48 @@ export const verification = pgTable("verification", {
 // Application Tables
 // ============================================================================
 
-export const categories = pgTable("categories", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  name: text("name").notNull().unique(),
-  slug: text("slug").notNull().unique(),
+export const categories = mysqlTable("categories", {
+  id: varchar("id", { length: 36 })
+    .primaryKey()
+    .default(sql`(UUID())`),
+  name: varchar("name", { length: 100 }).notNull().unique(),
+  slug: varchar("slug", { length: 120 }).notNull().unique(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const products = pgTable("products", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  name: text("name").notNull(),
-  slug: text("slug").notNull().unique(),
+export const products = mysqlTable("products", {
+  id: varchar("id", { length: 36 })
+    .primaryKey()
+    .default(sql`(UUID())`),
+  name: varchar("name", { length: 200 }).notNull(),
+  slug: varchar("slug", { length: 220 }).notNull().unique(),
   description: text("description").notNull(),
-  images: text("images").array().notNull().default([]), // Cloudinary URLs, max 5 enforced at app level (D-03)
-  materialType: text("material_type"),
-  estimatedProductionDays: integer("estimated_production_days"),
+  // Relative URLs served from public/uploads/products/<id>/<file>.
+  // Stored as JSON array of strings (MySQL has no native array type).
+  // Max 5 enforced at app level (D-03).
+  images: json("images").$type<string[]>().notNull().default([]),
+  materialType: varchar("material_type", { length: 64 }),
+  estimatedProductionDays: int("estimated_production_days"),
   isActive: boolean("is_active").notNull().default(true), // ADM-04
   isFeatured: boolean("is_featured").notNull().default(false), // D-12
-  categoryId: uuid("category_id").references(() => categories.id),
+  categoryId: varchar("category_id", { length: 36 }).references(
+    () => categories.id
+  ),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at")
+    .notNull()
+    .defaultNow()
+    .onUpdateNow(),
 });
 
-export const productVariants = pgTable("product_variants", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  productId: uuid("product_id")
+export const productVariants = mysqlTable("product_variants", {
+  id: varchar("id", { length: 36 })
+    .primaryKey()
+    .default(sql`(UUID())`),
+  productId: varchar("product_id", { length: 36 })
     .notNull()
     .references(() => products.id, { onDelete: "cascade" }),
-  size: text("size", { enum: ["S", "M", "L"] }).notNull(), // D-13
+  size: mysqlEnum("size", ["S", "M", "L"]).notNull(), // D-13
   price: decimal("price", { precision: 10, scale: 2 }).notNull(), // MYR
   widthCm: decimal("width_cm", { precision: 6, scale: 1 }),
   heightCm: decimal("height_cm", { precision: 6, scale: 1 }),
