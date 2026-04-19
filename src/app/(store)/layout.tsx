@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { StoreNav } from "@/components/store/store-nav";
 import { StoreFooter } from "@/components/store/store-footer";
+import { CartDrawer } from "@/components/store/cart-drawer";
 import { BRAND } from "@/lib/brand";
 
 /**
@@ -18,6 +19,7 @@ export default function StoreLayout({ children }: { children: ReactNode }) {
       <StoreNav />
       <main className="flex-1">{children}</main>
       <StoreFooter />
+      <CartDrawer />
     </div>
   );
 }

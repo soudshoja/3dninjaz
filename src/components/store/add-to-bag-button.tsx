@@ -1,9 +1,8 @@
-// STUB — Plan 02-04 replaces the onClick handler to write into the Zustand
-// cart store and open the cart drawer. Props contract is preserved.
 "use client";
 
 import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
+import { useCartStore } from "@/stores/cart-store";
 
 type SelectedVariant = {
   id: string;
@@ -11,6 +10,13 @@ type SelectedVariant = {
   price: string;
 } | null;
 
+/**
+ * Wired Add-to-bag button. Writes the selected variant into the Zustand
+ * cart store and opens the CartDrawer so the user gets immediate feedback.
+ *
+ * Props contract is frozen from the Plan 02-03 stub so the PDP never had
+ * to change — only the onClick body gained real behavior.
+ */
 export function AddToBagButton({
   selectedVariant,
   productId,
@@ -24,24 +30,26 @@ export function AddToBagButton({
   productName: string;
   productImage: string | null;
 }) {
+  const addItem = useCartStore((s) => s.addItem);
+  const setOpen = useCartStore((s) => s.setDrawerOpen);
   const disabled = selectedVariant === null;
+
   const label = disabled
     ? "Pick a size"
     : `Add to bag · ${formatMYR(selectedVariant!.price)}`;
 
   const onClick = () => {
     if (!selectedVariant) return;
-    // Plan 02-04 replaces this with useCartStore().addItem({...}) + drawer.open().
-    // eslint-disable-next-line no-console
-    console.log("[add-to-bag stub]", {
+    addItem({
       productId,
       productSlug,
-      productName,
-      productImage,
-      variantId: selectedVariant.id,
+      name: productName,
+      image: productImage,
       size: selectedVariant.size,
+      variantId: selectedVariant.id,
       unitPrice: selectedVariant.price,
     });
+    setOpen(true);
   };
 
   return (

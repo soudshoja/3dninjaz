@@ -1,26 +1,50 @@
 "use client";
 
-import Link from "next/link";
-import { BRAND } from "@/lib/brand";
 import { ShoppingBag } from "lucide-react";
+import { useEffect, useState } from "react";
+import { BRAND } from "@/lib/brand";
+import { useCartStore } from "@/stores/cart-store";
 
 /**
- * Stub cart button — Plan 02-04 REPLACES this file's body with a Zustand-aware
- * version that shows a live item count badge and opens the cart drawer.
+ * Nav bag button — shows a live item count badge and opens the CartDrawer
+ * when clicked. D-02 vocabulary: label is "Bag", drawer title is "Your bag".
  *
- * For Wave 2 it is just a pill link to /bag (D-02 vocabulary) so the nav
- * has a working anchor before the cart store exists.
+ * Hydration guard: Zustand persist rehydrates on the client, so the first
+ * SSR render has count=0 but the first client render would show the real
+ * count, causing a hydration mismatch warning. Mount guard forces count=0
+ * until after hydration, matching SSR output.
  */
 export function CartButton() {
+  const setOpen = useCartStore((s) => s.setDrawerOpen);
+  const count = useCartStore((s) => s.getItemCount());
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const shownCount = mounted ? count : 0;
+
   return (
-    <Link
-      href="/bag"
-      aria-label="Open bag"
-      className="inline-flex items-center gap-2 rounded-full px-4 py-2 font-semibold text-sm text-white shadow-md hover:opacity-90 transition min-h-[48px]"
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      aria-label={
+        shownCount > 0
+          ? `Open bag, ${shownCount} ${shownCount === 1 ? "item" : "items"}`
+          : "Open bag"
+      }
+      className="relative inline-flex items-center gap-2 rounded-full px-4 py-2 font-semibold text-sm text-white shadow-md hover:opacity-90 transition min-h-[48px]"
       style={{ backgroundColor: BRAND.ink }}
     >
       <ShoppingBag className="h-5 w-5" aria-hidden />
       <span>Bag</span>
-    </Link>
+      {shownCount > 0 ? (
+        <span
+          className="absolute -top-1 -right-1 min-w-[22px] h-[22px] rounded-full px-1.5 text-xs font-bold inline-flex items-center justify-center"
+          style={{ backgroundColor: BRAND.green, color: BRAND.ink }}
+          aria-hidden
+        >
+          {shownCount}
+        </span>
+      ) : null}
+    </button>
   );
 }
