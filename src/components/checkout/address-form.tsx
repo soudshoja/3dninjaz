@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { orderAddressSchema, MALAYSIAN_STATES } from "@/lib/validators";
 import { BRAND } from "@/lib/brand";
+import { AddressPicker } from "@/components/checkout/address-picker";
+import type { SavedAddress } from "@/actions/addresses";
 
 // Output type (what Zod produces after parsing — country is "Malaysia", not
 // optional) is the contract the rest of the app consumes.
@@ -15,11 +17,33 @@ export type AddressFormValues = z.output<typeof orderAddressSchema>;
 // type mismatch between the schema's input and output shapes.
 type AddressFormInput = z.input<typeof orderAddressSchema>;
 
+// Adapter — map saved address book entry (06-03 schema) to the orderAddressSchema
+// shape used by createPayPalOrder. Field names differ (fullName vs recipientName,
+// line1 vs addressLine1) so we explicitly translate.
+function adaptSaved(a: SavedAddress): AddressFormValues {
+  return {
+    recipientName: a.fullName,
+    phone: a.phone,
+    addressLine1: a.line1,
+    addressLine2: a.line2 ?? "",
+    city: a.city,
+    state: a.state as AddressFormValues["state"],
+    postcode: a.postcode,
+    country: "Malaysia",
+  };
+}
+
 /**
  * Shipping address form (D3-05) — react-hook-form + zodResolver bound to
  * orderAddressSchema. Emits the validated values up to the parent via
  * onValidChange; null when the form is invalid. The parent uses that to
  * enable/disable the PayPal button.
+ *
+ * Phase 6 06-03 extension: when `savedAddresses` is provided and non-empty,
+ * an AddressPicker renders above the form. The default address is auto-
+ * selected; the inline form is hidden in "saved" mode and revealed when the
+ * user picks "Use a new address". Zero-saved case: picker returns null and
+ * the form behaves exactly as in Phase 3 03-02 (T-06-03-regression).
  *
  * Tap targets: all inputs meet the ≥48px minimum (D3-20) via min-h-[48px]
  * + py-3 + px-4.
@@ -27,10 +51,17 @@ type AddressFormInput = z.input<typeof orderAddressSchema>;
 export function AddressForm({
   defaultName,
   onValidChange,
+  savedAddresses,
 }: {
   defaultName: string;
   onValidChange: (v: AddressFormValues | null) => void;
+  savedAddresses?: SavedAddress[];
 }) {
+  const hasSaved = !!savedAddresses && savedAddresses.length > 0;
+  const [mode, setMode] = useState<"saved" | "new">(hasSaved ? "saved" : "new");
+  const [pickedAddress, setPickedAddress] = useState<AddressFormValues | null>(
+    hasSaved ? adaptSaved(savedAddresses[0]) : null,
+  );
   const { register, formState, watch } = useForm<
     AddressFormInput,
     unknown,
@@ -54,10 +85,17 @@ export function AddressForm({
   const valid = formState.isValid;
 
   useEffect(() => {
+    if (mode === "saved") {
+      // Picker drives the validated address — bypass the form's own state.
+      onValidChange(pickedAddress);
+      return;
+    }
     onValidChange(valid ? (values as AddressFormValues) : null);
     // Intentionally watch all field values via `watch()`; re-run on any change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    mode,
+    pickedAddress,
     valid,
     values.recipientName,
     values.phone,
@@ -76,6 +114,21 @@ export function AddressForm({
 
   return (
     <form className="grid gap-4" noValidate>
+      {hasSaved && savedAddresses ? (
+        <AddressPicker
+          addresses={savedAddresses}
+          onSelect={(a) => {
+            setMode("saved");
+            setPickedAddress(adaptSaved(a));
+          }}
+          onUseNew={() => {
+            setMode("new");
+            setPickedAddress(null);
+          }}
+        />
+      ) : null}
+
+      <div className={mode === "saved" ? "hidden" : "contents"}>
       <div>
         <label className="block text-sm font-semibold mb-1">
           Recipient name
@@ -214,6 +267,7 @@ export function AddressForm({
           readOnly
           {...register("country")}
         />
+      </div>
       </div>
     </form>
   );

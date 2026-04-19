@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth-helpers";
+import { listMyAddresses } from "@/actions/addresses";
 import { CheckoutIsland } from "@/components/checkout/paypal-provider";
 import { BRAND } from "@/lib/brand";
 
@@ -22,6 +23,12 @@ export default async function CheckoutPage() {
     redirect("/login?next=/checkout");
   }
 
+  // Phase 6 06-03 — fetch saved addresses for the AddressPicker. Server-side
+  // listMyAddresses re-validates session via requireUser(), but we already
+  // know the user is authenticated (gate above). Returns [] if none saved —
+  // the picker hides itself and the existing form path is preserved.
+  const savedAddresses = await listMyAddresses();
+
   return (
     <main
       className="min-h-screen"
@@ -39,6 +46,7 @@ export default async function CheckoutPage() {
         <CheckoutIsland
           defaultName={user.name ?? ""}
           defaultEmail={user.email}
+          savedAddresses={savedAddresses}
         />
       </div>
     </main>

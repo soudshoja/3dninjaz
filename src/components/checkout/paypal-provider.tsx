@@ -11,6 +11,7 @@ import { AddressForm, type AddressFormValues } from "./address-form";
 import { CheckoutSummary } from "./checkout-summary";
 import { PayPalButton } from "./paypal-button";
 import { MobileSummarySheet } from "./mobile-summary-sheet";
+import type { SavedAddress } from "@/actions/addresses";
 
 /**
  * Client-side checkout island (D3-04). Wraps everything in PayPalScriptProvider
@@ -31,9 +32,11 @@ import { MobileSummarySheet } from "./mobile-summary-sheet";
 export function CheckoutIsland({
   defaultName,
   defaultEmail: _defaultEmail,
+  savedAddresses,
 }: {
   defaultName: string;
   defaultEmail: string;
+  savedAddresses?: SavedAddress[];
 }) {
   const router = useRouter();
   const items = useCartStore((s) => s.items);
@@ -91,6 +94,7 @@ export function CheckoutIsland({
           <AddressForm
             defaultName={defaultName}
             onValidChange={setAddress}
+            savedAddresses={savedAddresses}
           />
 
           {/* PayPal button area — desktop only; mobile uses the sticky sheet */}
