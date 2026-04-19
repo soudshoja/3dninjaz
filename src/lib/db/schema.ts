@@ -165,3 +165,88 @@ export const productVariantsRelations = relations(
     }),
   })
 );
+
+// ============================================================================
+// Phase 3: Orders & Order Items (D3-11, D3-13)
+// - orders.paypalOrderId is UNIQUE so PayPal idempotency is enforced at the DB
+// - order_items intentionally has NO FK to products/variants — products may
+//   be deleted but order history must remain immutable. We snapshot name,
+//   slug, image, unitPrice at order-creation time.
+// - user FK has NO cascade delete — deleting a user must not destroy order
+//   rows (PDPA audit requirement; customerEmail is snapshotted for contact).
+// ============================================================================
+
+export const orderStatusValues = [
+  "pending",
+  "paid",
+  "processing",
+  "shipped",
+  "delivered",
+  "cancelled",
+] as const;
+
+export const orders = mysqlTable("orders", {
+  id: varchar("id", { length: 36 })
+    .primaryKey()
+    .default(sql`(UUID())`),
+  userId: varchar("user_id", { length: 36 })
+    .notNull()
+    .references(() => user.id), // NO cascade — keep orders if user is deleted (PDPA audit, D3-23)
+  status: mysqlEnum("status", orderStatusValues).notNull().default("pending"),
+  // PayPal identifiers (nullable until each phase of the payment flow completes)
+  paypalOrderId: varchar("paypal_order_id", { length: 64 }).unique(),
+  paypalCaptureId: varchar("paypal_capture_id", { length: 64 }),
+  // Money (MYR) — decimal(10,2) stores up to 99,999,999.99
+  subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
+  shippingCost: decimal("shipping_cost", { precision: 10, scale: 2 })
+    .notNull()
+    .default("0.00"),
+  totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
+  currency: varchar("currency", { length: 3 }).notNull().default("MYR"),
+  // Customer email snapshot — survives user deletion (PDPA audit, D3-23)
+  customerEmail: varchar("customer_email", { length: 255 }).notNull(),
+  // Shipping address snapshot (set at checkout, never mutated)
+  shippingName: varchar("shipping_name", { length: 200 }).notNull(),
+  shippingPhone: varchar("shipping_phone", { length: 32 }).notNull(),
+  shippingLine1: varchar("shipping_line1", { length: 200 }).notNull(),
+  shippingLine2: varchar("shipping_line2", { length: 200 }),
+  shippingCity: varchar("shipping_city", { length: 100 }).notNull(),
+  shippingState: varchar("shipping_state", { length: 64 }).notNull(),
+  shippingPostcode: varchar("shipping_postcode", { length: 10 }).notNull(),
+  shippingCountry: varchar("shipping_country", { length: 64 })
+    .notNull()
+    .default("Malaysia"),
+  // Admin-only internal notes (D3-18)
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+});
+
+export const orderItems = mysqlTable("order_items", {
+  id: varchar("id", { length: 36 })
+    .primaryKey()
+    .default(sql`(UUID())`),
+  orderId: varchar("order_id", { length: 36 })
+    .notNull()
+    .references(() => orders.id, { onDelete: "cascade" }),
+  // NO FK to products/variants — snapshot-only (D3-13)
+  productId: varchar("product_id", { length: 36 }).notNull(),
+  variantId: varchar("variant_id", { length: 36 }).notNull(),
+  productName: varchar("product_name", { length: 200 }).notNull(),
+  productSlug: varchar("product_slug", { length: 220 }).notNull(),
+  // Nullable if the product had no image at order time
+  productImage: text("product_image"),
+  size: mysqlEnum("size", ["S", "M", "L"]).notNull(),
+  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
+  quantity: int("quantity").notNull(),
+  lineTotal: decimal("line_total", { precision: 10, scale: 2 }).notNull(),
+});
+
+export const ordersRelations = relations(orders, ({ one, many }) => ({
+  user: one(user, { fields: [orders.userId], references: [user.id] }),
+  items: many(orderItems),
+}));
+
+export const orderItemsRelations = relations(orderItems, ({ one }) => ({
+  order: one(orders, { fields: [orderItems.orderId], references: [orders.id] }),
+}));
