@@ -2,7 +2,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Package, FolderOpen, Receipt } from "lucide-react";
+import {
+  LayoutDashboard,
+  Package,
+  FolderOpen,
+  Receipt,
+  Users,
+  Tag,
+  Settings,
+  Truck,
+  Mail,
+  Star,
+  Upload,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const items = [
@@ -15,9 +27,45 @@ const items = [
     exact: false,
   },
   { href: "/admin/orders", label: "Orders", icon: Receipt, exact: false },
+  // Phase 5 admin extensions
+  { href: "/admin/users", label: "Users", icon: Users, exact: false },
+  { href: "/admin/coupons", label: "Coupons", icon: Tag, exact: false },
+  {
+    href: "/admin/products/import",
+    label: "Bulk import",
+    icon: Upload,
+    exact: true,
+  },
+  {
+    href: "/admin/email-templates",
+    label: "Email templates",
+    icon: Mail,
+    exact: false,
+  },
+  {
+    href: "/admin/reviews",
+    label: "Reviews",
+    icon: Star,
+    exact: false,
+    badge: "pendingReviewCount" as const,
+  },
+  { href: "/admin/shipping", label: "Shipping", icon: Truck, exact: false },
+  { href: "/admin/settings", label: "Settings", icon: Settings, exact: false },
 ];
 
-export function SidebarNav() {
+/**
+ * Admin sidebar navigation. After Phase 5 the list grew from 4 → 11 items,
+ * which is still comfortable on a 64-col-wide sidebar; on mobile the layout
+ * renders a horizontally scrollable chip strip instead (see (admin)/layout.tsx).
+ *
+ * `pendingReviewCount` is prop-drilled from the server-rendered admin layout
+ * so the badge updates on hard navigation without a separate fetch.
+ */
+export function SidebarNav({
+  pendingReviewCount = 0,
+}: {
+  pendingReviewCount?: number;
+}) {
   const pathname = usePathname();
 
   return (
@@ -27,6 +75,8 @@ export function SidebarNav() {
         const active = item.exact
           ? pathname === item.href
           : pathname === item.href || pathname.startsWith(item.href + "/");
+        const showBadge =
+          item.badge === "pendingReviewCount" && pendingReviewCount > 0;
         return (
           <Link
             key={item.href}
@@ -39,7 +89,15 @@ export function SidebarNav() {
             )}
           >
             <Icon className="h-4 w-4" />
-            {item.label}
+            <span>{item.label}</span>
+            {showBadge ? (
+              <span
+                className="ml-auto inline-flex items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white"
+                aria-label={`${pendingReviewCount} pending`}
+              >
+                {pendingReviewCount}
+              </span>
+            ) : null}
           </Link>
         );
       })}

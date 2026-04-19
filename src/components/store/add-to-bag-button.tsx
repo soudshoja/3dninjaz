@@ -50,6 +50,23 @@ export function AddToBagButton({
       unitPrice: selectedVariant.price,
     });
     setOpen(true);
+    // Plan 05-02 — fire-and-forget add_to_bag analytics ping (Q-05-03).
+    // Server hashes the IP + rate-limits; we ignore network errors.
+    if (typeof window !== "undefined") {
+      try {
+        void fetch("/api/events/track", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event: "add_to_bag",
+            path: window.location.pathname,
+          }),
+          keepalive: true,
+        }).catch(() => {});
+      } catch {
+        /* noop — analytics failure must never break add-to-bag */
+      }
+    }
   };
 
   return (

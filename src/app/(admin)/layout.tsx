@@ -6,6 +6,24 @@ import type { ReactNode } from "react";
 import { auth } from "@/lib/auth";
 import { SidebarNav } from "@/components/admin/sidebar-nav";
 import { AdminUserBadge } from "@/components/admin/admin-user-badge";
+import { getPendingReviewCount } from "@/actions/admin-reviews";
+
+// Mobile chip strip — single source of truth for both desktop sidebar and
+// mobile horizontal nav. Phase 5 added 7 entries; the chip strip overflows
+// horizontally and scrolls (intentional, D-04 mobile pattern).
+const MOBILE_CHIPS = [
+  { href: "/admin", label: "Dashboard" },
+  { href: "/admin/products", label: "Products" },
+  { href: "/admin/categories", label: "Categories" },
+  { href: "/admin/orders", label: "Orders" },
+  { href: "/admin/users", label: "Users" },
+  { href: "/admin/coupons", label: "Coupons" },
+  { href: "/admin/products/import", label: "Bulk import" },
+  { href: "/admin/email-templates", label: "Email templates" },
+  { href: "/admin/reviews", label: "Reviews" },
+  { href: "/admin/shipping", label: "Shipping" },
+  { href: "/admin/settings", label: "Settings" },
+];
 
 export default async function AdminLayout({
   children,
@@ -19,6 +37,15 @@ export default async function AdminLayout({
 
   if (!session || session.user.role !== "admin") {
     redirect("/login");
+  }
+
+  // Pending review badge is informational; if the action throws (e.g. DB
+  // hiccup) we fall back to 0 rather than crash the entire admin shell.
+  let pendingReviewCount = 0;
+  try {
+    pendingReviewCount = await getPendingReviewCount();
+  } catch {
+    pendingReviewCount = 0;
   }
 
   return (
@@ -37,7 +64,7 @@ export default async function AdminLayout({
             3D Ninjaz Admin
           </span>
         </Link>
-        <SidebarNav />
+        <SidebarNav pendingReviewCount={pendingReviewCount} />
         <div className="mt-auto">
           <AdminUserBadge
             name={session.user.name}
@@ -63,37 +90,31 @@ export default async function AdminLayout({
           </div>
           {/*
             Mobile nav strip — the sidebar is hidden below md so without this
-            strip there is no path to /admin/products, /admin/categories or
-            /admin/orders on a phone. Tap targets are 40px high (min-h-[40px]).
+            strip there is no path to admin sub-pages on a phone. After Phase 5
+            the chip count is 11; the strip scrolls horizontally per the
+            existing admin-order-filter pattern. Tap targets are 40px high.
           */}
           <nav
             aria-label="Admin sections"
             className="mt-3 flex gap-2 overflow-x-auto -mx-1 px-1 pb-1 text-xs"
           >
-            <Link
-              href="/admin"
-              className="inline-flex items-center rounded-full border px-3 min-h-[40px] whitespace-nowrap text-[var(--color-brand-text-primary)] border-[var(--color-brand-border)]"
-            >
-              Dashboard
-            </Link>
-            <Link
-              href="/admin/products"
-              className="inline-flex items-center rounded-full border px-3 min-h-[40px] whitespace-nowrap text-[var(--color-brand-text-primary)] border-[var(--color-brand-border)]"
-            >
-              Products
-            </Link>
-            <Link
-              href="/admin/categories"
-              className="inline-flex items-center rounded-full border px-3 min-h-[40px] whitespace-nowrap text-[var(--color-brand-text-primary)] border-[var(--color-brand-border)]"
-            >
-              Categories
-            </Link>
-            <Link
-              href="/admin/orders"
-              className="inline-flex items-center rounded-full border px-3 min-h-[40px] whitespace-nowrap text-[var(--color-brand-text-primary)] border-[var(--color-brand-border)]"
-            >
-              Orders
-            </Link>
+            {MOBILE_CHIPS.map((chip) => (
+              <Link
+                key={chip.href}
+                href={chip.href}
+                className="inline-flex items-center rounded-full border px-3 min-h-[40px] whitespace-nowrap text-[var(--color-brand-text-primary)] border-[var(--color-brand-border)]"
+              >
+                {chip.label}
+                {chip.href === "/admin/reviews" && pendingReviewCount > 0 ? (
+                  <span
+                    className="ml-2 inline-flex items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white"
+                    aria-label={`${pendingReviewCount} pending`}
+                  >
+                    {pendingReviewCount}
+                  </span>
+                ) : null}
+              </Link>
+            ))}
           </nav>
         </header>
         <main className="flex-1 p-6 md:p-8">{children}</main>
