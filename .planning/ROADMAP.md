@@ -12,7 +12,7 @@ Print Ninjaz ships in four phases. Phase 1 builds the project scaffold, database
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Foundation** - Project scaffold, database schema, auth, and admin product CRUD
+- [x] **Phase 1: Foundation** - Project scaffold, database schema, auth, and admin product CRUD
 - [ ] **Phase 2: Storefront + Cart** - Product catalog, product detail pages, and shopping cart
 - [ ] **Phase 3: Checkout + Orders** - PayPal payment, order confirmation, and order management
 - [ ] **Phase 4: Brand + Launch** - Trust content, PDPA compliance, branding, and responsive polish
@@ -32,10 +32,10 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans:** 4 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Scaffold Next.js 15, install deps, create DB schema, configure Better Auth
-- [ ] 01-02-PLAN.md — Build auth UI (login, register, forgot/reset password), admin seed script
-- [ ] 01-03-PLAN.md — Admin layout, server actions, product list, category management
-- [ ] 01-04-PLAN.md — Product create/edit forms with Cloudinary upload and variant pricing
+- [x] 01-01-PLAN.md — Scaffold Next.js 15, install deps, create DB schema, configure Better Auth
+- [x] 01-02-PLAN.md — Build auth UI (login, register, forgot/reset password), admin seed script
+- [x] 01-03-PLAN.md — Admin layout, server actions, product list, category management
+- [x] 01-04-PLAN.md — Product create/edit forms with local-disk upload and variant pricing
 
 ### Phase 2: Storefront + Cart
 **Goal**: Customers can browse products, read details, and build a cart — the full pre-purchase experience works end to end
@@ -46,7 +46,13 @@ Plans:
   2. User can open a product detail page showing multiple images, description, size guide with real dimensions, material info, and lead time notice
   3. User can select a size (S/M/L) and see the price update to match that variant before adding to cart
   4. User can view a cart showing each item's name, size, quantity, and price, update quantities, remove items, and see a running subtotal
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Brand primitives, catalog data helpers, format utilities, ProductCard, install vaul
+- [ ] 02-02-PLAN.md — Store shell (nav/footer/layout), homepage (hero/featured/categories/how-it-works), /shop with category filter
+- [ ] 02-03-PLAN.md — Product detail page: gallery, size selector, size guide, material, lead time, Add-to-bag stub
+- [ ] 02-04-PLAN.md — Zustand cart store, vaul drawer primitive, cart drawer + /cart page, wire CartButton + Add-to-bag
 
 ### Phase 3: Checkout + Orders
 **Goal**: Customers can complete a purchase via PayPal and both customer and admin can track what was ordered
@@ -79,6 +85,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 0/4 | Not started | - |
-| 2. Storefront + Cart | 0/? | Not started | - |
+| 2. Storefront + Cart | 0/4 | Not started | - |
 | 3. Checkout + Orders | 0/? | Not started | - |
 | 4. Brand + Launch | 0/? | Not started | - |
