@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- LAUNCH DAY: remove the noindex meta below (see .planning/phases/04-brand-launch/LAUNCH-CHECKLIST.md) -->
+  <meta name="robots" content="noindex" />
+  <meta name="description" content="3D Ninjaz — playful 3D-printed goods. Stealthy. Colorful. Made in Malaysia. Launching soon." />
+  <meta name="theme-color" content="#0B1020" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="3D Ninjaz — Coming Soon" />
+  <meta property="og:description" content="Playful 3D-printed goods. Stealthy. Colorful. Made in Malaysia. Launching soon." />
+  <meta property="og:image" content="https://3dninjaz.com/logo.png" />
+  <meta property="og:url" content="https://3dninjaz.com" />
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="3D Ninjaz — Coming Soon" />
+  <meta name="twitter:description" content="Playful 3D-printed goods. Stealthy. Colorful. Made in Malaysia. Launching soon." />
+  <meta name="twitter:image" content="https://3dninjaz.com/logo.png" />
+
+  <title>3D Ninjaz — Coming Soon</title>
+
+  <link rel="icon" href="./favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./favicon-192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Russo+One&family=Chakra+Petch:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+
+  <!-- Sticky top bar -->
+  <header class="topbar" role="banner">
+    <a href="#top" class="topbar__brand" aria-label="3D Ninjaz home">
+      <img src="./logo.png" alt="" class="topbar__logo" width="40" height="40" />
+      <span class="wordmark">3D <span class="wordmark__accent">NINJAZ</span></span>
+    </a>
+    <span class="pill pill--made" aria-label="Made in Malaysia">MADE IN MALAYSIA</span>
+  </header>
+
+  <!-- HERO -->
+  <section id="top" class="hero" aria-labelledby="hero-title">
+    <!-- Floating shurikens -->
+    <svg class="shuriken shuriken--1" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2l2.5 6.5L21 11l-6.5 2.5L12 20l-2.5-6.5L3 11l6.5-2.5z" fill="#2563EB" />
+    </svg>
+    <svg class="shuriken shuriken--2" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2l2.5 6.5L21 11l-6.5 2.5L12 20l-2.5-6.5L3 11l6.5-2.5z" fill="#84CC16" />
+    </svg>
+    <svg class="shuriken shuriken--3" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2l2.5 6.5L21 11l-6.5 2.5L12 20l-2.5-6.5L3 11l6.5-2.5z" fill="#8B5CF6" />
+    </svg>
+    <svg class="shuriken shuriken--4" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2l2.5 6.5L21 11l-6.5 2.5L12 20l-2.5-6.5L3 11l6.5-2.5z" fill="#2563EB" />
+    </svg>
+
+    <div class="hero__inner">
+      <img src="./logo.png" alt="3D Ninjaz — three chibi ninjas and a 3D printer" class="hero__logo" />
+      <h1 id="hero-title" class="hero__title">The ninjaz are gearing up.</h1>
+      <p class="hero__sub">3D-printed goods. <span class="hero__sub--accent">Stealthy. Colorful.</span> Coming soon.</p>
+    </div>
+
+    <!-- Purple wave divider -->
+    <svg class="wave" viewBox="0 0 1440 120" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0,64 C240,112 480,16 720,48 C960,80 1200,128 1440,64 L1440,120 L0,120 Z" fill="#8B5CF6" />
+    </svg>
+  </section>
+
+  <!-- COUNTDOWN -->
+  <section class="countdown" aria-labelledby="countdown-title">
+    <div class="countdown__inner">
+      <h2 id="countdown-title" class="countdown__title">Launching in</h2>
+      <div class="countdown__grid" id="countdown" aria-live="polite">
+        <div class="cd-card">
+          <span class="cd-card__num" id="cd-days">00</span>
+          <span class="cd-card__label" style="color: #2563EB;">Days</span>
+        </div>
+        <div class="cd-card">
+          <span class="cd-card__num" id="cd-hours">00</span>
+          <span class="cd-card__label" style="color: #84CC16;">Hours</span>
+        </div>
+        <div class="cd-card">
+          <span class="cd-card__num" id="cd-mins">00</span>
+          <span class="cd-card__label" style="color: #8B5CF6;">Minutes</span>
+        </div>
+        <div class="cd-card">
+          <span class="cd-card__num" id="cd-secs">00</span>
+          <span class="cd-card__label" style="color: #2563EB;">Seconds</span>
+        </div>
+      </div>
+      <p id="cd-fallback" class="countdown__fallback" hidden>We&rsquo;re almost there!</p>
+    </div>
+
+    <!-- Cream wave -->
+    <svg class="wave wave--bottom" viewBox="0 0 1440 120" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0,64 C240,112 480,16 720,48 C960,80 1200,128 1440,64 L1440,120 L0,120 Z" fill="#F7FAF4" />
+    </svg>
+  </section>
+
+  <!-- EMAIL CAPTURE -->
+  <section class="signup" aria-labelledby="signup-title">
+    <div class="signup__inner">
+      <h2 id="signup-title" class="signup__title">Be the first to know.</h2>
+      <p class="signup__lede">Drop your email and we&rsquo;ll slip into your inbox once we launch.</p>
+
+      <!-- TODO: Replace REPLACE_WITH_FORMSPREE_ID with your Formspree form ID -->
+      <form
+        id="signup-form"
+        class="signup__form"
+        action="https://formspree.io/f/REPLACE_WITH_FORMSPREE_ID"
+        method="POST"
+        novalidate
+      >
+        <!-- Honeypot anti-spam -->
+        <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true" />
+
+        <label for="email" class="visually-hidden">Email address</label>
+        <input
+          type="email"
+          id="email"
+          name="email"
+          required
+          placeholder="you@stealthmail.com"
+          class="signup__input"
+          autocomplete="email"
+          inputmode="email"
+        />
+        <button type="submit" class="signup__btn" id="signup-btn">
+          <span class="signup__btn-label">Notify me</span>
+          <svg class="signup__btn-spark" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2l2.5 6.5L21 11l-6.5 2.5L12 20l-2.5-6.5L3 11l6.5-2.5z" fill="currentColor" />
+          </svg>
+        </button>
+
+        <p id="form-error" class="form-error" role="alert" hidden></p>
+      </form>
+
+      <p class="signup__privacy">
+        We only email you once &mdash; at launch. No spam. PDPA 2010 compliant.
+      </p>
+    </div>
+
+    <!-- Cream wave (blends into cream peek section) -->
+    <svg class="wave" viewBox="0 0 1440 120" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0,64 C240,112 480,16 720,48 C960,80 1200,128 1440,64 L1440,120 L0,120 Z" fill="#F7FAF4" />
+    </svg>
+  </section>
+
+  <!-- FEATURE PEEK -->
+  <section class="peek" aria-labelledby="peek-title">
+    <div class="peek__inner">
+      <h2 id="peek-title" class="peek__title">Sneak peek.</h2>
+      <div class="peek__grid">
+        <article class="peek-card peek-card--blue">
+          <svg class="peek-card__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2l2.5 6.5L21 11l-6.5 2.5L12 20l-2.5-6.5L3 11l6.5-2.5z" fill="#0B1020" />
+          </svg>
+          <p class="peek-card__text">Kid-friendly designs</p>
+        </article>
+        <article class="peek-card peek-card--green">
+          <svg class="peek-card__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2l2.5 6.5L21 11l-6.5 2.5L12 20l-2.5-6.5L3 11l6.5-2.5z" fill="#0B1020" />
+          </svg>
+          <p class="peek-card__text">Ships across Malaysia</p>
+        </article>
+        <article class="peek-card peek-card--purple">
+          <svg class="peek-card__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2l2.5 6.5L21 11l-6.5 2.5L12 20l-2.5-6.5L3 11l6.5-2.5z" fill="#0B1020" />
+          </svg>
+          <p class="peek-card__text">New drops weekly</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer" role="contentinfo">
+    <div class="footer__inner">
+      <div class="footer__brand">
+        <img src="./logo.png" alt="" class="footer__logo" width="48" height="48" />
+        <div>
+          <p class="wordmark footer__wordmark">3D <span class="wordmark__accent">NINJAZ</span></p>
+          <p class="footer__line">&copy; 2026 3D Ninjaz &middot; Kuala Lumpur, MY</p>
+        </div>
+      </div>
+
+      <nav class="footer__socials" aria-label="Social links">
+        <a href="#" class="social" aria-label="Instagram">
+          <svg viewBox="0 0 24 24" aria-hidden="true" width="22" height="22">
+            <path fill="currentColor" d="M12 2.2c3.2 0 3.6 0 4.8.1 1.2.1 1.9.2 2.3.4.6.2 1 .5 1.5 1 .5.5.8.9 1 1.5.2.4.3 1.1.4 2.3.1 1.2.1 1.6.1 4.8s0 3.6-.1 4.8c-.1 1.2-.2 1.9-.4 2.3-.2.6-.5 1-1 1.5-.5.5-.9.8-1.5 1-.4.2-1.1.3-2.3.4-1.2.1-1.6.1-4.8.1s-3.6 0-4.8-.1c-1.2-.1-1.9-.2-2.3-.4-.6-.2-1-.5-1.5-1-.5-.5-.8-.9-1-1.5-.2-.4-.3-1.1-.4-2.3C2.2 15.6 2.2 15.2 2.2 12s0-3.6.1-4.8c.1-1.2.2-1.9.4-2.3.2-.6.5-1 1-1.5.5-.5.9-.8 1.5-1 .4-.2 1.1-.3 2.3-.4C8.4 2.2 8.8 2.2 12 2.2zm0 1.8c-3.2 0-3.5 0-4.7.1-1.1.1-1.7.2-2.1.3-.5.2-.8.4-1.2.8-.4.4-.6.7-.8 1.2-.1.4-.3 1-.3 2.1C2.8 8.5 2.8 8.8 2.8 12s0 3.5.1 4.7c.1 1.1.2 1.7.3 2.1.2.5.4.8.8 1.2.4.4.7.6 1.2.8.4.1 1 .3 2.1.3 1.2.1 1.5.1 4.7.1s3.5 0 4.7-.1c1.1-.1 1.7-.2 2.1-.3.5-.2.8-.4 1.2-.8.4-.4.6-.7.8-1.2.1-.4.3-1 .3-2.1.1-1.2.1-1.5.1-4.7s0-3.5-.1-4.7c-.1-1.1-.2-1.7-.3-2.1-.2-.5-.4-.8-.8-1.2-.4-.4-.7-.6-1.2-.8-.4-.1-1-.3-2.1-.3C15.5 4 15.2 4 12 4zm0 3.1a4.9 4.9 0 1 1 0 9.8 4.9 4.9 0 0 1 0-9.8zm0 1.8a3.1 3.1 0 1 0 0 6.2 3.1 3.1 0 0 0 0-6.2zm5.1-2.3a1.15 1.15 0 1 1 0 2.3 1.15 1.15 0 0 1 0-2.3z"/>
+          </svg>
+          <span class="visually-hidden">Instagram</span>
+        </a>
+        <a href="#" class="social" aria-label="TikTok">
+          <svg viewBox="0 0 24 24" aria-hidden="true" width="22" height="22">
+            <path fill="currentColor" d="M19.3 6.6a5.3 5.3 0 0 1-3.2-1.1V15a5.6 5.6 0 1 1-4.8-5.5v2.7a3 3 0 1 0 2.1 2.8V2h2.6a5.3 5.3 0 0 0 3.3 4.6v2z"/>
+          </svg>
+          <span class="visually-hidden">TikTok</span>
+        </a>
+        <a href="mailto:hello@3dninjaz.com" class="social" aria-label="Email us at hello@3dninjaz.com">
+          <svg viewBox="0 0 24 24" aria-hidden="true" width="22" height="22">
+            <path fill="currentColor" d="M3 5h18c1.1 0 2 .9 2 2v10c0 1.1-.9 2-2 2H3c-1.1 0-2-.9-2-2V7c0-1.1.9-2 2-2zm9 8L3.2 7h17.6L12 13zm0 2.3L3 9.2V17h18V9.2L12 15.3z"/>
+          </svg>
+          <span class="visually-hidden">Email</span>
+        </a>
+      </nav>
+    </div>
+  </footer>
+
+  <!-- Success toast -->
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden>
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2l2.5 6.5L21 11l-6.5 2.5L12 20l-2.5-6.5L3 11l6.5-2.5z" fill="#84CC16" />
+    </svg>
+    <span id="toast-text">You&rsquo;re in. Stay stealthy.</span>
+  </div>
+
+  <script src="./script.js" defer></script>
+</body>
+</html>
