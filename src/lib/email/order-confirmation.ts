@@ -182,11 +182,42 @@ export function renderOrderConfirmationText(order: OrderWithItems): string {
 }
 
 /**
+ * Pre-render the items table as a sanitised HTML fragment. Used as the
+ * `items_table` template variable (HTML_VARS — bypasses HTML-escape but
+ * still passes through DOMPurify for safety).
+ */
+function renderItemsTableFragment(order: OrderWithItems): string {
+  return order.items
+    .map(
+      (i) => `
+      <tr>
+        <td style="padding:12px 0;border-bottom:1px solid #eee;">
+          <strong>${escapeHtml(i.productName)}</strong><br>
+          <span style="color:#666;font-size:13px;">Size ${escapeHtml(i.size)} &middot; Qty ${i.quantity}</span>
+        </td>
+        <td style="padding:12px 0;border-bottom:1px solid #eee;text-align:right;white-space:nowrap;">
+          ${formatMYRServer(i.lineTotal)}
+        </td>
+      </tr>
+    `,
+    )
+    .join("");
+}
+
+/**
  * Send the confirmation email for a paid order. Loads the order + items from
  * the DB, early-returns if not paid, and swallows SMTP failures so the caller
  * (capturePayPalOrder) is never blocked on email delivery (T-03-26).
+ *
+ * Plan 05-06: now reads the template subject + HTML body from the DB-backed
+ * `email_templates` table via renderTemplate. The legacy renderOrderConfirmationHtml
+ * is kept as a fallback used by the plain-text rendering and the "Resend
+ * receipt" path; once 05-06 is verified in production we can drop the
+ * fallback entirely.
  */
-export async function sendOrderConfirmationEmail(orderId: string): Promise<void> {
+export async function sendOrderConfirmationEmail(
+  orderId: string,
+): Promise<void> {
   const row = await db.query.orders.findFirst({
     where: eq(orders.id, orderId),
     with: { items: true },
@@ -200,16 +231,37 @@ export async function sendOrderConfirmationEmail(orderId: string): Promise<void>
     return;
   }
 
-  const subject = `3D Ninjaz — Order ${formatOrderNumber(row.id)} confirmed`;
-  const html = renderOrderConfirmationHtml(row);
-  const text = renderOrderConfirmationText(row);
+  // Plan 05-06: render via DB template. Variables map mirrors
+  // availableVariables.order_confirmation in src/lib/email/templates.ts.
+  let subject: string;
+  let html: string;
+  let text: string;
+  try {
+    const { renderTemplate } = await import("@/lib/email/templates");
+    const rendered = await renderTemplate("order_confirmation", {
+      customer_name: row.shippingName,
+      order_number: formatOrderNumber(row.id),
+      order_total: `${formatMYRServer(row.totalAmount)} ${row.currency}`,
+      order_link: `${baseUrl()}/orders/${row.id}`,
+      items_table: renderItemsTableFragment(row),
+    });
+    subject = rendered.subject;
+    html = rendered.html;
+    text = rendered.text;
+  } catch (err) {
+    // Fallback to legacy hardcoded template if DB template load fails.
+    console.warn(
+      "[order-email] DB template render failed, falling back to legacy:",
+      err,
+    );
+    subject = `3D Ninjaz — Order ${formatOrderNumber(row.id)} confirmed`;
+    html = renderOrderConfirmationHtml(row);
+    text = renderOrderConfirmationText(row);
+  }
 
   try {
     await sendMail({ to: row.customerEmail, subject, html, text });
   } catch (err) {
-    // Do NOT throw. The payment has already succeeded; email failure should
-    // surface as a log only. The user can still view the order online and the
-    // "Resend receipt" button offers a retry path.
     console.error("[order-email] send failed:", err);
   }
 }

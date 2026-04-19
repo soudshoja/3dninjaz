@@ -47,16 +47,40 @@ export async function sendResetPasswordEmail(opts: {
   name: string;
   url: string;
 }): Promise<void> {
+  // Plan 05-06: render via DB-backed template. Fallback to legacy hardcoded
+  // body if template render fails (DB hiccup must not block password reset).
+  let subject: string;
+  let html: string;
+  let text: string | undefined;
+  try {
+    const { renderTemplate } = await import("@/lib/email/templates");
+    const rendered = await renderTemplate("password_reset", {
+      customer_name: opts.name,
+      reset_link: opts.url,
+    });
+    subject = rendered.subject;
+    html = rendered.html;
+    text = rendered.text;
+  } catch (err) {
+    console.warn(
+      "[mailer] DB template render failed, using legacy reset body:",
+      err,
+    );
+    subject = "Reset your 3D Ninjaz password";
+    html = `
+        <p>Hi ${opts.name},</p>
+        <p>Click <a href="${opts.url}">here</a> to reset your password. This link expires in 1 hour.</p>
+        <p>If you did not request this, ignore this email.</p>
+      `;
+    text = undefined;
+  }
   try {
     await getMailer().sendMail({
       from: MAIL_FROM,
       to: opts.to,
-      subject: "Reset your 3D Ninjaz password",
-      html: `
-        <p>Hi ${opts.name},</p>
-        <p>Click <a href="${opts.url}">here</a> to reset your password. This link expires in 1 hour.</p>
-        <p>If you did not request this, ignore this email.</p>
-      `,
+      subject,
+      html,
+      text,
     });
   } catch (err) {
     console.error("[mailer] Failed to send reset password email:", err);
