@@ -29,6 +29,28 @@ function toDecimalOrNull(v: string | undefined | null): string | null {
   return trimmed;
 }
 
+/**
+ * MariaDB stores JSON as LONGTEXT internally, so mysql2 returns the raw string
+ * instead of auto-parsing like it does for MySQL 8's native JSON type. Normalise
+ * the images column back to a string array at the data-access layer so callers
+ * never have to care about the dialect difference.
+ */
+function ensureImagesArray(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.filter((v): v is string => typeof v === "string");
+  if (typeof raw === "string") {
+    if (raw.trim() === "") return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((v): v is string => typeof v === "string");
+      }
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 export async function createProduct(
   data: ProductInput
 ): Promise<ProductActionResult> {
@@ -187,7 +209,7 @@ export async function getProduct(id: string) {
     if (catRow) category = catRow;
   }
 
-  return { ...row, variants, category };
+  return { ...row, images: ensureImagesArray(row.images), variants, category };
 }
 
 export async function getProducts() {
@@ -226,6 +248,7 @@ export async function getProducts() {
 
   return list.map((p) => ({
     ...p,
+    images: ensureImagesArray(p.images),
     variants: variantByProduct.get(p.id) ?? [],
     category: p.categoryId ? categoryById.get(p.categoryId) ?? null : null,
   }));
