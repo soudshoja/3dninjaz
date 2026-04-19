@@ -11,6 +11,9 @@ import { AdminOrderStatusBadge } from "@/components/admin/admin-order-status-bad
 import { AdminOrderTimeline } from "@/components/admin/admin-order-timeline";
 import { AdminOrderStatusForm } from "@/components/admin/admin-order-status-form";
 import { AdminOrderNotesForm } from "@/components/admin/admin-order-notes-form";
+// Phase 6 06-06 — admin approval surface for cancel/return requests.
+import { listOrderRequestsForOrder } from "@/actions/admin-order-requests";
+import { OrderRequestsAdmin } from "@/components/admin/order-requests-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +40,10 @@ export default async function AdminOrderDetailPage({
   const { id } = await params;
   const row = await getAdminOrder(id);
   if (!row) notFound();
+
+  // Phase 6 06-06 — pending + resolved cancel/return requests for the
+  // approve/reject UI. Empty state handled inside OrderRequestsAdmin.
+  const orderRequests = await listOrderRequestsForOrder(id);
 
   return (
     <main
@@ -180,6 +187,26 @@ export default async function AdminOrderDetailPage({
                 PayPal capture ID: {row.paypalCaptureId}
               </p>
             ) : null}
+          </section>
+
+          <section
+            className="rounded-2xl p-4 md:p-6 md:col-span-2"
+            style={{ backgroundColor: "#ffffff" }}
+          >
+            <h2 className="font-[var(--font-heading)] text-xl mb-3">
+              Cancel / return requests
+            </h2>
+            <OrderRequestsAdmin
+              requests={orderRequests.map((r) => ({
+                id: r.id,
+                type: r.type,
+                status: r.status,
+                reason: r.reason,
+                adminNotes: r.adminNotes ?? null,
+                createdAt: r.createdAt,
+                resolvedAt: r.resolvedAt ?? null,
+              }))}
+            />
           </section>
 
           <section
