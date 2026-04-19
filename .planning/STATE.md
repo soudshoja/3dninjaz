@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Phase 06 Customer Account complete (all 7 plans). Phase 05 Admin Extensions in progress in parallel."
-last_updated: "2026-04-19T22:30:00.000Z"
-last_activity: 2026-04-19 -- Phase 06 complete (7/7 plans, all CUST-01..CUST-08 closed)
+stopped_at: "Phase 05 + 06 both complete (14 plans across both phases). v1.0 milestone code complete; only launch-checklist human-gated tasks remain."
+last_updated: "2026-04-19T23:30:00.000Z"
+last_activity: 2026-04-19 -- Phase 05 complete (7/7 plans, all ADM/PROMO/INV/REV/SHIP/SETTINGS/REPORT requirements closed)
 progress:
   total_phases: 6
-  completed_phases: 5
-  total_plans: 23
-  completed_plans: 23
+  completed_phases: 6
+  total_plans: 30
+  completed_plans: 30
   percent: 100
 ---
 
@@ -25,11 +25,11 @@ See: .planning/PROJECT.md (updated 2026-04-12)
 
 ## Current Position
 
+Phase: 05 (Admin Extensions) — COMPLETE (all 7 plans)
 Phase: 06 (Customer Account) — COMPLETE (all 7 plans)
-Next Phase: Phase 05 finalisation (Admin Extensions, executing in parallel)
-Plan: 7 of 7 (all CUST-01 through CUST-08 closed)
-Status: Phase 06 complete; Phase 05 still running in another executor session
-Last activity: 2026-04-19 -- Phase 06 complete (schema + account shell + addresses + wishlist + reviews + invoice + cancel/return + closure)
+Next Phase: v1.0 launch (human-gated launch checklist + verifier sweep)
+Status: All 30 v1.0 plans complete across 6 phases
+Last activity: 2026-04-19 -- Phase 05 complete (schema + analytics + users + coupons + inventory + settings + shipping + bulk import + email templates + reviews moderation)
 
 Progress: [██████████] 100%
 
@@ -37,11 +37,12 @@ Progress: [██████████] 100%
 
 **Velocity:**
 
-- Total plans completed: 23
+- Total plans completed: 30
 - Phase 01 total duration: ~2 hours executor time (cumulative incremental work)
 - Phase 02 total duration: ~35 minutes executor time (single session)
 - Phase 03 total duration: ~varies (4 plans shipped)
 - Phase 04 total duration: ~100 min across 4 plans
+- Phase 05 total duration: ~195 min across 7 plans (parallel with Phase 06)
 - Phase 06 total duration: ~98 min across 7 plans
 - Average duration: ~20 min / plan
 
@@ -53,12 +54,13 @@ Progress: [██████████] 100%
 | 02    | 4     | ~35min | ~9min    |
 | 03    | 4     | —      | —        |
 | 04    | 4     | ~100min| ~25min   |
+| 05    | 7     | ~195min| ~28min   |
 | 06    | 7     | ~98min | ~14min   |
 
 **Recent Trend:**
 
-- Last 7 plans: 06-01 ✓, 06-02 ✓, 06-03 ✓, 06-04 ✓, 06-05 ✓, 06-06 ✓, 06-07 ✓
-- Trend: Phase 6 customer self-service complete in single executor session — schema + account + addresses + wishlist + reviews + invoice + cancel/return + closure all shipped. CUST-01..CUST-08 all closed.
+- Last 7 plans (Phase 5): 05-01 ✓, 05-02 ✓, 05-03 ✓, 05-04 ✓, 05-05 ✓, 05-06 ✓, 05-07 ✓
+- Trend: Phase 5 Admin Extensions complete in single executor session running in parallel with Phase 6. All ADM-07..ADM-15, PROMO-01/02, INV-01/02, REV-01, SHIP-01, SETTINGS-01, REPORT-01 requirements closed.
 
 *Updated after each plan completion*
 
@@ -97,20 +99,28 @@ Recent decisions affecting current work:
 - 2026-04-19 (Phase 6 06-05): Buyer-gate via server-side INNER JOIN order_items + orders WITH status IN paid|processing|shipped|delivered (T-06-05-buyer). Reviews 'Former customer' anonymisation when user.deletedAt set (T-06-05-PDPA). Wave-3 slot strategy: 06-05 commits stub components for 06-06; /orders/[id]/page.tsx edited only once.
 - 2026-04-19 (Phase 6 06-06): Invoice PDF route at /orders/[id]/invoice.pdf via @react-pdf/renderer renderToStream → Buffer; Cache-Control private, no-store; in-process Map rate limit 10/user/hour. Cancel/return one-pending-per-order rule enforced at app layer; admin approve-cancel atomic via db.transaction + assertValidTransition.
 - 2026-04-19 (Phase 6 06-07): Account closure anonymizes email to deleted-<userId>@3dninjaz.local (frees original for re-registration per Q-06-07); db.transaction wraps anonymize + addresses delete + wishlists delete + session delete; best-effort Better Auth banUser outside transaction. Re-registration with original email creates a brand-new disjoint account.
+- 2026-04-19 (Phase 5 05-01): Phase 5 schema landed via raw SQL migration (scripts/phase5-migrate.cjs) — 6 new tables (coupons, coupon_redemptions, email_templates, store_settings, shipping_rates, events) + 2 product_variants columns (in_stock, low_stock_threshold). 16 MY state rows seeded in shipping_rates at 0.00. The schema.ts/validators.ts edits were committed via Phase 6's d9bf71a (parallel append-only writes — both phases coexisted cleanly).
+- 2026-04-19 (Phase 5 05-02): Q-05-02 daily buckets for all 7d/30d/90d ranges. Q-05-03 client onClick → /api/events/track endpoint (sha256 IP hash, 100 req/min/IP rate limit). Q-05-07 Better Auth banned=true; in-flight sessions die at next request (accepted). Recharts (NOT shadcn Chart wrapper) used directly — saves a dep.
+- 2026-04-19 (Phase 5 05-03): Q-05-01 coupon UX: input above PayPal in summary card, separate -RM line, inline error. Coupon code threaded through PayPal customId='COUPON:CODE' to survive approval→capture (avoids adding columns to orders). Atomic redemption via UPDATE coupons SET usage_count=usage_count+1 WHERE id=? AND (usage_cap IS NULL OR usage_count < usage_cap) — race-safe.
+- 2026-04-19 (Phase 5 05-04): /admin/inventory standalone page (avoided product-form refactor). store_settings cached 60s in module-global; lazy-seeded on first read. shipping_rates seeded by migration; getShippingRate is customer-safe (no requireAdmin). paypal.ts now uses getShippingRate(state, subtotal) instead of hardcoded "0.00".
+- 2026-04-19 (Phase 5 05-05): Q-05-05 REJECT external image URLs in CSV (zero SSRF surface). Single-transaction commit, full rollback on any failure. Template CSV generated client-side from a 12-column header constant; no separate static file. 24h cleanup of public/uploads/imports/ deferred (cron task).
+- 2026-04-19 (Phase 5 05-06): Q-05-08 DOMPurify strict allowlist; FORBID_ATTR explicit on event handlers; ALLOW_DATA_ATTR=false. items_table is the only HTML_VARS member. Preview iframe uses srcDoc + sandbox='' (no allow-scripts). Existing email senders refactored to renderTemplate with legacy hardcoded fallback during rollout.
+- 2026-04-19 (Phase 5 05-07): Q-05-04 minimal review schema (rating + body + status enum). Default filter 'pending'. Hard delete with 2-step confirm (no audit log v1). Sidebar badge prop-drilled from layout via getPendingReviewCount.
 
 ### Pending Todos
 
 - **Launch (human-gated, not a code plan)** — follow `.planning/phases/04-brand-launch/LAUNCH-CHECKLIST.md`:
-  - D-01 WhatsApp number swap in `src/lib/business-info.ts`
-  - D-05 Instagram + TikTok URLs
+  - D-01 WhatsApp number swap (now in /admin/settings — admin can edit at runtime via 05-04 settings form)
+  - D-05 Instagram + TikTok URLs (also editable via /admin/settings)
   - Logo WebP optimisation (DEF-04-03-04)
   - PayPal env → live in cPanel Node app env vars
   - Document root swap (DEPLOY-NOTES.md Path A)
   - Upload `deploy/htaccess-launch.txt` as `/home/ninjaz/public_html/.htaccess`
   - Submit sitemap to Google Search Console
   - `git tag v1.0.0 && git push --tags`
-- Phase 5 (Admin Extensions) — executing in parallel session; check status before final v1 tag.
-- Phase 6 verifier sweep (per `/gsd-verify-phase 06`).
+- Phase 5 + Phase 6 verifier sweeps (`/gsd-verify-phase 05` and `/gsd-verify-phase 06`).
+- 24h cleanup cron for `public/uploads/imports/` (deferred from 05-05).
+- Optional follow-up: migrate storefront pages (about/contact/privacy/terms/whatsapp-cta) from `business-info.ts` BUSINESS const to `getStoreSettingsCached()` so admin edits surface without code change. Currently business-info.ts retained for back-compat; 05-04 added the DB-backed accessor only.
 
 ### Blockers/Concerns
 
@@ -123,6 +133,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-19T22:30:00.000Z
-Stopped at: Phase 06 Customer Account complete (all 7 plans). Phase 05 Admin Extensions executing in parallel — check that session before tagging v1.0.0.
-Resume file: .planning/phases/05-admin-extensions/ — verify Phase 5 progress; run /gsd-verify-phase 06 to validate Phase 6 work.
+Last session: 2026-04-19T23:30:00.000Z
+Stopped at: Phase 05 Admin Extensions complete (all 7 plans). Phase 06 also complete. v1.0 milestone code-complete; only launch checklist + verifier sweeps remain.
+Resume file: .planning/LAUNCH-CHECKLIST.md (Phase 4) for human-gated launch tasks; run `/gsd-verify-phase 05` and `/gsd-verify-phase 06` to validate both parallel phases.

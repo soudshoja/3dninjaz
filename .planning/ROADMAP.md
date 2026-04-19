@@ -14,9 +14,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation** - Project scaffold, database schema, auth, and admin product CRUD
 - [x] **Phase 2: Storefront + Cart** - Product catalog, product detail pages, and shopping cart
-- [ ] **Phase 3: Checkout + Orders** - PayPal payment, order confirmation, and order management
-- [ ] **Phase 4: Brand + Launch** - Trust content, PDPA compliance, branding, and responsive polish
-- [ ] **Phase 5: Admin Extensions** - User mgmt, coupons, inventory toggle, bulk import, store settings UI, analytics, email template editor, reviews moderation, shipping rates
+- [x] **Phase 3: Checkout + Orders** - PayPal payment, order confirmation, and order management
+- [x] **Phase 4: Brand + Launch** - Trust content, PDPA compliance, branding, and responsive polish
+- [x] **Phase 5: Admin Extensions** - User mgmt, coupons, inventory toggle, bulk import, store settings UI, analytics, email template editor, reviews moderation, shipping rates
 - [x] **Phase 6: Customer Account** - /account profile, saved addresses, wishlist, product reviews, PDF invoices, cancel/return requests
 
 ## Phase Details
@@ -108,13 +108,13 @@ Plans:
 **Plans**: 7 plans
 
 Plans:
-- [ ] 05-01-PLAN.md — Schema additions (coupons, coupon_redemptions, email_templates, reviews, store_settings, shipping_rates) + variant in_stock/low_stock_threshold + Zod schemas + new deps (Wave 1)
-- [ ] 05-02-PLAN.md — /admin/users (suspend/unsuspend) + /admin analytics dashboard (revenue, orders, top products, funnel, 7/30/90d range) + /api/events/track (Wave 2)
-- [ ] 05-03-PLAN.md — /admin/coupons CRUD + customer /checkout coupon apply + atomic redemption + pricing helper (Wave 2)
-- [ ] 05-04-PLAN.md — Inventory toggle (admin + storefront sold-out) + /admin/settings (DB-backed store settings, deprecate business-info.ts) + /admin/shipping (flat rates per MY state, free-ship threshold, SST toggle) (Wave 2)
-- [ ] 05-05-PLAN.md — /admin/products/import CSV upload → preview → commit flow (Wave 3)
-- [ ] 05-06-PLAN.md — /admin/email-templates editor (HTML + live preview + variable substitution + DOMPurify sanitize) + refactor order-confirmation + password-reset senders to DB-backed templates (Wave 3)
-- [ ] 05-07-PLAN.md — /admin/reviews moderation queue (approve / hide / delete) + sidebar pending-count badge (Wave 3)
+- [x] 05-01-PLAN.md — Schema additions (coupons, coupon_redemptions, email_templates, reviews, store_settings, shipping_rates) + variant in_stock/low_stock_threshold + Zod schemas + new deps (Wave 1)
+- [x] 05-02-PLAN.md — /admin/users (suspend/unsuspend) + /admin analytics dashboard (revenue, orders, top products, funnel, 7/30/90d range) + /api/events/track (Wave 2)
+- [x] 05-03-PLAN.md — /admin/coupons CRUD + customer /checkout coupon apply + atomic redemption + pricing helper (Wave 2)
+- [x] 05-04-PLAN.md — Inventory toggle (admin + storefront sold-out) + /admin/settings (DB-backed store settings, deprecate business-info.ts) + /admin/shipping (flat rates per MY state, free-ship threshold, SST toggle) (Wave 2)
+- [x] 05-05-PLAN.md — /admin/products/import CSV upload → preview → commit flow (Wave 3)
+- [x] 05-06-PLAN.md — /admin/email-templates editor (HTML + live preview + variable substitution + DOMPurify sanitize) + refactor order-confirmation + password-reset senders to DB-backed templates (Wave 3)
+- [x] 05-07-PLAN.md — /admin/reviews moderation queue (approve / hide / delete) + sidebar pending-count badge (Wave 3)
 
 ### Phase 6: Customer Account
 **Goal**: Logged-in customers have a full self-service account — view/edit profile, manage saved addresses, build wishlists, write product reviews, download invoices, request cancels/returns — no need to email for routine account tasks.
@@ -150,6 +150,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. Foundation | 4/4 | Complete | 2026-04-19 |
 | 2. Storefront + Cart | 4/4 | Complete | 2026-04-19 |
 | 3. Checkout + Orders | 4/4 | Complete | 2026-04-19 |
-| 4. Brand + Launch | 2/4 | In progress | - |
-| 5. Admin Extensions | 0/7 | Not started | - |
+| 4. Brand + Launch | 4/4 | Complete | 2026-04-20 |
+| 5. Admin Extensions | 7/7 | Complete | 2026-04-19 |
 | 6. Customer Account | 7/7 | Complete | 2026-04-19 |
