@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { auth } from "@/lib/auth";
 import { SidebarNav } from "@/components/admin/sidebar-nav";
-import { AdminUserBadge } from "@/components/admin/admin-user-badge";
+import { SignOutButton } from "@/components/admin/sign-out-button";
 import { getPendingReviewCount } from "@/actions/admin-reviews";
 
 // Mobile chip strip — single source of truth for both desktop sidebar and
@@ -67,10 +67,7 @@ export default async function AdminLayout({
         </Link>
         <SidebarNav pendingReviewCount={pendingReviewCount} />
         <div className="mt-auto">
-          <AdminUserBadge
-            name={session.user.name}
-            email={session.user.email}
-          />
+          <SignOutButton />
         </div>
       </aside>
       <div className="flex flex-1 flex-col">
