@@ -19,16 +19,32 @@ export const metadata: Metadata = {
     "Browse and buy unique 3D printed products. Ninja crafted in Malaysia.",
 };
 
-export default async function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ closed?: string }>;
+}) {
   const [featured, categories] = await Promise.all([
     getActiveFeaturedProducts(4),
     getActiveCategories(),
   ]);
 
   const accents = [BRAND.blue, BRAND.green, BRAND.purple] as const;
+  const sp = searchParams ? await searchParams : {};
+  const closed = sp.closed === "1";
 
   return (
     <>
+      {closed ? (
+        <div
+          role="status"
+          className="px-6 py-4 text-center text-sm"
+          style={{ backgroundColor: `${BRAND.purple}25`, color: BRAND.ink }}
+        >
+          Your account has been closed. We&apos;re sorry to see you go. You
+          can always sign up again with a new account.
+        </div>
+      ) : null}
       <Hero />
       <FeaturedRail products={featured} />
 
