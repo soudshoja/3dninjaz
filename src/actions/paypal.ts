@@ -9,6 +9,7 @@ import { orderAddressSchema, type OrderAddressInput } from "@/lib/validators";
 import { ordersController, PAYPAL_CURRENCY } from "@/lib/paypal";
 import { CheckoutPaymentIntent } from "@paypal/paypal-server-sdk";
 import { formatOrderNumber } from "@/lib/orders";
+import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
 import { revalidatePath } from "next/cache";
 
 type BagLineInput = {
@@ -355,6 +356,15 @@ export async function capturePayPalOrder({
     .set({ status: "paid", paypalCaptureId: captureId })
     .where(eq(orders.id, existing.id));
 
+  // Fire-and-forget order-confirmation email (Plan 03-03).
+  // T-03-26 / D3-10 UX contract: SMTP failure must NEVER block the capture
+  // response. sendOrderConfirmationEmail itself catches and logs internally;
+  // we also attach a catch here as a belt-and-braces guard in case the
+  // top-level DB read inside that function throws before the inner try/catch.
+  void sendOrderConfirmationEmail(existing.id).catch((err) =>
+    console.error("[paypal] confirmation email dispatch failed:", err),
+  );
+
   revalidatePath(`/orders/${existing.id}`);
   revalidatePath("/orders");
 
@@ -362,7 +372,9 @@ export async function capturePayPalOrder({
     ok: true,
     orderId: existing.id,
     orderNumber: formatOrderNumber(existing.id),
-    redirectTo: `/orders/${existing.id}`,
+    // `?from=checkout` toggles the success banner on /orders/[id] (Plan 03-03).
+    // T-03-24: cosmetic only — no behavior change if the flag is spoofed.
+    redirectTo: `/orders/${existing.id}?from=checkout`,
   };
 }
 
