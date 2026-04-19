@@ -11,6 +11,7 @@ import { CheckoutPaymentIntent } from "@paypal/paypal-server-sdk";
 import { formatOrderNumber } from "@/lib/orders";
 import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
 import { validateCoupon, redeemCoupon } from "@/actions/coupons";
+import { getShippingRate } from "@/actions/admin-shipping";
 import { revalidatePath } from "next/cache";
 
 type BagLineInput = {
@@ -102,6 +103,16 @@ export async function createPayPalOrder(
     if (!v.product?.isActive) {
       return { ok: false, error: "One or more items are no longer available." };
     }
+    // Phase 5 05-04 (T-05-04-tampering): server-side re-check of in-stock
+    // status. Cart could have been added before admin flipped the variant
+    // to sold-out; we refuse the order rather than charge for stock we
+    // can't ship.
+    if (v.inStock === false) {
+      return {
+        ok: false,
+        error: `${v.product?.name ?? "An item"} (Size ${v.size}) is sold out. Please remove it from your bag.`,
+      };
+    }
   }
 
   // Build snapshot lines with server-derived prices (NEVER client prices).
@@ -152,7 +163,12 @@ export async function createPayPalOrder(
 
   const subtotal = snapshots.reduce((sum, s) => sum + Number(s.lineTotal), 0);
   const subtotalStr = subtotal.toFixed(2);
-  const shippingStr = "0.00";
+
+  // Plan 05-04 — shipping cost from per-state DB rate + free-ship threshold.
+  // Server computes from address.state; client only supplies the state.
+  const shippingResult = await getShippingRate(addr.data.state, subtotal);
+  const shippingNum = Number(shippingResult.cost.toFixed(2));
+  const shippingStr = shippingNum.toFixed(2);
 
   // Plan 05-03 — server-side coupon application. Even if the client never
   // supplied a code, this branch is a no-op. If they did supply one, we
@@ -172,7 +188,7 @@ export async function createPayPalOrder(
     // price rather than blocking the order.
   }
 
-  const totalNum = Math.max(0, +(subtotal - discount).toFixed(2));
+  const totalNum = Math.max(0, +(subtotal - discount + shippingNum).toFixed(2));
   const totalStr = totalNum.toFixed(2);
 
   // Create PayPal order via SDK (Orders v2).

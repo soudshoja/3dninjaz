@@ -19,6 +19,9 @@ type Variant = {
   widthCm: string | null;
   heightCm: string | null;
   depthCm: string | null;
+  // Phase 5 05-04 — per-variant inventory toggle (INV-01).
+  // Optional for back-compat with callers not yet plumbing this through.
+  inStock?: boolean;
 };
 
 type ProductDetailProps = {

@@ -7,6 +7,10 @@ type Variant = {
   id: string;
   size: "S" | "M" | "L";
   price: string;
+  // Phase 5 05-04 — per-variant inventory toggle (INV-01). Optional so this
+  // component is backwards-compatible with callers that haven't passed the
+  // field through yet.
+  inStock?: boolean;
 };
 
 const SIZE_LABEL: Record<Variant["size"], string> = {
@@ -27,6 +31,10 @@ const ACCENTS: Record<Variant["size"], string> = {
  *
  * Uses the native ARIA radiogroup / radio pattern so screen readers
  * announce the selection group correctly.
+ *
+ * Phase 5 05-04: when a variant has inStock=false, the chip is greyed out,
+ * onClick is suppressed, aria-disabled=true, and a "Sold out" helper text
+ * appears under the price.
  */
 export function SizeSelector({
   variants,
@@ -52,26 +60,50 @@ export function SizeSelector({
         {variants.map((v) => {
           const isSelected = selectedSize === v.size;
           const accent = ACCENTS[v.size];
+          // inStock undefined → treat as in-stock (back-compat). Only an
+          // explicit false greys the chip out.
+          const soldOut = v.inStock === false;
           return (
             <li key={v.id}>
               <button
                 type="button"
                 role="radio"
                 aria-checked={isSelected}
-                onClick={() => onSelect(v.size)}
-                className="w-full rounded-[20px] py-4 px-3 font-bold transition border-2 flex flex-col items-center gap-1 min-h-[60px]"
+                aria-disabled={soldOut}
+                disabled={soldOut}
+                onClick={() => {
+                  if (soldOut) return;
+                  onSelect(v.size);
+                }}
+                className="w-full rounded-[20px] py-4 px-3 font-bold transition border-2 flex flex-col items-center gap-1 min-h-[60px] disabled:cursor-not-allowed"
                 style={{
-                  backgroundColor: isSelected ? accent : "white",
-                  color: isSelected ? "white" : BRAND.ink,
-                  borderColor: isSelected ? accent : BRAND.ink,
-                  boxShadow: isSelected
-                    ? `0 6px 0 rgba(0,0,0,0.35)`
-                    : "0 3px 0 rgba(0,0,0,0.15)",
+                  backgroundColor: soldOut
+                    ? "#f1f5f9"
+                    : isSelected
+                      ? accent
+                      : "white",
+                  color: soldOut
+                    ? "#94a3b8"
+                    : isSelected
+                      ? "white"
+                      : BRAND.ink,
+                  borderColor: soldOut
+                    ? "#cbd5e1"
+                    : isSelected
+                      ? accent
+                      : BRAND.ink,
+                  boxShadow: soldOut
+                    ? "none"
+                    : isSelected
+                      ? `0 6px 0 rgba(0,0,0,0.35)`
+                      : "0 3px 0 rgba(0,0,0,0.15)",
                 }}
               >
                 <span className="font-[var(--font-heading)] text-3xl">{v.size}</span>
                 <span className="text-sm opacity-90">{SIZE_LABEL[v.size]}</span>
-                <span className="text-sm font-bold mt-1">{formatMYR(v.price)}</span>
+                <span className="text-sm font-bold mt-1">
+                  {soldOut ? "Sold out" : formatMYR(v.price)}
+                </span>
               </button>
             </li>
           );

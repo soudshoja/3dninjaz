@@ -14,6 +14,7 @@ import {
   Mail,
   Star,
   Upload,
+  Boxes,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +30,7 @@ const items = [
   { href: "/admin/orders", label: "Orders", icon: Receipt, exact: false },
   // Phase 5 admin extensions
   { href: "/admin/users", label: "Users", icon: Users, exact: false },
+  { href: "/admin/inventory", label: "Inventory", icon: Boxes, exact: false },
   { href: "/admin/coupons", label: "Coupons", icon: Tag, exact: false },
   {
     href: "/admin/products/import",

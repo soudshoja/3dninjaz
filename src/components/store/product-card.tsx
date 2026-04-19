@@ -4,6 +4,7 @@ import { BRAND } from "@/lib/brand";
 import { priceRangeMYR } from "@/lib/format";
 import type { CatalogProduct } from "@/lib/catalog";
 import { WishlistButton } from "@/components/store/wishlist-button";
+import { SoldOutBadge } from "@/components/store/sold-out-badge";
 
 /**
  * Single product card. Used by the homepage featured rail, /shop grid,
@@ -31,6 +32,12 @@ export function ProductCard({
   const accent = ACCENTS[accentIndex % ACCENTS.length];
   const firstImage = product.images?.[0];
   const priceLabel = priceRangeMYR(product.variants);
+  // Phase 5 05-04 (INV-01): show Sold Out overlay when EVERY variant has
+  // inStock=false. If a product has no variants at all (defensive), do not
+  // show sold out — it is still purchasable / visible per existing rules.
+  const allSoldOut =
+    product.variants.length > 0 &&
+    product.variants.every((v) => v.inStock === false);
 
   return (
     <div className="relative group">
@@ -65,6 +72,7 @@ export function ProductCard({
             FEATURED
           </span>
         ) : null}
+        {allSoldOut ? <SoldOutBadge /> : null}
       </div>
       {/* p-5 flex row: title + price badge.
           - `min-w-0` on the flex item (h3) is required for `truncate` to
