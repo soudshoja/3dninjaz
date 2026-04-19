@@ -3,6 +3,7 @@ import Image from "next/image";
 import { BRAND } from "@/lib/brand";
 import { priceRangeMYR } from "@/lib/format";
 import type { CatalogProduct } from "@/lib/catalog";
+import { WishlistButton } from "@/components/store/wishlist-button";
 
 /**
  * Single product card. Used by the homepage featured rail, /shop grid,
@@ -11,27 +12,34 @@ import type { CatalogProduct } from "@/lib/catalog";
  *
  * Accent cycles through blue/green/purple based on `accentIndex` so grid
  * rows feel lively without per-product configuration.
+ *
+ * Phase 6 06-04: optional WishlistButton overlay top-right of the image.
+ * Parents pass `isWishlisted` via getWishlistedProductIds batch helper to
+ * avoid an N+1 query on grid pages.
  */
 const ACCENTS = [BRAND.blue, BRAND.green, BRAND.purple] as const;
 
 export function ProductCard({
   product,
   accentIndex = 0,
+  isWishlisted = false,
 }: {
   product: CatalogProduct;
   accentIndex?: number;
+  isWishlisted?: boolean;
 }) {
   const accent = ACCENTS[accentIndex % ACCENTS.length];
   const firstImage = product.images?.[0];
   const priceLabel = priceRangeMYR(product.variants);
 
   return (
-    <Link
-      href={`/products/${product.slug}`}
-      className="group block rounded-[28px] bg-white shadow-lg hover:-translate-y-1 hover:shadow-xl transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-      style={{ outlineColor: accent }}
-      aria-label={`${product.name} — ${priceLabel}`}
-    >
+    <div className="relative group">
+      <Link
+        href={`/products/${product.slug}`}
+        className="block rounded-[28px] bg-white shadow-lg hover:-translate-y-1 hover:shadow-xl transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+        style={{ outlineColor: accent }}
+        aria-label={`${product.name} — ${priceLabel}`}
+      >
       <div
         className="relative aspect-square rounded-[24px] overflow-hidden"
         style={{ backgroundColor: `${accent}20` }}
@@ -51,7 +59,7 @@ export function ProductCard({
         )}
         {product.isFeatured ? (
           <span
-            className="absolute top-3 right-3 rounded-full px-3 py-1 text-xs font-bold text-white"
+            className="absolute top-3 left-3 rounded-full px-3 py-1 text-xs font-bold text-white"
             style={{ backgroundColor: accent }}
           >
             FEATURED
@@ -79,6 +87,18 @@ export function ProductCard({
           {priceLabel}
         </span>
       </div>
-    </Link>
+      </Link>
+
+      {/* Wishlist heart overlay — sibling to the Link (NOT inside) so we
+          don't nest interactive elements (HTML invalid). The button uses
+          stopPropagation so a click never bubbles into the card link. */}
+      <div className="absolute top-3 right-3 z-10">
+        <WishlistButton
+          productId={product.id}
+          initialState={isWishlisted}
+          variant="overlay"
+        />
+      </div>
+    </div>
   );
 }

@@ -10,6 +10,7 @@ import {
   getActiveProductsByCategorySlug,
   type CatalogProduct,
 } from "@/lib/catalog";
+import { getWishlistedProductIds } from "@/actions/wishlist";
 
 export const metadata: Metadata = { title: "Shop" };
 
@@ -39,6 +40,10 @@ export default async function ShopPage({
   } else {
     products = allProducts ?? [];
   }
+
+  // Phase 6 06-04 — batch fetch wishlist state for all visible products in
+  // one query (avoids N+1). Returns empty Set when unauthenticated.
+  const wishedIds = await getWishlistedProductIds(products.map((p) => p.id));
 
   return (
     <div className="pb-24">
@@ -74,7 +79,11 @@ export default async function ShopPage({
           <ul className="grid grid-cols-1 min-[360px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 md:gap-6">
             {products.map((p, i) => (
               <li key={p.id}>
-                <ProductCard product={p} accentIndex={i} />
+                <ProductCard
+                  product={p}
+                  accentIndex={i}
+                  isWishlisted={wishedIds.has(p.id)}
+                />
               </li>
             ))}
           </ul>

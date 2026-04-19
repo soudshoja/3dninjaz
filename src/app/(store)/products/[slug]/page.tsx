@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getActiveProductBySlug } from "@/lib/catalog";
 import { ProductDetail } from "@/components/store/product-detail";
+import { isWishlisted } from "@/actions/wishlist";
 
 type Params = Promise<{ slug: string }>;
 
@@ -23,6 +24,10 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
   const { slug } = await params;
   const product = await getActiveProductBySlug(slug);
   if (!product) notFound();
+
+  // Phase 6 06-04 — server-side fetch of the wishlist state for this product
+  // so the heart button on PDP renders with the correct initial fill.
+  const wished = await isWishlisted(product.id);
 
   // Marshal to a client-safe plain object. Only pass what ProductDetail needs
   // — keeps the client bundle tight and avoids shipping server-only fields.
@@ -48,6 +53,7 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
           depthCm: v.depthCm,
         })),
       }}
+      isWishlistedInitial={wished}
     />
   );
 }

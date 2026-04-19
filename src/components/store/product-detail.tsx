@@ -7,6 +7,7 @@ import { ProductGallery } from "@/components/store/product-gallery";
 import { SizeSelector } from "@/components/store/size-selector";
 import { SizeGuide } from "@/components/store/size-guide";
 import { AddToBagButton } from "@/components/store/add-to-bag-button";
+import { WishlistButton } from "@/components/store/wishlist-button";
 
 type Size = "S" | "M" | "L";
 
@@ -31,6 +32,8 @@ type ProductDetailProps = {
     category: { name: string; slug: string } | null;
     variants: Variant[];
   };
+  // Phase 6 06-04 — initial wishlist state fetched server-side on PDP page.
+  isWishlistedInitial?: boolean;
 };
 
 const SIZE_ORDER: Record<Size, number> = { S: 0, M: 1, L: 2 };
@@ -41,7 +44,10 @@ const SIZE_ORDER: Record<Size, number> = { S: 0, M: 1, L: 2 };
  * material/lead-time + Add-to-bag. Props are kept intentionally small so
  * the client bundle only carries what it needs.
  */
-export function ProductDetail({ product }: ProductDetailProps) {
+export function ProductDetail({
+  product,
+  isWishlistedInitial = false,
+}: ProductDetailProps) {
   const sortedVariants = useMemo(
     () =>
       [...product.variants].sort(
@@ -108,13 +114,22 @@ export function ProductDetail({ product }: ProductDetailProps) {
           onSelect={setSelectedSize}
         />
 
-        <AddToBagButton
-          selectedVariant={selectedVariant}
-          productId={product.id}
-          productSlug={product.slug}
-          productName={product.name}
-          productImage={product.images[0] ?? null}
-        />
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex-1 min-w-0">
+            <AddToBagButton
+              selectedVariant={selectedVariant}
+              productId={product.id}
+              productSlug={product.slug}
+              productName={product.name}
+              productImage={product.images[0] ?? null}
+            />
+          </div>
+          <WishlistButton
+            productId={product.id}
+            initialState={isWishlistedInitial}
+            variant="pill"
+          />
+        </div>
 
         {/* Lead time notice — PROD-06 */}
         <p

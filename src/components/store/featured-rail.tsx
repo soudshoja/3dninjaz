@@ -2,14 +2,19 @@ import type { CatalogProduct } from "@/lib/catalog";
 import { ProductCard } from "@/components/store/product-card";
 import { BRAND } from "@/lib/brand";
 import { Wave } from "@/components/brand/wave";
+import { getWishlistedProductIds } from "@/actions/wishlist";
 
 /**
  * Homepage featured rail. Accepts `products` from the page — does no DB
  * work itself. Renders a 2/3/4 responsive grid (D2-06) on a blue band
  * flanked by matched-color wave dividers.
+ *
+ * Phase 6 06-04 — server-side batch fetch of wishlist state for the
+ * visible products so heart overlays render with correct initial state.
  */
-export function FeaturedRail({ products }: { products: CatalogProduct[] }) {
+export async function FeaturedRail({ products }: { products: CatalogProduct[] }) {
   if (!products.length) return null;
+  const wishedIds = await getWishlistedProductIds(products.map((p) => p.id));
   return (
     <section className="relative">
       <Wave color={BRAND.blue} />
@@ -32,7 +37,12 @@ export function FeaturedRail({ products }: { products: CatalogProduct[] }) {
               still works because min-w-0 on the card title lets it truncate. */}
           <div className="grid grid-cols-1 min-[360px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {products.map((p, i) => (
-              <ProductCard key={p.id} product={p} accentIndex={i} />
+              <ProductCard
+                key={p.id}
+                product={p}
+                accentIndex={i}
+                isWishlisted={wishedIds.has(p.id)}
+              />
             ))}
           </div>
         </div>
