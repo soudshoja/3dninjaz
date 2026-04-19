@@ -23,10 +23,12 @@ import { BRAND } from "@/lib/brand";
 export function PayPalButton({
   address,
   items,
+  appliedCouponCode,
   onPaid,
 }: {
   address: AddressFormValues | null;
   items: CartItem[];
+  appliedCouponCode?: string | null;
   onPaid: (redirectTo: string) => void;
 }) {
   const disabled = address === null || items.length === 0;
@@ -34,6 +36,8 @@ export function PayPalButton({
   addressRef.current = address;
   const itemsRef = useRef(items);
   itemsRef.current = items;
+  const couponRef = useRef(appliedCouponCode ?? null);
+  couponRef.current = appliedCouponCode ?? null;
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -49,6 +53,9 @@ export function PayPalButton({
         variantId: i.variantId,
         quantity: i.quantity,
       })),
+      // Plan 05-03: optional coupon code; server re-validates + recomputes
+      // discount; client-supplied amount is never trusted (T-05-03-tampering)
+      couponCode: couponRef.current ?? null,
     });
     if (!res.ok) {
       setErrorMsg(res.error);

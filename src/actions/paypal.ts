@@ -10,6 +10,7 @@ import { ordersController, PAYPAL_CURRENCY } from "@/lib/paypal";
 import { CheckoutPaymentIntent } from "@paypal/paypal-server-sdk";
 import { formatOrderNumber } from "@/lib/orders";
 import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
+import { validateCoupon, redeemCoupon } from "@/actions/coupons";
 import { revalidatePath } from "next/cache";
 
 type BagLineInput = {
@@ -20,10 +21,21 @@ type BagLineInput = {
 type CreateOrderInput = {
   address: OrderAddressInput;
   items: BagLineInput[];
+  // Plan 05-03 — optional coupon. Server-side validateCoupon recomputes the
+  // discount; client-supplied amount is ignored entirely (T-05-03-tampering).
+  couponCode?: string | null;
 };
 
 type CreateOrderResult =
-  | { ok: true; paypalOrderId: string; internalOrderId: string }
+  | {
+      ok: true;
+      paypalOrderId: string;
+      internalOrderId: string;
+      // Echo the discount back so the UI can display the line item the
+      // customer is paying for.
+      discount?: number;
+      couponCode?: string;
+    }
   | { ok: false; error: string };
 
 type CaptureOrderResult =
@@ -141,7 +153,27 @@ export async function createPayPalOrder(
   const subtotal = snapshots.reduce((sum, s) => sum + Number(s.lineTotal), 0);
   const subtotalStr = subtotal.toFixed(2);
   const shippingStr = "0.00";
-  const totalStr = subtotalStr; // v1: shipping free (D3-05)
+
+  // Plan 05-03 — server-side coupon application. Even if the client never
+  // supplied a code, this branch is a no-op. If they did supply one, we
+  // re-validate against the DB and recompute the discount; the client
+  // can never inflate the discount (T-05-03-tampering).
+  let discount = 0;
+  let appliedCouponCode: string | null = null;
+  if (input.couponCode && typeof input.couponCode === "string") {
+    const valid = await validateCoupon(input.couponCode, subtotal);
+    if (valid.ok) {
+      discount = valid.discount;
+      appliedCouponCode = valid.code;
+    }
+    // If coupon is invalid we silently drop it — the customer sees the
+    // error inline via the CouponApply component before submitting; if it
+    // expired between apply + checkout-confirm, we just proceed at full
+    // price rather than blocking the order.
+  }
+
+  const totalNum = Math.max(0, +(subtotal - discount).toFixed(2));
+  const totalStr = totalNum.toFixed(2);
 
   // Create PayPal order via SDK (Orders v2).
   let paypalOrderId: string;
@@ -163,6 +195,14 @@ export async function createPayPalOrder(
                   currencyCode: PAYPAL_CURRENCY,
                   value: shippingStr,
                 },
+                ...(discount > 0
+                  ? {
+                      discount: {
+                        currencyCode: PAYPAL_CURRENCY,
+                        value: discount.toFixed(2),
+                      },
+                    }
+                  : {}),
               },
             },
             items: snapshots.map((s) => ({
@@ -174,6 +214,11 @@ export async function createPayPalOrder(
               },
               sku: s.variantId.slice(0, 127),
             })),
+            // customId carries the coupon code so the capture flow can
+            // re-look-up + redeem it without an extra column on orders.
+            ...(appliedCouponCode
+              ? { customId: `COUPON:${appliedCouponCode}` }
+              : {}),
           },
         ],
       },
@@ -250,7 +295,14 @@ export async function createPayPalOrder(
       })),
     );
 
-    return { ok: true, paypalOrderId, internalOrderId };
+    return {
+      ok: true,
+      paypalOrderId,
+      internalOrderId,
+      ...(discount > 0
+        ? { discount, couponCode: appliedCouponCode ?? undefined }
+        : {}),
+    };
   } catch (err) {
     console.error("[paypal] DB write after createOrder failed:", err);
     // PayPal order exists but we failed to persist. The webhook will reconcile
@@ -307,6 +359,9 @@ export async function capturePayPalOrder({
   // repeat calls return ORDER_ALREADY_CAPTURED which we map to success below.
   let captureId: string | null = null;
   let captureStatus = "";
+  // Plan 05-03: pull the customId we set in createPayPalOrder so we know
+  // which coupon (if any) to redeem after capture succeeds.
+  let appliedCouponCode: string | null = null;
   try {
     const response = await ordersController().captureOrder({
       id: paypalOrderId,
@@ -316,6 +371,10 @@ export async function capturePayPalOrder({
     const capture = order?.purchaseUnits?.[0]?.payments?.captures?.[0];
     captureId = capture?.id ?? null;
     captureStatus = capture?.status ?? "";
+    const customId = order?.purchaseUnits?.[0]?.customId ?? null;
+    if (customId && customId.startsWith("COUPON:")) {
+      appliedCouponCode = customId.slice("COUPON:".length);
+    }
     if (!captureId || captureStatus !== "COMPLETED") {
       return {
         ok: false,
@@ -355,6 +414,37 @@ export async function capturePayPalOrder({
     .update(orders)
     .set({ status: "paid", paypalCaptureId: captureId })
     .where(eq(orders.id, existing.id));
+
+  // Plan 05-03 — atomic coupon redemption AFTER capture succeeds. If the
+  // coupon's usage_cap was hit between approval and capture, we lose the
+  // discount on the audit trail but the customer already paid the
+  // discounted amount (it was sent to PayPal as the order total). This is
+  // an acceptable failure mode — log it for the operator.
+  if (appliedCouponCode) {
+    try {
+      const subtotalNum = parseFloat(existing.subtotal);
+      const valid = await validateCoupon(appliedCouponCode, subtotalNum);
+      if (valid.ok) {
+        const redeemed = await redeemCoupon(
+          valid.couponId,
+          existing.id,
+          existing.userId,
+          subtotalNum,
+        );
+        if (!redeemed.ok) {
+          console.warn(
+            `[paypal] coupon ${appliedCouponCode} redemption refused after capture for order ${existing.id}: ${redeemed.error}`,
+          );
+        }
+      } else {
+        console.warn(
+          `[paypal] coupon ${appliedCouponCode} no longer valid at capture for order ${existing.id}: ${valid.error}`,
+        );
+      }
+    } catch (err) {
+      console.error("[paypal] coupon redemption error:", err);
+    }
+  }
 
   // Fire-and-forget order-confirmation email (Plan 03-03).
   // T-03-26 / D3-10 UX contract: SMTP failure must NEVER block the capture

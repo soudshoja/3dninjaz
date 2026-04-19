@@ -16,6 +16,7 @@ import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
 import type { CartItem } from "@/stores/cart-store";
 import type { AddressFormValues } from "./address-form";
+import type { AppliedCoupon } from "@/components/store/coupon-apply";
 
 /**
  * Mobile-only sticky CTA dock + Review-and-Pay bottom sheet (D3-20).
@@ -31,14 +32,19 @@ export function MobileSummarySheet({
   items,
   subtotalMyr,
   address,
+  appliedCoupon,
+  onCouponChange,
   onPaid,
 }: {
   items: CartItem[];
   subtotalMyr: number;
   address: AddressFormValues | null;
+  appliedCoupon: AppliedCoupon | null;
+  onCouponChange: (next: AppliedCoupon | null) => void;
   onPaid: (redirectTo: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const totalForDock = appliedCoupon ? appliedCoupon.finalTotal : subtotalMyr;
 
   return (
     <>
@@ -48,7 +54,7 @@ export function MobileSummarySheet({
           <div className="flex-1">
             <p className="text-[11px] text-slate-600 leading-none">Total</p>
             <p className="font-[var(--font-heading)] text-xl leading-tight">
-              {formatMYR(subtotalMyr)}
+              {formatMYR(totalForDock)}
             </p>
           </div>
           <button
@@ -75,13 +81,19 @@ export function MobileSummarySheet({
           </DrawerHeader>
 
           <div className="flex-1 overflow-y-auto px-5 py-3">
-            <CheckoutSummary items={items} subtotal={subtotalMyr} />
+            <CheckoutSummary
+              items={items}
+              subtotal={subtotalMyr}
+              appliedCoupon={appliedCoupon}
+              onCouponChange={onCouponChange}
+            />
           </div>
 
           <DrawerFooter>
             <PayPalButton
               address={address}
               items={items}
+              appliedCouponCode={appliedCoupon?.code ?? null}
               onPaid={(redirect) => {
                 setOpen(false);
                 onPaid(redirect);

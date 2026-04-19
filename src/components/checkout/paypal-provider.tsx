@@ -12,6 +12,7 @@ import { CheckoutSummary } from "./checkout-summary";
 import { PayPalButton } from "./paypal-button";
 import { MobileSummarySheet } from "./mobile-summary-sheet";
 import type { SavedAddress } from "@/actions/addresses";
+import type { AppliedCoupon } from "@/components/store/coupon-apply";
 
 /**
  * Client-side checkout island (D3-04). Wraps everything in PayPalScriptProvider
@@ -55,6 +56,11 @@ export function CheckoutIsland({
 
   // Collected + validated address — only non-null when the form reports valid.
   const [address, setAddress] = useState<AddressFormValues | null>(null);
+  // Plan 05-03 — applied coupon state shared between desktop summary card
+  // and mobile bottom-sheet. Null if no coupon, or if user removed it.
+  const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(
+    null,
+  );
 
   const initialOptions = useMemo<ReactPayPalScriptOptions>(
     () => ({
@@ -102,6 +108,7 @@ export function CheckoutIsland({
             <PayPalButton
               address={address}
               items={items}
+              appliedCouponCode={appliedCoupon?.code ?? null}
               onPaid={handlePaid}
             />
           </div>
@@ -121,7 +128,12 @@ export function CheckoutIsland({
             >
               Your order
             </h2>
-            <CheckoutSummary items={items} subtotal={subtotal} />
+            <CheckoutSummary
+              items={items}
+              subtotal={subtotal}
+              appliedCoupon={appliedCoupon}
+              onCouponChange={setAppliedCoupon}
+            />
           </div>
         </aside>
 
@@ -129,6 +141,8 @@ export function CheckoutIsland({
           subtotalMyr={subtotal}
           address={address}
           items={items}
+          appliedCoupon={appliedCoupon}
+          onCouponChange={setAppliedCoupon}
           onPaid={handlePaid}
         />
       </div>
