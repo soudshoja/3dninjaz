@@ -1,0 +1,70 @@
+# ============================================================================
+# 3D Ninjaz — Launch-day .htaccess for /home/ninjaz/public_html/
+# ============================================================================
+#
+# Purpose: enforce HTTPS + emit security headers once the Next.js app takes
+# over the domain root. See README.md in this directory for the swap steps.
+#
+# This file is NOT currently in use — the preview at 3dninjaz.com/v1 lives
+# behind LSWS reverse-proxy userdata config (see DEPLOY-NOTES.md). During
+# the dev phase the live public_html/ still serves the coming-soon static
+# files and its own .htaccess (if any).
+#
+# LAUNCH DAY: rename this file to `.htaccess` and drop it into
+# /home/ninjaz/public_html/ — after document root has been flipped to the
+# Node app. LSWS / Apache reads .htaccess on every request; no restart
+# needed.
+# ============================================================================
+
+RewriteEngine On
+
+# --- HTTPS enforcement -------------------------------------------------------
+# Redirect all HTTP traffic to HTTPS with a permanent (301) redirect.
+# Use %{HTTP_HOST} so www. and apex hosts both self-canonicalise.
+RewriteCond %{HTTPS} !=on
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# --- Security headers --------------------------------------------------------
+# LiteSpeed + Apache both honour mod_headers. Use `Header always set` so
+# headers attach to 3xx / 4xx / 5xx responses as well (default `set` only
+# affects 2xx).
+<IfModule mod_headers.c>
+  # HSTS — 2-year max-age + preload-list opt-in. Only safe once HTTPS is
+  # known-stable; once a client sees this header it will refuse HTTP for
+  # the advertised duration. A broken SSL renewal will lock users out.
+  # Keep AutoSSL / LetsEncrypt renewal monitoring ACTIVE in cPanel.
+  Header always set Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+
+  # Prevent content-type sniffing attacks on uploaded product images
+  # (/public/uploads/products/*). Combined with correct Content-Type
+  # responses from Next.js, this blocks MIME-confusion XSS vectors.
+  Header always set X-Content-Type-Options "nosniff"
+
+  # Clickjacking protection. SAMEORIGIN lets our own /admin pages frame
+  # /admin tooling (none yet) while blocking external frames.
+  Header always set X-Frame-Options "SAMEORIGIN"
+
+  # Send the origin only on cross-origin nav, full URL within same-origin.
+  # Preserves analytics-style diagnostics without leaking path data to
+  # third parties.
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+  # Deny sensors + device APIs by default. Note we do NOT restrict
+  # `payment=(self)` here — PayPal's embedded iframe can run Payment
+  # Request API via the normal cross-origin permissions-policy inheritance.
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+</IfModule>
+
+# --- (Optional) Node.js proxy pass-through ----------------------------------
+# cPanel's Node.js Selector (selectorctl) normally auto-writes its own
+# Apache userdata file pointing /v1 or / at 127.0.0.1:<app port>. If we
+# ever move to a flat .htaccess proxy model instead, the block below is
+# the template. Uncomment + set PORT to match the Node app's listen port
+# before enabling.
+#
+# <IfModule mod_rewrite.c>
+#   RewriteCond %{REQUEST_URI} !^/cgi-bin
+#   RewriteCond %{REQUEST_URI} !^/.well-known
+#   RewriteCond %{REQUEST_URI} !^/uploads
+#   RewriteRule ^(.*)$ http://127.0.0.1:3100/$1 [P,L]
+# </IfModule>
