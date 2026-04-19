@@ -11,7 +11,7 @@ import {
   type CatalogProduct,
 } from "@/lib/catalog";
 
-export const metadata: Metadata = { title: "Shop | 3D Ninjaz" };
+export const metadata: Metadata = { title: "Shop" };
 
 type SearchParams = Promise<{ category?: string }>;
 
@@ -71,7 +71,7 @@ export default async function ShopPage({
             <p className="text-slate-600">The ninjas are still printing.</p>
           </div>
         ) : (
-          <ul className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 md:gap-6">
+          <ul className="grid grid-cols-1 min-[360px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 md:gap-6">
             {products.map((p, i) => (
               <li key={p.id}>
                 <ProductCard product={p} accentIndex={i} />

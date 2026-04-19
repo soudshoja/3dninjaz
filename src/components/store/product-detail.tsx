@@ -66,7 +66,14 @@ export function ProductDetail({ product }: ProductDetailProps) {
         <ProductGallery images={product.images} alt={product.name} />
       </div>
 
-      <div className="flex flex-col">
+      {/*
+        `min-w-0` on the flex-col right column is required so the size-guide
+        <table> (inside `overflow-x-auto`) can actually shrink to the grid-cell
+        width. Without it, the table's intrinsic width (wider than 320px on
+        small phones) pushes the column wider than the viewport and spills
+        horizontal scroll onto the document.
+       */}
+      <div className="min-w-0 flex flex-col">
         {product.category ? (
           <a
             href={`/shop?category=${encodeURIComponent(product.category.slug)}`}

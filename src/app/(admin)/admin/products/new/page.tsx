@@ -3,7 +3,8 @@ import { getCategories } from "@/actions/categories";
 import { ProductForm } from "@/components/admin/product-form";
 
 export const metadata: Metadata = {
-  title: "New Product | 3D Ninjaz Admin",
+  title: "Admin · New Product",
+  robots: { index: false, follow: false },
 };
 
 export default async function NewProductPage() {

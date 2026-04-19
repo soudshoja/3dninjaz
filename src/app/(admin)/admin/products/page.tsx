@@ -16,7 +16,8 @@ import {
 import { ProductRowActions } from "./product-row-actions";
 
 export const metadata: Metadata = {
-  title: "Products | 3D Ninjaz Admin",
+  title: "Admin · Products",
+  robots: { index: false, follow: false },
 };
 
 function formatPriceRange(

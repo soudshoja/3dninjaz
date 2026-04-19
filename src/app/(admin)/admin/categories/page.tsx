@@ -13,7 +13,8 @@ import { CategoryForm } from "./category-form";
 import { CategoryRowActions } from "./category-row-actions";
 
 export const metadata: Metadata = {
-  title: "Categories | 3D Ninjaz Admin",
+  title: "Admin · Categories",
+  robots: { index: false, follow: false },
 };
 
 export default async function AdminCategoriesPage() {

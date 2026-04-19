@@ -11,7 +11,8 @@ import {
 } from "@/components/ui/card";
 
 export const metadata: Metadata = {
-  title: "Dashboard | 3D Ninjaz Admin",
+  title: "Admin Dashboard",
+  robots: { index: false, follow: false },
 };
 
 export default async function AdminDashboardPage() {

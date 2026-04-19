@@ -58,15 +58,22 @@ export function ProductCard({
           </span>
         ) : null}
       </div>
-      <div className="p-5 flex items-center justify-between gap-3">
+      {/* p-5 flex row: title + price badge.
+          - `min-w-0` on the flex item (h3) is required for `truncate` to
+            work inside a flex parent (CSS defaults flex items to
+            `min-width: auto`, which prevents shrink below intrinsic content
+            size and pushes the price badge past the 320px viewport edge).
+          - `shrink-0` on the badge is preserved so price never wraps or
+            truncates — on very narrow cards the title compresses instead. */}
+      <div className="p-4 md:p-5 flex items-center justify-between gap-3">
         <h3
-          className="font-[var(--font-heading)] text-lg md:text-xl truncate"
+          className="min-w-0 font-[var(--font-heading)] text-lg md:text-xl truncate"
           style={{ color: BRAND.ink }}
         >
           {product.name}
         </h3>
         <span
-          className="shrink-0 rounded-full px-3 py-1 text-sm font-bold text-white"
+          className="shrink-0 rounded-full px-3 py-1 text-xs md:text-sm font-bold text-white"
           style={{ backgroundColor: accent }}
         >
           {priceLabel}

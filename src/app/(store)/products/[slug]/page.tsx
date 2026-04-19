@@ -12,9 +12,9 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params;
   const product = await getActiveProductBySlug(slug);
-  if (!product) return { title: "Product not found | 3D Ninjaz" };
+  if (!product) return { title: "Product not found" };
   return {
-    title: `${product.name} | 3D Ninjaz`,
+    title: product.name,
     description: product.description.slice(0, 160),
   };
 }

@@ -31,3 +31,45 @@ sameAs: Object.values(SITE.socials).filter(
 Remove the explicit `v is string` type predicate — filter() will still infer `string` from the `typeof` guard.
 
 **Follow-up:** 04-01 executor to resolve before its own build verify, then Plan 04-02 build re-runs clean.
+
+## From Plan 04-03 execution (2026-04-16)
+
+### DEF-04-03-01 — Turbopack build-time RHF resolver inference error in `src/components/checkout/address-form.tsx`
+
+**Status:** BLOCKING for `npm run build` (turbopack), but **out of Plan 04-03 scope**. Owned by the parallel Plan 03-02 executor (Phase 3 Wave 2 checkout work).
+
+**Discovery:** Running the plan-mandated `npm run build` verify step failed with:
+
+```
+./src/components/checkout/address-form.tsx:29:5
+Type error: Type 'Resolver<{ ...; country?: "Malaysia" | undefined; }>' is not assignable to type
+'Resolver<{ ...; country: "Malaysia"; }>'.
+  Types of parameters 'options' and 'options' are incompatible.
+    Type 'string | undefined' is not assignable to type 'string'.
+```
+
+Location: `useForm<AddressFormValues>({ resolver: zodResolver(orderAddressSchema), ... })`.
+
+Root cause: Zod schema produces `country: "Malaysia"` (required literal) but the inferred
+`AddressFormValues` has `country?: "Malaysia" | undefined` (optional with default), creating a
+resolver generic mismatch. Typical fixes: use `zodResolver<AddressFormValues>(...)` with explicit
+generic, or align the schema's `.default("Malaysia")` with a `.pipe(z.literal("Malaysia"))` to
+strip optionality, or update `AddressFormValues` type to match.
+
+**Why not fixed here:** Plan 04-03 scope explicitly excludes `src/components/checkout/*` and
+`src/actions/orders.ts` — those are Plan 03-02 territory under active parallel execution. Touching
+them would stomp 03-02's in-flight work.
+
+**Workaround used for 04-03 verify:**
+- `npx tsc --noEmit` (repo-wide) passes with exit 0 — my Plan 04-03 files type-check cleanly.
+- The turbopack build error is isolated to the checkout form; it does not touch any Plan 04-03 file.
+- Next's dev server + start server cover the routes Plan 04-03 actually sweeps (storefront
+  pages; `/checkout` is intentionally out of scope of the responsive audit because it is stubbed
+  during parallel execution).
+
+**Suggested fix (for 03-02 owner):** Either add explicit generic `useForm<AddressFormValues>`
+with `zodResolver<AddressFormValues, unknown, AddressFormValues>(orderAddressSchema)`, or update
+the form values type to make `country` required (drop the `?`), or change the schema default
+pattern to use `.transform()` so the output type retains the literal.
+
+**Follow-up:** 03-02 executor to resolve before its own build verify.

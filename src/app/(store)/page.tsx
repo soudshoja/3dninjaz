@@ -12,7 +12,9 @@ import {
 } from "@/lib/catalog";
 
 export const metadata: Metadata = {
-  title: "3D Ninjaz — 3D Printed Products",
+  // Omit title so the root layout's default ("3D Ninjaz — 3D Printed
+  // Products") is used verbatim. Setting a title here would re-apply the
+  // `%s | 3D Ninjaz` template and produce a doubled suffix.
   description:
     "Browse and buy unique 3D printed products. Ninja crafted in Malaysia.",
 };

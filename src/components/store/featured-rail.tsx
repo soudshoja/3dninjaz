@@ -24,7 +24,13 @@ export function FeaturedRail({ products }: { products: CatalogProduct[] }) {
           <p className="text-center mb-12 text-lg text-white/80">
             Fresh off the printer. Limited runs, ninja fast delivery.
           </p>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {/* 320px phones (iPhone SE landscape, older Androids) can't fit
+              two cards side-by-side when a product has a full price range
+              label like "RM 28.00 - RM 52.00" (~143px) — the shrink-0 badge
+              would escape its card. Below 360px we fall back to a single
+              column; at 360+ (iPhone SE portrait and up) the 2-col grid
+              still works because min-w-0 on the card title lets it truncate. */}
+          <div className="grid grid-cols-1 min-[360px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {products.map((p, i) => (
               <ProductCard key={p.id} product={p} accentIndex={i} />
             ))}

@@ -8,7 +8,8 @@ import {
 } from "@/components/admin/product-form";
 
 export const metadata: Metadata = {
-  title: "Edit Product | 3D Ninjaz Admin",
+  title: "Admin · Edit Product",
+  robots: { index: false, follow: false },
 };
 
 export default async function EditProductPage({
