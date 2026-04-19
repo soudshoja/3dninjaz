@@ -181,3 +181,46 @@ Do not make direct repo edits outside a GSD workflow unless the user explicitly 
 > Profile not yet configured. Run `/gsd-profile-user` to generate your developer profile.
 > This section is managed by `generate-claude-profile` -- do not edit manually.
 <!-- GSD:profile-end -->
+
+## Pivots & Production Quirks (2026-04-19 → 2026-04-20)
+
+### Stack pivot from initial plan
+- **Project renamed**: Print Ninjaz → **3D Ninjaz** (domain `3dninjaz.com`, logo `/public/logo.png`)
+- **Database**: Neon Postgres → **cPanel MariaDB 10.11** (self-hosted). DATABASE_URL in `.env.local`
+- **Images**: Cloudinary → **local filesystem** `public/uploads/products/<uuid>/`
+- **Email**: Resend → **nodemailer + cPanel SMTP** via `noreply@3dninjaz.com` (see `src/lib/mailer.ts`)
+- **Brand palette unified**: blue `#2563EB`, green `#84CC16`, purple `#8B5CF6`, ink `#0B1020`, cream `#F7FAF4` — same across storefront + admin. See `.planning/phases/02-storefront-cart/DECISIONS.md` D-01
+- **Cart vocabulary**: user-facing = "bag" (button/drawer/nav/route `/bag`). Internal code still `cart-store.ts`, `useCartStore`, `CartItem` — minimize diff. D-02 in same DECISIONS file
+
+### MariaDB 10.11 gotchas (apply automatically)
+- **No LATERAL joins** — Drizzle's `db.query.products.findMany({ with: { variants, category } })` compiles to LATERAL and fails with `ER_PARSE_ERROR`. Use **manual multi-query hydration** (`getProduct`/`getProducts` in `src/actions/products.ts` as reference) — fetch parent rows, then `.select().from(child).where(inArray(fk, parentIds))`, join in memory.
+- **JSON columns stored as LONGTEXT** — mysql2 does NOT auto-parse. Every JSON read site must call `ensureImagesArray(raw)` (or equivalent parse helper). See `src/actions/products.ts`.
+- **App-generated UUIDs** — use `crypto.randomUUID()` on INSERT. Do NOT rely on `$returningId()` or SQL `UUID()` for round-trips. Needed for image upload paths that must exist before the DB row.
+- **Do NOT run `drizzle-kit push` against remote if latency is high** — it hung on schema-pull. Fall back to raw SQL DDL that matches Drizzle's schema byte-for-byte + verify with `SHOW CREATE TABLE`.
+
+### Better Auth specifics
+- Library version 1.6.2 API: `authClient.requestPasswordReset(...)` — NOT the older `forgetPassword` name
+- Admin seed: two-step via `auth.api.signUpEmail` (uses Better Auth password pipeline) then direct Drizzle `update(user).set({ role: 'admin' })`. `auth.api.createUser` ignores `role` outside an authenticated admin session. Seed script `scripts/seed-admin.ts` is idempotent.
+- Admin-auth check: **handler-level `requireAdmin()` as first `await` in every admin server action** (CVE-2025-29927 — middleware alone is bypassable). See `src/lib/auth-helpers.ts`.
+
+### cPanel + LiteSpeed deploy topology
+- Server: cPanel + CloudLinux + LiteSpeed 6.3.4 Enterprise
+- **LSWS does NOT support Apache `mod_passenger`** — CloudLinux-generated `.htaccess` Passenger directives in `public_html/v1/` are ignored
+- Working pattern: **Node app listens on localhost port, Apache userdata ProxyPass forwards** `/v1` → `http://127.0.0.1:3100/v1`
+- Apache userdata config: `/etc/apache2/conf.d/userdata/{std,ssl}/2_4/ninjaz/3dninjaz.com/3dninjaz_v1.conf` with `ProxyPass` + `ProxyPassReverse` + `ProxyPreserveHost On` inside a `<Location "/v1">` block. After editing, `/usr/local/lsws/bin/lswsctrl reload` (graceful SIGUSR1 — no downtime for other users).
+- App node binary: `/home/ninjaz/nodevenv/apps/3dninjaz_v1/20/bin/node` (CloudLinux Node 20 via `cloudlinux-selector create --interpreter nodejs`)
+- **SSH is key-only for root** — user password auth is blocked. For unattended tasks use: root via key (full server), FTP via user/password (files only), cPanel UAPI via Basic auth at `https://152.53.86.223:2083/execute/<Module>/<fn>` (per-user scoped)
+- Node app persistence: currently `nohup` — **dies on reboot**. Production requires systemd user unit or cron `@reboot` start script. See `.planning/phases/04-brand-launch/DEPLOY-NOTES.md`
+- **Never run `lswsctrl restart`** (hard restart) — other users affected. Graceful `reload` is fine.
+
+### Preview site
+- `https://3dninjaz.com/v1` — Next.js app (sandbox PayPal)
+- `https://3dninjaz.com/` — coming-soon static (launch-day swap planned)
+- Test buyer: `sb-shnvz50688339@personal.example.com` / `_s!Cw2Wp` (sandbox MYR 5000)
+
+### Launch-day blockers (tracked in `.planning/phases/04-brand-launch/LAUNCH-CHECKLIST.md`)
+- Real WhatsApp MY number (D-01 placeholder `60000000000`)
+- Social handles Instagram + TikTok (D-05 placeholders `#`)
+- `public/logo.png` 1.5 MB → WebP ~200 KB (LCP blocker)
+- `PAYPAL_ENV=sandbox` → `live` in prod env
+- Remove `<meta robots="noindex">` from coming-soon
