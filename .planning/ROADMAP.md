@@ -13,7 +13,7 @@ Print Ninjaz ships in four phases. Phase 1 builds the project scaffold, database
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation** - Project scaffold, database schema, auth, and admin product CRUD
-- [ ] **Phase 2: Storefront + Cart** - Product catalog, product detail pages, and shopping cart
+- [x] **Phase 2: Storefront + Cart** - Product catalog, product detail pages, and shopping cart
 - [ ] **Phase 3: Checkout + Orders** - PayPal payment, order confirmation, and order management
 - [ ] **Phase 4: Brand + Launch** - Trust content, PDPA compliance, branding, and responsive polish
 
@@ -49,33 +49,45 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Brand primitives, catalog data helpers, format utilities, ProductCard, install vaul
-- [ ] 02-02-PLAN.md — Store shell (nav/footer/layout), homepage (hero/featured/categories/how-it-works), /shop with category filter
-- [ ] 02-03-PLAN.md — Product detail page: gallery, size selector, size guide, material, lead time, Add-to-bag stub
-- [ ] 02-04-PLAN.md — Zustand cart store, vaul drawer primitive, cart drawer + /cart page, wire CartButton + Add-to-bag
+- [x] 02-01-PLAN.md — Brand primitives, catalog data helpers, format utilities, ProductCard, install vaul
+- [x] 02-02-PLAN.md — Store shell (nav/footer/layout), homepage (hero/featured/categories/how-it-works), /shop with category filter
+- [x] 02-03-PLAN.md — Product detail page: gallery, size selector, size guide, material, lead time, Add-to-bag stub
+- [x] 02-04-PLAN.md — Zustand cart store, vaul drawer primitive, cart drawer + /cart page, wire CartButton + Add-to-bag
 
 ### Phase 3: Checkout + Orders
 **Goal**: Customers can complete a purchase via PayPal and both customer and admin can track what was ordered
 **Depends on**: Phase 2
 **Requirements**: PAY-01, PAY-02, PAY-03, PAY-04, PAY-05, ORD-01, ORD-02, ADM-05, ADM-06
 **Success Criteria** (what must be TRUE):
-  1. User can proceed from cart to checkout, enter a shipping address, and pay via PayPal in MYR
+  1. User can proceed from bag to checkout, enter a shipping address, and pay via PayPal in MYR (vocab per Phase 2 DECISIONS.md D-02)
   2. User sees an order confirmation page immediately after successful payment
-  3. User receives an order confirmation email with a full order summary
+  3. User receives an order confirmation email (nodemailer + cPanel SMTP) with a full order summary
   4. User can view their order history and individual order details including current status
   5. Admin can view all orders with customer info and update order status from pending through to delivered
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 03-01-PLAN.md — Orders + order_items schema migration, status state machine, order-number helper, PayPal SDK client, address Zod schema (Wave 1)
+- [ ] 03-02-PLAN.md — /checkout page + address form + PayPal Buttons, create/capture server actions with server-side price derivation, signature-verified webhook (Wave 2)
+- [ ] 03-03-PLAN.md — /orders list, /orders/[id] confirmation+detail, order-confirmation email (HTML+text), resend-receipt (rate-limited) (Wave 3)
+- [ ] 03-04-PLAN.md — /admin/orders list with filter, /admin/orders/[id] detail, status-transition form, internal notes (Wave 4)
 
 ### Phase 4: Brand + Launch
-**Goal**: The store looks and feels like Print Ninjaz and meets Malaysian legal requirements — ready for real customers
+**Goal**: The store looks and feels like 3D Ninjaz and meets Malaysian legal requirements — ready for real customers
 **Depends on**: Phase 3
 **Requirements**: BRAND-01, BRAND-02, BRAND-03, BRAND-04, BRAND-05, RESP-01, RESP-02, RESP-03
 **Success Criteria** (what must be TRUE):
-  1. Site displays Print Ninjaz logo, ninja-themed copy, and green/blue/black color scheme consistently across all pages
-  2. Site has an About/Contact page with business information and a WhatsApp contact link
+  1. Site displays 3D Ninjaz logo, ninja-themed copy, and the unified blue/green/purple + ink/cream color scheme (per Phase 2 DECISIONS.md D-01) consistently across all pages
+  2. Site has About and Contact pages with business information and a WhatsApp contact link
   3. Site has a privacy policy page compliant with PDPA 2010 and the registration consent checkbox links to it
   4. All pages are fully mobile-responsive with no horizontal scroll, tap targets of at least 44px, and load in under 2 seconds on mobile
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — Root metadata, favicon set, JSON-LD, OG/Twitter cards (Wave 1)
+- [ ] 04-02-PLAN.md — About, Contact, Privacy (PDPA 2010), Terms pages + WhatsApp CTA (Wave 1)
+- [ ] 04-03-PLAN.md — SiteNav/SiteFooter unification + responsive sweep at 320/375/390/768/1024/1440 + image audit + Lighthouse gates (Wave 2)
+- [ ] 04-04-PLAN.md — robots.txt, sitemap.xml, .htaccess (HTTPS+HSTS), coming-soon neutralisation, production deploy + smoke test (Wave 3)
 
 ## Progress
 
@@ -84,7 +96,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/4 | Not started | - |
-| 2. Storefront + Cart | 0/4 | Not started | - |
-| 3. Checkout + Orders | 0/? | Not started | - |
-| 4. Brand + Launch | 0/? | Not started | - |
+| 1. Foundation | 4/4 | Complete | 2026-04-19 |
+| 2. Storefront + Cart | 4/4 | Complete | 2026-04-19 |
+| 3. Checkout + Orders | 0/4 | Not started | - |
+| 4. Brand + Launch | 0/4 | Not started | - |
