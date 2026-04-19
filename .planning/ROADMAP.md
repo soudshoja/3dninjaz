@@ -14,8 +14,10 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation** - Project scaffold, database schema, auth, and admin product CRUD
 - [x] **Phase 2: Storefront + Cart** - Product catalog, product detail pages, and shopping cart
-- [ ] **Phase 3: Checkout + Orders** - PayPal payment, order confirmation, and order management
-- [ ] **Phase 4: Brand + Launch** - Trust content, PDPA compliance, branding, and responsive polish
+- [x] **Phase 3: Checkout + Orders** - PayPal payment, order confirmation, and order management
+- [x] **Phase 4: Brand + Launch** - Trust content, PDPA compliance, branding, and responsive polish
+- [ ] **Phase 5: Admin Extensions** - User mgmt, coupons, inventory toggle, bulk import, store settings UI, analytics, email template editor, reviews moderation, shipping rates
+- [ ] **Phase 6: Customer Account** - /account profile, saved addresses, wishlist, product reviews, PDF invoices, cancel/return requests
 
 ## Phase Details
 
@@ -67,10 +69,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Orders + order_items schema migration, status state machine, order-number helper, PayPal SDK client, address Zod schema (Wave 1)
-- [ ] 03-02-PLAN.md — /checkout page + address form + PayPal Buttons, create/capture server actions with server-side price derivation, signature-verified webhook (Wave 2)
-- [ ] 03-03-PLAN.md — /orders list, /orders/[id] confirmation+detail, order-confirmation email (HTML+text), resend-receipt (rate-limited) (Wave 3)
-- [ ] 03-04-PLAN.md — /admin/orders list with filter, /admin/orders/[id] detail, status-transition form, internal notes (Wave 4)
+- [x] 03-01-PLAN.md — Orders + order_items schema migration, status state machine, order-number helper, PayPal SDK client, address Zod schema (Wave 1)
+- [x] 03-02-PLAN.md — /checkout page + address form + PayPal Buttons, create/capture server actions with server-side price derivation, signature-verified webhook (Wave 2)
+- [x] 03-03-PLAN.md — /orders list, /orders/[id] confirmation+detail, order-confirmation email (HTML+text), resend-receipt (rate-limited) (Wave 3)
+- [x] 03-04-PLAN.md — /admin/orders list with filter, /admin/orders/[id] detail, status-transition form, internal notes (Wave 4)
 
 ### Phase 4: Brand + Launch
 **Goal**: The store looks and feels like 3D Ninjaz and meets Malaysian legal requirements — ready for real customers
@@ -84,19 +86,52 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Root metadata, favicon set, JSON-LD, OG/Twitter cards (Wave 1)
-- [ ] 04-02-PLAN.md — About, Contact, Privacy (PDPA 2010), Terms pages + WhatsApp CTA (Wave 1)
-- [ ] 04-03-PLAN.md — SiteNav/SiteFooter unification + responsive sweep at 320/375/390/768/1024/1440 + image audit + Lighthouse gates (Wave 2)
-- [ ] 04-04-PLAN.md — robots.txt, sitemap.xml, .htaccess (HTTPS+HSTS), coming-soon neutralisation, production deploy + smoke test (Wave 3)
+- [x] 04-01-PLAN.md — Root metadata, favicon set, JSON-LD, OG/Twitter cards (Wave 1)
+- [x] 04-02-PLAN.md — About, Contact, Privacy (PDPA 2010), Terms pages + WhatsApp CTA (Wave 1)
+- [x] 04-03-PLAN.md — SiteNav/SiteFooter unification + responsive sweep at 320/375/390/768/1024/1440 + image audit + Lighthouse gates (Wave 2)
+- [x] 04-04-PLAN.md — robots.txt, sitemap.xml, .htaccess (HTTPS+HSTS), coming-soon neutralisation, production deploy + smoke test (Wave 3)
+
+### Phase 5: Admin Extensions
+**Goal**: Admin has every control needed to operate the store day-to-day — users, coupons, inventory, bulk ops, branding, metrics, emails, reviews, shipping rates — no more code edits for routine management tasks.
+**Depends on**: Phase 4
+**Requirements**: ADM-07, ADM-08, ADM-09, ADM-10, ADM-11, ADM-12, ADM-13, ADM-14, ADM-15, PROMO-01, PROMO-02, INV-01, INV-02, REV-01, SHIP-01, SETTINGS-01, REPORT-01 (new requirement IDs — add to REQUIREMENTS.md during planning)
+**Success Criteria** (what must be TRUE):
+  1. Admin can view a list of all customer accounts with registration date, last login, order count, and suspend/unsuspend any non-admin user
+  2. Admin can create, edit, and deactivate discount codes (percentage or fixed MYR off, min-spend, start/end date, usage cap)
+  3. Admin can toggle a product as out-of-stock or mark a variant low-stock without deleting it
+  4. Admin can import a CSV of products (name, description, category, S/M/L prices, image URLs) and see a success/failure report
+  5. Admin can edit store settings (business name, contact details, WhatsApp number, socials, banner announcement) through a form without touching env vars
+  6. Admin can view a dashboard with revenue, order count, top products, and conversion funnel for the last 7/30/90 days
+  7. Admin can edit the HTML of transactional email templates (order confirmation, password reset) with a live preview
+  8. Admin can moderate customer reviews/ratings (approve, hide, delete) once reviews feature ships
+  9. Admin can configure flat shipping rates per MY state, free-shipping thresholds, and SST toggle (off for now but ready)
+**Plans**: TBD
+
+### Phase 6: Customer Account
+**Goal**: Logged-in customers have a full self-service account — view/edit profile, manage saved addresses, build wishlists, write product reviews, download invoices, request cancels/returns — no need to email for routine account tasks.
+**Depends on**: Phase 5 (reviews moderation admin, coupon/user schemas)
+**Requirements**: CUST-01, CUST-02, CUST-03, CUST-04, CUST-05, CUST-06, CUST-07, CUST-08 (add to REQUIREMENTS.md during planning)
+**Success Criteria** (what must be TRUE):
+  1. User can open `/account` and see name, email, join date, total order count, and loyalty points (even if points engine defers)
+  2. User can update display name + email (email change triggers verification) and change password from `/account/security`
+  3. User can manage saved shipping addresses (CRUD, mark default) and use them at checkout via a dropdown
+  4. User can add products to a wishlist from PDP/shop and view/remove them on `/account/wishlist`
+  5. User can leave a star rating + review on any product they have bought; reviews show pending state until admin approves (Phase 5 moderation queue)
+  6. User can download a PDF invoice from any paid order at `/orders/[id]`
+  7. User can request an order cancel (if not yet shipped) or a return (within 14 days of delivery) via a form; admin sees the request in `/admin/orders/[id]`
+  8. User can close their account — account flagged as deleted, personal data anonymised, orders retained per PDPA D-06 retention
+**Plans**: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 4/4 | Complete | 2026-04-19 |
 | 2. Storefront + Cart | 4/4 | Complete | 2026-04-19 |
-| 3. Checkout + Orders | 0/4 | Not started | - |
-| 4. Brand + Launch | 0/4 | Not started | - |
+| 3. Checkout + Orders | 4/4 | Complete | 2026-04-19 |
+| 4. Brand + Launch | 4/4 | Complete | 2026-04-20 |
+| 5. Admin Extensions | 0/? | Not started | - |
+| 6. Customer Account | 0/? | Not started | - |
