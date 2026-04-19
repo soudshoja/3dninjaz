@@ -90,6 +90,14 @@ export function UserNav() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        {/* Phase 6 06-02 — surface customer account routes above the existing
+            admin/sign-out items. Mobile users reach these via the same nav
+            drawer because SiteNav renders UserNav inside its disclosure. */}
+        <DropdownMenuItem render={<Link href="/account">Profile</Link>} />
+        <DropdownMenuItem render={<Link href="/orders">My orders</Link>} />
+        <DropdownMenuItem render={<Link href="/account/addresses">Addresses</Link>} />
+        <DropdownMenuItem render={<Link href="/account/wishlist">Wishlist</Link>} />
+        <DropdownMenuSeparator />
         {role === "admin" && (
           <DropdownMenuItem render={<Link href="/admin">Admin Panel</Link>} />
         )}
