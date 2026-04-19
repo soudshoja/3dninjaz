@@ -91,14 +91,14 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Customer Account (Phase 6)
 
-- [ ] **CUST-01**: Logged-in user can open `/account` and see name, email, join date, total order count, and a loyalty-points placeholder card (zero points in v1)
-- [ ] **CUST-02**: User can change email (with Better Auth verification flow) and change password (with current-password challenge) from `/account/security`
-- [ ] **CUST-03**: User can create, edit, delete, and mark-default saved shipping addresses; addresses surface as a dropdown on `/checkout`
-- [ ] **CUST-04**: User can add a product to a wishlist from PDP and shop grid, view all wishlisted items on `/account/wishlist`, remove from wishlist, and add-to-bag from the wishlist page
-- [ ] **CUST-05**: User who has bought a product (order status paid/processing/shipped/delivered) can submit a 1-5 star rating + text review; reviews enter the Phase 5 admin moderation queue with `pending` status and appear on the product detail page once approved
-- [ ] **CUST-06**: User can download a PDF invoice (`/orders/[id]/invoice.pdf`) for any of their orders, rendered server-side via `@react-pdf/renderer` with order details + business footer
-- [ ] **CUST-07**: User can submit a cancel request (if status ∈ pending/paid and not shipped) or a return request (if status=delivered and within 14 days of delivery) via a textarea reason; admin sees the pending request on `/admin/orders/[id]` and can approve or reject
-- [ ] **CUST-08**: User can close their account via `/account/close`; closure anonymizes email, marks `deletedAt`, invalidates sessions, and preserves orders per PDPA retention (D-06 7y)
+- [x] **CUST-01**: Logged-in user can open `/account` and see name, email, join date, total order count, and a loyalty-points placeholder card (zero points in v1)
+- [x] **CUST-02**: User can change email (with Better Auth verification flow) and change password (with current-password challenge) from `/account/security`
+- [x] **CUST-03**: User can create, edit, delete, and mark-default saved shipping addresses; addresses surface as a dropdown on `/checkout`
+- [x] **CUST-04**: User can add a product to a wishlist from PDP and shop grid, view all wishlisted items on `/account/wishlist`, remove from wishlist, and add-to-bag from the wishlist page
+- [x] **CUST-05**: User who has bought a product (order status paid/processing/shipped/delivered) can submit a 1-5 star rating + text review; reviews enter the Phase 5 admin moderation queue with `pending` status and appear on the product detail page once approved
+- [x] **CUST-06**: User can download a PDF invoice (`/orders/[id]/invoice.pdf`) for any of their orders, rendered server-side via `@react-pdf/renderer` with order details + business footer
+- [x] **CUST-07**: User can submit a cancel request (if status ∈ pending/paid and not shipped) or a return request (if status=delivered and within 14 days of delivery) via a textarea reason; admin sees the pending request on `/admin/orders/[id]` and can approve or reject
+- [x] **CUST-08**: User can close their account via `/account/close`; closure anonymizes email, marks `deletedAt`, invalidates sessions, and preserves orders per PDPA retention (D-06 7y)
 
 ### Trust & Brand
 

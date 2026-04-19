@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Phase 04 Brand + Launch complete. Phase 05 Admin Extensions planned — ready to execute."
-last_updated: "2026-04-20T00:00:00.000Z"
-last_activity: 2026-04-20 -- Phase 04 complete (all 4 plans)
+stopped_at: "Phase 06 Customer Account complete (all 7 plans). Phase 05 Admin Extensions in progress in parallel."
+last_updated: "2026-04-19T22:30:00.000Z"
+last_activity: 2026-04-19 -- Phase 06 complete (7/7 plans, all CUST-01..CUST-08 closed)
 progress:
-  total_phases: 5
-  completed_phases: 4
-  total_plans: 16
-  completed_plans: 16
-  percent: 80
+  total_phases: 6
+  completed_phases: 5
+  total_plans: 23
+  completed_plans: 23
+  percent: 100
 ---
 
 # Project State
@@ -21,27 +21,28 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-12)
 
 **Core value:** Customers can easily browse and buy unique 3D printed products with a simple, clean shopping experience.
-**Current focus:** Phase 04 complete — launch-ready. Next: Phase 05 Admin Extensions.
+**Current focus:** Phase 06 Customer Account complete (all 7 plans, CUST-01..CUST-08 closed). Phase 05 Admin Extensions running in parallel.
 
 ## Current Position
 
-Phase: 04 (Brand + Launch) — COMPLETE
-Next Phase: 05 (Admin Extensions)
-Plan: 4 of 4 (all complete)
-Status: Phase 04 complete, ready for Phase 05
-Last activity: 2026-04-20 -- Phase 04 brand + launch shipped
+Phase: 06 (Customer Account) — COMPLETE (all 7 plans)
+Next Phase: Phase 05 finalisation (Admin Extensions, executing in parallel)
+Plan: 7 of 7 (all CUST-01 through CUST-08 closed)
+Status: Phase 06 complete; Phase 05 still running in another executor session
+Last activity: 2026-04-19 -- Phase 06 complete (schema + account shell + addresses + wishlist + reviews + invoice + cancel/return + closure)
 
-Progress: [████████░░] 80%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 16
+- Total plans completed: 23
 - Phase 01 total duration: ~2 hours executor time (cumulative incremental work)
 - Phase 02 total duration: ~35 minutes executor time (single session)
 - Phase 03 total duration: ~varies (4 plans shipped)
 - Phase 04 total duration: ~100 min across 4 plans
+- Phase 06 total duration: ~98 min across 7 plans
 - Average duration: ~20 min / plan
 
 **By Phase:**
@@ -52,11 +53,12 @@ Progress: [████████░░] 80%
 | 02    | 4     | ~35min | ~9min    |
 | 03    | 4     | —      | —        |
 | 04    | 4     | ~100min| ~25min   |
+| 06    | 7     | ~98min | ~14min   |
 
 **Recent Trend:**
 
-- Last 5 plans: 04-01 ✓, 04-02 ✓, 04-03 ✓, 04-04 ✓, v1 launch-ready
-- Trend: launch-ready — Phase 4 closed the v1 milestone. robots/sitemap/htaccess shipped, checklist + deploy notes ready for human operator.
+- Last 7 plans: 06-01 ✓, 06-02 ✓, 06-03 ✓, 06-04 ✓, 06-05 ✓, 06-06 ✓, 06-07 ✓
+- Trend: Phase 6 customer self-service complete in single executor session — schema + account + addresses + wishlist + reviews + invoice + cancel/return + closure all shipped. CUST-01..CUST-08 all closed.
 
 *Updated after each plan completion*
 
@@ -87,6 +89,14 @@ Recent decisions affecting current work:
 - 2026-04-20 (Phase 4 Plan 04-04): Next.js 15 file-based `robots.ts` + `sitemap.ts`. Sitemap is DB-backed (getActiveProducts + getActiveCategories), preview-aware via NEXT_PUBLIC_SITE_URL, fail-soft on DB failure. `.htaccess` with HTTPS+HSTS+security-headers STAGED in `deploy/` for launch-day swap — not auto-applied.
 - 2026-04-20 (Phase 4 Plan 04-04): Node app reboot survival via cron `@reboot` + start script (Option A); systemd user unit documented as Option B. cPanel does not expose `loginctl enable-linger` by default, so cron is the reliable path.
 - 2026-04-20 (Phase 4 Plan 04-04): HSTS max-age 63072000 (2 years) + preload ready. Submission to hstspreload.org deferred to post-launch +6 months.
+- 2026-04-19 (Phase 6 06-01): drizzle-kit push hung against cPanel MariaDB (Phase 3 01 precedent). Fallback raw-SQL applicator at scripts/phase6-migrate.cjs ships the 4 new tables (addresses, wishlists, order_requests, reviews) + user.deletedAt column. Uses latin1 charset to match existing user/products tables (FK constraint requires identical charset).
+- 2026-04-19 (Phase 6 06-01): requireUser() helper added with hot+cold dual deletedAt check (defense-in-depth against Better Auth ban propagation lag).
+- 2026-04-19 (Phase 6 06-01): @react-pdf/renderer 4.5.1 added as runtime dep for invoice PDF rendering.
+- 2026-04-19 (Phase 6 06-03): Address cap = 10 per user (Q-06-08 implicit; Assumption 8). One-default-per-user enforced via db.transaction (MariaDB no partial unique index).
+- 2026-04-19 (Phase 6 06-04): Wishlist cap = 50 items per user (Q-06-08 resolution). UNIQUE(user_id, product_id) DB-side + ER_DUP_ENTRY catch as idempotent success. ProductCard restructured to outer relative div with sibling WishlistButton (avoids nested-interactive-element HTML invalidity).
+- 2026-04-19 (Phase 6 06-05): Buyer-gate via server-side INNER JOIN order_items + orders WITH status IN paid|processing|shipped|delivered (T-06-05-buyer). Reviews 'Former customer' anonymisation when user.deletedAt set (T-06-05-PDPA). Wave-3 slot strategy: 06-05 commits stub components for 06-06; /orders/[id]/page.tsx edited only once.
+- 2026-04-19 (Phase 6 06-06): Invoice PDF route at /orders/[id]/invoice.pdf via @react-pdf/renderer renderToStream → Buffer; Cache-Control private, no-store; in-process Map rate limit 10/user/hour. Cancel/return one-pending-per-order rule enforced at app layer; admin approve-cancel atomic via db.transaction + assertValidTransition.
+- 2026-04-19 (Phase 6 06-07): Account closure anonymizes email to deleted-<userId>@3dninjaz.local (frees original for re-registration per Q-06-07); db.transaction wraps anonymize + addresses delete + wishlists delete + session delete; best-effort Better Auth banUser outside transaction. Re-registration with original email creates a brand-new disjoint account.
 
 ### Pending Todos
 
@@ -99,7 +109,8 @@ Recent decisions affecting current work:
   - Upload `deploy/htaccess-launch.txt` as `/home/ninjaz/public_html/.htaccess`
   - Submit sitemap to Google Search Console
   - `git tag v1.0.0 && git push --tags`
-- Phase 5 planning / execution (Admin Extensions).
+- Phase 5 (Admin Extensions) — executing in parallel session; check status before final v1 tag.
+- Phase 6 verifier sweep (per `/gsd-verify-phase 06`).
 
 ### Blockers/Concerns
 
@@ -112,6 +123,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-20T00:00:00.000Z
-Stopped at: Phase 04 Brand + Launch complete. Phase 05 Admin Extensions planned — ready to execute.
-Resume file: .planning/phases/05-admin-extensions/05-01-PLAN.md (if the phase folder + plans exist; otherwise run /gsd-plan-phase 05).
+Last session: 2026-04-19T22:30:00.000Z
+Stopped at: Phase 06 Customer Account complete (all 7 plans). Phase 05 Admin Extensions executing in parallel — check that session before tagging v1.0.0.
+Resume file: .planning/phases/05-admin-extensions/ — verify Phase 5 progress; run /gsd-verify-phase 06 to validate Phase 6 work.

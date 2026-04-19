@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 3: Checkout + Orders** - PayPal payment, order confirmation, and order management
 - [ ] **Phase 4: Brand + Launch** - Trust content, PDPA compliance, branding, and responsive polish
 - [ ] **Phase 5: Admin Extensions** - User mgmt, coupons, inventory toggle, bulk import, store settings UI, analytics, email template editor, reviews moderation, shipping rates
-- [ ] **Phase 6: Customer Account** - /account profile, saved addresses, wishlist, product reviews, PDF invoices, cancel/return requests
+- [x] **Phase 6: Customer Account** - /account profile, saved addresses, wishlist, product reviews, PDF invoices, cancel/return requests
 
 ## Phase Details
 
@@ -132,13 +132,13 @@ Plans:
 **Plans**: 7 plans
 
 Plans:
-- [ ] 06-01-PLAN.md — Schema additions (addresses, wishlists, order_requests, conditional reviews IF NOT EXISTS) + user.deletedAt column + requireUser() helper + Phase 6 Zod schemas + @react-pdf/renderer dep (Wave 1)
-- [ ] 06-02-PLAN.md — /account shell + /account profile + /account/security (Better Auth changeEmail + changePassword) + UserNav dropdown extension (Wave 2)
-- [ ] 06-03-PLAN.md — /account/addresses CRUD + mark-default transaction + checkout AddressPicker integration without regression (Wave 2)
-- [ ] 06-04-PLAN.md — Wishlist server actions (toggle + list + batch-hydrate) + WishlistButton + ProductCard/PDP integration + /account/wishlist list page (Wave 2)
-- [ ] 06-05-PLAN.md — Buyer-gated review submission on /orders/[id] + storefront reviews list + avg rating badge on PDP (Wave 3)
-- [ ] 06-06-PLAN.md — /orders/[id]/invoice.pdf (@react-pdf/renderer) with rate limit + cancel/return request flow + admin approve/reject (Wave 3)
-- [ ] 06-07-PLAN.md — /account/close PDPA-compliant soft-delete + requireUser() deletedAt hardening + homepage closure banner (Wave 3)
+- [x] 06-01-PLAN.md — Schema additions (addresses, wishlists, order_requests, conditional reviews IF NOT EXISTS) + user.deletedAt column + requireUser() helper + Phase 6 Zod schemas + @react-pdf/renderer dep (Wave 1)
+- [x] 06-02-PLAN.md — /account shell + /account profile + /account/security (Better Auth changeEmail + changePassword) + UserNav dropdown extension (Wave 2)
+- [x] 06-03-PLAN.md — /account/addresses CRUD + mark-default transaction + checkout AddressPicker integration without regression (Wave 2)
+- [x] 06-04-PLAN.md — Wishlist server actions (toggle + list + batch-hydrate) + WishlistButton + ProductCard/PDP integration + /account/wishlist list page (Wave 2)
+- [x] 06-05-PLAN.md — Buyer-gated review submission on /orders/[id] + storefront reviews list + avg rating badge on PDP (Wave 3)
+- [x] 06-06-PLAN.md — /orders/[id]/invoice.pdf (@react-pdf/renderer) with rate limit + cancel/return request flow + admin approve/reject (Wave 3)
+- [x] 06-07-PLAN.md — /account/close PDPA-compliant soft-delete + requireUser() deletedAt hardening + homepage closure banner (Wave 3)
 
 ## Progress
 
@@ -152,4 +152,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. Checkout + Orders | 4/4 | Complete | 2026-04-19 |
 | 4. Brand + Launch | 2/4 | In progress | - |
 | 5. Admin Extensions | 0/7 | Not started | - |
-| 6. Customer Account | 0/7 | Not started | - |
+| 6. Customer Account | 7/7 | Complete | 2026-04-19 |
