@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { getActiveProductBySlug } from "@/lib/catalog";
 import { ProductDetail } from "@/components/store/product-detail";
 import { isWishlisted } from "@/actions/wishlist";
+import { listProductReviews } from "@/actions/reviews";
+import { ProductReviews } from "@/components/store/product-reviews";
 
 type Params = Promise<{ slug: string }>;
 
@@ -27,33 +29,45 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
 
   // Phase 6 06-04 — server-side fetch of the wishlist state for this product
   // so the heart button on PDP renders with the correct initial fill.
-  const wished = await isWishlisted(product.id);
+  // Phase 6 06-05 — fetch the approved-review summary for the rating badge
+  // in the PDP header, then render the full reviews list below ProductDetail.
+  const [wished, reviewsSummary] = await Promise.all([
+    isWishlisted(product.id),
+    listProductReviews(product.id, { limit: 10 }),
+  ]);
 
   // Marshal to a client-safe plain object. Only pass what ProductDetail needs
   // — keeps the client bundle tight and avoids shipping server-only fields.
   return (
-    <ProductDetail
-      product={{
-        id: product.id,
-        name: product.name,
-        slug: product.slug,
-        description: product.description,
-        images: product.images,
-        materialType: product.materialType,
-        estimatedProductionDays: product.estimatedProductionDays,
-        category: product.category
-          ? { name: product.category.name, slug: product.category.slug }
-          : null,
-        variants: product.variants.map((v) => ({
-          id: v.id,
-          size: v.size,
-          price: v.price,
-          widthCm: v.widthCm,
-          heightCm: v.heightCm,
-          depthCm: v.depthCm,
-        })),
-      }}
-      isWishlistedInitial={wished}
-    />
+    <>
+      <ProductDetail
+        product={{
+          id: product.id,
+          name: product.name,
+          slug: product.slug,
+          description: product.description,
+          images: product.images,
+          materialType: product.materialType,
+          estimatedProductionDays: product.estimatedProductionDays,
+          category: product.category
+            ? { name: product.category.name, slug: product.category.slug }
+            : null,
+          variants: product.variants.map((v) => ({
+            id: v.id,
+            size: v.size,
+            price: v.price,
+            widthCm: v.widthCm,
+            heightCm: v.heightCm,
+            depthCm: v.depthCm,
+          })),
+        }}
+        isWishlistedInitial={wished}
+        ratingAvg={reviewsSummary.avgRating}
+        ratingCount={reviewsSummary.totalApproved}
+      />
+      <div className="max-w-6xl mx-auto px-6 pb-16 -mt-6">
+        <ProductReviews productId={product.id} />
+      </div>
+    </>
   );
 }

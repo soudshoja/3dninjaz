@@ -8,6 +8,7 @@ import { SizeSelector } from "@/components/store/size-selector";
 import { SizeGuide } from "@/components/store/size-guide";
 import { AddToBagButton } from "@/components/store/add-to-bag-button";
 import { WishlistButton } from "@/components/store/wishlist-button";
+import { RatingBadge } from "@/components/store/rating-badge";
 
 type Size = "S" | "M" | "L";
 
@@ -34,6 +35,9 @@ type ProductDetailProps = {
   };
   // Phase 6 06-04 — initial wishlist state fetched server-side on PDP page.
   isWishlistedInitial?: boolean;
+  // Phase 6 06-05 — approved-review summary for header rating badge.
+  ratingAvg?: number;
+  ratingCount?: number;
 };
 
 const SIZE_ORDER: Record<Size, number> = { S: 0, M: 1, L: 2 };
@@ -47,6 +51,8 @@ const SIZE_ORDER: Record<Size, number> = { S: 0, M: 1, L: 2 };
 export function ProductDetail({
   product,
   isWishlistedInitial = false,
+  ratingAvg = 0,
+  ratingCount = 0,
 }: ProductDetailProps) {
   const sortedVariants = useMemo(
     () =>
@@ -91,11 +97,17 @@ export function ProductDetail({
         ) : null}
 
         <h1
-          className="font-[var(--font-heading)] text-3xl md:text-5xl leading-tight mb-4"
+          className="font-[var(--font-heading)] text-3xl md:text-5xl leading-tight mb-2"
           style={{ color: BRAND.ink }}
         >
           {product.name}
         </h1>
+
+        {ratingCount > 0 ? (
+          <div className="mb-3">
+            <RatingBadge avg={ratingAvg} count={ratingCount} size="md" />
+          </div>
+        ) : null}
 
         <p
           className="inline-flex self-start rounded-full px-5 py-2 text-lg font-bold text-white mb-6"

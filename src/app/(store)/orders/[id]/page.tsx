@@ -8,6 +8,12 @@ import { formatMYR } from "@/lib/format";
 import { OrderStatusBadge } from "@/components/orders/order-status-badge";
 import { OrderTimeline } from "@/components/orders/order-timeline";
 import { ResendReceiptButton } from "@/components/orders/resend-receipt-button";
+// Phase 6 Wave 3 — feature sections injected by 06-05 / 06-06 / 06-07
+import { ReviewsSection } from "@/components/orders/reviews-section";
+import { DownloadInvoiceButton } from "@/components/orders/download-invoice-button";
+import { OrderActionsPanel } from "@/components/orders/order-actions-panel";
+import { OrderRequestsList } from "@/components/orders/order-requests-list";
+import { listMyOrderRequests } from "@/actions/order-requests";
 
 /**
  * /orders/[id] — doubles as post-checkout confirmation (PAY-04) AND long-lived
@@ -59,6 +65,11 @@ export default async function OrderDetailPage({
     row.status === "shipped" ||
     row.status === "delivered";
 
+  // Phase 6 06-06 / 06-07 — past + pending cancel/return requests on this
+  // order. The OrderActionsPanel uses the pending flag to gate the form.
+  const myRequests = await listMyOrderRequests(row.id);
+  const hasPendingRequest = myRequests.some((r) => r.status === "pending");
+
   return (
     <main
       className="min-h-screen"
@@ -93,7 +104,11 @@ export default async function OrderDetailPage({
               Placed {new Date(row.createdAt).toLocaleString("en-MY")}
             </p>
           </div>
-          <OrderStatusBadge status={row.status} />
+          <div className="flex items-center gap-3 flex-wrap">
+            <OrderStatusBadge status={row.status} />
+            {/* Phase 6 06-06 — invoice download for any status */}
+            <DownloadInvoiceButton orderId={row.id} />
+          </div>
         </header>
 
         <section
@@ -171,6 +186,31 @@ export default async function OrderDetailPage({
             </div>
           </div>
         </section>
+
+        {/* Phase 6 06-05 — per-item Review your items section. Hidden when
+            order isn't in a buyer-qualifying status. */}
+        <ReviewsSection
+          status={row.status}
+          items={row.items.map((i) => ({
+            id: i.id,
+            productId: i.productId,
+            productSlug: i.productSlug,
+            productName: i.productName,
+            size: i.size,
+          }))}
+        />
+
+        {/* Phase 6 06-06 / 06-07 — Cancel / return action panel. Renders only
+            when the status + recency rules allow at least one of the actions. */}
+        <OrderActionsPanel
+          orderId={row.id}
+          status={row.status}
+          updatedAt={row.updatedAt}
+          hasPendingRequest={hasPendingRequest}
+        />
+
+        {/* Phase 6 06-06 — past requests (pending / approved / rejected). */}
+        <OrderRequestsList requests={myRequests} />
 
         <section
           aria-labelledby="ship"
