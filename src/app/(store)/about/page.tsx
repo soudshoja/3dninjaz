@@ -61,9 +61,8 @@ export default function AboutPage() {
             </span>
           </h1>
           <p className="mt-6 mx-auto max-w-2xl text-lg sm:text-xl leading-relaxed text-zinc-700">
-            We are three siblings — Idrees (11), Ishaq (10), and Alaina (3) —
-            based in Malaysia, who love creating fun things for kids just like
-            us.
+            We are three siblings Idrees (11), Ishaq (10), and Alaina (3) based
+            in Malaysia, who love creating fun things for kids just like us.
           </p>
         </div>
 
@@ -94,7 +93,7 @@ export default function AboutPage() {
                 By day, we go to school… but by night, we turn into 3D printing
                 ninjas <span aria-label="ninja">🥷</span> and bring our ideas to
                 life! From fun toys to awesome custom designs, we&rsquo;re
-                always thinking of new things to make and share.
+                always thinking of new things to make and share
               </p>
               <p>
                 Every morning before school, we rush to check what we printed
