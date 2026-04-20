@@ -184,6 +184,11 @@ export const productVariants = mysqlTable("product_variants", {
     .references(() => products.id, { onDelete: "cascade" }),
   size: mysqlEnum("size", ["S", "M", "L"]).notNull(), // D-13
   price: decimal("price", { precision: 10, scale: 2 }).notNull(), // MYR
+  // Phase 10 (10-01) — per-variant unit cost (MYR). Nullable so existing rows
+  // remain valid; the admin fills in cost retroactively. Admin product form
+  // renders a live margin readout; order-level profit summary snapshots this
+  // value into order_items.unit_cost at checkout.
+  costPrice: decimal("cost_price", { precision: 10, scale: 2 }),
   widthCm: decimal("width_cm", { precision: 6, scale: 1 }),
   heightCm: decimal("height_cm", { precision: 6, scale: 1 }),
   depthCm: decimal("depth_cm", { precision: 6, scale: 1 }),
@@ -332,6 +337,14 @@ export const orders = mysqlTable("orders", {
     precision: 10,
     scale: 2,
   }),
+  // Phase 10 (10-01) — one-off order-level cost not tied to a line item
+  // (rush material, upgraded packaging, courier surcharge we absorb, etc.).
+  // NOT NULL with default 0 so existing rows remain valid. The optional note
+  // is admin-only free text to explain the charge in the profit panel.
+  extraCost: decimal("extra_cost", { precision: 10, scale: 2 })
+    .notNull()
+    .default("0.00"),
+  extraCostNote: varchar("extra_cost_note", { length: 255 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
 });
@@ -352,6 +365,11 @@ export const orderItems = mysqlTable("order_items", {
   productImage: text("product_image"),
   size: mysqlEnum("size", ["S", "M", "L"]).notNull(),
   unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
+  // Phase 10 (10-01) — snapshot of productVariants.costPrice at order-creation
+  // time. Nullable: historical orders (pre-phase 10) + variants whose cost has
+  // not been filled in retroactively stay NULL. Profit helper treats NULL as 0
+  // but flags it via hasMissingCosts so admin can see which lines need input.
+  unitCost: decimal("unit_cost", { precision: 10, scale: 2 }),
   quantity: int("quantity").notNull(),
   lineTotal: decimal("line_total", { precision: 10, scale: 2 }).notNull(),
 });
