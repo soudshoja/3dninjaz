@@ -15,6 +15,9 @@ import { DownloadInvoiceButton } from "@/components/orders/download-invoice-butt
 import { OrderActionsPanel } from "@/components/orders/order-actions-panel";
 import { OrderRequestsList } from "@/components/orders/order-requests-list";
 import { listMyOrderRequests } from "@/actions/order-requests";
+// Phase 9 (09-02) — live courier tracking timeline (customer view).
+import { getMyOrderTracking } from "@/actions/shipping";
+import { OrderTracking } from "@/components/store/order-tracking";
 
 /**
  * /orders/[id] — doubles as post-checkout confirmation (PAY-04) AND long-lived
@@ -70,6 +73,12 @@ export default async function OrderDetailPage({
   // order. The OrderActionsPanel uses the pending flag to gate the form.
   const myRequests = await listMyOrderRequests(row.id);
   const hasPendingRequest = myRequests.some((r) => r.status === "pending");
+
+  // Phase 9 (09-02) — live courier tracking view. Ownership re-checked inside
+  // getMyOrderTracking (first await, CVE-2025-29927). Returns an empty-shape
+  // view (hasShipment: false) when no courier has been booked yet, which
+  // renders the friendly "being prepared" panel.
+  const tracking = await getMyOrderTracking(row.id);
 
   return (
     <main
@@ -142,6 +151,25 @@ export default async function OrderDetailPage({
           </h2>
           <OrderTimeline status={row.status} />
         </section>
+
+        {tracking ? (
+          <section
+            aria-labelledby="tracking"
+            className="rounded-2xl p-4 md:p-6 mb-6 border"
+            style={{
+              backgroundColor: "#ffffff",
+              borderColor: "#e4e4e7",
+            }}
+          >
+            <h2
+              id="tracking"
+              className="font-[var(--font-heading)] text-xl mb-4"
+            >
+              Tracking
+            </h2>
+            <OrderTracking view={tracking} />
+          </section>
+        ) : null}
 
         <section
           aria-labelledby="items"
