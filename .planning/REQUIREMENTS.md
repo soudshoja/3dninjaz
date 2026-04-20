@@ -62,6 +62,14 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **ADM-13**: Admin can configure flat shipping rates per MY state, free-shipping threshold, and SST toggle (off for now but ready)
 - [ ] **ADM-14**: Admin can import a CSV of products (name, description, category, S/M/L prices) and see a success/failure report
 - [ ] **ADM-15**: Admin can toggle a product variant as in-stock/out-of-stock without deleting it
+- [ ] **ADM-16**: Admin can create a one-off (custom) order at `/admin/orders/new` with customer name, optional matched-or-snapshot email, item name + description, multiple uploaded images, manual MYR amount, and shipping address — appears in `/admin/orders` and `/admin/payments` like a normal order
+- [ ] **ADM-17**: Admin can generate a unique PayPal payment link for a custom order at `/payment-links/[token]` (no PII in URL); customer pays via the link and the same webhook + capture flow records `paypalCaptureId` against the custom order
+- [ ] **ADM-18**: `/admin/payments` and `/admin/orders/[id]` display per-capture financials fetched live from PayPal `GET /v2/payments/captures/{id}` — gross MYR, PayPal fee, net amount the seller receives, currency, transaction status (COMPLETED / REFUNDED / PARTIALLY_REFUNDED / PENDING / DECLINED), seller-protection eligibility, settle date — mirroring the PayPal Activity dashboard
+- [ ] **ADM-19**: Admin can issue a full or partial refund from `/admin/payments/[orderId]` via PayPal `POST /v2/payments/captures/{id}/refund`, with server-side amount cap (refund ≤ remaining capture), reason field, and idempotent webhook reconciliation
+- [ ] **ADM-20**: Admin can list open buyer disputes at `/admin/disputes` (live via PayPal `GET /v1/customer/disputes`) and view full thread + buyer evidence at `/admin/disputes/[id]`
+- [ ] **ADM-21**: Admin can accept a dispute claim, provide a defence with file attachments, and escalate to PayPal arbiter from `/admin/disputes/[id]` (calls `accept-claim`, `provide-evidence`, `escalate-to-arbiter` endpoints), with rate-limit (10/min/admin) and dispute-to-order verification
+- [ ] **ADM-22**: A nightly cPanel cron pulls `GET /v1/reporting/transactions` for the prior day, compares each PayPal transaction to local `orders.paypalCaptureId`, persists drift to `recon_runs` table, and writes a JSON snapshot to `.planning/intel/recon-YYYY-MM-DD.json`
+- [ ] **ADM-23**: Admin dashboard surfaces a reconciliation drift widget showing the latest run timestamp, drift count, and a deep link to per-run detail; latest drift count exposed as a navigation badge
 
 ### Promotions
 
@@ -99,6 +107,18 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **CUST-06**: User can download a PDF invoice (`/orders/[id]/invoice.pdf`) for any of their orders, rendered server-side via `@react-pdf/renderer` with order details + business footer
 - [x] **CUST-07**: User can submit a cancel request (if status ∈ pending/paid and not shipped) or a return request (if status=delivered and within 14 days of delivery) via a textarea reason; admin sees the pending request on `/admin/orders/[id]` and can approve or reject
 - [x] **CUST-08**: User can close their account via `/account/close`; closure anonymizes email, marks `deletedAt`, invalidates sessions, and preserves orders per PDPA retention (D-06 7y)
+
+### Image Pipeline (Phase 7)
+
+- [ ] **IMG-01**: Every uploaded image (admin product, custom order, future user-uploaded review) is automatically compressed via `sharp`: original kept under `<base>/orig.<ext>`, served versions are WebP + AVIF + JPEG fallback at 3 widths (400 / 800 / 1600 px) at quality ~78
+- [ ] **IMG-02**: Storefront `<Image>` and `<ProductCard>` emit a `srcset` matching the generated tiers (400/800/1600), and the new server-side `pickImage(url)` returns the variant manifest as `{ webp, avif, jpg }` per width
+- [ ] **IMG-03**: Variant responses serve with long-cache `Cache-Control: public, max-age=31536000, immutable` headers (set in `next.config.ts` headers() for `/uploads/**`); Next.js `<Image>` srcset emission verified at 320/375/390/768/1024/1440 viewports
+
+### Custom Errors (Phase 7)
+
+- [ ] **ERR-01**: 404 page (`src/app/not-found.tsx`) renders branded ninja illustration + helpful copy + link to homepage and shop, no generic Next.js 404 frame
+- [ ] **ERR-02**: 500 page (`src/app/error.tsx` + `src/app/global-error.tsx`) renders branded illustration + "Something went wrong" copy + a request-id reference (logged server-side); NEVER renders the stack trace, error.message, or error.stack to the user
+- [ ] **ERR-03**: Maintenance mode page (`src/app/(store)/maintenance/page.tsx`) is shown when `MAINTENANCE_MODE=true` env flag is set; middleware redirects every non-`/admin`, non-`/api/*health*` route to `/maintenance` while flag is on
 
 ### Trust & Brand
 
@@ -160,7 +180,7 @@ Explicitly excluded. Documented to prevent scope creep.
 | Loyalty points accrual engine | UI placeholder only in CUST-01; engine deferred to a future phase |
 | Review editing by customer | Submit-once policy; admin moderation is the only mutation path |
 | Wishlist sharing / public URLs | Private account-scoped only in v1 |
-| Auto-refund via PayPal API on approved cancel | Admin handles refund out-of-band in PayPal dashboard in v1 |
+| ~~Auto-refund via PayPal API on approved cancel~~ | Phase 7 ADM-19 ships admin refund button (full + partial) via PayPal capture refund API |
 
 ## Traceability
 
@@ -206,6 +226,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ADM-13 | Phase 5 | Pending |
 | ADM-14 | Phase 5 | Pending |
 | ADM-15 | Phase 5 | Pending |
+| ADM-16 | Phase 7 | Pending |
+| ADM-17 | Phase 7 | Pending |
+| ADM-18 | Phase 7 | Pending |
+| ADM-19 | Phase 7 | Pending |
+| ADM-20 | Phase 7 | Pending |
+| ADM-21 | Phase 7 | Pending |
+| ADM-22 | Phase 7 | Pending |
+| ADM-23 | Phase 7 | Pending |
 | PROMO-01 | Phase 5 | Pending |
 | PROMO-02 | Phase 5 | Pending |
 | INV-01 | Phase 5 | Pending |
@@ -222,6 +250,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CUST-06 | Phase 6 | Pending |
 | CUST-07 | Phase 6 | Pending |
 | CUST-08 | Phase 6 | Pending |
+| IMG-01 | Phase 7 | Pending |
+| IMG-02 | Phase 7 | Pending |
+| IMG-03 | Phase 7 | Pending |
+| ERR-01 | Phase 7 | Pending |
+| ERR-02 | Phase 7 | Pending |
+| ERR-03 | Phase 7 | Pending |
 | BRAND-01 | Phase 4 | Complete |
 | BRAND-02 | Phase 4 | Complete |
 | BRAND-03 | Phase 4 | Complete |
@@ -232,10 +266,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RESP-03 | Phase 4 | Complete |
 
 **Coverage:**
-- v1 requirements: 62 total (37 original + 17 Phase 5 additions + 8 Phase 6 additions)
-- Mapped to phases: 62
+- v1 requirements: 76 total (37 original + 17 Phase 5 additions + 8 Phase 6 additions + 14 Phase 7 additions)
+- Mapped to phases: 76
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-12*
-*Last updated: 2026-04-16 — Phase 6 requirements added (CUST-01..CUST-08)*
+*Last updated: 2026-04-16 — Phase 7 requirements added (ADM-16..ADM-23, IMG-01..IMG-03, ERR-01..ERR-03)*

@@ -18,6 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: Brand + Launch** - Trust content, PDPA compliance, branding, and responsive polish
 - [x] **Phase 5: Admin Extensions** - User mgmt, coupons, inventory toggle, bulk import, store settings UI, analytics, email template editor, reviews moderation, shipping rates
 - [x] **Phase 6: Customer Account** - /account profile, saved addresses, wishlist, product reviews, PDF invoices, cancel/return requests
+- [x] **Phase 7: Manual Orders + Image Pipeline + Custom Errors** - Admin creates one-off custom orders with PayPal payment-link generator, automatic image compression on every upload (WebP/AVIF, size + quality tiers), branded 404/500/maintenance pages
 
 ## Phase Details
 
@@ -140,10 +141,39 @@ Plans:
 - [x] 06-06-PLAN.md — /orders/[id]/invoice.pdf (@react-pdf/renderer) with rate limit + cancel/return request flow + admin approve/reject (Wave 3)
 - [x] 06-07-PLAN.md — /account/close PDPA-compliant soft-delete + requireUser() deletedAt hardening + homepage closure banner (Wave 3)
 
+### Phase 7: Manual Orders + PayPal Ops Mirror + Image Pipeline + Custom Errors
+**Goal**: Admin operates the store like a real retail counter — books one-off custom orders with PayPal-link generation, sees PayPal transaction-level financials AND manages refunds/disputes WITHOUT leaving the app, every uploaded image is auto-compressed for web speed, and broken pages render branded "ninja got lost" screens instead of generic stack traces.
+**Depends on**: Phase 5 (admin shell + analytics) and Phase 3 (PayPal SDK)
+**Requirements**: ADM-16, ADM-17, ADM-18, ADM-19, ADM-20, ADM-21, ADM-22, ADM-23, IMG-01, IMG-02, IMG-03, ERR-01, ERR-02, ERR-03 (add to REQUIREMENTS.md during planning)
+**Success Criteria** (what must be TRUE):
+  1. Admin can open `/admin/orders/new` and create a one-off custom order with: customer name, optional customer email (assigns to existing user if matched, else stand-alone), item name, item description/note, multiple uploaded images, manual amount in MYR, and shipping address
+  2. The custom order shows in `/admin/orders` and `/admin/payments` exactly like a normal order; status flows through the same state machine
+  3. Admin can click "Generate payment link" on the custom order — system calls PayPal `orders/create` with the order amount and returns a unique payment URL the admin shares with the customer (WhatsApp / email / SMS)
+  4. When the customer pays via the link, the same webhook + capture flow records `paypalCaptureId` against the custom order
+  5. **PayPal payment page parity** — `/admin/payments` and `/admin/orders/[id]` fetch capture detail from PayPal `GET /v2/payments/captures/{id}` and display: gross MYR, **PayPal fee**, **net amount the seller receives**, currency, transaction status (COMPLETED / REFUNDED / PARTIALLY_REFUNDED / PENDING / DECLINED), seller-protection eligibility, settle date — exactly mirroring the PayPal Activity dashboard so admin never has to log into paypal.com to verify earnings
+  6. **Refund from admin** — admin clicks "Refund" on a captured payment → enters amount (full or partial) + reason → server calls PayPal `POST /v2/payments/captures/{id}/refund` → records `refunded_amount` on the order + flips status; webhook reconciliation idempotent
+  7. **Disputes / claims** — `/admin/disputes` lists open buyer claims fetched from PayPal `GET /v1/customer/disputes`; admin can: view dispute thread + buyer evidence (`GET /v1/customer/disputes/{id}`), accept the claim (`POST .../accept-claim`), provide a defence with file attachments (`POST .../provide-evidence`), and escalate to PayPal arbiter (`POST .../escalate-to-arbiter`). Live "Customer disputes" capability already approved on the 3dninjaz PayPal app
+  8. **Daily reconciliation** — nightly cron pulls `GET /v1/reporting/transactions` for the prior day, compares each PayPal transaction to local `orders.paypalCaptureId`, flags any drift (refunds processed externally, missing captures, etc.) on the admin dashboard
+  9. Every image uploaded anywhere (admin product images, custom order images, future user-uploaded review images) is automatically compressed: original kept as `.bak`, served versions are WebP + AVIF + a JPEG fallback at 3 widths (400/800/1600 px) at quality ~78
+  10. Image responses include long-cache `Cache-Control` headers and the storefront `<Image>` components emit a `srcset` matching the generated tiers
+  11. 404, 500, and maintenance pages render a branded ninja illustration + helpful copy (no generic Next.js error frame); errors logged server-side with request id
+**Plans**: 9 plans
+
+Plans:
+- [ ] 07-01-PLAN.md — Schema additions (payment_links, dispute_cache, recon_runs) + 9 new orders columns + sharp/dotenv deps + raw-SQL migration applicator + .gitignore intel dir (Wave 1)
+- [ ] 07-02-PLAN.md — PayPal SDK extensions: disputesController, getCaptureDetails, paypal-refund.ts, paypal-disputes.ts, paypal-reporting.ts with OAuth + raw-fetch fallback (Wave 1)
+- [ ] 07-03-PLAN.md — /admin/orders/new manual order form + payment-links server actions + public /payment-links/[token] page with PayPal Smart Button (Wave 2)
+- [ ] 07-04-PLAN.md — /admin/payments enriched (gross/fee/net/seller-protection/settle) + /admin/payments/[orderId] detail with PaymentFinancialsPanel + cache hydration on first live fetch (Wave 2)
+- [ ] 07-05-PLAN.md — /admin/payments/[orderId]/refund: refund-form with two-step confirm + cap + rate-limit + PAYMENT.CAPTURE.REFUNDED idempotent webhook handler (Wave 2)
+- [ ] 07-06-PLAN.md — /admin/disputes list + /admin/disputes/[id] detail with evidence uploader + accept-claim + escalate-to-arbiter (Wave 3)
+- [ ] 07-07-PLAN.md — Nightly recon cron (CJS) + /admin/recon history + drift dashboard widget + sidebar drift badge + cPanel cron registration (Wave 3)
+- [ ] 07-08-PLAN.md — sharp image-pipeline (3 widths × 3 formats) + ResponsiveProductImage + storefront srcset wiring + Cache-Control headers + backfill script (Wave 4)
+- [ ] 07-09-PLAN.md — Branded 404/500/maintenance pages + middleware MAINTENANCE_MODE redirect + error-reporting helper (Wave 4)
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -153,3 +183,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 4. Brand + Launch | 4/4 | Complete | 2026-04-20 |
 | 5. Admin Extensions | 7/7 | Complete | 2026-04-19 |
 | 6. Customer Account | 7/7 | Complete | 2026-04-19 |
+| 7. Manual Orders + Image Pipeline + Custom Errors | 0/9 | Not started | - |
