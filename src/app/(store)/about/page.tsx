@@ -8,9 +8,8 @@ export const metadata: Metadata = {
   title: "About Us",
   description:
     "Meet Idrees, Ishaq, and Alaina — three siblings in Malaysia turning 3D printing into fun toys for kids.",
-  openGraph: {
-    images: ["/about/siblings-hero.png"],
-  },
+  // OG image left to the root layout default (logo / branded card) — the
+  // trio portrait was removed from the page on 2026-04-20 per user feedback.
 };
 
 /**
@@ -18,9 +17,10 @@ export const metadata: Metadata = {
  * ("we are three siblings"). Layout follows the lightened storefront theme:
  * mostly white, subtle blue/green/purple accents, wide whitespace.
  *
- * Sibling profile cards use the ninja nav icons rather than cropped portraits
- * from the trio hero — the hero glow labels don't crop cleanly and keeping
- * the full trio as one centered piece preserves the artist's composition.
+ * 2026-04-20: trio portrait (`/about/siblings-hero.*`, horizontal group
+ * image with baked-in name labels) removed from the hero per user feedback
+ * — the page now opens with a clean title hero and small decorative
+ * shuriken. Sibling profile cards below keep the ninja nav icons.
  */
 export default function AboutPage() {
   return (
@@ -67,19 +67,6 @@ export default function AboutPage() {
           </p>
         </div>
 
-        <div className="relative mx-auto mt-10 max-w-4xl">
-          <div className="rounded-3xl border border-zinc-200 bg-white p-4 sm:p-8 shadow-sm">
-            <Image
-              src="/about/siblings-hero.png"
-              alt="Idrees, Ishaq and Alaina — three ninja siblings"
-              width={1536}
-              height={1024}
-              priority
-              sizes="(max-width: 640px) 90vw, (max-width: 1024px) 80vw, 900px"
-              className="mx-auto h-auto w-full max-w-[900px] object-contain"
-            />
-          </div>
-        </div>
       </section>
 
       {/* STORY — intro + the day-in-the-life copy, with a little ninja icon */}
@@ -110,10 +97,13 @@ export default function AboutPage() {
                 always thinking of new things to make and share.
               </p>
               <p>
-                Before heading to school each morning, we check the items we
-                printed overnight. After school, we help prepare and send out
-                orders, making sure everything is packed with care (with lots
-                of help from our mum).
+                Every morning before school, we rush to check what we printed
+                overnight (it&rsquo;s our favourite part).
+              </p>
+              <p>
+                After school, we help prepare and send out orders, making sure
+                everything is packed with care (with lots of help from our
+                mum).
               </p>
               <p>
                 Alaina might still be small, but she loves watching her
@@ -238,7 +228,7 @@ export default function AboutPage() {
           </h2>
           <p className="mt-4 text-base sm:text-lg leading-relaxed text-zinc-700">
             We started this little business because we wanted to do something
-            fun! What&rsquo;s better than making things made by kids, for kids.
+            fun! What&rsquo;s better than making things by kids, for kids.
           </p>
           <div className="mt-8">
             <Link
