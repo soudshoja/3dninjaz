@@ -1,25 +1,70 @@
 /**
- * Seed script to create the first admin user.
+ * Seed script to create the first admin user, and optionally rotate the
+ * password of an existing admin in place.
  *
  * Run with: npm run seed:admin
  * (which runs `tsx --env-file=.env.local scripts/seed-admin.ts`)
  *
- * Reads ADMIN_EMAIL / ADMIN_PASSWORD from env, falls back to safe defaults.
- * If the user already exists, the script exits successfully without error.
+ * Environment variables:
+ *   ADMIN_EMAIL          — email of the admin to create / rotate (required in practice)
+ *   ADMIN_PASSWORD       — password (create mode: initial; rotate mode: new)
+ *   ADMIN_RESET_PASSWORD — when set to "1" and the user already exists, updates
+ *                          the credential-provider password hash in place using
+ *                          Better Auth's own hasher. User id, role,
+ *                          email_verified and sessions are preserved.
+ *
+ * Safety properties:
+ *   - Never logs the password value.
+ *   - Never deletes user or account rows; rotation is an UPDATE of account.password only.
+ *   - Idempotent: running the rotation twice with the same password succeeds
+ *     without error (the hash changes — scrypt salts are per-call — but
+ *     verification against the same input still passes).
+ *   - If the credential account row is missing, the script exits with a
+ *     non-zero status rather than silently creating one.
  */
 
 import { auth } from "../src/lib/auth";
 import { db } from "../src/lib/db";
-import { user } from "../src/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { account, user } from "../src/lib/db/schema";
+import { and, eq } from "drizzle-orm";
+
+async function rotatePassword(userId: string, newPassword: string) {
+  // Better Auth exposes its hash/verify implementation via the internal
+  // auth.$context promise. Using it ensures the scrypt parameters match
+  // what sign-in expects when validating.
+  const ctx = await auth.$context;
+  const hash = await ctx.password.hash(newPassword);
+
+  // Update only the credential-provider row for this user. Social-login rows
+  // (if any ever exist) must not be touched.
+  const result = await db
+    .update(account)
+    .set({ password: hash, updatedAt: new Date() })
+    .where(and(eq(account.userId, userId), eq(account.providerId, "credential")));
+
+  // Drizzle returns [ResultSetHeader, ...] for mysql2. affectedRows tells us
+  // whether we actually touched a row.
+  const header = Array.isArray(result) ? result[0] : result;
+  const affected =
+    header && typeof header === "object" && "affectedRows" in header
+      ? (header as { affectedRows: number }).affectedRows
+      : undefined;
+
+  if (affected === 0) {
+    throw new Error(
+      `No credential account row found for user id ${userId}. Refusing to create one silently.`
+    );
+  }
+
+  return affected;
+}
 
 async function seedAdmin() {
   const email = process.env.ADMIN_EMAIL ?? "admin@3dninjaz.com";
   const password = process.env.ADMIN_PASSWORD ?? "changeme123";
+  const resetMode = process.env.ADMIN_RESET_PASSWORD === "1";
   const name = "3D Ninjaz Admin";
 
-  // Check if the user already exists up-front so we can give a clean message
-  // without relying on Better Auth's error shape.
   const existing = await db
     .select()
     .from(user)
@@ -28,6 +73,9 @@ async function seedAdmin() {
 
   if (existing.length > 0) {
     const current = existing[0];
+
+    // Promote to admin if needed (pre-existing behaviour, kept for
+    // backward compatibility).
     if (current.role !== "admin") {
       await db
         .update(user)
@@ -36,10 +84,34 @@ async function seedAdmin() {
       console.log(
         `[seed-admin] existing user ${email} promoted to admin role.`
       );
-    } else {
-      console.log(`[seed-admin] admin user ${email} already exists, skipping.`);
     }
+
+    if (resetMode) {
+      try {
+        const affected = await rotatePassword(current.id, password);
+        console.log(
+          `[seed-admin] password rotated for ${email} (user id ${current.id}, account rows updated: ${affected}).`
+        );
+      } catch (err) {
+        console.error("[seed-admin] password rotation failed:", err);
+        process.exit(1);
+      }
+      return;
+    }
+
+    console.log(
+      `[seed-admin] admin user ${email} already exists, skipping. ` +
+        `Set ADMIN_RESET_PASSWORD=1 to rotate the password.`
+    );
     return;
+  }
+
+  // Create path — user does not exist yet.
+  if (resetMode) {
+    console.error(
+      `[seed-admin] ADMIN_RESET_PASSWORD=1 was set but no user exists for ${email}. Aborting.`
+    );
+    process.exit(1);
   }
 
   try {
