@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { emailSubscribers } from "@/lib/db/schema";
+import type { SubscriberStatusFilter } from "@/lib/subscriber-filters";
 
 /**
  * Admin server actions for the email-subscribers queue (/admin/subscribers).
@@ -12,13 +13,10 @@ import { emailSubscribers } from "@/lib/db/schema";
  * IMPORTANT (CVE-2025-29927):
  * Every exported function calls `await requireAdmin()` as the FIRST await —
  * middleware alone is bypassable.
+ *
+ * NB: "use server" modules can only export async functions, so the filter
+ * type-guard + shared enum live in @/lib/subscriber-filters.
  */
-
-export type SubscriberStatusFilter =
-  | "all"
-  | "active"
-  | "unsubscribed"
-  | "bounced";
 
 export type AdminSubscriberRow = {
   id: string;
@@ -29,19 +27,6 @@ export type AdminSubscriberRow = {
   unsubscribedAt: Date | null;
   userId: string | null;
 };
-
-const VALID_FILTERS: SubscriberStatusFilter[] = [
-  "all",
-  "active",
-  "unsubscribed",
-  "bounced",
-];
-
-export function isValidSubscriberFilter(
-  v: string | undefined,
-): v is SubscriberStatusFilter {
-  return typeof v === "string" && VALID_FILTERS.includes(v as SubscriberStatusFilter);
-}
 
 /** Totals for the filter-dropdown counts + badge. */
 export type SubscriberCounts = {

@@ -3,10 +3,12 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/auth-helpers";
 import {
   getSubscriberCounts,
-  isValidSubscriberFilter,
   listSubscribers,
-  type SubscriberStatusFilter,
 } from "@/actions/admin-subscribers";
+import {
+  isValidSubscriberFilter,
+  type SubscriberStatusFilter,
+} from "@/lib/subscriber-filters";
 import { BRAND } from "@/lib/brand";
 import { SubscriberRowActions } from "@/components/admin/subscriber-row-actions";
 
