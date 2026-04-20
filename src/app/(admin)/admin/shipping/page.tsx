@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { listShippingRates } from "@/actions/admin-shipping";
 import { getStoreSettingsCached } from "@/lib/store-settings";
@@ -31,6 +32,15 @@ export default async function AdminShippingPage() {
           <p className="mt-1 text-slate-600">
             Set per-state flat rates for Malaysia. Free-shipping kicks in at
             the threshold below.
+          </p>
+          <p className="mt-3 text-sm">
+            <Link
+              href="/admin/shipping/delyva"
+              className="inline-flex items-center gap-1 rounded-full px-4 py-2 font-semibold text-white"
+              style={{ backgroundColor: BRAND.blue }}
+            >
+              Delyva courier integration &rarr;
+            </Link>
           </p>
         </header>
         <ShippingRatesForm
