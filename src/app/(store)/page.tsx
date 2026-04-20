@@ -24,9 +24,20 @@ export default async function HomePage({
 }: {
   searchParams?: Promise<{ closed?: string }>;
 }) {
+  // Phase 8 — getActiveCategories now ORDER BYs the new position column.
+  // During the first deploy window the prod DB may not yet have the column
+  // (migration runs before build on the server, but static build caches and
+  // CI can race). Fall back to an empty list rather than failing the home
+  // prerender; the SHOP BY SQUAD rail just hides until the query recovers.
   const [featured, categories] = await Promise.all([
-    getActiveFeaturedProducts(4),
-    getActiveCategories(),
+    getActiveFeaturedProducts(4).catch((err) => {
+      console.warn("[home] getActiveFeaturedProducts failed:", err);
+      return [];
+    }),
+    getActiveCategories().catch((err) => {
+      console.warn("[home] getActiveCategories failed:", err);
+      return [];
+    }),
   ]);
 
   const accents = [BRAND.blue, BRAND.green, BRAND.purple] as const;
