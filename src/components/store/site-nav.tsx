@@ -152,10 +152,11 @@ export function SiteNav() {
           </ul>
           {/* Account actions area — UserNav ships its own sign-in/register
               affordances for signed-out users and an account menu for signed-in
-              users. Rendering it at the end gives mobile users a reachable
-              login/account entry without duplicating logic. */}
+              users. The "mobile" variant renders a flat list (no popover/portal)
+              to avoid a focus-trap clash with this disclosure that previously
+              produced a client-side exception when the avatar was tapped. */}
           <div className="px-6 py-4 border-t" style={{ borderColor: "#0B102010" }}>
-            <UserNav />
+            <UserNav variant="mobile" />
           </div>
         </div>
       ) : null}
