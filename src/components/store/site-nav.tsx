@@ -30,10 +30,12 @@ function MobileNavIcon({ name }: { name: string }) {
 
 /**
  * Compact 18px ninja icon for the desktop nav links. Sits to the LEFT
- * of the link text with a small gap. Hidden on narrow tablet widths so
- * the nav stays uncrowded. `src` accepts any path under /icons/ninja/
- * (both nav/ and emoji/ folders), since Contact reuses the envelope
- * emoji ninja.
+ * of the link text with a small gap. Visible from the `md` breakpoint
+ * (>= 768px) so icons show on any desktop/tablet where the desktop nav
+ * itself appears. (Previous `xl` gated them to >=1280px, which hid them
+ * on most laptops at 1024–1280px widths.) `src` accepts any path under
+ * /icons/ninja/ (both nav/ and emoji/ folders), since Contact reuses
+ * the envelope emoji ninja.
  */
 function DesktopNavIcon({ src }: { src: string }) {
   return (
@@ -42,7 +44,7 @@ function DesktopNavIcon({ src }: { src: string }) {
       alt=""
       width={18}
       height={18}
-      className="hidden xl:inline-block h-[18px] w-[18px] object-contain shrink-0"
+      className="hidden md:inline-block h-[18px] w-[18px] object-contain shrink-0"
     />
   );
 }
