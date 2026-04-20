@@ -12,9 +12,13 @@ import {
   shippingConfig,
   products,
 } from "@/lib/db/schema";
-import { requireAdmin } from "@/lib/auth-helpers";
+import { requireAdmin, getSessionUser } from "@/lib/auth-helpers";
 import { delyvaApi, DelyvaError, parseQuoteServices } from "@/lib/delyva";
-import type { InventoryItem, DelyvaContact } from "@/lib/delyva";
+import type { InventoryItem, DelyvaContact, OrderDetails } from "@/lib/delyva";
+import {
+  buildTrackingView,
+  type ShipmentTrackingView,
+} from "@/lib/shipment-tracking";
 import { DELYVA_EVENTS_TO_REGISTER } from "@/lib/delyva-events";
 import {
   SHIPPING_CONFIG_ID,
@@ -602,6 +606,152 @@ export async function cancelShipment(
       return { ok: false, error: `${e.code}: ${e.message}` };
     return { ok: false, error: (e as Error).message };
   }
+}
+
+// --------------------------- Tracking view (customer + admin) ---------------------------
+
+/**
+ * Internal helper — given a loaded shipment mirror row, pull the latest live
+ * tracking from Delyva (5-second cap), fall back to the mirror row on timeout
+ * or failure, and best-effort update the mirror with the freshest fields.
+ *
+ * Used by both `getMyOrderTracking` and `getAdminOrderTracking`. It does NOT
+ * enforce any authorization — the callers are responsible for that.
+ */
+async function hydrateTrackingView(
+  shipment: ShipmentRow | null,
+): Promise<ShipmentTrackingView> {
+  if (!shipment || !shipment.delyvaOrderId) {
+    return buildTrackingView({ shipment, live: null, cachedNote: null });
+  }
+
+  let live: OrderDetails | null = null;
+  let cachedNote: string | null = null;
+
+  try {
+    live = await delyvaApi.getOrderFast(shipment.delyvaOrderId, 5000);
+  } catch (e) {
+    if (e instanceof DelyvaError && e.code === "TIMEOUT") {
+      cachedNote = "Showing last-known status — live tracking is slow right now.";
+    } else {
+      cachedNote = "Showing last-known status — live tracking is unavailable.";
+    }
+  }
+
+  // Best-effort mirror update for next-time cached read. Wrapped separately so
+  // a DB write failure does not break the render.
+  if (live) {
+    try {
+      await db
+        .update(orderShipments)
+        .set({
+          consignmentNo: live.consignmentNo ?? shipment.consignmentNo,
+          trackingNo: live.trackingNo ?? shipment.trackingNo,
+          statusCode: live.statusCode ?? shipment.statusCode,
+          statusMessage: live.statusMessage ?? shipment.statusMessage,
+          personnelName: live.personnel?.name ?? shipment.personnelName,
+          personnelPhone: live.personnel?.phone ?? shipment.personnelPhone,
+          lastTrackingEventAt: new Date(),
+        })
+        .where(eq(orderShipments.orderId, shipment.orderId));
+    } catch (e) {
+      console.warn(
+        "hydrateTrackingView: mirror update failed",
+        (e as Error).message,
+      );
+    }
+  }
+
+  return buildTrackingView({ shipment, live, cachedNote });
+}
+
+/**
+ * Customer-facing tracking fetch. Enforces ownership as the FIRST await
+ * (CVE-2025-29927 — middleware alone is bypassable). Returns an empty-shape
+ * view when the caller is the owner but no shipment has been booked yet, so
+ * the UI can render a friendly "preparing" state instead of a 404.
+ *
+ * Returns `null` when the viewer does not own the order (same shape as a
+ * missing order — blocks enumeration).
+ */
+export async function getMyOrderTracking(
+  orderId: string,
+): Promise<ShipmentTrackingView | null> {
+  const user = await getSessionUser();
+  if (!user) return null;
+  if (typeof orderId !== "string" || orderId.length === 0) return null;
+
+  const orderRows = await db
+    .select({ id: orders.id, userId: orders.userId })
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+  if (orderRows.length === 0) return null;
+  const order = orderRows[0];
+  if (order.userId !== user.id && user.role !== "admin") {
+    // Same null shape for "not found" and "not yours" — blocks enumeration.
+    return null;
+  }
+
+  const shipRows = await db
+    .select()
+    .from(orderShipments)
+    .where(eq(orderShipments.orderId, orderId))
+    .limit(1);
+  const shipment: ShipmentRow | null =
+    shipRows.length === 0
+      ? null
+      : {
+          id: shipRows[0].id,
+          orderId: shipRows[0].orderId,
+          delyvaOrderId: shipRows[0].delyvaOrderId ?? null,
+          serviceCode: shipRows[0].serviceCode ?? null,
+          consignmentNo: shipRows[0].consignmentNo ?? null,
+          trackingNo: shipRows[0].trackingNo ?? null,
+          statusCode: shipRows[0].statusCode ?? null,
+          statusMessage: shipRows[0].statusMessage ?? null,
+          personnelName: shipRows[0].personnelName ?? null,
+          personnelPhone: shipRows[0].personnelPhone ?? null,
+          quotedPrice: shipRows[0].quotedPrice ?? null,
+          createdAt: shipRows[0].createdAt,
+          updatedAt: shipRows[0].updatedAt,
+        };
+
+  return hydrateTrackingView(shipment);
+}
+
+/**
+ * Admin-facing tracking fetch. Admin gate is the FIRST await. Always returns
+ * a view (including empty-shape for orders with no shipment booked).
+ */
+export async function getAdminOrderTracking(
+  orderId: string,
+): Promise<ShipmentTrackingView> {
+  await requireAdmin();
+  const rows = await db
+    .select()
+    .from(orderShipments)
+    .where(eq(orderShipments.orderId, orderId))
+    .limit(1);
+  const shipment: ShipmentRow | null =
+    rows.length === 0
+      ? null
+      : {
+          id: rows[0].id,
+          orderId: rows[0].orderId,
+          delyvaOrderId: rows[0].delyvaOrderId ?? null,
+          serviceCode: rows[0].serviceCode ?? null,
+          consignmentNo: rows[0].consignmentNo ?? null,
+          trackingNo: rows[0].trackingNo ?? null,
+          statusCode: rows[0].statusCode ?? null,
+          statusMessage: rows[0].statusMessage ?? null,
+          personnelName: rows[0].personnelName ?? null,
+          personnelPhone: rows[0].personnelPhone ?? null,
+          quotedPrice: rows[0].quotedPrice ?? null,
+          createdAt: rows[0].createdAt,
+          updatedAt: rows[0].updatedAt,
+        };
+  return hydrateTrackingView(shipment);
 }
 
 export async function refreshShipmentStatus(

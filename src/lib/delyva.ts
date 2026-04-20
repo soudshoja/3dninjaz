@@ -365,6 +365,43 @@ export const delyvaApi = {
     delyva<OrderDetails>(`/order/${id}`),
 
   /**
+   * Same as getOrder but caps the outbound fetch at `timeoutMs` (default 5s)
+   * via AbortController. Used by tracking render paths that must not hang a
+   * page render — caller should fall back to the cached order_shipments row
+   * when this throws a DelyvaError with code "TIMEOUT".
+   *
+   * Separate helper (rather than a flag on getOrder) so the happy path in
+   * booking/cancel flows keeps the old "wait as long as it takes" semantics.
+   */
+  getOrderFast: async (
+    id: number | string,
+    timeoutMs = 5000,
+  ): Promise<OrderDetails> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await delyva<OrderDetails>(`/order/${id}`, {
+        signal: controller.signal,
+      });
+    } catch (e) {
+      if (
+        (e as { name?: string })?.name === "AbortError" ||
+        (e as { code?: string })?.code === "ABORT_ERR"
+      ) {
+        throw new DelyvaError(
+          "TIMEOUT",
+          null,
+          0,
+          `Delyva /order/${id} did not respond within ${timeoutMs}ms`,
+        );
+      }
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+  },
+
+  /**
    * GET /order/{id}/label — binary PDF. Caller must arrayBuffer().
    */
   label: (id: number | string) => delyva<Response>(`/order/${id}/label`),
