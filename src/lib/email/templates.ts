@@ -32,6 +32,10 @@ export const availableVariables: Record<TemplateKey, string[]> = {
     "order_total",
     "order_link",
     "items_table",
+    // Optional — substituted with the empty string if the order has no
+    // PayPal capture id yet (status === "pending"). Templates can guard
+    // around it with surrounding markup.
+    "paypal_capture_id",
   ],
   password_reset: ["customer_name", "reset_link"],
 };

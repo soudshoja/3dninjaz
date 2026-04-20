@@ -111,6 +111,13 @@ export default async function OrderDetailPage({
           </div>
         </header>
 
+        {row.paypalCaptureId ? (
+          <p className="mb-4 text-xs text-slate-600">
+            Payment reference:{" "}
+            <span className="font-mono break-all">{row.paypalCaptureId}</span>
+          </p>
+        ) : null}
+
         <section
           aria-labelledby="progress"
           className="rounded-2xl p-4 md:p-6 mb-6"

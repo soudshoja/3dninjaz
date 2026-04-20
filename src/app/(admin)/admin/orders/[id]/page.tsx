@@ -66,6 +66,12 @@ export default async function AdminOrderDetailPage({
               Placed {new Date(row.createdAt).toLocaleString("en-MY")}
             </p>
             <p className="text-xs text-slate-500 font-mono mt-1 break-all">{row.id}</p>
+            {row.paypalCaptureId ? (
+              <p className="text-xs text-slate-600 mt-2">
+                Payment reference:{" "}
+                <span className="font-mono break-all">{row.paypalCaptureId}</span>
+              </p>
+            ) : null}
           </div>
           <AdminOrderStatusBadge status={row.status} />
         </header>

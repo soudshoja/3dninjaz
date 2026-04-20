@@ -99,6 +99,11 @@ export function renderOrderConfirmationHtml(order: OrderWithItems): string {
         <td style="padding:8px 0;color:#666;">Placed</td>
         <td style="padding:8px 0;text-align:right;">${escapeHtml(new Date(order.createdAt).toLocaleString("en-MY"))}</td>
       </tr>
+      ${order.paypalCaptureId ? `
+      <tr>
+        <td style="padding:8px 0;color:#666;">Payment reference</td>
+        <td style="padding:8px 0;text-align:right;font-family:monospace;word-break:break-all;">${escapeHtml(order.paypalCaptureId)}</td>
+      </tr>` : ""}
     </table>
 
     <h2 style="margin:24px 0 8px;font-size:18px;">Items</h2>
@@ -155,6 +160,9 @@ export function renderOrderConfirmationText(order: OrderWithItems): string {
   lines.push(`Thanks for your order. Payment confirmed.`);
   lines.push("");
   lines.push(`Placed: ${new Date(order.createdAt).toLocaleString("en-MY")}`);
+  if (order.paypalCaptureId) {
+    lines.push(`Payment reference: ${order.paypalCaptureId}`);
+  }
   lines.push("");
   lines.push("Items:");
   for (const i of order.items) {
@@ -244,6 +252,10 @@ export async function sendOrderConfirmationEmail(
       order_total: `${formatMYRServer(row.totalAmount)} ${row.currency}`,
       order_link: `${baseUrl()}/orders/${row.id}`,
       items_table: renderItemsTableFragment(row),
+      // Optional template variable {{paypal_capture_id}} — empty when the
+      // capture id isn't set yet (status !== "paid"); templates that include
+      // it can wrap with conditional copy in their HTML.
+      paypal_capture_id: row.paypalCaptureId ?? "",
     });
     subject = rendered.subject;
     html = rendered.html;
