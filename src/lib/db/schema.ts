@@ -953,6 +953,55 @@ export const orderShipmentsRelations = relations(orderShipments, ({ one }) => ({
   }),
 }));
 
+// ============================================================================
+// Phase 12 — Email subscribers (newsletter)
+//
+// Rows are created by the storefront footer subscribe form (/api/subscribe)
+// and managed by admins at /admin/subscribers. Unsubscribe tokens are used
+// by the public /api/unsubscribe flow so email footers can offer one-click
+// unsubscription (CAN-SPAM / GDPR basics).
+//
+// MariaDB quirks (CLAUDE.md):
+//   - App-generated UUID + unsubscribe_token (crypto.randomBytes(16).hex) on
+//     INSERT — no SQL defaults for these.
+//   - status is an ENUM so Drizzle's mysqlEnum is a clean mapping.
+//   - email is UNIQUE — the /api/subscribe route uses this to detect the
+//     "reactivate a previously unsubscribed email" path.
+// ============================================================================
+
+export const emailSubscriberStatusValues = [
+  "active",
+  "unsubscribed",
+  "bounced",
+] as const;
+
+export const emailSubscribers = mysqlTable(
+  "email_subscribers",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    email: varchar("email", { length: 254 }).notNull().unique(),
+    source: varchar("source", { length: 50 }),
+    // Nullable — set when the subscriber signed up while authenticated.
+    userId: varchar("user_id", { length: 36 }),
+    status: mysqlEnum("status", emailSubscriberStatusValues)
+      .notNull()
+      .default("active"),
+    // 32 hex chars = 16 random bytes; schema allows up to 64 for headroom.
+    unsubscribeToken: varchar("unsubscribe_token", { length: 64 }).unique(),
+    subscribedAt: timestamp("subscribed_at").notNull().defaultNow(),
+    unsubscribedAt: timestamp("unsubscribed_at"),
+    lastEmailSentAt: timestamp("last_email_sent_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({
+    statusIdx: index("idx_email_subscribers_status").on(t.status),
+    subscribedAtIdx: index("idx_email_subscribers_subscribed_at").on(
+      t.subscribedAt,
+    ),
+  }),
+);
+
 export function seedEmailTemplates(): EmailTemplateSeed[] {
   // Stub HTML — Wave 3 plan 05-06 replaces with the real template content
   // pulled from src/lib/email/order-confirmation.ts.
