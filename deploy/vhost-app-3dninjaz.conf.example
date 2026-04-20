@@ -1,0 +1,62 @@
+# ============================================================================
+# 3D Ninjaz — Apache userdata vhost config for app.3dninjaz.com
+# ============================================================================
+#
+# Purpose: reverse-proxy app.3dninjaz.com -> Next.js node server on :3100,
+# with branded static error pages served directly by Apache when node is
+# unreachable (502/503/504).
+#
+# Live location on the server (NOT in git, cPanel rewrites from userdata):
+#   /etc/apache2/conf.d/userdata/std/2_4/ninjaz/app.3dninjaz.com/3dninjaz_app_proxy.conf
+#   /etc/apache2/conf.d/userdata/ssl/2_4/ninjaz/app.3dninjaz.com/3dninjaz_app_proxy.conf
+#
+# Both std and ssl variants contain the SAME content. After editing, run:
+#   /scripts/ebuildhttpdconf && /usr/local/lsws/bin/lswsctrl reload
+# (Graceful reload only. NEVER `lswsctrl restart` — other users affected.)
+#
+# Why this file exists: the real config lives outside the repo, so this
+# example is the source of truth for what the vhost should look like. Keep
+# it in sync with the server whenever either side changes.
+# ============================================================================
+
+# --- Static bypass #1: branded error pages ----------------------------------
+# When node is down, Apache's ErrorDocument 503 points at /errors/503.html.
+# We MUST serve that file directly — if Apache proxied it back to dead node
+# it would return another 503, looping. Alias + ProxyPass `!` exclusion
+# keep /errors/ local to the filesystem.
+Alias /errors/ /home/ninjaz/apps/3dninjaz_v1/public/errors/
+<Directory "/home/ninjaz/apps/3dninjaz_v1/public/errors">
+    Require all granted
+    Options -Indexes
+</Directory>
+ProxyPass /errors/ !
+
+# --- Static bypass #2: ninja error icons ------------------------------------
+# The 502/503/504 error pages reference /icons/ninja/errors/*.png. When
+# node is down those must also be served directly by Apache, otherwise the
+# branded page loads but the ninja image is broken.
+Alias /icons/ /home/ninjaz/apps/3dninjaz_v1/public/icons/
+<Directory "/home/ninjaz/apps/3dninjaz_v1/public/icons">
+    Require all granted
+    Options -Indexes
+</Directory>
+ProxyPass /icons/ !
+
+# --- ErrorDocument overrides -------------------------------------------------
+# Apache serves these local files when the proxy target (:3100) responds
+# with 502/503/504 or is unreachable. They live at vhost level (not inside
+# the <Location /> block) so the proxy failure path doesn't re-enter the
+# proxy and loop.
+ErrorDocument 502 /errors/502.html
+ErrorDocument 503 /errors/503.html
+ErrorDocument 504 /errors/504.html
+
+# --- Main reverse-proxy to Next.js node server ------------------------------
+# IMPORTANT: this block must come AFTER the ProxyPass `!` exclusions above,
+# otherwise Apache's first-match semantics would still proxy /errors/ and
+# /icons/ to dead node.
+<Location "/">
+    ProxyPass http://127.0.0.1:3100/
+    ProxyPassReverse http://127.0.0.1:3100/
+    ProxyPreserveHost On
+</Location>
