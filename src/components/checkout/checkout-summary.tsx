@@ -67,16 +67,16 @@ export function CheckoutSummary({
           </span>
         </div>
       ) : null}
-      <div className="mt-1 flex items-center justify-between text-sm text-slate-600">
+      <div className="mt-1 flex items-center justify-between text-sm text-zinc-800">
         <span>
           Shipping
           {shipping ? (
-            <span className="block text-xs text-slate-500">
+            <span className="block text-xs text-zinc-600">
               {shipping.serviceName}
             </span>
           ) : null}
         </span>
-        <span className="font-semibold">
+        <span className="font-semibold text-zinc-900">
           {shipping
             ? shipping.price === 0
               ? "Free"

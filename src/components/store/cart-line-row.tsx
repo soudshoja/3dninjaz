@@ -73,19 +73,19 @@ export function CartLineRow({
         </p>
         <div className="mt-3 flex items-center gap-3">
           <div
-            className="inline-flex items-center rounded-full border-2 overflow-hidden"
+            className="inline-flex items-center rounded-full border-2 overflow-hidden bg-white"
             style={{ borderColor: BRAND.ink }}
           >
             <button
               type="button"
               onClick={() => decrement(item.key)}
               aria-label={`Decrease quantity of ${item.name} size ${item.size}`}
-              className="min-h-[48px] min-w-[48px] inline-flex items-center justify-center hover:bg-black/5"
+              className="min-h-[48px] min-w-[48px] inline-flex items-center justify-center text-zinc-900 hover:bg-zinc-100"
             >
               <Minus className="h-4 w-4" aria-hidden />
             </button>
             <span
-              className="min-w-[2ch] text-center font-bold px-2"
+              className="min-w-[2ch] text-center font-bold px-2 text-zinc-900"
               aria-live="polite"
             >
               {item.quantity}
@@ -95,7 +95,7 @@ export function CartLineRow({
               onClick={() => increment(item.key)}
               aria-label={`Increase quantity of ${item.name} size ${item.size}`}
               disabled={item.quantity >= 10}
-              className="min-h-[48px] min-w-[48px] inline-flex items-center justify-center hover:bg-black/5 disabled:opacity-40"
+              className="min-h-[48px] min-w-[48px] inline-flex items-center justify-center text-zinc-900 hover:bg-zinc-100 disabled:opacity-40"
             >
               <Plus className="h-4 w-4" aria-hidden />
             </button>
@@ -104,8 +104,7 @@ export function CartLineRow({
             type="button"
             onClick={() => remove(item.key)}
             aria-label={`Remove ${item.name} size ${item.size} from bag`}
-            className="min-h-[48px] px-3 inline-flex items-center gap-1 text-sm font-semibold hover:underline"
-            style={{ color: BRAND.ink }}
+            className="min-h-[48px] px-3 inline-flex items-center gap-1 text-sm font-semibold hover:underline text-zinc-900"
           >
             <Trash2 className="h-4 w-4" aria-hidden />
             <span className={variant === "full" ? "" : "hidden sm:inline"}>

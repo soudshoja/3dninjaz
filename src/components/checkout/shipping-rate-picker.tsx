@@ -229,10 +229,10 @@ export function ShippingRatePicker({ address, items, onChange }: Props) {
                     {opt.serviceName}
                   </div>
                   {eta ? (
-                    <div className="text-xs text-zinc-500">ETA {eta}</div>
+                    <div className="text-xs text-zinc-700">ETA {eta}</div>
                   ) : null}
                 </div>
-                <div className="font-[var(--font-heading)] text-lg">
+                <div className="font-[var(--font-heading)] text-lg text-zinc-900">
                   {opt.freeShipApplied ? (
                     <span style={{ color: BRAND.green }}>FREE</span>
                   ) : (
