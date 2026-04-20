@@ -71,3 +71,6 @@ next-env.d.ts
 # Phase 7 (07-01) — recon JSON snapshots are gitignored (PayPal txn IDs are
 # sensitive per T-07-X-recon-leak)
 .planning/intel/
+
+# Claude Code local config — skills, settings, plugin metadata
+.claude/
