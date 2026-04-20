@@ -86,14 +86,47 @@ export const verification = mysqlTable("verification", {
 // Application Tables
 // ============================================================================
 
+// Phase 8 (08-01) — 2-level taxonomy.
+// Categories own subcategories; products reference a subcategory which rolls
+// up to its parent. We keep categories.name UNIQUE (display-only scope) but
+// subcategory slugs only need to be unique WITHIN a parent (so two parents
+// can each have a "General" subcategory without collision).
+//
+// position columns drive admin-sorted menu order; default 0 so newly-created
+// rows land at the top until an admin reorders them.
 export const categories = mysqlTable("categories", {
   id: varchar("id", { length: 36 })
     .primaryKey()
     .default(sql`(UUID())`),
   name: varchar("name", { length: 100 }).notNull().unique(),
   slug: varchar("slug", { length: 120 }).notNull().unique(),
+  position: int("position").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
 });
+
+export const subcategories = mysqlTable(
+  "subcategories",
+  {
+    id: varchar("id", { length: 36 })
+      .primaryKey()
+      .default(sql`(UUID())`),
+    categoryId: varchar("category_id", { length: 36 })
+      .notNull()
+      .references(() => categories.id, { onDelete: "cascade" }),
+    slug: varchar("slug", { length: 120 }).notNull(),
+    name: varchar("name", { length: 120 }).notNull(),
+    position: int("position").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({
+    // Slug uniqueness is scoped to the parent category (two categories can
+    // each have a "general" subcategory).
+    categorySlugUnique: unique("uq_subcategory_slug").on(t.categoryId, t.slug),
+    categoryIdx: index("idx_subcategory_category").on(t.categoryId),
+  }),
+);
 
 export const products = mysqlTable("products", {
   id: varchar("id", { length: 36 })
@@ -117,12 +150,22 @@ export const products = mysqlTable("products", {
   categoryId: varchar("category_id", { length: 36 }).references(
     () => categories.id
   ),
+  // Phase 8 (08-01) — subcategory FK. Nullable during transition; once nav
+  // and filters fully switch over, products.categoryId will be retired in a
+  // follow-up phase. ON DELETE SET NULL so deleting a subcategory orphans
+  // products (admin must reassign) instead of cascading.
+  subcategoryId: varchar("subcategory_id", { length: 36 }).references(
+    () => subcategories.id,
+    { onDelete: "set null" }
+  ),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at")
     .notNull()
     .defaultNow()
     .onUpdateNow(),
-});
+}, (t) => ({
+  subcategoryIdx: index("idx_products_subcategory").on(t.subcategoryId),
+}));
 
 export const productVariants = mysqlTable("product_variants", {
   id: varchar("id", { length: 36 })
@@ -162,12 +205,28 @@ export const accountRelations = relations(account, ({ one }) => ({
 
 export const categoriesRelations = relations(categories, ({ many }) => ({
   products: many(products),
+  subcategories: many(subcategories),
 }));
+
+export const subcategoriesRelations = relations(
+  subcategories,
+  ({ one, many }) => ({
+    category: one(categories, {
+      fields: [subcategories.categoryId],
+      references: [categories.id],
+    }),
+    products: many(products),
+  }),
+);
 
 export const productsRelations = relations(products, ({ one, many }) => ({
   category: one(categories, {
     fields: [products.categoryId],
     references: [categories.id],
+  }),
+  subcategory: one(subcategories, {
+    fields: [products.subcategoryId],
+    references: [subcategories.id],
   }),
   variants: many(productVariants),
 }));
