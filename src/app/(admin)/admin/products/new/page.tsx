@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { getCategories } from "@/actions/categories";
+import { getCategories, getAllSubcategories } from "@/actions/categories";
 import { ProductForm } from "@/components/admin/product-form";
 
 export const metadata: Metadata = {
@@ -8,7 +8,10 @@ export const metadata: Metadata = {
 };
 
 export default async function NewProductPage() {
-  const categories = await getCategories();
+  const [categories, subcategories] = await Promise.all([
+    getCategories(),
+    getAllSubcategories(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -22,6 +25,11 @@ export default async function NewProductPage() {
       </div>
       <ProductForm
         categories={categories.map((c) => ({ id: c.id, name: c.name }))}
+        subcategories={subcategories.map((s) => ({
+          id: s.id,
+          categoryId: s.categoryId,
+          name: s.name,
+        }))}
       />
     </div>
   );

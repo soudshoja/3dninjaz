@@ -78,6 +78,11 @@ export const productSchema = z.object({
   isActive: z.boolean().default(true),
   isFeatured: z.boolean().default(false),
   categoryId: z.string().uuid().optional().nullable(),
+  // Phase 8 (08-01) — products now pick a subcategory (which implies a
+  // parent category). Nullable to keep backward compatibility while older
+  // rows are backfilled; the storefront treats null-subcategory products
+  // as "uncategorized" until admin edits them.
+  subcategoryId: z.string().uuid().optional().nullable(),
   variants: z
     .array(productVariantSchema)
     .min(1, "At least one size variant is required"),

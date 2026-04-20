@@ -2,7 +2,12 @@
 
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
-import { products, productVariants, categories } from "@/lib/db/schema";
+import {
+  products,
+  productVariants,
+  categories,
+  subcategories,
+} from "@/lib/db/schema";
 import { eq, desc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { productSchema, type ProductInput } from "@/lib/validators";
@@ -53,6 +58,23 @@ function clampThumbnailIndex(
   return Math.floor(raw);
 }
 
+/**
+ * Given a subcategoryId, return the parent categoryId so we can keep the
+ * legacy products.category_id pointer in sync while the transition rolls
+ * out. Returns null when the subcategory isn't found (shouldn't happen
+ * from the UI but defends against stale form data).
+ */
+async function resolveParentCategoryId(
+  subcategoryId: string,
+): Promise<string | null> {
+  const [row] = await db
+    .select({ categoryId: subcategories.categoryId })
+    .from(subcategories)
+    .where(eq(subcategories.id, subcategoryId))
+    .limit(1);
+  return row?.categoryId ?? null;
+}
+
 function ensureImagesArray(raw: unknown): string[] {
   if (Array.isArray(raw)) return raw.filter((v): v is string => typeof v === "string");
   if (typeof raw === "string") {
@@ -97,6 +119,13 @@ export async function createProduct(
     productData.images.length,
   );
 
+  // Phase 8 — when the form supplies a subcategoryId, resolve its parent
+  // category so the legacy products.category_id stays consistent (nav and
+  // shop filters still read from both columns during transition).
+  const resolvedCategoryId = productData.subcategoryId
+    ? await resolveParentCategoryId(productData.subcategoryId)
+    : productData.categoryId || null;
+
   await db.insert(products).values({
     id,
     name: productData.name,
@@ -108,7 +137,8 @@ export async function createProduct(
     estimatedProductionDays: productData.estimatedProductionDays ?? null,
     isActive: productData.isActive,
     isFeatured: productData.isFeatured,
-    categoryId: productData.categoryId || null,
+    categoryId: resolvedCategoryId,
+    subcategoryId: productData.subcategoryId || null,
   });
 
   if (variants.length > 0) {
@@ -147,6 +177,10 @@ export async function updateProduct(
     productData.images.length,
   );
 
+  const resolvedCategoryId = productData.subcategoryId
+    ? await resolveParentCategoryId(productData.subcategoryId)
+    : productData.categoryId || null;
+
   await db
     .update(products)
     .set({
@@ -158,7 +192,8 @@ export async function updateProduct(
       estimatedProductionDays: productData.estimatedProductionDays ?? null,
       isActive: productData.isActive,
       isFeatured: productData.isFeatured,
-      categoryId: productData.categoryId || null,
+      categoryId: resolvedCategoryId,
+      subcategoryId: productData.subcategoryId || null,
     })
     .where(eq(products.id, id));
 
@@ -233,7 +268,7 @@ export async function getProduct(id: string) {
     .from(productVariants)
     .where(eq(productVariants.productId, id));
 
-  let category: { id: string; name: string; slug: string } | null = null;
+  let category: typeof categories.$inferSelect | null = null;
   if (row.categoryId) {
     const [catRow] = await db
       .select()
@@ -243,7 +278,23 @@ export async function getProduct(id: string) {
     if (catRow) category = catRow;
   }
 
-  return { ...row, images: ensureImagesArray(row.images), variants, category };
+  let subcategory: typeof subcategories.$inferSelect | null = null;
+  if (row.subcategoryId) {
+    const [subRow] = await db
+      .select()
+      .from(subcategories)
+      .where(eq(subcategories.id, row.subcategoryId))
+      .limit(1);
+    if (subRow) subcategory = subRow;
+  }
+
+  return {
+    ...row,
+    images: ensureImagesArray(row.images),
+    variants,
+    category,
+    subcategory,
+  };
 }
 
 export async function getProducts() {
@@ -271,6 +322,17 @@ export async function getProducts() {
           .where(inArray(categories.id, categoryIds))
       : [];
 
+  const subcategoryIds = Array.from(
+    new Set(list.map((p) => p.subcategoryId).filter((v): v is string => !!v)),
+  );
+  const subcategoryRows =
+    subcategoryIds.length > 0
+      ? await db
+          .select()
+          .from(subcategories)
+          .where(inArray(subcategories.id, subcategoryIds))
+      : [];
+
   const variantByProduct = new Map<string, typeof variantRows>();
   for (const v of variantRows) {
     const bucket = variantByProduct.get(v.productId) ?? [];
@@ -279,11 +341,15 @@ export async function getProducts() {
   }
 
   const categoryById = new Map(categoryRows.map((c) => [c.id, c]));
+  const subcategoryById = new Map(subcategoryRows.map((s) => [s.id, s]));
 
   return list.map((p) => ({
     ...p,
     images: ensureImagesArray(p.images),
     variants: variantByProduct.get(p.id) ?? [],
     category: p.categoryId ? categoryById.get(p.categoryId) ?? null : null,
+    subcategory: p.subcategoryId
+      ? subcategoryById.get(p.subcategoryId) ?? null
+      : null,
   }));
 }

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getProduct } from "@/actions/products";
-import { getCategories } from "@/actions/categories";
+import { getCategories, getAllSubcategories } from "@/actions/categories";
 import {
   ProductForm,
   type ProductFormInitial,
@@ -21,7 +21,10 @@ export default async function EditProductPage({
   const product = await getProduct(id);
   if (!product) notFound();
 
-  const categories = await getCategories();
+  const [categories, subcategories] = await Promise.all([
+    getCategories(),
+    getAllSubcategories(),
+  ]);
 
   const initialData: ProductFormInitial = {
     id: product.id,
@@ -34,6 +37,7 @@ export default async function EditProductPage({
     isActive: product.isActive,
     isFeatured: product.isFeatured,
     categoryId: product.categoryId,
+    subcategoryId: product.subcategoryId,
     variants: product.variants.map((v) => ({
       size: v.size as "S" | "M" | "L",
       price: v.price,
@@ -56,6 +60,11 @@ export default async function EditProductPage({
       <ProductForm
         initialData={initialData}
         categories={categories.map((c) => ({ id: c.id, name: c.name }))}
+        subcategories={subcategories.map((s) => ({
+          id: s.id,
+          categoryId: s.categoryId,
+          name: s.name,
+        }))}
       />
     </div>
   );

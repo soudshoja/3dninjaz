@@ -35,6 +35,7 @@ export type ProductFormInitial = {
   isActive: boolean;
   isFeatured: boolean;
   categoryId: string | null;
+  subcategoryId: string | null;
   variants: Array<{
     size: "S" | "M" | "L";
     price: string;
@@ -45,6 +46,11 @@ export type ProductFormInitial = {
 };
 
 export type CategoryOption = { id: string; name: string };
+export type SubcategoryOption = {
+  id: string;
+  categoryId: string;
+  name: string;
+};
 
 type VariantRow = {
   size: "S" | "M" | "L";
@@ -85,9 +91,17 @@ function initialVariants(
 export function ProductForm({
   initialData,
   categories,
+  subcategories,
 }: {
   initialData?: ProductFormInitial;
   categories: CategoryOption[];
+  /**
+   * Phase 8 — full flat list of subcategories across all categories. The
+   * cascading dropdown filters this list client-side by the current
+   * parent categoryId selection so the server doesn't need to round-trip
+   * every time the parent changes.
+   */
+  subcategories: SubcategoryOption[];
 }) {
   const router = useRouter();
   const editing = !!initialData;
@@ -102,6 +116,9 @@ export function ProductForm({
   );
   const [categoryId, setCategoryId] = useState<string>(
     initialData?.categoryId ?? NO_CATEGORY
+  );
+  const [subcategoryId, setSubcategoryId] = useState<string>(
+    initialData?.subcategoryId ?? NO_CATEGORY,
   );
   const [materialType, setMaterialType] = useState(
     initialData?.materialType ?? ""
@@ -181,6 +198,7 @@ export function ProductForm({
       isActive,
       isFeatured,
       categoryId: categoryId === NO_CATEGORY ? null : categoryId,
+      subcategoryId: subcategoryId === NO_CATEGORY ? null : subcategoryId,
       variants: variants
         .filter((v) => v.enabled)
         .map((v) => ({
@@ -251,38 +269,86 @@ export function ProductForm({
               <p className="text-sm text-red-500">{errors.description}</p>
             )}
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="category">Category</Label>
-            <Select
-              value={categoryId}
-              onValueChange={(v: string | null) =>
-                setCategoryId(v ?? NO_CATEGORY)
-              }
-            >
-              <SelectTrigger id="category" className="h-10 w-full">
-                {/*
-                  base-ui's Select.Value defaults to printing the raw `value`
-                  prop (the category UUID). Pass a children render prop to map
-                  the id back to a label so the trigger shows the human name —
-                  was rendering the UUID before this fix.
-                */}
-                <SelectValue placeholder="Select a category">
-                  {(value: string | null) => {
-                    if (!value || value === NO_CATEGORY) return "None";
-                    const match = categories.find((c) => c.id === value);
-                    return match?.name ?? "Select a category";
-                  }}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NO_CATEGORY}>None</SelectItem>
-                {categories.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="category">Category</Label>
+              <Select
+                value={categoryId}
+                onValueChange={(v: string | null) => {
+                  const next = v ?? NO_CATEGORY;
+                  setCategoryId(next);
+                  // When the parent changes, reset the subcategory selection
+                  // if the previously-picked sub doesn't belong to the new
+                  // parent — avoids submitting an orphaned FK pair.
+                  if (subcategoryId !== NO_CATEGORY) {
+                    const stillValid = subcategories.some(
+                      (s) => s.id === subcategoryId && s.categoryId === next,
+                    );
+                    if (!stillValid) setSubcategoryId(NO_CATEGORY);
+                  }
+                }}
+              >
+                <SelectTrigger id="category" className="h-10 w-full">
+                  {/*
+                    base-ui's Select.Value defaults to printing the raw `value`
+                    prop (the category UUID). Pass a children render prop to map
+                    the id back to a label so the trigger shows the human name.
+                  */}
+                  <SelectValue placeholder="Select a category">
+                    {(value: string | null) => {
+                      if (!value || value === NO_CATEGORY) return "None";
+                      const match = categories.find((c) => c.id === value);
+                      return match?.name ?? "Select a category";
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_CATEGORY}>None</SelectItem>
+                  {categories.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="subcategory">Subcategory</Label>
+              <Select
+                value={subcategoryId}
+                onValueChange={(v: string | null) =>
+                  setSubcategoryId(v ?? NO_CATEGORY)
+                }
+                disabled={categoryId === NO_CATEGORY}
+              >
+                <SelectTrigger id="subcategory" className="h-10 w-full">
+                  <SelectValue placeholder={
+                    categoryId === NO_CATEGORY
+                      ? "Pick a category first"
+                      : "Select a subcategory"
+                  }>
+                    {(value: string | null) => {
+                      if (!value || value === NO_CATEGORY) return "None";
+                      const match = subcategories.find((s) => s.id === value);
+                      return match?.name ?? "Select a subcategory";
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_CATEGORY}>None</SelectItem>
+                  {subcategories
+                    .filter((s) => s.categoryId === categoryId)
+                    .map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-[var(--color-brand-text-muted)]">
+                Products live in a subcategory. Category syncs automatically.
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
