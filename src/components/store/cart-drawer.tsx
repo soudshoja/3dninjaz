@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { X } from "lucide-react";
 import {
@@ -52,6 +53,13 @@ export function CartDrawer() {
         <div className="flex-1 overflow-y-auto px-5 divide-y divide-black/10">
           {items.length === 0 ? (
             <div className="py-16 text-center">
+              <Image
+                src="/icons/ninja/emoji/thank-you@128.png"
+                alt=""
+                width={96}
+                height={96}
+                className="mx-auto h-24 w-24 object-contain mb-3"
+              />
               <p className="text-lg font-bold mb-2 text-zinc-900">Your bag is empty.</p>
               <p className="text-zinc-600 mb-6">Pick something stealthy.</p>
               <Link

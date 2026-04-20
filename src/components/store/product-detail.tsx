@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useState } from "react";
 import { BRAND } from "@/lib/brand";
 import { formatMYR, priceRangeMYR } from "@/lib/format";
@@ -157,6 +158,18 @@ export function ProductDetail({
             variant="pill"
           />
         </div>
+
+        {/* Secure-checkout trust badge — Phase 9b ninja pass */}
+        <p className="mt-4 flex items-center gap-2 text-sm text-zinc-600">
+          <Image
+            src="/icons/ninja/emoji/secure@128.png"
+            alt=""
+            width={32}
+            height={32}
+            className="h-8 w-8 object-contain shrink-0"
+          />
+          <span>Secure checkout with PayPal.</span>
+        </p>
 
         {/* Lead time notice — PROD-06 */}
         <p

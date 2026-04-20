@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { BRAND } from "@/lib/brand";
 import { Shuriken } from "@/components/brand/shuriken";
@@ -102,15 +103,40 @@ export default async function HomePage({
           </h2>
           <ol className="grid md:grid-cols-3 gap-6">
             {[
-              { n: "01", t: "Browse", d: "Scroll the drops. Pick a piece.", c: BRAND.blue },
-              { n: "02", t: "Size up", d: "Small, medium, or large ninja.", c: BRAND.green },
-              { n: "03", t: "Checkout", d: "PayPal. Shipped across Malaysia.", c: BRAND.purple },
+              {
+                n: "01",
+                t: "Browse",
+                d: "Scroll the drops. Pick a piece.",
+                c: BRAND.blue,
+                icon: "/icons/ninja/nav/shop@128.png",
+              },
+              {
+                n: "02",
+                t: "Size up",
+                d: "Small, medium, or large ninja.",
+                c: BRAND.green,
+                icon: "/icons/ninja/emoji/tip@128.png",
+              },
+              {
+                n: "03",
+                t: "Checkout",
+                d: "PayPal. Shipped across Malaysia.",
+                c: BRAND.purple,
+                icon: "/icons/ninja/nav/download@128.png",
+              },
             ].map((s) => (
               <li
                 key={s.n}
                 className="rounded-[28px] p-8 shadow-sm border border-zinc-200 border-b-[6px] bg-white"
                 style={{ borderBottomColor: s.c }}
               >
+                <Image
+                  src={s.icon}
+                  alt=""
+                  width={64}
+                  height={64}
+                  className="h-16 w-16 object-contain mb-2"
+                />
                 <div
                   className="font-[var(--font-heading)] text-5xl mb-3"
                   style={{ color: s.c }}

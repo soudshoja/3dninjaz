@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { BRAND } from "@/lib/brand";
 import { Logo } from "@/components/brand/logo";
@@ -7,6 +8,10 @@ import { Shuriken } from "@/components/brand/shuriken";
  * Homepage hero — lightened (2026-04-20). White background with dark text,
  * vivid shuriken + CTA pops for energy. Keeps the ninja typography but drops
  * the heavy dark canvas that was dominating the page.
+ *
+ * 2026-04-20 ninja pass: small waving mascot peeks into the hero — below
+ * the CTAs on mobile, floating top-right on desktop — so the brand
+ * character lands before scroll.
  */
 export function Hero() {
   return (
@@ -14,6 +19,15 @@ export function Hero() {
       className="relative overflow-hidden pt-14 md:pt-20 pb-16 md:pb-20"
       style={{ backgroundColor: "#FFFFFF" }}
     >
+      {/* Decorative ninja mascot — hidden on small screens, peeks in on md+ */}
+      <Image
+        src="/icons/ninja/emoji/hello.png"
+        alt=""
+        width={180}
+        height={180}
+        priority
+        className="hidden md:block absolute top-10 right-6 lg:right-16 w-[160px] lg:w-[200px] h-auto object-contain pointer-events-none select-none"
+      />
       <Shuriken
         className="absolute top-10 left-8 w-10 h-10 opacity-50 animate-spin-slow"
         fill={BRAND.blue}

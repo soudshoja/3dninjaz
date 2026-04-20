@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronRight } from "lucide-react";
@@ -100,6 +101,13 @@ export default async function ShopPage({
         <div>
           {products.length === 0 ? (
             <div className="text-center py-20">
+              <Image
+                src="/icons/ninja/nav/faq@128.png"
+                alt=""
+                width={96}
+                height={96}
+                className="mx-auto h-24 w-24 object-contain mb-4"
+              />
               <p className="text-xl font-bold mb-2" style={{ color: BRAND.ink }}>
                 {category || subcategory
                   ? "No drops in this squad yet."

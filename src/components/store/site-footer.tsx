@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 // lucide-react v1 does not ship brand glyphs (no Instagram / TikTok icons).
 // Camera reads clearly as "photo social" for Instagram; Music2 as "short-form
@@ -125,6 +126,13 @@ export function SiteFooter() {
         <div className="flex flex-col md:flex-row items-center md:items-center justify-between gap-6 pt-8 border-t border-zinc-200 text-center md:text-left">
           <div className="flex items-center gap-3">
             <Logo size={40} />
+            <Image
+              src="/icons/ninja/emoji/thank-you@128.png"
+              alt=""
+              width={32}
+              height={32}
+              className="h-8 w-8 object-contain hidden sm:block"
+            />
             <div className="flex flex-col">
               <span className="font-[var(--font-heading)] tracking-wide text-zinc-900">
                 3D <span style={{ color: BRAND.green }}>NINJAZ</span>

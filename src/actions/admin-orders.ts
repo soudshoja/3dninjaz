@@ -161,6 +161,10 @@ export type AdminOrderDetail = {
   paypalNet: string | null;
   sellerProtection: string | null;
   paypalSettleDate: Date | null;
+  // Phase 9b — Delyva courier selection captured at checkout
+  shippingServiceCode: string | null;
+  shippingServiceName: string | null;
+  shippingQuotedPrice: string | null;
   user: { id: string; email: string; name: string } | null;
   items: Array<{
     id: string;
@@ -246,6 +250,9 @@ export async function getAdminOrder(orderId: string): Promise<AdminOrderDetail |
     paypalNet: head.o.paypalNet ?? null,
     sellerProtection: head.o.sellerProtection ?? null,
     paypalSettleDate: head.o.paypalSettleDate ?? null,
+    shippingServiceCode: head.o.shippingServiceCode ?? null,
+    shippingServiceName: head.o.shippingServiceName ?? null,
+    shippingQuotedPrice: head.o.shippingQuotedPrice ?? null,
     user: head.uId
       ? { id: head.uId, email: head.uEmail ?? "", name: head.uName ?? "" }
       : null,

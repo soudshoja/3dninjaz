@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
@@ -55,6 +56,13 @@ export default function BagPage() {
 
         {items.length === 0 ? (
           <div className="rounded-3xl bg-white p-10 text-center border border-zinc-200 shadow-sm">
+            <Image
+              src="/icons/ninja/emoji/thank-you@128.png"
+              alt=""
+              width={120}
+              height={120}
+              className="mx-auto h-28 w-28 object-contain mb-4"
+            />
             <p className="text-xl font-bold mb-2 text-zinc-900">
               Your bag is empty.
             </p>

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { count, eq } from "drizzle-orm";
 import { getSessionUser } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
@@ -22,8 +23,22 @@ export default async function AccountPage() {
     .where(eq(orders.userId, sessionUser.id));
   const totalOrders = Number(totals?.c ?? 0);
 
+  const firstName = (sessionUser.name ?? "").trim().split(/\s+/)[0] || "ninja";
+
   return (
     <div>
+      <div className="flex items-center gap-3 mb-4">
+        <Image
+          src="/icons/ninja/emoji/hello@128.png"
+          alt=""
+          width={56}
+          height={56}
+          className="h-14 w-14 object-contain shrink-0"
+        />
+        <p className="font-[var(--font-heading)] text-2xl text-zinc-900">
+          Welcome back, {firstName}.
+        </p>
+      </div>
       <LoyaltyCard />
 
       <section className="rounded-2xl p-5 md:p-6 mb-4 bg-white">

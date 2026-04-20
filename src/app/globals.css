@@ -182,6 +182,17 @@
   animation-play-state: paused;
 }
 
+/* Add-to-bag confirmation flash */
+@keyframes fade-in-out {
+  0% { opacity: 0; transform: translate(-50%, -4px); }
+  20% { opacity: 1; transform: translate(-50%, -6px); }
+  80% { opacity: 1; transform: translate(-50%, -6px); }
+  100% { opacity: 0; transform: translate(-50%, -12px); }
+}
+.animate-fade-in-out {
+  animation: fade-in-out 1500ms ease-out forwards;
+}
+
 /* Typewriter caret blink */
 @keyframes caret-blink {
   0%, 49% { opacity: 1; }
