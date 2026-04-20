@@ -154,7 +154,7 @@ export function ShippingRatePicker({ address, items, onChange }: Props) {
         className="rounded-2xl border-2 p-4 text-sm"
         style={{ borderColor: `${BRAND.ink}22`, color: BRAND.ink }}
       >
-        Fill in the shipping address to see courier rates.
+        Fill in your shipping address to see courier rates.
       </div>
     );
   }

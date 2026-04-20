@@ -88,23 +88,28 @@ export function PayPalButton({
     [onPaid],
   );
 
+  // User-facing hints deliberately don't mention PayPal — the button's
+  // visible disabled/enabled state already conveys that. The shipping
+  // address hint lives in shipping-rate-picker.tsx so we avoid duplicating
+  // the same message in two places; here we only surface the "pick a
+  // courier" nudge once the address is filled in.
   const disabledReason =
     address === null || items.length === 0
-      ? "Fill in your shipping address to unlock PayPal."
+      ? null
       : shipping === null
-        ? "Pick a courier above to unlock PayPal."
+        ? "Pick a courier above to continue."
         : null;
 
   return (
     <div aria-live="polite">
-      {disabled ? (
+      {disabled && disabledReason ? (
         <div
           className="rounded-2xl p-4 text-sm border-2"
           style={{ borderColor: `${BRAND.ink}22`, color: BRAND.ink }}
         >
           {disabledReason}
         </div>
-      ) : (
+      ) : disabled ? null : (
         <>
           <PayPalButtons
             style={{
