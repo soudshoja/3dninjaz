@@ -17,6 +17,8 @@ import {
   Boxes,
   Wallet,
   UserCog,
+  Scale,
+  ScanLine,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +35,16 @@ const items = [
   // Phase post-launch — PayPal transactions report (admin sees what they'd
   // see in the PayPal dashboard without needing to log in there).
   { href: "/admin/payments", label: "Payments", icon: Wallet, exact: false },
+  // Phase 7 (07-06) — buyer disputes mirror.
+  { href: "/admin/disputes", label: "Disputes", icon: Scale, exact: false },
+  // Phase 7 (07-07) — nightly PayPal reconciliation reports.
+  {
+    href: "/admin/recon",
+    label: "Reconciliation",
+    icon: ScanLine,
+    exact: false,
+    badge: "reconDriftCount" as const,
+  },
   // Phase 5 admin extensions
   { href: "/admin/users", label: "Users", icon: Users, exact: false },
   { href: "/admin/inventory", label: "Inventory", icon: Boxes, exact: false },
@@ -71,8 +83,11 @@ const items = [
  */
 export function SidebarNav({
   pendingReviewCount = 0,
+  reconDriftCount = 0,
 }: {
   pendingReviewCount?: number;
+  /** Phase 7 (07-07) — drift count from latest reconciliation run. */
+  reconDriftCount?: number;
 }) {
   const pathname = usePathname();
 
@@ -83,8 +98,14 @@ export function SidebarNav({
         const active = item.exact
           ? pathname === item.href
           : pathname === item.href || pathname.startsWith(item.href + "/");
-        const showBadge =
-          item.badge === "pendingReviewCount" && pendingReviewCount > 0;
+        const badgeKey = (item as { badge?: string }).badge;
+        const badgeCount =
+          badgeKey === "pendingReviewCount"
+            ? pendingReviewCount
+            : badgeKey === "reconDriftCount"
+              ? reconDriftCount
+              : 0;
+        const showBadge = !!badgeKey && badgeCount > 0;
         return (
           <Link
             key={item.href}
@@ -101,9 +122,9 @@ export function SidebarNav({
             {showBadge ? (
               <span
                 className="ml-auto inline-flex items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white"
-                aria-label={`${pendingReviewCount} pending`}
+                aria-label={`${badgeCount} pending`}
               >
-                {pendingReviewCount}
+                {badgeCount}
               </span>
             ) : null}
           </Link>

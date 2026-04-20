@@ -17,6 +17,9 @@ const MOBILE_CHIPS = [
   { href: "/admin/categories", label: "Categories" },
   { href: "/admin/orders", label: "Orders" },
   { href: "/admin/payments", label: "Payments" },
+  // Phase 7 (07-06, 07-07)
+  { href: "/admin/disputes", label: "Disputes" },
+  { href: "/admin/recon", label: "Reconciliation" },
   { href: "/admin/users", label: "Users" },
   { href: "/admin/inventory", label: "Inventory" },
   { href: "/admin/coupons", label: "Coupons" },
