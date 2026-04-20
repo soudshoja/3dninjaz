@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -9,6 +10,23 @@ import { Logo } from "@/components/brand/logo";
 import { UserNav } from "@/components/auth/user-nav";
 import { CartButton } from "@/components/store/cart-button";
 import type { CategoryTreeNode } from "@/lib/catalog";
+
+/**
+ * Small helper to render a 24px ninja icon next to a mobile nav link.
+ * Uses the @128 variant; the browser scales down cleanly. Decorative
+ * alt="" — the link text is the accessible name.
+ */
+function MobileNavIcon({ name }: { name: string }) {
+  return (
+    <Image
+      src={`/icons/ninja/nav/${name}@128.png`}
+      alt=""
+      width={24}
+      height={24}
+      className="h-6 w-6 object-contain shrink-0"
+    />
+  );
+}
 
 /**
  * Unified customer-facing navigation (Phase 4 Plan 04-03, expanded in 08-01).
@@ -76,6 +94,14 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
     { href: "/about", label: "About" },
     { href: "/contact", label: "Contact" },
   ];
+  // Only used inside the mobile disclosure. Desktop links stay text-only
+  // for a cleaner 68px nav bar.
+  const MOBILE_ICONS: Record<string, string> = {
+    "/about": "about",
+    // Contact page gets the envelope emoji — there's no contact ninja in
+    // the nav set. The MobileNavIcon helper hard-wires the nav/ folder, so
+    // only use nav/* slugs here (about matches the profile bubble).
+  };
 
   return (
     <nav
@@ -214,11 +240,12 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
             <li>
               <Link
                 href="/shop"
-                className="block py-4 min-h-[48px] font-semibold border-b"
+                className="flex items-center gap-3 py-4 min-h-[48px] font-semibold border-b"
                 style={{ borderColor: "#0B102010", color: BRAND.ink }}
                 onClick={() => setOpen(false)}
               >
-                Shop — all drops
+                <MobileNavIcon name="shop" />
+                <span>Shop — all drops</span>
               </Link>
             </li>
             {categoryTree.map((c) => {
@@ -270,18 +297,31 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
                 </li>
               );
             })}
-            {nonShopLinks.map((l) => (
-              <li key={l.href}>
-                <Link
-                  href={l.href}
-                  className="block py-4 min-h-[48px] font-semibold border-b last:border-b-0"
-                  style={{ borderColor: "#0B102010", color: BRAND.ink }}
-                  onClick={() => setOpen(false)}
-                >
-                  {l.label}
-                </Link>
-              </li>
-            ))}
+            {nonShopLinks.map((l) => {
+              const iconName = MOBILE_ICONS[l.href];
+              return (
+                <li key={l.href}>
+                  <Link
+                    href={l.href}
+                    className="flex items-center gap-3 py-4 min-h-[48px] font-semibold border-b last:border-b-0"
+                    style={{ borderColor: "#0B102010", color: BRAND.ink }}
+                    onClick={() => setOpen(false)}
+                  >
+                    {iconName ? <MobileNavIcon name={iconName} /> : null}
+                    {l.href === "/contact" ? (
+                      <Image
+                        src="/icons/ninja/emoji/contact@128.png"
+                        alt=""
+                        width={24}
+                        height={24}
+                        className="h-6 w-6 object-contain shrink-0"
+                      />
+                    ) : null}
+                    <span>{l.label}</span>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
           <div className="px-6 py-4 border-t" style={{ borderColor: "#0B102010" }}>
             <UserNav variant="mobile" />
