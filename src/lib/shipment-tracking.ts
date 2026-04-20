@@ -1,7 +1,36 @@
-import "server-only";
+// No "server-only" here on purpose — this module is pure types + a pure
+// normalization function. It is imported by both server action callers and
+// the shared tracking timeline component (which is rendered from a client
+// "use client" parent, so bundles the module into the client graph). Nothing
+// here reads env vars or calls Delyva; it only receives the already-fetched
+// data as arguments.
+//
+// We intentionally declare a LOCAL `ShipmentMirrorRow` type here rather than
+// importing ShipmentRow from `@/actions/shipping`. Two reasons:
+//   1. `shipping.ts` has "use server" — client components cannot import non-
+//      async exports from it.
+//   2. Re-importing would create a cycle (shipping.ts already imports from
+//      this file to build the view).
+//
+// Structurally compatible with ShipmentRow — any change there must be mirrored
+// here. Enforced indirectly at the buildTrackingView() call sites because
+// ShipmentRow satisfies this shape via structural typing.
 
 import type { OrderDetails } from "@/lib/delyva";
-import type { ShipmentRow } from "@/actions/shipping";
+
+export type ShipmentMirrorRow = {
+  orderId: string;
+  delyvaOrderId: string | null;
+  serviceCode: string | null;
+  consignmentNo: string | null;
+  trackingNo: string | null;
+  statusCode: number | null;
+  statusMessage: string | null;
+  personnelName: string | null;
+  personnelPhone: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
 
 // ============================================================================
 // Normalized shipment-tracking view consumed by BOTH the customer order page
@@ -80,7 +109,7 @@ export type ShipmentTrackingView = {
  *   mirror row alone with `cachedNote` set so the UI can show a hint.
  */
 export function buildTrackingView(args: {
-  shipment: ShipmentRow | null;
+  shipment: ShipmentMirrorRow | null;
   live: OrderDetails | null;
   cachedNote: string | null;
 }): ShipmentTrackingView {

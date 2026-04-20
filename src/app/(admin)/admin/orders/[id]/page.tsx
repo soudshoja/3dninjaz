@@ -21,7 +21,8 @@ import { PaymentLinkCard } from "@/components/admin/payment-link-card";
 import { getPaymentDetail } from "@/actions/admin-payments";
 import { PaymentFinancialsPanel } from "@/components/admin/payment-financials-panel";
 // Phase 9 (09-01) — Delyva shipment panel (book / print label / track).
-import { getOrderShipment } from "@/actions/shipping";
+// Phase 9 (09-02) — live tracking view shared with the customer page.
+import { getOrderShipment, getAdminOrderTracking } from "@/actions/shipping";
 import { OrderShipmentPanel } from "@/components/admin/order-shipment-panel";
 // Phase 10 (10-01) — cost + profit panel with inline edits.
 import { OrderCostsPanel } from "@/components/admin/order-costs-panel";
@@ -73,6 +74,17 @@ export default async function AdminOrderDetailPage({
   // Cheap indexed SELECT; no API call here — actual Delyva calls happen
   // on the client when the admin clicks "Book courier" or "Refresh status".
   const shipment = await getOrderShipment(row.id);
+
+  // Phase 9 (09-02) — server-side normalized tracking view (live Delyva data
+  // with 5s timeout + cached-fallback). Wrapped in try/catch so a transient
+  // Delyva outage never breaks the admin page — we fall back to null and the
+  // panel shows the legacy minimal display.
+  let tracking = null as Awaited<ReturnType<typeof getAdminOrderTracking>> | null;
+  try {
+    tracking = await getAdminOrderTracking(row.id);
+  } catch (e) {
+    console.warn("getAdminOrderTracking failed", (e as Error).message);
+  }
 
   return (
     <main
@@ -324,7 +336,11 @@ export default async function AdminOrderDetailPage({
             style={{ backgroundColor: "#ffffff" }}
           >
             <h2 className="font-[var(--font-heading)] text-xl mb-3">Shipping</h2>
-            <OrderShipmentPanel orderId={row.id} shipment={shipment} />
+            <OrderShipmentPanel
+              orderId={row.id}
+              shipment={shipment}
+              tracking={tracking}
+            />
           </section>
 
           <section

@@ -10,6 +10,8 @@ import {
   quoteRatesForOrder,
   type ShipmentRow,
 } from "@/actions/shipping";
+import type { ShipmentTrackingView } from "@/lib/shipment-tracking";
+import { OrderTrackingTimeline } from "@/components/orders/order-tracking-timeline";
 
 type Service = {
   serviceCode: string;
@@ -23,6 +25,13 @@ type Service = {
 type Props = {
   orderId: string;
   shipment: ShipmentRow | null;
+  /**
+   * Server-fetched normalized tracking view (Phase 9 09-02). Passed in so the
+   * admin surface renders the SAME timeline + driver card + map the customer
+   * sees, below the existing action row. `null` when the action failed server-
+   * side; in that case we fall back to the legacy minimal display.
+   */
+  tracking?: ShipmentTrackingView | null;
 };
 
 /**
@@ -41,7 +50,7 @@ type Props = {
  * We expose the button unconditionally and let Delyva reject — the error is
  * surfaced inline.
  */
-export function OrderShipmentPanel({ orderId, shipment }: Props) {
+export function OrderShipmentPanel({ orderId, shipment, tracking }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -199,7 +208,10 @@ export function OrderShipmentPanel({ orderId, shipment }: Props) {
   // Treat "delivered" as statusCode >= 400, "cancelled" as 90.
   const delivered = typeof status === "number" && status >= 400 && status !== 500;
   const cancelled = status === 90;
-  const showMap = !!shipment.consignmentNo && !delivered && !cancelled;
+  // Fallback live-map when the server did not hydrate the tracking view —
+  // keeps the old behaviour if the Delyva call errored out before render.
+  const showLegacyMap =
+    !tracking && !!shipment.consignmentNo && !delivered && !cancelled;
 
   return (
     <div className="space-y-4">
@@ -259,8 +271,18 @@ export function OrderShipmentPanel({ orderId, shipment }: Props) {
         ) : null}
       </div>
 
-      {showMap ? (
-        <div className="rounded-xl overflow-hidden border" style={{ borderColor: `${BRAND.ink}22` }}>
+      {tracking ? (
+        <div
+          className="mt-2 pt-4 border-t"
+          style={{ borderColor: `${BRAND.ink}15` }}
+        >
+          <OrderTrackingTimeline view={tracking} dense />
+        </div>
+      ) : showLegacyMap ? (
+        <div
+          className="rounded-xl overflow-hidden border"
+          style={{ borderColor: `${BRAND.ink}22` }}
+        >
           <iframe
             src={`https://my.delyva.app/track/rmap?trackingNo=${encodeURIComponent(shipment.consignmentNo!)}`}
             style={{ width: "100%", height: 420, border: 0 }}
