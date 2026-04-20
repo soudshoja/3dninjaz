@@ -29,6 +29,7 @@ export type ProductFormInitial = {
   name: string;
   description: string;
   images: string[];
+  thumbnailIndex: number;
   materialType: string | null;
   estimatedProductionDays: number | null;
   isActive: boolean;
@@ -96,6 +97,9 @@ export function ProductForm({
     initialData?.description ?? ""
   );
   const [images, setImages] = useState<string[]>(initialData?.images ?? []);
+  const [thumbnailIndex, setThumbnailIndex] = useState<number>(
+    initialData?.thumbnailIndex ?? 0
+  );
   const [categoryId, setCategoryId] = useState<string>(
     initialData?.categoryId ?? NO_CATEGORY
   );
@@ -125,7 +129,7 @@ export function ProductForm({
     const next: Record<string, string> = {};
     if (!name.trim()) next.name = "Product name is required";
     if (!description.trim()) next.description = "Description is required";
-    if (images.length > 5) next.images = "Maximum 5 images allowed";
+    if (images.length > 10) next.images = "Maximum 10 images allowed";
 
     const enabledVariants = variants.filter((v) => v.enabled);
     if (enabledVariants.length === 0) {
@@ -159,10 +163,18 @@ export function ProductForm({
       return;
     }
 
+    // Defensive bounds-check: if the picker points past the current images
+    // array (image was removed without re-selecting), fall back to slot 0.
+    const safeThumbnailIndex =
+      images.length > 0 && thumbnailIndex >= 0 && thumbnailIndex < images.length
+        ? thumbnailIndex
+        : 0;
+
     const payload = {
       name: name.trim(),
       description: description.trim(),
       images,
+      thumbnailIndex: safeThumbnailIndex,
       materialType: materialType.trim(),
       estimatedProductionDays:
         productionDays === "" ? undefined : Number(productionDays),
@@ -248,7 +260,19 @@ export function ProductForm({
               }
             >
               <SelectTrigger id="category" className="h-10 w-full">
-                <SelectValue placeholder="Select a category" />
+                {/*
+                  base-ui's Select.Value defaults to printing the raw `value`
+                  prop (the category UUID). Pass a children render prop to map
+                  the id back to a label so the trigger shows the human name —
+                  was rendering the UUID before this fix.
+                */}
+                <SelectValue placeholder="Select a category">
+                  {(value: string | null) => {
+                    if (!value || value === NO_CATEGORY) return "None";
+                    const match = categories.find((c) => c.id === value);
+                    return match?.name ?? "Select a category";
+                  }}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={NO_CATEGORY}>None</SelectItem>
@@ -273,7 +297,9 @@ export function ProductForm({
             images={images}
             onImagesChange={setImages}
             productId={initialData?.id}
-            maxImages={5}
+            maxImages={10}
+            thumbnailIndex={thumbnailIndex}
+            onThumbnailChange={setThumbnailIndex}
           />
           {errors.images && (
             <p className="mt-2 text-sm text-red-500">{errors.images}</p>
