@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -187,14 +188,20 @@ export function UserNav({
         }
       />
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel>
-          <div className="flex flex-col">
-            <span className="font-medium">{data.user.name}</span>
-            <span className="text-xs text-[var(--color-brand-text-muted)]">
-              {data.user.email}
-            </span>
-          </div>
-        </DropdownMenuLabel>
+        {/* Base UI's Menu.GroupLabel requires a surrounding Menu.Group or it
+            throws "MenuGroupRootContext is missing" (error #31) when the
+            avatar dropdown opens. Wrapping the label + identity section in
+            DropdownMenuGroup satisfies the primitive's context requirement. */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>
+            <div className="flex flex-col">
+              <span className="font-medium">{data.user.name}</span>
+              <span className="text-xs text-[var(--color-brand-text-muted)]">
+                {data.user.email}
+              </span>
+            </div>
+          </DropdownMenuLabel>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         {isAdmin ? (
           <DropdownMenuItem render={<Link href="/admin">Admin Panel</Link>} />
