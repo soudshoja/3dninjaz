@@ -1,5 +1,6 @@
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { getSessionUser } from "@/lib/auth-helpers";
 import { getMyOrder } from "@/actions/orders";
 import { BRAND } from "@/lib/brand";
@@ -78,14 +79,24 @@ export default async function OrderDetailPage({
       <div className="mx-auto max-w-3xl px-4 py-8 md:py-14">
         {justPaid ? (
           <div
-            className="rounded-2xl p-5 mb-6 flex items-center gap-3 flex-wrap"
+            className="rounded-2xl p-5 mb-6 flex items-center gap-4 flex-wrap"
             style={{ backgroundColor: `${BRAND.green}30`, color: BRAND.ink }}
             role="status"
           >
-            <span className="font-bold text-lg">Payment confirmed.</span>
-            <span className="text-slate-700">
-              We&apos;ll email your receipt in a moment.
-            </span>
+            <Image
+              src="/icons/ninja/emoji/success.png"
+              alt=""
+              width={72}
+              height={72}
+              priority
+              className="h-[72px] w-[72px] object-contain shrink-0"
+            />
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-lg">Payment confirmed. Thank you!</p>
+              <p className="text-slate-700 text-sm mt-0.5">
+                We&apos;ll email your receipt in a moment.
+              </p>
+            </div>
           </div>
         ) : null}
 

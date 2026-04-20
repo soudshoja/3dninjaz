@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { getAnalyticsForRangeParam } from "@/actions/admin-analytics";
 import { parseRange } from "@/lib/analytics";
@@ -36,18 +37,27 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-3 md:flex-row md:items-baseline md:justify-between">
-        <div>
-          <h1
-            className="font-[var(--font-heading)] text-3xl"
-            style={{ color: BRAND.ink }}
-          >
-            Dashboard
-          </h1>
-          <p className="text-sm text-slate-600">
-            3D Ninjaz performance · last {range === "7d" ? 7 : range === "30d" ? 30 : 90}{" "}
-            days
-          </p>
+      <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-3">
+          <Image
+            src="/icons/ninja/emoji/great@128.png"
+            alt=""
+            width={56}
+            height={56}
+            className="h-14 w-14 object-contain shrink-0"
+          />
+          <div>
+            <h1
+              className="font-[var(--font-heading)] text-3xl"
+              style={{ color: BRAND.ink }}
+            >
+              Dashboard
+            </h1>
+            <p className="text-sm text-slate-600">
+              3D Ninjaz performance · last{" "}
+              {range === "7d" ? 7 : range === "30d" ? 30 : 90} days
+            </p>
+          </div>
         </div>
         <AnalyticsRangeTabs current={range} />
       </header>

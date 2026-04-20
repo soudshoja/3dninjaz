@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { BRAND } from "@/lib/brand";
 import { BUSINESS } from "@/lib/business-info";
 import { WhatsAppCta } from "@/components/store/whatsapp-cta";
@@ -21,6 +22,14 @@ export default function ContactPage() {
       style={{ color: BRAND.ink }}
     >
       <header className="text-center">
+        <Image
+          src="/icons/ninja/emoji/contact.png"
+          alt=""
+          width={140}
+          height={140}
+          priority
+          className="mx-auto mb-3 h-[140px] w-[140px] object-contain"
+        />
         <span
           className="inline-block rounded-full px-3 py-1 text-xs font-bold uppercase tracking-[0.2em]"
           style={{ backgroundColor: BRAND.ink, color: BRAND.cream }}
@@ -93,14 +102,23 @@ export default function ContactPage() {
         </div>
       </dl>
 
-      <p
-        className="mt-10 rounded-2xl p-5 text-sm leading-relaxed"
+      <div
+        className="mt-10 rounded-2xl p-5 flex items-start gap-4"
         style={{ backgroundColor: "#FEF3C7", color: BRAND.ink }}
       >
-        <strong>Tip:</strong> For questions about an existing order, please
-        have your order number ready &mdash; it&rsquo;s on your confirmation
-        email.
-      </p>
+        <Image
+          src="/icons/ninja/emoji/tip@128.png"
+          alt=""
+          width={56}
+          height={56}
+          className="h-14 w-14 object-contain shrink-0"
+        />
+        <p className="text-sm leading-relaxed">
+          <strong>Tip:</strong> For questions about an existing order, please
+          have your order number ready &mdash; it&rsquo;s on your confirmation
+          email.
+        </p>
+      </div>
     </section>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
@@ -83,6 +84,14 @@ export function LoginForm() {
   return (
     <div className="space-y-6">
       <div className="space-y-2 text-center">
+        <Image
+          src="/icons/ninja/emoji/hello.png"
+          alt=""
+          width={120}
+          height={120}
+          priority
+          className="mx-auto h-[120px] w-[120px] object-contain"
+        />
         <h1 className="font-heading text-2xl text-[var(--color-brand-text-primary)]">
           Sign In
         </h1>
@@ -140,6 +149,17 @@ export function LoginForm() {
         >
           {submitting ? "Signing in..." : "Sign In"}
         </Button>
+
+        <p className="flex items-center justify-center gap-2 text-xs text-[var(--color-brand-text-muted)]">
+          <Image
+            src="/icons/ninja/emoji/secure@128.png"
+            alt=""
+            width={28}
+            height={28}
+            className="h-7 w-7 object-contain"
+          />
+          <span>Secure sign-in — we never see your password.</span>
+        </p>
       </form>
 
       <p className="text-center text-sm text-[var(--color-brand-text-muted)]">
