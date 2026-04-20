@@ -131,6 +131,44 @@ export const orderAddressSchema = z.object({
 export type OrderAddressInput = z.infer<typeof orderAddressSchema>;
 
 // ============================================================================
+// Phase 7 (07-03) — manual order creation schema
+// Admin books a one-off custom order from /admin/orders/new. Image URLs are
+// internal /uploads/... paths; external URLs rejected (T-07-03-money via
+// upload pipeline).
+// ============================================================================
+
+export const manualOrderSchema = z.object({
+  customerName: z.string().min(1, "Customer name is required").max(200),
+  customerEmail: z
+    .string()
+    .email("Enter a valid email")
+    .optional()
+    .or(z.literal("")),
+  customerPhone: z.string().min(7).max(32),
+  itemName: z.string().min(1, "Item name is required").max(200),
+  itemDescription: z.string().max(2000).optional().or(z.literal("")),
+  amount: z.coerce
+    .number()
+    .positive("Amount must be greater than 0")
+    .max(99_999_999.99, "Amount exceeds the per-order maximum"),
+  images: z
+    .array(
+      z
+        .string()
+        .min(1)
+        .regex(
+          /^\/uploads\/products\//,
+          "Image URL must be a local upload path",
+        ),
+    )
+    .max(6)
+    .default([]),
+  shipping: orderAddressSchema,
+});
+export type ManualOrderInput = z.input<typeof manualOrderSchema>;
+export type ManualOrderOutput = z.output<typeof manualOrderSchema>;
+
+// ============================================================================
 // Phase 6: Customer Account (06-01)
 // All schemas below are consumed by customer-side server actions and forms.
 // ============================================================================

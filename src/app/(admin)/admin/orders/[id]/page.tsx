@@ -14,6 +14,9 @@ import { AdminOrderNotesForm } from "@/components/admin/admin-order-notes-form";
 // Phase 6 06-06 — admin approval surface for cancel/return requests.
 import { listOrderRequestsForOrder } from "@/actions/admin-order-requests";
 import { OrderRequestsAdmin } from "@/components/admin/order-requests-admin";
+// Phase 7 (07-03) — manual order payment-link surface.
+import { listOrderPaymentLinks } from "@/actions/admin-manual-orders";
+import { PaymentLinkCard } from "@/components/admin/payment-link-card";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +47,13 @@ export default async function AdminOrderDetailPage({
   // Phase 6 06-06 — pending + resolved cancel/return requests for the
   // approve/reject UI. Empty state handled inside OrderRequestsAdmin.
   const orderRequests = await listOrderRequestsForOrder(id);
+
+  // Phase 7 (07-03) — for manual orders without capture, fetch the link
+  // history. Cheap query (one indexed SELECT); skipped for web orders.
+  const isManualUnpaid = row.sourceType === "manual" && !row.paypalCaptureId;
+  const paymentLinks = isManualUnpaid
+    ? await listOrderPaymentLinks(row.id)
+    : [];
 
   return (
     <main
@@ -119,6 +129,68 @@ export default async function AdminOrderDetailPage({
             <h2 className="font-[var(--font-heading)] text-xl mb-4">Progress</h2>
             <AdminOrderTimeline status={row.status} />
           </section>
+
+          {row.sourceType === "manual" ? (
+            <section
+              className="rounded-2xl p-4 md:p-6 md:col-span-2"
+              style={{ backgroundColor: "#ffffff" }}
+            >
+              <h2 className="font-[var(--font-heading)] text-xl mb-3">
+                Custom item
+              </h2>
+              <p className="font-semibold">
+                {row.customItemName ?? "(unnamed)"}
+              </p>
+              {row.customItemDescription ? (
+                <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">
+                  {row.customItemDescription}
+                </p>
+              ) : null}
+              {row.customImages.length > 0 ? (
+                <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
+                  {row.customImages.map((url) => (
+                    <a
+                      key={url}
+                      href={url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block aspect-square overflow-hidden rounded-md border border-[var(--color-brand-border)] bg-slate-50"
+                    >
+                      {/* Plain img — these uploads may be legacy/raw paths */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    </a>
+                  ))}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
+          {isManualUnpaid ? (
+            <section
+              className="rounded-2xl p-4 md:p-6 md:col-span-2"
+              style={{ backgroundColor: "#ffffff" }}
+            >
+              <h2 className="font-[var(--font-heading)] text-xl mb-3">
+                Payment link
+              </h2>
+              <PaymentLinkCard
+                orderId={row.id}
+                existingLinks={paymentLinks}
+                customerEmail={
+                  row.customerEmail.endsWith("@3dninjaz.local")
+                    ? null
+                    : row.customerEmail
+                }
+                itemName={row.customItemName}
+                totalAmount={row.totalAmount}
+              />
+            </section>
+          ) : null}
 
           <section
             className="rounded-2xl p-4 md:p-6 md:col-span-2"

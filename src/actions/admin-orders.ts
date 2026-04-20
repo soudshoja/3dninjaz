@@ -150,6 +150,17 @@ export type AdminOrderDetail = {
   notes: string | null;
   createdAt: Date;
   updatedAt: Date;
+  // Phase 7 (07-03) — manual order surface
+  sourceType: "web" | "manual";
+  customItemName: string | null;
+  customItemDescription: string | null;
+  customImages: string[];
+  // Phase 7 (07-04) — PayPal financials cache
+  refundedAmount: string;
+  paypalFee: string | null;
+  paypalNet: string | null;
+  sellerProtection: string | null;
+  paypalSettleDate: Date | null;
   user: { id: string; email: string; name: string } | null;
   items: Array<{
     id: string;
@@ -164,6 +175,19 @@ export type AdminOrderDetail = {
     lineTotal: string;
   }>;
 };
+
+function ensureImagesArrayLocal(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.map(String).filter(Boolean);
+  if (typeof raw === "string" && raw.length > 0) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
+    } catch {
+      // fall through
+    }
+  }
+  return [];
+}
 
 /**
  * Fetch a single order with its line items and joined user snapshot.
@@ -213,6 +237,15 @@ export async function getAdminOrder(orderId: string): Promise<AdminOrderDetail |
     notes: head.o.notes ?? null,
     createdAt: head.o.createdAt,
     updatedAt: head.o.updatedAt,
+    sourceType: (head.o.sourceType ?? "web") as "web" | "manual",
+    customItemName: head.o.customItemName ?? null,
+    customItemDescription: head.o.customItemDescription ?? null,
+    customImages: ensureImagesArrayLocal(head.o.customImages),
+    refundedAmount: head.o.refundedAmount ?? "0.00",
+    paypalFee: head.o.paypalFee ?? null,
+    paypalNet: head.o.paypalNet ?? null,
+    sellerProtection: head.o.sellerProtection ?? null,
+    paypalSettleDate: head.o.paypalSettleDate ?? null,
     user: head.uId
       ? { id: head.uId, email: head.uEmail ?? "", name: head.uName ?? "" }
       : null,
