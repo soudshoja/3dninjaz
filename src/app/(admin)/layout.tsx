@@ -7,6 +7,8 @@ import { auth } from "@/lib/auth";
 import { SidebarNav } from "@/components/admin/sidebar-nav";
 import { SignOutButton } from "@/components/admin/sign-out-button";
 import { getPendingReviewCount } from "@/actions/admin-reviews";
+// Phase 7 (07-07) — recon drift sidebar badge.
+import { getReconDriftBadgeCount } from "@/actions/admin-recon";
 
 // Mobile chip strip — single source of truth for both desktop sidebar and
 // mobile horizontal nav. Phase 5 added 7 entries; the chip strip overflows
@@ -54,6 +56,10 @@ export default async function AdminLayout({
     pendingReviewCount = 0;
   }
 
+  // Phase 7 (07-07) — recon drift badge. getReconDriftBadgeCount is
+  // failure-safe (returns 0 on any error, including no-runs-yet).
+  const reconDriftCount = await getReconDriftBadgeCount();
+
   return (
     <div className="flex min-h-screen bg-gray-50">
       <aside className="hidden w-64 flex-col border-r border-[var(--color-brand-border)] bg-white p-6 md:flex">
@@ -70,7 +76,10 @@ export default async function AdminLayout({
             3D Ninjaz Admin
           </span>
         </Link>
-        <SidebarNav pendingReviewCount={pendingReviewCount} />
+        <SidebarNav
+          pendingReviewCount={pendingReviewCount}
+          reconDriftCount={reconDriftCount}
+        />
         <div className="mt-auto">
           <SignOutButton />
         </div>

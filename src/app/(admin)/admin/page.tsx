@@ -8,6 +8,8 @@ import { AnalyticsRangeTabs } from "@/components/admin/analytics-range-tabs";
 import { AnalyticsRevenueChart } from "@/components/admin/analytics-revenue-chart";
 import { AnalyticsFunnel } from "@/components/admin/analytics-funnel";
 import { AnalyticsTopProducts } from "@/components/admin/analytics-top-products";
+// Phase 7 (07-07) — recon drift surface on dashboard.
+import { ReconDriftWidget } from "@/components/admin/recon-drift-widget";
 
 export const dynamic = "force-dynamic";
 
@@ -128,6 +130,9 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
           <AnalyticsFunnel data={analytics.funnel} />
         </section>
       </div>
+
+      {/* Phase 7 (07-07) — recon drift widget */}
+      <ReconDriftWidget />
     </div>
   );
 }
