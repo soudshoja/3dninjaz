@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>502 Bad Gateway &middot; 3D Ninjaz</title>
+  <style>
+    :root {
+      --brand-blue: #2563EB;
+      --brand-blue-dark: #1d4ed8;
+      --brand-ink: #0B1020;
+      --brand-cream: #F7FAF4;
+      --brand-slate: #475569;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--brand-cream);
+      color: var(--brand-ink);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .wrap {
+      max-width: 560px;
+      width: 100%;
+      text-align: center;
+      padding: 24px;
+    }
+    .wrap img {
+      width: 240px;
+      height: 240px;
+      object-fit: contain;
+      margin: 0 auto 24px;
+      display: block;
+    }
+    h1 {
+      font-size: 28px;
+      line-height: 1.2;
+      margin: 0 0 12px;
+      color: var(--brand-ink);
+    }
+    p {
+      color: var(--brand-slate);
+      font-size: 16px;
+      line-height: 1.5;
+      margin: 0 0 24px;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+    }
+    a.btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 48px;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-weight: 600;
+      text-decoration: none;
+      font-size: 15px;
+    }
+    a.btn-primary {
+      background: var(--brand-blue);
+      color: #fff;
+    }
+    a.btn-primary:hover { background: var(--brand-blue-dark); }
+    a.btn-secondary {
+      border: 2px solid var(--brand-ink);
+      color: var(--brand-ink);
+      background: transparent;
+    }
+    @media (min-width: 640px) {
+      h1 { font-size: 32px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <img src="/icons/ninja/errors/502.png" alt="3D Ninjaz ninja shrugging — bad gateway">
+    <h1>502 Bad Gateway</h1>
+    <p>The upstream gave us an invalid response. The ninjas are investigating &mdash; please try again soon.</p>
+    <div class="actions">
+      <a class="btn btn-primary" href="/">Back to homepage</a>
+      <a class="btn btn-secondary" href="/shop">Browse products</a>
+    </div>
+  </main>
+</body>
+</html>
