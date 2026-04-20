@@ -10,6 +10,7 @@ import {
   iterateDays,
   type AnalyticsRange,
 } from "@/lib/analytics";
+import { computeOrderCost, toNum, toNumOrNull } from "@/lib/profit";
 
 // ============================================================================
 // Plan 05-02 admin analytics aggregation.
@@ -192,4 +193,128 @@ export async function getAnalyticsForRangeParam(
 ): Promise<AnalyticsResult> {
   const range = parseRange(rangeParam);
   return getAnalytics(range);
+}
+
+// ============================================================================
+// Phase 10 (10-01) — "Profit this month" dashboard widget.
+//
+// Sums revenue, item cost, and extra cost across every order placed in the
+// current calendar month whose status is one of REVENUE_STATUSES (same filter
+// the revenue card uses — excludes pending + cancelled so unconfirmed/void
+// orders don't inflate or deflate the number).
+//
+// Implementation note (MariaDB 10.11 — no LATERAL joins):
+// Fetch qualifying order ids + extraCost first, then hydrate their
+// orderItems in a single IN () query, then aggregate in JS via
+// computeOrderCost. This matches the src/actions/products.ts pattern.
+// ============================================================================
+
+export type MonthlyProfitSummary = {
+  monthStartISO: string;
+  orderCount: number;
+  revenue: number;
+  itemCostTotal: number;
+  extraCostTotal: number;
+  totalCost: number;
+  profit: number;
+  marginPercent: number;
+  ordersMissingCost: number;
+};
+
+export async function getMonthlyProfitSummary(): Promise<MonthlyProfitSummary> {
+  await requireAdmin();
+
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+
+  // 1) Qualifying orders placed this calendar month.
+  const orderRows = await db
+    .select({
+      id: orders.id,
+      extraCost: orders.extraCost,
+    })
+    .from(orders)
+    .where(
+      and(
+        inArray(orders.status, REVENUE_STATUSES),
+        gte(orders.createdAt, startOfMonth),
+      ),
+    );
+
+  if (orderRows.length === 0) {
+    return {
+      monthStartISO: startOfMonth.toISOString(),
+      orderCount: 0,
+      revenue: 0,
+      itemCostTotal: 0,
+      extraCostTotal: 0,
+      totalCost: 0,
+      profit: 0,
+      marginPercent: 0,
+      ordersMissingCost: 0,
+    };
+  }
+
+  const orderIds = orderRows.map((o) => o.id);
+
+  // 2) All items belonging to those orders. MariaDB-safe inArray IN ().
+  const itemRows = await db
+    .select({
+      orderId: orderItems.orderId,
+      unitPrice: orderItems.unitPrice,
+      unitCost: orderItems.unitCost,
+      quantity: orderItems.quantity,
+    })
+    .from(orderItems)
+    .where(inArray(orderItems.orderId, orderIds));
+
+  // 3) Bucket items by order id so computeOrderCost gets per-order input.
+  const itemsByOrder = new Map<
+    string,
+    { price: number; qty: number; unitCost: number | null }[]
+  >();
+  for (const row of itemRows) {
+    const bucket = itemsByOrder.get(row.orderId) ?? [];
+    bucket.push({
+      price: toNum(row.unitPrice),
+      qty: row.quantity,
+      unitCost: toNumOrNull(row.unitCost),
+    });
+    itemsByOrder.set(row.orderId, bucket);
+  }
+
+  // 4) Aggregate each order, sum into the monthly totals.
+  let revenue = 0;
+  let itemCostTotal = 0;
+  let extraCostTotal = 0;
+  let ordersMissingCost = 0;
+
+  for (const o of orderRows) {
+    const items = itemsByOrder.get(o.id) ?? [];
+    const summary = computeOrderCost(items, toNum(o.extraCost));
+    revenue += summary.revenueGross;
+    itemCostTotal += summary.itemCostTotal;
+    extraCostTotal += summary.extraCost;
+    if (summary.hasMissingCosts) ordersMissingCost += 1;
+  }
+
+  const totalCost = itemCostTotal + extraCostTotal;
+  const profit = revenue - totalCost;
+  const marginPercent = revenue > 0 ? (profit / revenue) * 100 : 0;
+
+  const round2 = (n: number) =>
+    Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+
+  return {
+    monthStartISO: startOfMonth.toISOString(),
+    orderCount: orderRows.length,
+    revenue: round2(revenue),
+    itemCostTotal: round2(itemCostTotal),
+    extraCostTotal: round2(extraCostTotal),
+    totalCost: round2(totalCost),
+    profit: round2(profit),
+    marginPercent: round2(marginPercent),
+    ordersMissingCost,
+  };
 }
