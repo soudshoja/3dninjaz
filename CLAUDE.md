@@ -222,5 +222,5 @@ Do not make direct repo edits outside a GSD workflow unless the user explicitly 
 - Real WhatsApp MY number (D-01 placeholder `60000000000`)
 - Social handles Instagram + TikTok (D-05 placeholders `#`)
 - `public/logo.png` 1.5 MB → WebP ~200 KB (LCP blocker)
-- `PAYPAL_ENV=sandbox` → `live` in prod env
+- `PAYPAL_ENV=live` in prod env — switched 2026-04-20 (OAuth verified, `reporting/search/read` scope active)
 - Remove `<meta robots="noindex">` from coming-soon
