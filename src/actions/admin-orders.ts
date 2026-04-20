@@ -2,11 +2,12 @@
 
 import { db } from "@/lib/db";
 import { orders, orderItems, user } from "@/lib/db/schema";
-import { eq, desc, inArray } from "drizzle-orm";
+import { and, eq, desc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { assertValidTransition, type OrderStatus } from "@/lib/orders";
 import { orderStatusValues } from "@/lib/db/schema";
+import { computeOrderCost, toNum, toNumOrNull } from "@/lib/profit";
 
 // ============================================================================
 // Plan 03-04 admin order actions.
@@ -165,6 +166,9 @@ export type AdminOrderDetail = {
   shippingServiceCode: string | null;
   shippingServiceName: string | null;
   shippingQuotedPrice: string | null;
+  // Phase 10 (10-01) — order-level one-off cost + optional note.
+  extraCost: string;
+  extraCostNote: string | null;
   user: { id: string; email: string; name: string } | null;
   items: Array<{
     id: string;
@@ -175,6 +179,9 @@ export type AdminOrderDetail = {
     productImage: string | null;
     size: "S" | "M" | "L";
     unitPrice: string;
+    // Phase 10 — snapshotted per-unit cost. NULL = variant had no costPrice
+    // when the order was created. Admin can backfill via inline edit.
+    unitCost: string | null;
     quantity: number;
     lineTotal: string;
   }>;
@@ -253,6 +260,8 @@ export async function getAdminOrder(orderId: string): Promise<AdminOrderDetail |
     shippingServiceCode: head.o.shippingServiceCode ?? null,
     shippingServiceName: head.o.shippingServiceName ?? null,
     shippingQuotedPrice: head.o.shippingQuotedPrice ?? null,
+    extraCost: head.o.extraCost ?? "0.00",
+    extraCostNote: head.o.extraCostNote ?? null,
     user: head.uId
       ? { id: head.uId, email: head.uEmail ?? "", name: head.uName ?? "" }
       : null,
@@ -265,6 +274,7 @@ export async function getAdminOrder(orderId: string): Promise<AdminOrderDetail |
       productImage: it.productImage ?? null,
       size: it.size,
       unitPrice: it.unitPrice,
+      unitCost: it.unitCost ?? null,
       quantity: it.quantity,
       lineTotal: it.lineTotal,
     })),
@@ -349,4 +359,170 @@ export async function updateOrderNotes(
 
   revalidatePath(`/admin/orders/${orderId}`);
   return { ok: true };
+}
+
+// ============================================================================
+// Phase 10 (10-01) — Cost + profit inline edits.
+//
+// requireAdmin() first await in every exported action (CVE-2025-29927). Both
+// edits validate ≥ 0, persist, then return the recomputed OrderCostSummary so
+// the caller can refresh the profit panel without a full page reload.
+// ============================================================================
+
+export type OrderProfitSummary = {
+  revenueGross: number;
+  itemCostTotal: number;
+  extraCost: number;
+  totalCost: number;
+  profitExShipping: number;
+  marginPercent: number;
+  hasMissingCosts: boolean;
+  missingCount: number;
+};
+
+type CostUpdateResult =
+  | { ok: true; summary: OrderProfitSummary }
+  | { ok: false; error: string };
+
+/**
+ * Recompute the order's profit summary from persisted rows. Called after
+ * every cost mutation so the client sees fresh numbers without a full
+ * refresh + server-rendered too. Cheap: two indexed selects.
+ */
+async function recomputeOrderProfit(orderId: string): Promise<OrderProfitSummary> {
+  const [orderRow] = await db
+    .select({ extraCost: orders.extraCost })
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+
+  const itemRows = await db
+    .select({
+      unitPrice: orderItems.unitPrice,
+      unitCost: orderItems.unitCost,
+      quantity: orderItems.quantity,
+    })
+    .from(orderItems)
+    .where(eq(orderItems.orderId, orderId));
+
+  const summary = computeOrderCost(
+    itemRows.map((r) => ({
+      price: toNum(r.unitPrice),
+      qty: r.quantity,
+      unitCost: toNumOrNull(r.unitCost),
+    })),
+    toNum(orderRow?.extraCost),
+  );
+  return summary;
+}
+
+export async function getOrderProfitSummary(
+  orderId: string,
+): Promise<OrderProfitSummary | null> {
+  await requireAdmin();
+  const [row] = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+  if (!row) return null;
+  return recomputeOrderProfit(orderId);
+}
+
+/**
+ * Set the snapshotted unit_cost on a single order_item row. Empty string /
+ * null clears the value (makes it missing in the profit summary).
+ */
+export async function updateOrderItemCost(
+  orderId: string,
+  itemId: string,
+  unitCostRaw: string | null,
+): Promise<CostUpdateResult> {
+  await requireAdmin();
+
+  let valueToStore: string | null = null;
+  if (unitCostRaw != null && unitCostRaw.trim() !== "") {
+    const trimmed = unitCostRaw.trim();
+    if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) {
+      return { ok: false, error: "Cost must be a non-negative MYR amount." };
+    }
+    const n = parseFloat(trimmed);
+    if (!Number.isFinite(n) || n < 0) {
+      return { ok: false, error: "Cost must be ≥ 0." };
+    }
+    valueToStore = n.toFixed(2);
+  }
+
+  // Guard: the order_item must belong to the order we say it does. Prevents
+  // an admin tab on one order posting edits to a different order's item via
+  // crafted IDs. AND clause + row existence check.
+  const [row] = await db
+    .select({ id: orderItems.id })
+    .from(orderItems)
+    .where(and(eq(orderItems.id, itemId), eq(orderItems.orderId, orderId)))
+    .limit(1);
+  if (!row) return { ok: false, error: "Line item not found on this order." };
+
+  await db
+    .update(orderItems)
+    .set({ unitCost: valueToStore })
+    .where(eq(orderItems.id, itemId));
+
+  const summary = await recomputeOrderProfit(orderId);
+  revalidatePath(`/admin/orders/${orderId}`);
+  return { ok: true, summary };
+}
+
+/**
+ * Set the order-level extraCost + optional note.
+ */
+export async function updateOrderExtraCost(
+  orderId: string,
+  extraCostRaw: string | null,
+  note: string | null,
+): Promise<CostUpdateResult> {
+  await requireAdmin();
+
+  // Empty / null → persist 0.00 (NOT NULL column, default 0).
+  let storedCost = "0.00";
+  if (extraCostRaw != null && extraCostRaw.trim() !== "") {
+    const trimmed = extraCostRaw.trim();
+    if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) {
+      return {
+        ok: false,
+        error: "Extra cost must be a non-negative MYR amount.",
+      };
+    }
+    const n = parseFloat(trimmed);
+    if (!Number.isFinite(n) || n < 0) {
+      return { ok: false, error: "Extra cost must be ≥ 0." };
+    }
+    storedCost = n.toFixed(2);
+  }
+
+  // Cap note length to the VARCHAR(255) column.
+  let storedNote: string | null = null;
+  if (note != null) {
+    const trimmed = note.trim();
+    if (trimmed.length > 255) {
+      return { ok: false, error: "Note too long (max 255 characters)." };
+    }
+    storedNote = trimmed.length === 0 ? null : trimmed;
+  }
+
+  const [row] = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+  if (!row) return { ok: false, error: "Order not found." };
+
+  await db
+    .update(orders)
+    .set({ extraCost: storedCost, extraCostNote: storedNote })
+    .where(eq(orders.id, orderId));
+
+  const summary = await recomputeOrderProfit(orderId);
+  revalidatePath(`/admin/orders/${orderId}`);
+  return { ok: true, summary };
 }

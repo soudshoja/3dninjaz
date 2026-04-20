@@ -23,6 +23,8 @@ import { PaymentFinancialsPanel } from "@/components/admin/payment-financials-pa
 // Phase 9 (09-01) — Delyva shipment panel (book / print label / track).
 import { getOrderShipment } from "@/actions/shipping";
 import { OrderShipmentPanel } from "@/components/admin/order-shipment-panel";
+// Phase 10 (10-01) — cost + profit panel with inline edits.
+import { OrderCostsPanel } from "@/components/admin/order-costs-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -274,6 +276,27 @@ export default async function AdminOrderDetailPage({
                 </span>
               </div>
             </div>
+          </section>
+
+          {/* Phase 10 (10-01) — profit panel. Always rendered; numbers go
+              to RM 0 for manual orders with no line items + no extra cost. */}
+          <section
+            className="rounded-2xl p-4 md:p-6 md:col-span-2"
+            style={{ backgroundColor: "#ffffff" }}
+          >
+            <OrderCostsPanel
+              orderId={row.id}
+              items={row.items.map((i) => ({
+                id: i.id,
+                productName: i.productName,
+                size: i.size,
+                unitPrice: i.unitPrice,
+                unitCost: i.unitCost,
+                quantity: i.quantity,
+              }))}
+              extraCost={row.extraCost}
+              extraCostNote={row.extraCostNote}
+            />
           </section>
 
           {paymentDetail ? (
