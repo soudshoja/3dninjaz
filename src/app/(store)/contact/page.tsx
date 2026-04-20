@@ -3,6 +3,8 @@ import Image from "next/image";
 import { BRAND } from "@/lib/brand";
 import { BUSINESS } from "@/lib/business-info";
 import { WhatsAppCta } from "@/components/store/whatsapp-cta";
+import { getSiteSettings } from "@/actions/admin-settings";
+import { SocialLinks, type SocialConfig } from "@/components/store/social-links";
 
 export const metadata: Metadata = {
   title: "Contact",
@@ -12,9 +14,32 @@ export const metadata: Metadata = {
 
 /**
  * /contact — business info + primary WhatsApp CTA + email fallback.
+ * Phase 11: pulls contact + social settings from store_settings (singleton)
+ * and renders conditional tiles. Empty field → that tile is omitted.
  * No contact form in v1 (scope) — WhatsApp covers the conversational side.
  */
-export default function ContactPage() {
+function usable(v: string | null | undefined): v is string {
+  if (!v) return false;
+  const t = v.trim();
+  return t !== "" && t !== "#";
+}
+
+export default async function ContactPage() {
+  const settings = await getSiteSettings();
+  const hasEmail = !!settings.contactEmail;
+  const hasPhone = usable(settings.contactPhone);
+  const hasWhatsApp =
+    !!settings.whatsappNumber && settings.whatsappNumber !== "60000000000";
+
+  const socialConfig: SocialConfig = {
+    twitter: settings.twitterUrl,
+    whatsapp: settings.whatsappUrl,
+    instagram: settings.instagramUrl,
+    facebook: settings.facebookUrl,
+    tiktok: settings.tiktokUrl,
+    like: settings.likeUrl,
+  };
+
   return (
     <section
       aria-labelledby="contact-title"
@@ -47,7 +72,7 @@ export default function ContactPage() {
         </p>
       </header>
 
-      {/* Primary CTA */}
+      {/* Primary CTA — always visible because WhatsApp is the core channel. */}
       <div className="mt-10 flex justify-center">
         <WhatsAppCta
           variant="primary"
@@ -56,6 +81,71 @@ export default function ContactPage() {
           Chat with us on WhatsApp
         </WhatsAppCta>
       </div>
+
+      {/* Quick-contact tiles — each conditional on settings. */}
+      {(hasEmail || hasPhone || hasWhatsApp) && (
+        <div
+          className="mt-8 grid gap-3 sm:grid-cols-3"
+          aria-label="Quick contact"
+        >
+          {hasEmail && (
+            <a
+              href={`mailto:${settings.contactEmail}`}
+              className="flex items-center gap-3 rounded-2xl border p-4 hover:bg-white min-h-[56px]"
+              style={{ borderColor: "#E4E4E7", backgroundColor: "#FAFAFA" }}
+            >
+              <Image
+                src="/icons/ninja/emoji/contact@128.png"
+                alt=""
+                width={40}
+                height={40}
+                className="h-10 w-10 object-contain"
+              />
+              <span className="text-sm font-semibold break-all">
+                {settings.contactEmail}
+              </span>
+            </a>
+          )}
+          {hasPhone && (
+            <a
+              href={`tel:${settings.contactPhone.replace(/[^\d+]/g, "")}`}
+              className="flex items-center gap-3 rounded-2xl border p-4 hover:bg-white min-h-[56px]"
+              style={{ borderColor: "#E4E4E7", backgroundColor: "#FAFAFA" }}
+            >
+              <Image
+                src="/icons/ninja/emoji/hello@128.png"
+                alt=""
+                width={40}
+                height={40}
+                className="h-10 w-10 object-contain"
+              />
+              <span className="text-sm font-semibold">
+                {settings.contactPhone}
+              </span>
+            </a>
+          )}
+          {hasWhatsApp && (
+            <a
+              href={`https://wa.me/${settings.whatsappNumber}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 rounded-2xl border p-4 hover:bg-white min-h-[56px]"
+              style={{ borderColor: "#E4E4E7", backgroundColor: "#FAFAFA" }}
+            >
+              <Image
+                src="/icons/ninja/social/whatsapp.png"
+                alt=""
+                width={40}
+                height={40}
+                className="h-10 w-10 object-contain"
+              />
+              <span className="text-sm font-semibold">
+                {settings.whatsappNumberDisplay || "WhatsApp"}
+              </span>
+            </a>
+          )}
+        </div>
+      )}
 
       {/* Other channels */}
       <dl className="mt-12 grid gap-4 sm:grid-cols-2">
@@ -68,10 +158,10 @@ export default function ContactPage() {
           </dt>
           <dd className="mt-2">
             <a
-              href={`mailto:${BUSINESS.contactEmail}`}
+              href={`mailto:${settings.contactEmail || BUSINESS.contactEmail}`}
               className="inline-flex min-h-12 items-center font-semibold text-[#2563EB] underline underline-offset-2 hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F7FAF4] rounded-sm"
             >
-              {BUSINESS.contactEmail}
+              {settings.contactEmail || BUSINESS.contactEmail}
             </a>
           </dd>
         </div>
@@ -101,6 +191,15 @@ export default function ContactPage() {
           </dd>
         </div>
       </dl>
+
+      {/* Social icon row — returns null if all URLs are blank. */}
+      <div className="mt-10">
+        <SocialLinks
+          config={socialConfig}
+          size={56}
+          className="flex flex-wrap items-center justify-center gap-3"
+        />
+      </div>
 
       <div
         className="mt-10 rounded-2xl p-5 flex items-start gap-4"

@@ -423,23 +423,33 @@ export type ReviewModerationInput = z.infer<typeof reviewModerationSchema>;
  * concatenate cleanly. instagramUrl/tiktokUrl accept "#" or empty for
  * pre-launch placeholder values (Phase 4 D-05).
  */
+// Shared URL-or-empty helper — accepts a full http(s) URL, `#` placeholder,
+// or empty string. Empty = hide from storefront (SocialLinks filters).
+const optionalUrl = z
+  .string()
+  .max(500)
+  .url()
+  .or(z.literal("#"))
+  .or(z.literal(""));
+
 export const storeSettingsSchema = z.object({
   businessName: z.string().min(1).max(200),
   contactEmail: z.string().email(),
+  // Phase 11 — optional generic phone (PSTN). Accepts empty string to
+  // suppress the row in footer/contact. Loose format — admin may enter
+  // international or local; we render exactly what they type.
+  contactPhone: z.string().max(32).default(""),
   whatsappNumber: z
     .string()
     .regex(/^\d{7,15}$/, "Digits only, no +, e.g. 60123456789"),
   whatsappNumberDisplay: z.string().min(1).max(32),
-  instagramUrl: z
-    .string()
-    .url()
-    .or(z.literal("#"))
-    .or(z.literal("")),
-  tiktokUrl: z
-    .string()
-    .url()
-    .or(z.literal("#"))
-    .or(z.literal("")),
+  instagramUrl: optionalUrl,
+  tiktokUrl: optionalUrl,
+  // Phase 11 — per-platform social URLs.
+  twitterUrl: optionalUrl,
+  whatsappUrl: optionalUrl,
+  facebookUrl: optionalUrl,
+  likeUrl: optionalUrl,
   bannerText: z.string().max(500).optional().nullable(),
   bannerEnabled: z.boolean().default(false),
   freeShipThreshold: z

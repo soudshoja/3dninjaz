@@ -1,42 +1,48 @@
 import Image from "next/image";
 import Link from "next/link";
-// lucide-react v1 does not ship brand glyphs (no Instagram / TikTok icons).
-// Camera reads clearly as "photo social" for Instagram; Music2 as "short-form
-// video/audio" for TikTok. Both are neutral — we're not trying to counterfeit
-// the brand marks. When lucide-react upgrades or the user provides real
-// socials (D-05), swap these for brand icons or a dedicated icon set.
-import { Camera, Music2, Mail } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { BRAND } from "@/lib/brand";
 import { BUSINESS } from "@/lib/business-info";
+import { getSiteSettings } from "@/actions/admin-settings";
+import { SocialLinks, type SocialConfig } from "@/components/store/social-links";
 
 /**
- * Unified customer-facing footer (Phase 4 Plan 04-03).
+ * Unified customer-facing footer (Phase 4 Plan 04-03 + Phase 11 social wiring).
  *
- * Three link groups (Shop / Company / Legal) plus a brand + social row.
- * On mobile each column stacks vertically at block-level tap-target heights
- * (py-3 → ~48px with default line-height). Desktop (≥ 768px) renders the
- * three columns side-by-side under the brand row.
+ * Reads store_settings singleton server-side and renders:
+ *   - link groups (Shop / Company / Legal)
+ *   - brand row + contact row (email / phone / WhatsApp — each conditional)
+ *   - social icon row via <SocialLinks> (Phase 11). Empty settings → no row.
  *
- * Social icons: Instagram + TikTok come from `BUSINESS.socials` (per D-05
- * both are `#` placeholders until the user provides real URLs). While a
- * social URL is a `#` placeholder we render the icon as a muted, non-link
- * span so the empty state looks intentional — clicking a link that 404s
- * to a spoofed profile is worse than showing "coming soon" affordance
- * (threat T-04-03-05). The Email icon is always rendered as a `mailto:`
- * link because `BUSINESS.socials.email` is concrete.
+ * If NO social URLs are configured the SocialLinks component returns null and
+ * the footer falls back to a quiet "© 3D Ninjaz" line — no empty div, no
+ * dangling icons. Same for the contact row: each tile only renders when its
+ * field has a value.
  */
-const PLACEHOLDER_SOCIAL = "#";
 
-function isPlaceholderSocial(url: string): boolean {
-  return !url || url === PLACEHOLDER_SOCIAL;
+// Normalize a URL-like setting. `#` and empty string both mean "not set".
+function usable(v: string | null | undefined): v is string {
+  if (!v) return false;
+  const t = v.trim();
+  return t !== "" && t !== "#";
 }
 
-export function SiteFooter() {
+export async function SiteFooter() {
   const year = new Date().getFullYear();
+  const settings = await getSiteSettings();
 
-  const socialIconClass =
-    "inline-flex items-center justify-center h-11 w-11 rounded-full transition-colors";
+  const socialConfig: SocialConfig = {
+    twitter: settings.twitterUrl,
+    whatsapp: settings.whatsappUrl,
+    instagram: settings.instagramUrl,
+    facebook: settings.facebookUrl,
+    tiktok: settings.tiktokUrl,
+    like: settings.likeUrl,
+  };
+
+  const hasEmail = !!settings.contactEmail;
+  const hasPhone = usable(settings.contactPhone);
+  const hasWhatsApp = !!settings.whatsappNumber && settings.whatsappNumber !== "60000000000";
 
   return (
     <footer
@@ -122,6 +128,68 @@ export function SiteFooter() {
           </div>
         </div>
 
+        {/* Contact row — each tile conditional. If none set, block is omitted. */}
+        {(hasEmail || hasPhone || hasWhatsApp) && (
+          <div
+            className="mb-8 grid gap-3 sm:grid-cols-3 pt-6 border-t border-zinc-200"
+            aria-label="Contact"
+          >
+            {hasEmail && (
+              <a
+                href={`mailto:${settings.contactEmail}`}
+                className="inline-flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-white min-h-[48px]"
+              >
+                <Image
+                  src="/icons/ninja/emoji/contact.png"
+                  alt=""
+                  width={40}
+                  height={40}
+                  className="h-10 w-10 object-contain"
+                />
+                <span className="text-sm font-semibold break-all">
+                  {settings.contactEmail}
+                </span>
+              </a>
+            )}
+            {hasPhone && (
+              <a
+                href={`tel:${settings.contactPhone.replace(/[^\d+]/g, "")}`}
+                className="inline-flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-white min-h-[48px]"
+              >
+                <Image
+                  src="/icons/ninja/emoji/hello@128.png"
+                  alt=""
+                  width={40}
+                  height={40}
+                  className="h-10 w-10 object-contain"
+                />
+                <span className="text-sm font-semibold">
+                  {settings.contactPhone}
+                </span>
+              </a>
+            )}
+            {hasWhatsApp && (
+              <a
+                href={`https://wa.me/${settings.whatsappNumber}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-white min-h-[48px]"
+              >
+                <Image
+                  src="/icons/ninja/social/whatsapp.png"
+                  alt=""
+                  width={40}
+                  height={40}
+                  className="h-10 w-10 object-contain"
+                />
+                <span className="text-sm font-semibold">
+                  {settings.whatsappNumberDisplay || "WhatsApp us"}
+                </span>
+              </a>
+            )}
+          </div>
+        )}
+
         {/* Brand + socials row */}
         <div className="flex flex-col md:flex-row items-center md:items-center justify-between gap-6 pt-8 border-t border-zinc-200 text-center md:text-left">
           <div className="flex items-center gap-3">
@@ -144,65 +212,8 @@ export function SiteFooter() {
             </div>
           </div>
 
-          <div
-            className="flex items-center gap-2"
-            aria-label="Social links"
-          >
-            {/* Instagram */}
-            {isPlaceholderSocial(BUSINESS.socials.instagram) ? (
-              <span
-                role="img"
-                className={`${socialIconClass} text-zinc-300`}
-                aria-label="Instagram (coming soon)"
-                title="Instagram (coming soon)"
-              >
-                <Camera className="h-5 w-5" aria-hidden />
-              </span>
-            ) : (
-              <a
-                href={BUSINESS.socials.instagram}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`${socialIconClass} text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900`}
-                aria-label="Instagram"
-              >
-                <Camera className="h-5 w-5" aria-hidden />
-              </a>
-            )}
-
-            {/* TikTok — lucide-react doesn't ship a TikTok glyph; Music2
-                is the closest neutral "social audio/video" icon available
-                without adding a new dependency. */}
-            {isPlaceholderSocial(BUSINESS.socials.tiktok) ? (
-              <span
-                role="img"
-                className={`${socialIconClass} text-zinc-300`}
-                aria-label="TikTok (coming soon)"
-                title="TikTok (coming soon)"
-              >
-                <Music2 className="h-5 w-5" aria-hidden />
-              </span>
-            ) : (
-              <a
-                href={BUSINESS.socials.tiktok}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`${socialIconClass} text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900`}
-                aria-label="TikTok"
-              >
-                <Music2 className="h-5 w-5" aria-hidden />
-              </a>
-            )}
-
-            {/* Email — always concrete (D-04) */}
-            <a
-              href={BUSINESS.socials.email}
-              className={`${socialIconClass} text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900`}
-              aria-label={`Email ${BUSINESS.contactEmail}`}
-            >
-              <Mail className="h-5 w-5" aria-hidden />
-            </a>
-          </div>
+          {/* SocialLinks returns null when all URLs are blank — no empty div. */}
+          <SocialLinks config={socialConfig} size={44} />
         </div>
       </div>
     </footer>

@@ -27,6 +27,13 @@ export async function getStoreSettings() {
   return getStoreSettingsCached();
 }
 
+// Phase 11 alias — public (non-admin) read path used by the storefront footer
+// + /contact page. Lazy-seeds the singleton on first call (same helper). No
+// admin gate because the footer renders for anonymous visitors.
+export async function getSiteSettings() {
+  return getStoreSettingsCached();
+}
+
 type UpdateResult = { ok: true } | { ok: false; error: string };
 
 export async function updateStoreSettings(
@@ -36,10 +43,15 @@ export async function updateStoreSettings(
   const parsed = storeSettingsSchema.safeParse({
     businessName: formData.get("businessName"),
     contactEmail: formData.get("contactEmail"),
+    contactPhone: formData.get("contactPhone") || "",
     whatsappNumber: formData.get("whatsappNumber"),
     whatsappNumberDisplay: formData.get("whatsappNumberDisplay"),
     instagramUrl: formData.get("instagramUrl") || "",
     tiktokUrl: formData.get("tiktokUrl") || "",
+    twitterUrl: formData.get("twitterUrl") || "",
+    whatsappUrl: formData.get("whatsappUrl") || "",
+    facebookUrl: formData.get("facebookUrl") || "",
+    likeUrl: formData.get("likeUrl") || "",
     bannerText: formData.get("bannerText") || null,
     bannerEnabled: formData.get("bannerEnabled") === "true",
     freeShipThreshold: formData.get("freeShipThreshold") || null,
@@ -59,10 +71,15 @@ export async function updateStoreSettings(
     .set({
       businessName: data.businessName,
       contactEmail: data.contactEmail,
+      contactPhone: data.contactPhone,
       whatsappNumber: data.whatsappNumber,
       whatsappNumberDisplay: data.whatsappNumberDisplay,
       instagramUrl: data.instagramUrl || "#",
       tiktokUrl: data.tiktokUrl || "#",
+      twitterUrl: data.twitterUrl,
+      whatsappUrl: data.whatsappUrl,
+      facebookUrl: data.facebookUrl,
+      likeUrl: data.likeUrl,
       bannerText: data.bannerText ?? null,
       bannerEnabled: data.bannerEnabled,
       freeShipThreshold: data.freeShipThreshold ?? null,

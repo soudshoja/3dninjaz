@@ -634,10 +634,22 @@ export const storeSettings = mysqlTable("store_settings", {
   id: varchar("id", { length: 36 }).primaryKey().default("default"),
   businessName: varchar("business_name", { length: 200 }).notNull(),
   contactEmail: varchar("contact_email", { length: 255 }).notNull(),
+  // Phase 11 — optional generic phone (PSTN). Separate from WhatsApp because
+  // some businesses use different lines. Empty string = hide from storefront.
+  contactPhone: varchar("contact_phone", { length: 32 }).notNull().default(""),
   whatsappNumber: varchar("whatsapp_number", { length: 32 }).notNull(),
   whatsappNumberDisplay: varchar("whatsapp_number_display", { length: 32 }).notNull(),
   instagramUrl: varchar("instagram_url", { length: 500 }).notNull().default("#"),
   tiktokUrl: varchar("tiktok_url", { length: 500 }).notNull().default("#"),
+  // Phase 11 — per-platform social URLs for the branded ninja icon row in the
+  // footer and /contact. Empty string = hide that icon from the storefront
+  // (SocialLinks component filters out empty/null). `likeUrl` is a generic
+  // extra slot (Google Reviews, Trustpilot, etc.). All default "" so
+  // existing rows remain valid after migration.
+  twitterUrl: varchar("twitter_url", { length: 500 }).notNull().default(""),
+  whatsappUrl: varchar("whatsapp_url", { length: 500 }).notNull().default(""),
+  facebookUrl: varchar("facebook_url", { length: 500 }).notNull().default(""),
+  likeUrl: varchar("like_url", { length: 500 }).notNull().default(""),
   bannerText: varchar("banner_text", { length: 500 }),
   bannerEnabled: boolean("banner_enabled").notNull().default(false),
   // NULL means free-shipping disabled
@@ -726,10 +738,15 @@ export function seedStoreSettings(): StoreSettingsSeed {
     id: "default",
     businessName: "3D Ninjaz",
     contactEmail: "info@3dninjaz.com",
+    contactPhone: "",
     whatsappNumber: "60000000000",
     whatsappNumberDisplay: "+60 00 000 0000",
     instagramUrl: "#",
     tiktokUrl: "#",
+    twitterUrl: "",
+    whatsappUrl: "",
+    facebookUrl: "",
+    likeUrl: "",
     bannerText: null,
     bannerEnabled: false,
     freeShipThreshold: null,

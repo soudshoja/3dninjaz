@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { BRAND } from "@/lib/brand";
@@ -8,16 +9,64 @@ import { updateStoreSettings } from "@/actions/admin-settings";
 type Initial = {
   businessName: string;
   contactEmail: string;
+  contactPhone: string;
   whatsappNumber: string;
   whatsappNumberDisplay: string;
   instagramUrl: string;
   tiktokUrl: string;
+  twitterUrl: string;
+  whatsappUrl: string;
+  facebookUrl: string;
+  likeUrl: string;
   bannerText: string | null;
   bannerEnabled: boolean;
   freeShipThreshold: string | null;
   sstEnabled: boolean;
   sstRate: string;
 };
+
+// Phase 11 — social platforms rendered with branded ninja icons. The `key`
+// matches the form field + DB column basename (so `twitter` → `twitter_url`).
+// Any row whose URL is empty at save time will be hidden on the storefront
+// (SocialLinks component filters nulls/empties).
+const SOCIAL_ROWS = [
+  {
+    key: "twitter",
+    label: "Twitter / X URL",
+    placeholder: "https://twitter.com/3dninjaz",
+    icon: "/icons/ninja/social/twitter.png",
+  },
+  {
+    key: "whatsapp",
+    label: "WhatsApp link (wa.me/...)",
+    placeholder: "https://wa.me/60123456789",
+    icon: "/icons/ninja/social/whatsapp.png",
+  },
+  {
+    key: "instagram",
+    label: "Instagram URL",
+    placeholder: "https://instagram.com/3dninjaz",
+    icon: "/icons/ninja/social/instagram.png",
+  },
+  {
+    key: "facebook",
+    label: "Facebook URL",
+    placeholder: "https://facebook.com/3dninjaz",
+    icon: "/icons/ninja/social/facebook.png",
+  },
+  {
+    key: "tiktok",
+    label: "TikTok URL",
+    placeholder: "https://tiktok.com/@3dninjaz",
+    icon: "/icons/ninja/social/tiktok.png",
+  },
+  {
+    key: "like",
+    label: "Review link (Google review / Trustpilot / extra)",
+    placeholder: "https://g.page/r/…",
+    icon: "/icons/ninja/social/like.png",
+  },
+] as const;
 
 /**
  * /admin/settings form. Submits via updateStoreSettings server action.
@@ -73,101 +122,157 @@ export function SettingsForm({ initial }: { initial: Initial }) {
         />
       </div>
 
-      <div>
-        <label
-          htmlFor="sf-contactEmail"
-          className="block text-sm font-semibold mb-1"
-        >
-          Contact email
-        </label>
-        <input
-          id="sf-contactEmail"
-          name="contactEmail"
-          type="email"
-          required
-          defaultValue={initial.contactEmail}
-          className="w-full rounded-xl border-2 px-4 py-3 text-sm min-h-[48px]"
-          style={{ borderColor: `${BRAND.ink}33` }}
-        />
-      </div>
+      {/* ============================================================
+          Social & Contact (Phase 11)
+          Each social row is optional — leave blank to hide that icon
+          from the storefront footer and /contact page.
+          ============================================================ */}
+      <section
+        className="rounded-2xl border-2 p-5 space-y-5"
+        style={{ borderColor: `${BRAND.ink}22`, backgroundColor: "#FAFAFA" }}
+        aria-labelledby="sf-social-heading"
+      >
+        <div>
+          <h2
+            id="sf-social-heading"
+            className="font-[var(--font-heading)] text-lg"
+          >
+            Social & Contact
+          </h2>
+          <p className="text-xs text-slate-600 mt-1">
+            Leave any URL blank to hide that icon from the storefront.
+          </p>
+        </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label
-            htmlFor="sf-whatsappNumber"
+            htmlFor="sf-contactEmail"
             className="block text-sm font-semibold mb-1"
           >
-            WhatsApp number (digits only)
+            Contact email
           </label>
           <input
-            id="sf-whatsappNumber"
-            name="whatsappNumber"
-            type="text"
-            inputMode="numeric"
-            pattern="\d{7,15}"
+            id="sf-contactEmail"
+            name="contactEmail"
+            type="email"
             required
-            defaultValue={initial.whatsappNumber}
-            className="w-full rounded-xl border-2 px-4 py-3 text-sm min-h-[48px]"
+            defaultValue={initial.contactEmail}
+            className="w-full rounded-xl border-2 px-4 py-3 text-sm min-h-[48px] bg-white"
             style={{ borderColor: `${BRAND.ink}33` }}
-            placeholder="60123456789"
           />
         </div>
-        <div>
-          <label
-            htmlFor="sf-whatsappNumberDisplay"
-            className="block text-sm font-semibold mb-1"
-          >
-            WhatsApp display
-          </label>
-          <input
-            id="sf-whatsappNumberDisplay"
-            name="whatsappNumberDisplay"
-            type="text"
-            required
-            defaultValue={initial.whatsappNumberDisplay}
-            className="w-full rounded-xl border-2 px-4 py-3 text-sm min-h-[48px]"
-            style={{ borderColor: `${BRAND.ink}33` }}
-            placeholder="+60 12 345 6789"
-          />
-        </div>
-      </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label
-            htmlFor="sf-instagramUrl"
+            htmlFor="sf-contactPhone"
             className="block text-sm font-semibold mb-1"
           >
-            Instagram URL
+            Contact phone (optional)
           </label>
           <input
-            id="sf-instagramUrl"
-            name="instagramUrl"
-            type="url"
-            defaultValue={initial.instagramUrl}
-            className="w-full rounded-xl border-2 px-4 py-3 text-sm min-h-[48px]"
+            id="sf-contactPhone"
+            name="contactPhone"
+            type="text"
+            maxLength={32}
+            defaultValue={initial.contactPhone}
+            className="w-full rounded-xl border-2 px-4 py-3 text-sm min-h-[48px] bg-white"
             style={{ borderColor: `${BRAND.ink}33` }}
-            placeholder="https://instagram.com/3dninjaz"
+            placeholder="+60 3-1234 5678"
           />
+          <p className="mt-1 text-xs text-slate-500">
+            Displayed as a <code>tel:</code> link. Leave blank to hide.
+          </p>
         </div>
-        <div>
-          <label
-            htmlFor="sf-tiktokUrl"
-            className="block text-sm font-semibold mb-1"
-          >
-            TikTok URL
-          </label>
-          <input
-            id="sf-tiktokUrl"
-            name="tiktokUrl"
-            type="url"
-            defaultValue={initial.tiktokUrl}
-            className="w-full rounded-xl border-2 px-4 py-3 text-sm min-h-[48px]"
-            style={{ borderColor: `${BRAND.ink}33` }}
-            placeholder="https://tiktok.com/@3dninjaz"
-          />
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label
+              htmlFor="sf-whatsappNumber"
+              className="block text-sm font-semibold mb-1"
+            >
+              WhatsApp number (digits only)
+            </label>
+            <input
+              id="sf-whatsappNumber"
+              name="whatsappNumber"
+              type="text"
+              inputMode="numeric"
+              pattern="\d{7,15}"
+              required
+              defaultValue={initial.whatsappNumber}
+              className="w-full rounded-xl border-2 px-4 py-3 text-sm min-h-[48px] bg-white"
+              style={{ borderColor: `${BRAND.ink}33` }}
+              placeholder="60167203048"
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              E.164 digits, no &ldquo;+&rdquo;. Used to build wa.me deep-links.
+            </p>
+          </div>
+          <div>
+            <label
+              htmlFor="sf-whatsappNumberDisplay"
+              className="block text-sm font-semibold mb-1"
+            >
+              WhatsApp display
+            </label>
+            <input
+              id="sf-whatsappNumberDisplay"
+              name="whatsappNumberDisplay"
+              type="text"
+              required
+              defaultValue={initial.whatsappNumberDisplay}
+              className="w-full rounded-xl border-2 px-4 py-3 text-sm min-h-[48px] bg-white"
+              style={{ borderColor: `${BRAND.ink}33` }}
+              placeholder="+60 16 720 3048"
+            />
+          </div>
         </div>
-      </div>
+
+        <div className="space-y-4">
+          <p className="text-sm font-semibold">Social platform URLs</p>
+          {SOCIAL_ROWS.map((row) => {
+            const initialKey = `${row.key}Url` as
+              | "twitterUrl"
+              | "whatsappUrl"
+              | "instagramUrl"
+              | "facebookUrl"
+              | "tiktokUrl"
+              | "likeUrl";
+            const nameKey = `${row.key}Url`;
+            const defaultVal = initial[initialKey] ?? "";
+            return (
+              <div key={row.key} className="flex items-start gap-3">
+                <Image
+                  src={row.icon}
+                  alt=""
+                  width={56}
+                  height={56}
+                  className="h-14 w-14 shrink-0 object-contain rounded-lg bg-white"
+                />
+                <div className="flex-1">
+                  <label
+                    htmlFor={`sf-${nameKey}`}
+                    className="block text-sm font-semibold mb-1"
+                  >
+                    {row.label}
+                  </label>
+                  <input
+                    id={`sf-${nameKey}`}
+                    name={nameKey}
+                    type="url"
+                    defaultValue={
+                      defaultVal === "#" ? "" : defaultVal
+                    }
+                    className="w-full rounded-xl border-2 px-4 py-3 text-sm min-h-[48px] bg-white"
+                    style={{ borderColor: `${BRAND.ink}33` }}
+                    placeholder={row.placeholder}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
 
       <div>
         <label
