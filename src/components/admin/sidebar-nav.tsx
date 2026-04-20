@@ -125,31 +125,44 @@ export function SidebarNav({
 }) {
   const pathname = usePathname();
 
-  // All groups default to OPEN on first load (less friction for admins
-  // who've never seen the grouping). Persist per-group after first toggle.
+  // All groups default to CLOSED on first load — admins click to open what
+  // they need. Persist per-group after first toggle. Exception: if the
+  // current path is inside a group, that group auto-opens so the active
+  // item is visible.
   const [openState, setOpenState] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
-    for (const g of GROUPS) initial[g.name] = true;
+    for (const g of GROUPS) initial[g.name] = false;
     return initial;
   });
 
-  // Rehydrate from localStorage after mount (SSR cannot see it).
+  // Rehydrate from localStorage after mount (SSR cannot see it). Also
+  // auto-open the group containing the current path if no explicit
+  // localStorage preference exists for it yet.
   useEffect(() => {
     if (typeof window === "undefined") return;
     setOpenState((prev) => {
       const next = { ...prev };
       for (const g of GROUPS) {
+        let stored: string | null = null;
         try {
-          const v = window.localStorage.getItem(storageKey(g.name));
-          if (v === "0") next[g.name] = false;
-          else if (v === "1") next[g.name] = true;
+          stored = window.localStorage.getItem(storageKey(g.name));
         } catch {
           /* localStorage unavailable — keep defaults */
+        }
+        if (stored === "0") next[g.name] = false;
+        else if (stored === "1") next[g.name] = true;
+        else {
+          // No stored preference — auto-open if current path is in group.
+          const inGroup = g.items.some(
+            (item) =>
+              pathname === item.href || pathname.startsWith(item.href + "/")
+          );
+          if (inGroup) next[g.name] = true;
         }
       }
       return next;
     });
-  }, []);
+  }, [pathname]);
 
   const toggleGroup = (name: string) => {
     setOpenState((prev) => {
@@ -221,7 +234,7 @@ export function SidebarNav({
 
       {GROUPS.map((g) => {
         if (g.items.length === 0) return null;
-        const open = openState[g.name] ?? true;
+        const open = openState[g.name] ?? false;
         return (
           <div key={g.name} className="mt-3">
             <button
