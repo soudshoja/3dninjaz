@@ -24,6 +24,12 @@ type Variant = {
   inStock?: boolean;
 };
 
+type PictureSource = {
+  type: "image/avif" | "image/webp" | "image/jpeg";
+  srcSet: string;
+};
+type PictureData = { sources: PictureSource[]; fallbackSrc: string };
+
 type ProductDetailProps = {
   product: {
     id: string;
@@ -41,6 +47,8 @@ type ProductDetailProps = {
   // Phase 6 06-05 — approved-review summary for header rating badge.
   ratingAvg?: number;
   ratingCount?: number;
+  // Phase 7 (07-08) — pre-resolved <picture> sources from manifest.
+  pictures?: PictureData[];
 };
 
 const SIZE_ORDER: Record<Size, number> = { S: 0, M: 1, L: 2 };
@@ -56,6 +64,7 @@ export function ProductDetail({
   isWishlistedInitial = false,
   ratingAvg = 0,
   ratingCount = 0,
+  pictures,
 }: ProductDetailProps) {
   const sortedVariants = useMemo(
     () =>
@@ -78,7 +87,11 @@ export function ProductDetail({
   return (
     <div className="max-w-6xl mx-auto px-6 py-10 md:py-16 grid lg:grid-cols-2 gap-10 md:gap-14">
       <div>
-        <ProductGallery images={product.images} alt={product.name} />
+        <ProductGallery
+          images={product.images}
+          pictures={pictures}
+          alt={product.name}
+        />
       </div>
 
       {/*

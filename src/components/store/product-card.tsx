@@ -1,10 +1,13 @@
 import Link from "next/link";
-import Image from "next/image";
 import { BRAND } from "@/lib/brand";
 import { priceRangeMYR } from "@/lib/format";
 import { pickThumbnail, type CatalogProduct } from "@/lib/catalog";
 import { WishlistButton } from "@/components/store/wishlist-button";
 import { SoldOutBadge } from "@/components/store/sold-out-badge";
+// Phase 7 (07-08) — replaces next/Image with `<picture>` shell that reads
+// the per-image manifest and emits avif/webp/jpeg srcset for ~70% size
+// reduction on average.
+import { ResponsiveProductImage } from "@/components/storefront/responsive-product-image";
 
 /**
  * Single product card. Used by the homepage featured rail, /shop grid,
@@ -20,7 +23,7 @@ import { SoldOutBadge } from "@/components/store/sold-out-badge";
  */
 const ACCENTS = [BRAND.blue, BRAND.green, BRAND.purple] as const;
 
-export function ProductCard({
+export async function ProductCard({
   product,
   accentIndex = 0,
   isWishlisted = false,
@@ -54,12 +57,11 @@ export function ProductCard({
         style={{ backgroundColor: `${accent}20` }}
       >
         {firstImage ? (
-          <Image
-            src={firstImage}
+          <ResponsiveProductImage
+            imageUrl={firstImage}
             alt={product.name}
-            fill
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-            className="object-cover"
+            className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-sm text-slate-500">
