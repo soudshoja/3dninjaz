@@ -1,69 +1,94 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Retail/ops sequence: overview → catalog → orders → payments/finance →
-// customers → merchandising → ops/config → self. Reordered 2026-04-20 so the
-// daily-use items (Dashboard, Products, Orders, Disputes, Reconciliation)
-// sit at the top of the scan path and admin-config sinks to the bottom.
-//
-// 2026-04-20 icon pass: replaced the lucide-react icon set with branded
-// ninja icons from /public/icons/ninja/nav/. Keeps the nav scannable while
-// reinforcing brand personality. ninjaIcon = filename in .../nav/*@128.png.
-const items = [
-  // Overview
-  { href: "/admin", label: "Dashboard", ninjaIcon: "home", exact: true },
-  // Catalog
-  { href: "/admin/products", label: "Products", ninjaIcon: "shop", exact: false },
+// Admin nav grouped into collapsible sections by function. Replaces the
+// flat list from the prior iteration per user feedback ("finance anything
+// related under it, product anything related under it, etc.").
+// Groups collapse/expand; state persists to localStorage per-group.
+
+type NavItem = {
+  href: string;
+  label: string;
+  ninjaIcon: string;
+  exact?: boolean;
+  badge?: "pendingReviewCount" | "reconDriftCount";
+};
+
+type NavGroup = { name: string; title: string; items: NavItem[] };
+
+const GROUPS: NavGroup[] = [
   {
-    href: "/admin/categories",
-    label: "Categories",
-    ninjaIcon: "portfolio",
-    exact: false,
+    name: "catalog",
+    title: "Catalog",
+    items: [
+      { href: "/admin/products", label: "Products", ninjaIcon: "shop" },
+      { href: "/admin/categories", label: "Categories", ninjaIcon: "portfolio" },
+      { href: "/admin/inventory", label: "Inventory", ninjaIcon: "portfolio" },
+      {
+        href: "/admin/products/import",
+        label: "Bulk import",
+        ninjaIcon: "download",
+        exact: true,
+      },
+    ],
   },
-  { href: "/admin/inventory", label: "Inventory", ninjaIcon: "portfolio", exact: false },
   {
-    href: "/admin/products/import",
-    label: "Bulk import",
-    ninjaIcon: "download",
-    exact: true,
+    name: "sales",
+    title: "Sales",
+    items: [
+      { href: "/admin/orders", label: "Orders", ninjaIcon: "download" },
+      { href: "/admin/disputes", label: "Disputes", ninjaIcon: "warning" },
+    ],
   },
-  // Orders + fulfilment
-  { href: "/admin/orders", label: "Orders", ninjaIcon: "download", exact: false },
-  // Payments / finance / disputes — grouped so post-sale ops hang together.
-  { href: "/admin/payments", label: "Payments", ninjaIcon: "secure", exact: false },
-  { href: "/admin/disputes", label: "Disputes", ninjaIcon: "warning", exact: false },
   {
-    href: "/admin/recon",
-    label: "Reconciliation",
-    ninjaIcon: "secure",
-    exact: false,
-    badge: "reconDriftCount" as const,
+    name: "finance",
+    title: "Finance",
+    items: [
+      { href: "/admin/payments", label: "Payments", ninjaIcon: "secure" },
+      {
+        href: "/admin/recon",
+        label: "Reconciliation",
+        ninjaIcon: "secure",
+        badge: "reconDriftCount",
+      },
+    ],
   },
-  // Customers + merchandising
-  { href: "/admin/users", label: "Customers", ninjaIcon: "about", exact: false },
-  { href: "/admin/coupons", label: "Coupons", ninjaIcon: "tip", exact: false },
   {
-    href: "/admin/reviews",
-    label: "Reviews",
-    ninjaIcon: "great",
-    exact: false,
-    badge: "pendingReviewCount" as const,
+    name: "customers",
+    title: "Customers",
+    items: [
+      { href: "/admin/users", label: "Customers", ninjaIcon: "about" },
+    ],
   },
-  // Ops / configuration
-  { href: "/admin/shipping", label: "Shipping", ninjaIcon: "download", exact: false },
   {
-    href: "/admin/email-templates",
-    label: "Email templates",
-    ninjaIcon: "contact",
-    exact: false,
+    name: "marketing",
+    title: "Marketing",
+    items: [
+      { href: "/admin/email-templates", label: "Email templates", ninjaIcon: "contact" },
+      { href: "/admin/coupons", label: "Coupons", ninjaIcon: "tip" },
+      {
+        href: "/admin/reviews",
+        label: "Reviews",
+        ninjaIcon: "great",
+        badge: "pendingReviewCount",
+      },
+    ],
   },
-  { href: "/admin/settings", label: "Settings", ninjaIcon: "services", exact: false },
-  // Self
-  { href: "/admin/profile", label: "Profile", ninjaIcon: "login", exact: false },
+  {
+    name: "operations",
+    title: "Operations",
+    items: [
+      { href: "/admin/shipping", label: "Shipping (flat-rate)", ninjaIcon: "download" },
+      { href: "/admin/shipping/delyva", label: "Delyva courier", ninjaIcon: "services" },
+      { href: "/admin/settings", label: "Site settings", ninjaIcon: "services" },
+    ],
+  },
 ];
 
 /**
@@ -77,10 +102,15 @@ function ninjaIconPath(name: string): string {
   return `/icons/ninja/${folder}/${name}@128.png`;
 }
 
+function storageKey(groupName: string): string {
+  return `admin-nav-group-${groupName}`;
+}
+
 /**
- * Admin sidebar navigation. After Phase 5 the list grew from 4 → 11 items,
- * which is still comfortable on a 64-col-wide sidebar; on mobile the layout
- * renders a horizontally scrollable chip strip instead (see (admin)/layout.tsx).
+ * Admin sidebar navigation. After Phase 9 the list is grouped into collapsible
+ * sections by function (catalog, sales, finance, customers, marketing, ops).
+ * Group open-state persists to localStorage per-group. On mobile the chip
+ * strip in the admin layout remains flat.
  *
  * `pendingReviewCount` is prop-drilled from the server-rendered admin layout
  * so the badge updates on hard navigation without a separate fetch.
@@ -95,50 +125,141 @@ export function SidebarNav({
 }) {
   const pathname = usePathname();
 
-  return (
-    <nav className="mt-8 flex flex-col gap-1" aria-label="Admin navigation">
-      {items.map((item) => {
-        const active = item.exact
-          ? pathname === item.href
-          : pathname === item.href || pathname.startsWith(item.href + "/");
-        const badgeKey = (item as { badge?: string }).badge;
-        const badgeCount =
-          badgeKey === "pendingReviewCount"
-            ? pendingReviewCount
-            : badgeKey === "reconDriftCount"
-              ? reconDriftCount
-              : 0;
-        const showBadge = !!badgeKey && badgeCount > 0;
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-              active
-                ? "bg-[var(--color-brand-surface)] text-[var(--color-brand-primary)] font-medium"
-                : "text-[var(--color-brand-text-muted)] hover:bg-[var(--color-brand-surface)] hover:text-[var(--color-brand-primary)]"
-            )}
+  // All groups default to OPEN on first load (less friction for admins
+  // who've never seen the grouping). Persist per-group after first toggle.
+  const [openState, setOpenState] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    for (const g of GROUPS) initial[g.name] = true;
+    return initial;
+  });
+
+  // Rehydrate from localStorage after mount (SSR cannot see it).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setOpenState((prev) => {
+      const next = { ...prev };
+      for (const g of GROUPS) {
+        try {
+          const v = window.localStorage.getItem(storageKey(g.name));
+          if (v === "0") next[g.name] = false;
+          else if (v === "1") next[g.name] = true;
+        } catch {
+          /* localStorage unavailable — keep defaults */
+        }
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleGroup = (name: string) => {
+    setOpenState((prev) => {
+      const open = !prev[name];
+      const next = { ...prev, [name]: open };
+      try {
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(storageKey(name), open ? "1" : "0");
+        }
+      } catch {
+        /* noop */
+      }
+      return next;
+    });
+  };
+
+  const renderItem = (item: NavItem) => {
+    const active = item.exact
+      ? pathname === item.href
+      : pathname === item.href || pathname.startsWith(item.href + "/");
+    const badgeKey = item.badge;
+    const badgeCount =
+      badgeKey === "pendingReviewCount"
+        ? pendingReviewCount
+        : badgeKey === "reconDriftCount"
+          ? reconDriftCount
+          : 0;
+    const showBadge = !!badgeKey && badgeCount > 0;
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        className={cn(
+          "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+          active
+            ? "bg-[var(--color-brand-surface)] text-[var(--color-brand-primary)] font-medium"
+            : "text-[var(--color-brand-text-muted)] hover:bg-[var(--color-brand-surface)] hover:text-[var(--color-brand-primary)]"
+        )}
+      >
+        <Image
+          src={ninjaIconPath(item.ninjaIcon)}
+          alt=""
+          width={28}
+          height={28}
+          className="h-7 w-7 object-contain shrink-0"
+        />
+        <span>{item.label}</span>
+        {showBadge ? (
+          <span
+            className="ml-auto inline-flex items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white"
+            aria-label={`${badgeCount} pending`}
           >
-            <Image
-              src={ninjaIconPath(item.ninjaIcon)}
-              alt=""
-              width={28}
-              height={28}
-              className="h-7 w-7 object-contain shrink-0"
-            />
-            <span>{item.label}</span>
-            {showBadge ? (
-              <span
-                className="ml-auto inline-flex items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white"
-                aria-label={`${badgeCount} pending`}
+            {badgeCount}
+          </span>
+        ) : null}
+      </Link>
+    );
+  };
+
+  return (
+    <nav className="mt-6 flex flex-col gap-1" aria-label="Admin navigation">
+      {/* Dashboard — flat, top */}
+      {renderItem({
+        href: "/admin",
+        label: "Dashboard",
+        ninjaIcon: "home",
+        exact: true,
+      })}
+
+      {GROUPS.map((g) => {
+        if (g.items.length === 0) return null;
+        const open = openState[g.name] ?? true;
+        return (
+          <div key={g.name} className="mt-3">
+            <button
+              type="button"
+              onClick={() => toggleGroup(g.name)}
+              aria-expanded={open}
+              aria-controls={`nav-group-${g.name}`}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--color-brand-text-muted)] hover:text-[var(--color-brand-text-primary)]"
+            >
+              <ChevronDown
+                className={cn(
+                  "h-3 w-3 transition-transform",
+                  open ? "rotate-0" : "-rotate-90"
+                )}
+                aria-hidden
+              />
+              <span>{g.title}</span>
+            </button>
+            {open ? (
+              <div
+                id={`nav-group-${g.name}`}
+                className="flex flex-col gap-1 pl-1"
               >
-                {badgeCount}
-              </span>
+                {g.items.map(renderItem)}
+              </div>
             ) : null}
-          </Link>
+          </div>
         );
       })}
+
+      {/* Profile — flat, bottom, separator above */}
+      <div className="mt-6 border-t border-[var(--color-brand-border)] pt-3">
+        {renderItem({
+          href: "/admin/profile",
+          label: "Profile",
+          ninjaIcon: "login",
+        })}
+      </div>
     </nav>
   );
 }

@@ -46,6 +46,7 @@ const MOBILE_CHIPS = [
   { href: "/admin/coupons", label: "Coupons" },
   { href: "/admin/reviews", label: "Reviews" },
   { href: "/admin/shipping", label: "Shipping" },
+  { href: "/admin/shipping/delyva", label: "Delyva" },
   { href: "/admin/email-templates", label: "Email templates" },
   { href: "/admin/settings", label: "Settings" },
   { href: "/admin/profile", label: "Profile" },
