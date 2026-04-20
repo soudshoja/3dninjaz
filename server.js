@@ -1,4 +1,5 @@
-// server.js — Next.js custom server for cPanel Node.js App (3D Ninjaz /v1 preview)
+// server.js — Next.js custom server for cPanel Node.js App (3D Ninjaz)
+// Served at the root of app.3dninjaz.com — no basePath prefix.
 // Passenger / cPanel sets PORT automatically.
 const { createServer } = require("http");
 const next = require("next");
@@ -14,7 +15,7 @@ app
   .then(() => {
     createServer((req, res) => handle(req, res)).listen(port, hostname, () => {
       // eslint-disable-next-line no-console
-      console.log(`> 3D Ninjaz /v1 ready on http://${hostname}:${port}`);
+      console.log(`> 3D Ninjaz ready on http://${hostname}:${port}`);
     });
   })
   .catch((err) => {

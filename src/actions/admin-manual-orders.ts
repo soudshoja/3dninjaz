@@ -25,7 +25,7 @@ import { revalidatePath } from "next/cache";
 
 const PAYMENT_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const PUBLIC_LINK_BASE =
-  process.env.NEXT_PUBLIC_BASE_URL ?? "https://3dninjaz.com/v1";
+  process.env.NEXT_PUBLIC_BASE_URL ?? "https://app.3dninjaz.com";
 const SENTINEL_EMAIL_DOMAIN = "@3dninjaz.local";
 
 export type CreateManualOrderResult =

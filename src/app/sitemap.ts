@@ -5,9 +5,9 @@ import { getActiveProducts, getActiveCategories } from "@/lib/catalog";
 /**
  * /sitemap.xml via Next.js 15 Metadata API (file-based convention).
  *
- * Base URL resolves from NEXT_PUBLIC_SITE_URL when set (preview deployments
- * under /v1 may set this to https://3dninjaz.com/v1 so sitemap entries stay
- * self-consistent), otherwise falls back to SITE.url (https://3dninjaz.com).
+ * Base URL resolves from NEXT_PUBLIC_SITE_URL when set (production should set
+ * this to https://app.3dninjaz.com so sitemap entries stay self-consistent
+ * with the deployed origin), otherwise falls back to SITE.url.
  *
  * Only emits ACTIVE products (getActiveProducts filters isActive=true) so
  * draft / inactive products never leak into the crawl surface (T-04-04-02).
