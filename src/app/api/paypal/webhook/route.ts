@@ -155,7 +155,11 @@ export async function POST(req: NextRequest) {
     resource?: {
       id?: string;
       supplementary_data?: {
-        related_ids?: { order_id?: string };
+        related_ids?: { order_id?: string; capture_id?: string };
+      };
+      links?: Array<{ rel: string; href: string }>;
+      seller_payable_breakdown?: {
+        total_refunded_amount?: { value?: string; currency_code?: string };
       };
     };
   };
@@ -168,6 +172,61 @@ export async function POST(req: NextRequest) {
   const eventType = event.event_type ?? "";
   // Do NOT log the full payload (T-03-20) — only the event type.
   console.info(`[paypal webhook] verified event: ${eventType}`);
+
+  // ==========================================================================
+  // Phase 7 (07-05) — PAYMENT.CAPTURE.REFUNDED handler.
+  //
+  // Idempotent on orders.refundedAmount via GREATEST(local, paypal_total) so
+  // replays do not double-count (T-07-05-replay). PayPal supplies the running
+  // total in resource.seller_payable_breakdown.total_refunded_amount.
+  //
+  // Capture id resolution order:
+  //   1. resource.supplementary_data.related_ids.capture_id (PayPal canonical)
+  //   2. resource.links[?rel='up'].href tail (fallback)
+  // ==========================================================================
+  if (eventType === "PAYMENT.CAPTURE.REFUNDED") {
+    let captureId: string | null =
+      event.resource?.supplementary_data?.related_ids?.capture_id ?? null;
+    if (!captureId) {
+      const upLink = (event.resource?.links ?? []).find(
+        (l) => l.rel === "up",
+      );
+      if (upLink?.href) {
+        const tail = upLink.href.split("/").pop();
+        if (tail) captureId = tail;
+      }
+    }
+    if (!captureId) {
+      return NextResponse.json({ ok: true, ignored: "no-capture-id" });
+    }
+    const totalRefunded = parseFloat(
+      event.resource?.seller_payable_breakdown?.total_refunded_amount?.value ??
+        "0",
+    );
+    if (!Number.isFinite(totalRefunded) || totalRefunded <= 0) {
+      return NextResponse.json({ ok: true, ignored: "zero-refund" });
+    }
+    const row = await db.query.orders.findFirst({
+      where: eq(orders.paypalCaptureId, captureId),
+    });
+    if (!row) {
+      return NextResponse.json({ ok: true, ignored: "no-local-order" });
+    }
+    const localRefunded = parseFloat(row.refundedAmount);
+    const target = Math.max(localRefunded, totalRefunded);
+    if (target > localRefunded + 0.001) {
+      const total = parseFloat(row.totalAmount);
+      const fullyRefunded = target + 0.001 >= total;
+      await db
+        .update(orders)
+        .set({
+          refundedAmount: target.toFixed(2),
+          ...(fullyRefunded ? { status: "cancelled" as const } : {}),
+        })
+        .where(eq(orders.id, row.id));
+    }
+    return NextResponse.json({ ok: true });
+  }
 
   if (eventType === "PAYMENT.CAPTURE.COMPLETED") {
     const captureId = event.resource?.id;
