@@ -15,6 +15,8 @@ import {
   Star,
   Upload,
   Boxes,
+  Wallet,
+  UserCog,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +30,9 @@ const items = [
     exact: false,
   },
   { href: "/admin/orders", label: "Orders", icon: Receipt, exact: false },
+  // Phase post-launch — PayPal transactions report (admin sees what they'd
+  // see in the PayPal dashboard without needing to log in there).
+  { href: "/admin/payments", label: "Payments", icon: Wallet, exact: false },
   // Phase 5 admin extensions
   { href: "/admin/users", label: "Users", icon: Users, exact: false },
   { href: "/admin/inventory", label: "Inventory", icon: Boxes, exact: false },
@@ -53,6 +58,7 @@ const items = [
   },
   { href: "/admin/shipping", label: "Shipping", icon: Truck, exact: false },
   { href: "/admin/settings", label: "Settings", icon: Settings, exact: false },
+  { href: "/admin/profile", label: "Profile", icon: UserCog, exact: false },
 ];
 
 /**

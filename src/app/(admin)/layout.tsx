@@ -16,6 +16,7 @@ const MOBILE_CHIPS = [
   { href: "/admin/products", label: "Products" },
   { href: "/admin/categories", label: "Categories" },
   { href: "/admin/orders", label: "Orders" },
+  { href: "/admin/payments", label: "Payments" },
   { href: "/admin/users", label: "Users" },
   { href: "/admin/inventory", label: "Inventory" },
   { href: "/admin/coupons", label: "Coupons" },
@@ -24,6 +25,7 @@ const MOBILE_CHIPS = [
   { href: "/admin/reviews", label: "Reviews" },
   { href: "/admin/shipping", label: "Shipping" },
   { href: "/admin/settings", label: "Settings" },
+  { href: "/admin/profile", label: "Profile" },
 ];
 
 export default async function AdminLayout({
@@ -85,6 +87,12 @@ export default async function AdminLayout({
                 3D Ninjaz Admin
               </span>
             </Link>
+            {/* Mobile sign-out — desktop sidebar already has SignOutButton at
+                its bottom; the mobile header lacked any way to sign out, so
+                admins were stuck in /admin without a logout affordance. */}
+            <div className="shrink-0">
+              <SignOutButton />
+            </div>
           </div>
           {/*
             Mobile nav strip — the sidebar is hidden below md so without this
