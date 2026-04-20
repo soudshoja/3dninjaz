@@ -138,6 +138,12 @@ export function SidebarNav({
   // Rehydrate from localStorage after mount (SSR cannot see it). Also
   // auto-open the group containing the current path if no explicit
   // localStorage preference exists for it yet.
+  //
+  // Important (bug fix 2026-04-20): groups with NO stored preference must
+  // reflect the CURRENT pathname — previously, navigating from a grouped page
+  // back to /admin left the prior group open (a stale auto-open). Now: sticky
+  // preference wins, otherwise the group is open IFF the current path matches
+  // one of its items. Landing on /admin closes every auto-opened group.
   useEffect(() => {
     if (typeof window === "undefined") return;
     setOpenState((prev) => {
@@ -152,12 +158,14 @@ export function SidebarNav({
         if (stored === "0") next[g.name] = false;
         else if (stored === "1") next[g.name] = true;
         else {
-          // No stored preference — auto-open if current path is in group.
+          // No stored preference — open only if current path is in group.
+          // This intentionally closes previously auto-opened groups when the
+          // admin navigates to a page outside them (e.g. /admin dashboard).
           const inGroup = g.items.some(
             (item) =>
               pathname === item.href || pathname.startsWith(item.href + "/")
           );
-          if (inGroup) next[g.name] = true;
+          next[g.name] = inGroup;
         }
       }
       return next;
