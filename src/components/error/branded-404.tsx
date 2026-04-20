@@ -1,11 +1,11 @@
+import Image from "next/image";
 import Link from "next/link";
 import { BRAND } from "@/lib/brand";
 
 /**
  * Phase 7 (07-09) — branded 404 page body.
- *
- * Used by src/app/not-found.tsx (server component). Tap targets >= 48px;
- * mobile validated.
+ * Art refreshed to use the sheet-derived /icons/ninja/errors/404.png
+ * (ninja holding a magnifying glass). Tap targets >= 48px.
  */
 export function BrandedNotFound() {
   return (
@@ -14,19 +14,14 @@ export function BrandedNotFound() {
       style={{ backgroundColor: BRAND.cream, color: BRAND.ink }}
     >
       <div className="max-w-lg w-full text-center">
-        <div
-          className="mx-auto mb-6 inline-block rounded-3xl p-3"
-          style={{ backgroundColor: BRAND.ink }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/ninja-lost.svg"
-            alt=""
-            width={200}
-            height={200}
-            className="block"
-          />
-        </div>
+        <Image
+          src="/icons/ninja/errors/404.png"
+          alt="3D Ninjaz ninja with a magnifying glass — page not found"
+          width={240}
+          height={240}
+          priority
+          className="mx-auto mb-6 h-[240px] w-[240px] object-contain"
+        />
         <h1 className="font-[var(--font-heading)] text-3xl md:text-4xl mb-3">
           The ninja went stealth on this page
         </h1>

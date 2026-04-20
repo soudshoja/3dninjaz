@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { BRAND } from "@/lib/brand";
 import { getStoreSettingsCached } from "@/lib/store-settings";
 
@@ -25,19 +26,14 @@ export async function BrandedMaintenance() {
       style={{ backgroundColor: BRAND.cream, color: BRAND.ink }}
     >
       <div className="max-w-lg w-full text-center">
-        <div
-          className="mx-auto mb-6 inline-block rounded-3xl p-3"
-          style={{ backgroundColor: BRAND.ink }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/ninja-lost.svg"
-            alt=""
-            width={200}
-            height={200}
-            className="block"
-          />
-        </div>
+        <Image
+          src="/icons/ninja/errors/maintenance.png"
+          alt="3D Ninjaz ninja in a hard hat next to a barricade — under maintenance"
+          width={240}
+          height={240}
+          priority
+          className="mx-auto mb-6 h-[240px] w-[240px] object-contain"
+        />
         <h1 className="font-[var(--font-heading)] text-3xl md:text-4xl mb-3">
           We are training the ninja
         </h1>

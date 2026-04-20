@@ -1,7 +1,10 @@
+import Image from "next/image";
 import { BRAND } from "@/lib/brand";
 
 /**
  * Phase 7 (07-09) — branded 500 page body.
+ * Art refreshed to use /icons/ninja/errors/500.png (ninja looking confused
+ * next to a gear + question-mark thought bubble).
  *
  * Props are STRICTLY { requestId, reset? } — `error` object is NEVER
  * passed in (T-07-09-error-page-leak / D-07-12). Stack/message logged
@@ -20,19 +23,14 @@ export function BrandedFiveHundred({
       style={{ backgroundColor: BRAND.cream, color: BRAND.ink }}
     >
       <div className="max-w-lg w-full text-center">
-        <div
-          className="mx-auto mb-6 inline-block rounded-3xl p-3"
-          style={{ backgroundColor: BRAND.ink }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/ninja-lost.svg"
-            alt=""
-            width={200}
-            height={200}
-            className="block"
-          />
-        </div>
+        <Image
+          src="/icons/ninja/errors/500.png"
+          alt="3D Ninjaz ninja confused next to a gear — something broke"
+          width={240}
+          height={240}
+          priority
+          className="mx-auto mb-6 h-[240px] w-[240px] object-contain"
+        />
         <h1 className="font-[var(--font-heading)] text-3xl md:text-4xl mb-3">
           Something went wrong
         </h1>
