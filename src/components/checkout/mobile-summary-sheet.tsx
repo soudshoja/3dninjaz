@@ -17,6 +17,7 @@ import { formatMYR } from "@/lib/format";
 import type { CartItem } from "@/stores/cart-store";
 import type { AddressFormValues } from "./address-form";
 import type { AppliedCoupon } from "@/components/store/coupon-apply";
+import type { SelectedShipping } from "./shipping-rate-picker";
 
 /**
  * Mobile-only sticky CTA dock + Review-and-Pay bottom sheet (D3-20).
@@ -34,6 +35,7 @@ export function MobileSummarySheet({
   address,
   appliedCoupon,
   onCouponChange,
+  shipping,
   onPaid,
 }: {
   items: CartItem[];
@@ -41,10 +43,14 @@ export function MobileSummarySheet({
   address: AddressFormValues | null;
   appliedCoupon: AppliedCoupon | null;
   onCouponChange: (next: AppliedCoupon | null) => void;
+  shipping: SelectedShipping | null;
   onPaid: (redirectTo: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const totalForDock = appliedCoupon ? appliedCoupon.finalTotal : subtotalMyr;
+  const discountedSubtotal = appliedCoupon
+    ? appliedCoupon.finalTotal
+    : subtotalMyr;
+  const totalForDock = discountedSubtotal + (shipping?.price ?? 0);
 
   return (
     <>
@@ -86,6 +92,7 @@ export function MobileSummarySheet({
               subtotal={subtotalMyr}
               appliedCoupon={appliedCoupon}
               onCouponChange={onCouponChange}
+              shipping={shipping}
             />
           </div>
 
@@ -94,6 +101,7 @@ export function MobileSummarySheet({
               address={address}
               items={items}
               appliedCouponCode={appliedCoupon?.code ?? null}
+              shipping={shipping}
               onPaid={(redirect) => {
                 setOpen(false);
                 onPaid(redirect);

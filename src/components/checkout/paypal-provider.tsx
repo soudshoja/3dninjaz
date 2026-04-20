@@ -11,6 +11,10 @@ import { AddressForm, type AddressFormValues } from "./address-form";
 import { CheckoutSummary } from "./checkout-summary";
 import { PayPalButton } from "./paypal-button";
 import { MobileSummarySheet } from "./mobile-summary-sheet";
+import {
+  ShippingRatePicker,
+  type SelectedShipping,
+} from "./shipping-rate-picker";
 import type { SavedAddress } from "@/actions/addresses";
 import type { AppliedCoupon } from "@/components/store/coupon-apply";
 
@@ -61,6 +65,9 @@ export function CheckoutIsland({
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(
     null,
   );
+  // Phase 9b — customer-selected Delyva courier + price. Null until quote
+  // returns options + user picks one. PayPal button stays disabled while null.
+  const [shipping, setShipping] = useState<SelectedShipping | null>(null);
 
   const initialOptions = useMemo<ReactPayPalScriptOptions>(
     () => ({
@@ -103,12 +110,23 @@ export function CheckoutIsland({
             savedAddresses={savedAddresses}
           />
 
+          {/* Phase 9b — shipping-rate picker. Renders only once the address is
+              filled in; on postcode change it debounces + calls Delyva. */}
+          <div className="mt-8">
+            <ShippingRatePicker
+              address={address}
+              items={items}
+              onChange={setShipping}
+            />
+          </div>
+
           {/* PayPal button area — desktop only; mobile uses the sticky sheet */}
           <div className="hidden md:block mt-8">
             <PayPalButton
               address={address}
               items={items}
               appliedCouponCode={appliedCoupon?.code ?? null}
+              shipping={shipping}
               onPaid={handlePaid}
             />
           </div>
@@ -133,6 +151,7 @@ export function CheckoutIsland({
               subtotal={subtotal}
               appliedCoupon={appliedCoupon}
               onCouponChange={setAppliedCoupon}
+              shipping={shipping}
             />
           </div>
         </aside>
@@ -143,6 +162,7 @@ export function CheckoutIsland({
           items={items}
           appliedCoupon={appliedCoupon}
           onCouponChange={setAppliedCoupon}
+          shipping={shipping}
           onPaid={handlePaid}
         />
       </div>

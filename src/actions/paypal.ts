@@ -12,6 +12,7 @@ import { formatOrderNumber } from "@/lib/orders";
 import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
 import { validateCoupon, redeemCoupon } from "@/actions/coupons";
 import { getShippingRate } from "@/actions/admin-shipping";
+import { quoteForCart } from "@/actions/shipping-quote";
 import { revalidatePath } from "next/cache";
 
 type BagLineInput = {
@@ -25,6 +26,10 @@ type CreateOrderInput = {
   // Plan 05-03 — optional coupon. Server-side validateCoupon recomputes the
   // discount; client-supplied amount is ignored entirely (T-05-03-tampering).
   couponCode?: string | null;
+  // Phase 9b — customer-selected Delyva service. Server re-quotes and
+  // re-derives the price — the client never dictates shipping cost
+  // (T-09-01-tampering). When null, falls back to the flat-rate table.
+  shippingServiceCode?: string | null;
 };
 
 type CreateOrderResult =
@@ -164,10 +169,72 @@ export async function createPayPalOrder(
   const subtotal = snapshots.reduce((sum, s) => sum + Number(s.lineTotal), 0);
   const subtotalStr = subtotal.toFixed(2);
 
-  // Plan 05-04 — shipping cost from per-state DB rate + free-ship threshold.
-  // Server computes from address.state; client only supplies the state.
-  const shippingResult = await getShippingRate(addr.data.state, subtotal);
-  const shippingNum = Number(shippingResult.cost.toFixed(2));
+  // Phase 9b — prefer Delyva live quote if the customer picked a courier.
+  // Fall back to the Phase 5 per-state flat rate when no serviceCode is set.
+  // The server never trusts client-supplied shipping prices — we re-quote
+  // against Delyva here (T-09-01-tampering).
+  let shippingNum: number;
+  let shippingServiceCode: string | null = null;
+  let shippingServiceName: string | null = null;
+  if (input.shippingServiceCode) {
+    try {
+      const quote = await quoteForCart(
+        input.items.map((i) => {
+          const row = variantRows.find((v) => v.id === i.variantId);
+          return {
+            productId: row?.productId ?? "",
+            quantity: qtyByVariant.get(i.variantId) ?? i.quantity,
+            unitPrice: row ? Number(row.price) : 0,
+          };
+        }),
+        {
+          address1: addr.data.addressLine1,
+          address2: addr.data.addressLine2 ?? null,
+          city: addr.data.city,
+          state: addr.data.state,
+          postcode: addr.data.postcode,
+          country: "MY",
+        },
+      );
+      if (quote.ok) {
+        const match = quote.options.find(
+          (o) => o.serviceCode === input.shippingServiceCode,
+        );
+        if (match) {
+          shippingNum = match.finalPrice;
+          shippingServiceCode = match.serviceCode;
+          shippingServiceName = match.serviceName;
+        } else {
+          // Requested service no longer available — fall back to cheapest.
+          const cheapest = [...quote.options].sort(
+            (a, b) => a.finalPrice - b.finalPrice,
+          )[0];
+          if (cheapest) {
+            shippingNum = cheapest.finalPrice;
+            shippingServiceCode = cheapest.serviceCode;
+            shippingServiceName = cheapest.serviceName;
+          } else {
+            const flat = await getShippingRate(addr.data.state, subtotal);
+            shippingNum = Number(flat.cost.toFixed(2));
+          }
+        }
+      } else {
+        // Delyva quote failed — fall back to flat-rate table so checkout
+        // doesn't hard-fail. The admin still sees which state shipped to.
+        const flat = await getShippingRate(addr.data.state, subtotal);
+        shippingNum = Number(flat.cost.toFixed(2));
+      }
+    } catch (err) {
+      console.error("[paypal] Delyva re-quote failed:", err);
+      const flat = await getShippingRate(addr.data.state, subtotal);
+      shippingNum = Number(flat.cost.toFixed(2));
+    }
+  } else {
+    // Plan 05-04 — shipping cost from per-state DB rate + free-ship threshold.
+    const shippingResult = await getShippingRate(addr.data.state, subtotal);
+    shippingNum = Number(shippingResult.cost.toFixed(2));
+  }
+  shippingNum = Number(shippingNum.toFixed(2));
   const shippingStr = shippingNum.toFixed(2);
 
   // Plan 05-03 — server-side coupon application. Even if the client never
@@ -293,6 +360,11 @@ export async function createPayPalOrder(
       shippingState: addr.data.state,
       shippingPostcode: addr.data.postcode,
       shippingCountry: "Malaysia",
+      // Phase 9b — Delyva service snapshot. Null when the customer didn't
+      // pick one (e.g. flat-rate fallback path).
+      shippingServiceCode: shippingServiceCode,
+      shippingServiceName: shippingServiceName,
+      shippingQuotedPrice: shippingServiceCode ? shippingStr : null,
     });
 
     await db.insert(orderItems).values(

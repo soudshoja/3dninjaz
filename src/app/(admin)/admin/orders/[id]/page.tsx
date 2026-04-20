@@ -254,7 +254,17 @@ export default async function AdminOrderDetailPage({
                 <span>{formatMYR(row.subtotal)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-600">Shipping</span>
+                <span className="text-slate-600">
+                  Shipping
+                  {row.shippingServiceName ? (
+                    <span className="block text-xs text-slate-500">
+                      {row.shippingServiceName}
+                      {row.shippingServiceCode
+                        ? ` (${row.shippingServiceCode})`
+                        : ""}
+                    </span>
+                  ) : null}
+                </span>
                 <span>{formatMYR(row.shippingCost)}</span>
               </div>
               <div className="flex justify-between pt-2 border-t border-black/10 font-bold text-base">

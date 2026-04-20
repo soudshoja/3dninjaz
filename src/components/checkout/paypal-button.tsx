@@ -5,6 +5,7 @@ import { PayPalButtons } from "@paypal/react-paypal-js";
 import { createPayPalOrder, capturePayPalOrder } from "@/actions/paypal";
 import type { CartItem } from "@/stores/cart-store";
 import type { AddressFormValues } from "./address-form";
+import type { SelectedShipping } from "./shipping-rate-picker";
 import { BRAND } from "@/lib/brand";
 
 /**
@@ -24,20 +25,26 @@ export function PayPalButton({
   address,
   items,
   appliedCouponCode,
+  shipping,
   onPaid,
 }: {
   address: AddressFormValues | null;
   items: CartItem[];
   appliedCouponCode?: string | null;
+  shipping: SelectedShipping | null;
   onPaid: (redirectTo: string) => void;
 }) {
-  const disabled = address === null || items.length === 0;
+  // Phase 9b — require a shipping service selection before PayPal is usable.
+  const disabled =
+    address === null || items.length === 0 || shipping === null;
   const addressRef = useRef(address);
   addressRef.current = address;
   const itemsRef = useRef(items);
   itemsRef.current = items;
   const couponRef = useRef(appliedCouponCode ?? null);
   couponRef.current = appliedCouponCode ?? null;
+  const shippingRef = useRef(shipping);
+  shippingRef.current = shipping;
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -56,6 +63,10 @@ export function PayPalButton({
       // Plan 05-03: optional coupon code; server re-validates + recomputes
       // discount; client-supplied amount is never trusted (T-05-03-tampering)
       couponCode: couponRef.current ?? null,
+      // Phase 9b: the customer-selected Delyva service. The server
+      // re-quotes with this serviceCode (and falls back to the cheapest if
+      // it's no longer offered) — the client-supplied price is ignored.
+      shippingServiceCode: shippingRef.current?.serviceCode ?? null,
     });
     if (!res.ok) {
       setErrorMsg(res.error);
@@ -77,6 +88,13 @@ export function PayPalButton({
     [onPaid],
   );
 
+  const disabledReason =
+    address === null || items.length === 0
+      ? "Fill in your shipping address to unlock PayPal."
+      : shipping === null
+        ? "Pick a courier above to unlock PayPal."
+        : null;
+
   return (
     <div aria-live="polite">
       {disabled ? (
@@ -84,7 +102,7 @@ export function PayPalButton({
           className="rounded-2xl p-4 text-sm border-2"
           style={{ borderColor: `${BRAND.ink}22`, color: BRAND.ink }}
         >
-          Fill in your shipping address to unlock PayPal.
+          {disabledReason}
         </div>
       ) : (
         <>

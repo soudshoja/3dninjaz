@@ -324,6 +324,14 @@ export const orders = mysqlTable("orders", {
   paypalNet: decimal("paypal_net", { precision: 10, scale: 2 }),
   sellerProtection: varchar("seller_protection", { length: 32 }),
   paypalSettleDate: timestamp("paypal_settle_date"),
+  // Phase 9b — Delyva courier selection captured at checkout. All nullable
+  // because flat-rate orders (pre-Delyva wiring) don't populate these.
+  shippingServiceCode: varchar("shipping_service_code", { length: 50 }),
+  shippingServiceName: varchar("shipping_service_name", { length: 120 }),
+  shippingQuotedPrice: decimal("shipping_quoted_price", {
+    precision: 10,
+    scale: 2,
+  }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
 });
