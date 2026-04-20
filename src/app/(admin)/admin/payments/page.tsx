@@ -22,8 +22,22 @@ const STATUS_TABS: Array<{ key: PaymentStatusFilter; label: string }> = [
   { key: "cancelled", label: "Cancelled" },
 ];
 
+// Phase 7 (07-04) — refund-status chip strip.
+const REFUND_TABS: Array<{ key: "any" | "none" | "partial" | "full"; label: string }> = [
+  { key: "any", label: "All" },
+  { key: "none", label: "No refunds" },
+  { key: "partial", label: "Partial" },
+  { key: "full", label: "Full" },
+];
+
 function isStatusFilter(v: string | undefined): v is PaymentStatusFilter {
   return v === "all" || v === "active" || v === "cancelled";
+}
+
+function isRefundFilterValue(
+  v: string | undefined,
+): v is "any" | "none" | "partial" | "full" {
+  return v === "any" || v === "none" || v === "partial" || v === "full";
 }
 
 /**
@@ -52,6 +66,7 @@ export default async function AdminPaymentsPage({
     from?: string;
     to?: string;
     page?: string;
+    refunded?: string;
   }>;
 }) {
   await requireAdmin();
@@ -59,6 +74,11 @@ export default async function AdminPaymentsPage({
   const status: PaymentStatusFilter = isStatusFilter(sp.status)
     ? sp.status
     : "all";
+  const refunded: "any" | "none" | "partial" | "full" = isRefundFilterValue(
+    sp.refunded,
+  )
+    ? sp.refunded
+    : "any";
   const page = Math.max(0, Math.floor(Number(sp.page) || 0));
 
   const result = await listAdminPayments({
@@ -66,11 +86,13 @@ export default async function AdminPaymentsPage({
     from: sp.from,
     to: sp.to,
     page,
+    refunded,
   });
 
   function withParams(over: Partial<Record<string, string | undefined>>) {
     const merged: Record<string, string> = {};
     if (status !== "all") merged.status = status;
+    if (refunded !== "any") merged.refunded = refunded;
     if (sp.from) merged.from = sp.from;
     if (sp.to) merged.to = sp.to;
     for (const [k, v] of Object.entries(over)) {
@@ -115,6 +137,30 @@ export default async function AdminPaymentsPage({
                       backgroundColor: active ? BRAND.ink : "transparent",
                       color: active ? BRAND.cream : BRAND.ink,
                       borderColor: active ? BRAND.ink : "#0B102022",
+                    }}
+                    aria-current={active ? "page" : undefined}
+                  >
+                    {tab.label}
+                  </Link>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <span className="self-center text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Refunds:
+              </span>
+              {REFUND_TABS.map((tab) => {
+                const active = tab.key === refunded;
+                return (
+                  <Link
+                    key={tab.key}
+                    href={`/admin/payments${withParams({ refunded: tab.key === "any" ? undefined : tab.key, page: undefined })}`}
+                    className="inline-flex items-center rounded-full border px-3 min-h-[40px] text-xs font-semibold"
+                    style={{
+                      backgroundColor: active ? BRAND.blue : "transparent",
+                      color: active ? "#ffffff" : BRAND.ink,
+                      borderColor: active ? BRAND.blue : "#0B102022",
                     }}
                     aria-current={active ? "page" : undefined}
                   >
@@ -196,68 +242,96 @@ export default async function AdminPaymentsPage({
                   >
                     <th className="p-3">Order #</th>
                     <th className="p-3">Customer</th>
-                    <th className="p-3">Amount</th>
+                    <th className="p-3">Gross</th>
+                    <th className="p-3">Fee</th>
+                    <th className="p-3">Net</th>
+                    <th className="p-3">Refunded</th>
                     <th className="p-3">Date</th>
-                    <th className="p-3">PayPal Order ID</th>
                     <th className="p-3">Capture ID</th>
                     <th className="p-3">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {result.rows.map((r) => (
-                    <tr key={r.orderId} className="border-t border-black/10">
-                      <td className="p-3">
-                        <Link
-                          href={`/admin/orders/${r.orderId}`}
-                          className="font-semibold underline decoration-dotted"
-                        >
-                          {formatOrderNumber(r.orderId)}
-                        </Link>
-                        <p className="text-xs text-slate-500">
-                          {r.itemCount} {r.itemCount === 1 ? "item" : "items"}
-                        </p>
-                      </td>
-                      <td className="p-3">
-                        <p className="font-semibold truncate max-w-[180px]">
-                          {r.customerName}
-                        </p>
-                        <p className="text-xs text-slate-600 truncate max-w-[200px]">
-                          {r.customerEmail}
-                        </p>
-                      </td>
-                      <td className="p-3 whitespace-nowrap font-semibold">
-                        {formatMYR(r.amount)} {r.currency}
-                      </td>
-                      <td className="p-3 whitespace-nowrap text-slate-700">
-                        {new Date(r.createdAt).toLocaleString("en-MY")}
-                      </td>
-                      <td className="p-3">
-                        <code className="text-xs break-all">
-                          {r.paypalOrderId ?? "—"}
-                        </code>
-                      </td>
-                      <td className="p-3">
-                        <code className="text-xs break-all">
-                          {r.paypalCaptureId}
-                        </code>
-                      </td>
-                      <td className="p-3">
-                        <span
-                          className="inline-flex items-center rounded-full px-3 py-1 text-xs font-bold text-white"
-                          style={{
-                            backgroundColor:
-                              r.status === "cancelled"
-                                ? "#dc2626"
-                                : r.status === "delivered"
-                                  ? BRAND.green
-                                  : BRAND.blue,
-                          }}
-                        >
-                          {r.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {result.rows.map((r) => {
+                    const refundedNum = parseFloat(r.refundedAmount);
+                    const totalNum = parseFloat(r.amount);
+                    const isFullyRefunded =
+                      refundedNum >= totalNum - 0.001 && refundedNum > 0;
+                    const isPartiallyRefunded =
+                      refundedNum > 0 && !isFullyRefunded;
+                    return (
+                      <tr key={r.orderId} className="border-t border-black/10">
+                        <td className="p-3">
+                          <Link
+                            href={`/admin/payments/${r.orderId}`}
+                            className="font-semibold underline decoration-dotted"
+                          >
+                            {formatOrderNumber(r.orderId)}
+                          </Link>
+                          <p className="text-xs text-slate-500">
+                            {r.itemCount} {r.itemCount === 1 ? "item" : "items"}
+                          </p>
+                        </td>
+                        <td className="p-3">
+                          <p className="font-semibold truncate max-w-[180px]">
+                            {r.customerName}
+                          </p>
+                          <p className="text-xs text-slate-600 truncate max-w-[200px]">
+                            {r.customerEmail}
+                          </p>
+                        </td>
+                        <td className="p-3 whitespace-nowrap font-semibold">
+                          {formatMYR(r.amount)}
+                        </td>
+                        <td className="p-3 whitespace-nowrap text-xs text-slate-700">
+                          {r.paypalFee ? formatMYR(r.paypalFee) : "—"}
+                        </td>
+                        <td className="p-3 whitespace-nowrap text-xs text-slate-700">
+                          {r.paypalNet ? formatMYR(r.paypalNet) : "—"}
+                        </td>
+                        <td className="p-3 whitespace-nowrap text-xs">
+                          {refundedNum > 0 ? (
+                            <span
+                              className="inline-flex items-center rounded-full px-2 py-0.5 font-bold text-white"
+                              style={{
+                                backgroundColor: isFullyRefunded
+                                  ? "#dc2626"
+                                  : "#f59e0b",
+                              }}
+                            >
+                              {formatMYR(r.refundedAmount)}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </td>
+                        <td className="p-3 whitespace-nowrap text-slate-700">
+                          {new Date(r.createdAt).toLocaleDateString("en-MY")}
+                        </td>
+                        <td className="p-3">
+                          <code className="text-xs break-all">
+                            {r.paypalCaptureId}
+                          </code>
+                        </td>
+                        <td className="p-3">
+                          <span
+                            className="inline-flex items-center rounded-full px-3 py-1 text-xs font-bold text-white"
+                            style={{
+                              backgroundColor:
+                                r.status === "cancelled"
+                                  ? "#dc2626"
+                                  : r.status === "delivered"
+                                    ? BRAND.green
+                                    : BRAND.blue,
+                            }}
+                          >
+                            {r.status}
+                            {isPartiallyRefunded ? " · partial" : ""}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

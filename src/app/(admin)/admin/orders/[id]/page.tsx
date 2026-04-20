@@ -17,6 +17,9 @@ import { OrderRequestsAdmin } from "@/components/admin/order-requests-admin";
 // Phase 7 (07-03) — manual order payment-link surface.
 import { listOrderPaymentLinks } from "@/actions/admin-manual-orders";
 import { PaymentLinkCard } from "@/components/admin/payment-link-card";
+// Phase 7 (07-04) — PayPal financials mirror for paid orders.
+import { getPaymentDetail } from "@/actions/admin-payments";
+import { PaymentFinancialsPanel } from "@/components/admin/payment-financials-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +57,12 @@ export default async function AdminOrderDetailPage({
   const paymentLinks = isManualUnpaid
     ? await listOrderPaymentLinks(row.id)
     : [];
+
+  // Phase 7 (07-04) — for paid orders, fetch the live PayPal financials.
+  // Lazy: only call PayPal when paypalCaptureId is set.
+  const paymentDetail = row.paypalCaptureId
+    ? await getPaymentDetail(row.id)
+    : null;
 
   return (
     <main
@@ -248,6 +257,26 @@ export default async function AdminOrderDetailPage({
               </div>
             </div>
           </section>
+
+          {paymentDetail ? (
+            <section
+              className="rounded-2xl p-4 md:p-6 md:col-span-2"
+              style={{ backgroundColor: "#ffffff" }}
+            >
+              <h2 className="font-[var(--font-heading)] text-xl mb-4">
+                PayPal financials
+              </h2>
+              <PaymentFinancialsPanel detail={paymentDetail} />
+              <p className="mt-3 text-xs text-slate-500">
+                <Link
+                  href={`/admin/payments/${row.id}`}
+                  className="underline decoration-dotted"
+                >
+                  Open payment detail page &rarr;
+                </Link>
+              </p>
+            </section>
+          ) : null}
 
           <section
             className="rounded-2xl p-4 md:p-6 md:col-span-2"

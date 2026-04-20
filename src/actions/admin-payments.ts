@@ -2,8 +2,19 @@
 
 import { db } from "@/lib/db";
 import { orders, orderItems, user } from "@/lib/db/schema";
-import { and, desc, eq, gte, inArray, isNotNull, lt } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  lt,
+  sql,
+} from "drizzle-orm";
 import { requireAdmin } from "@/lib/auth-helpers";
+import { getCaptureDetails, type CaptureDetails } from "@/lib/paypal";
+import type { OrderStatus } from "@/lib/orders";
 
 // ============================================================================
 // /admin/payments — captured PayPal transactions report.
@@ -31,9 +42,20 @@ export type AdminPaymentRow = {
   customerEmail: string;
   itemCount: number;
   createdAt: Date;
+  // Phase 7 (07-04) — financials cache columns
+  refundedAmount: string;
+  paypalFee: string | null;
+  paypalNet: string | null;
 };
 
 export type PaymentStatusFilter = "all" | "active" | "cancelled";
+
+// Phase 7 (07-04) — refund-status filter chip strip on /admin/payments.
+export type RefundFilter = "any" | "none" | "partial" | "full";
+
+function isRefundFilter(v: unknown): v is RefundFilter {
+  return v === "any" || v === "none" || v === "partial" || v === "full";
+}
 
 const PAGE_SIZE = 50;
 
@@ -58,6 +80,8 @@ export type ListAdminPaymentsInput = {
   to?: string;
   /** Zero-indexed page offset. Defaults to 0. */
   page?: number;
+  /** Phase 7 (07-04) — refund-status chip filter. */
+  refunded?: RefundFilter;
 };
 
 export type ListAdminPaymentsResult = {
@@ -98,6 +122,23 @@ export async function listAdminPayments(
     conditions.push(lt(orders.createdAt, upper));
   }
 
+  // Phase 7 (07-04) — refund chip filter. Compares refunded_amount (decimal
+  // string) using SQL CAST so partial/full math is precise.
+  const refunded: RefundFilter = isRefundFilter(input.refunded)
+    ? input.refunded
+    : "any";
+  if (refunded === "none") {
+    conditions.push(eq(orders.refundedAmount, "0.00"));
+  } else if (refunded === "partial") {
+    conditions.push(
+      sql`CAST(${orders.refundedAmount} AS DECIMAL(10,2)) > 0 AND CAST(${orders.refundedAmount} AS DECIMAL(10,2)) < CAST(${orders.totalAmount} AS DECIMAL(10,2))`,
+    );
+  } else if (refunded === "full") {
+    conditions.push(
+      sql`CAST(${orders.refundedAmount} AS DECIMAL(10,2)) >= CAST(${orders.totalAmount} AS DECIMAL(10,2))`,
+    );
+  }
+
   // Fetch one extra row so we can compute hasMore without a COUNT query.
   const rawRows = await db
     .select({
@@ -113,6 +154,9 @@ export async function listAdminPayments(
       userId: orders.userId,
       userEmail: user.email,
       userName: user.name,
+      refundedAmount: orders.refundedAmount,
+      paypalFee: orders.paypalFee,
+      paypalNet: orders.paypalNet,
     })
     .from(orders)
     .leftJoin(user, eq(orders.userId, user.id))
@@ -156,7 +200,92 @@ export async function listAdminPayments(
     customerEmail: r.userEmail || r.customerEmail,
     itemCount: countByOrder.get(r.orderId) ?? 0,
     createdAt: r.createdAt,
+    refundedAmount: r.refundedAmount ?? "0.00",
+    paypalFee: r.paypalFee ?? null,
+    paypalNet: r.paypalNet ?? null,
   }));
 
   return { rows, page, pageSize: PAGE_SIZE, hasMore };
+}
+
+// ============================================================================
+// Phase 7 (07-04) — per-payment detail action.
+//
+// getPaymentDetail(orderId): admin-gated; loads the order row, calls PayPal
+// for live capture detail (gross/fee/net/sellerProtection/settle date), and
+// hydrates the cache columns on first successful fetch (cache-fill on read).
+// On PayPal failure (network / NOT_AUTHORIZED) returns the cached values
+// with a `liveError` flag so the panel can show "live data unavailable".
+// ============================================================================
+
+export type PaymentDetail = {
+  orderId: string;
+  paypalCaptureId: string;
+  paypalOrderId: string | null;
+  localGross: string;
+  localCurrency: string;
+  localRefundedAmount: string;
+  cachedFee: string | null;
+  cachedNet: string | null;
+  cachedSellerProtection: string | null;
+  cachedSettleDate: Date | null;
+  live: CaptureDetails | null;
+  liveError: string | null;
+  status: OrderStatus;
+};
+
+export async function getPaymentDetail(
+  orderId: string,
+): Promise<PaymentDetail | null> {
+  await requireAdmin();
+  const row = await db.query.orders.findFirst({
+    where: eq(orders.id, orderId),
+  });
+  if (!row || !row.paypalCaptureId) return null;
+
+  let live: CaptureDetails | null = null;
+  let liveError: string | null = null;
+  try {
+    live = await getCaptureDetails(row.paypalCaptureId);
+  } catch (err) {
+    liveError = err instanceof Error ? err.message : "Unknown error";
+    // Translate technical errors to short admin-facing labels.
+    if (liveError.includes("NOT_AUTHORIZED")) {
+      liveError = "PayPal not authorised to read this capture.";
+    }
+    console.error("[admin-payments] live fetch failed:", err);
+  }
+
+  // Cache-hydrate on first successful fetch (D-07-04).
+  if (live && (!row.paypalFee || !row.paypalNet)) {
+    try {
+      await db
+        .update(orders)
+        .set({
+          paypalFee: live.feeValue ?? null,
+          paypalNet: live.netValue ?? null,
+          sellerProtection: live.sellerProtection ?? null,
+          paypalSettleDate: live.settleDate ? new Date(live.settleDate) : null,
+        })
+        .where(eq(orders.id, orderId));
+    } catch (err) {
+      console.error("[admin-payments] cache hydration failed:", err);
+    }
+  }
+
+  return {
+    orderId: row.id,
+    paypalCaptureId: row.paypalCaptureId,
+    paypalOrderId: row.paypalOrderId ?? null,
+    localGross: row.totalAmount,
+    localCurrency: row.currency,
+    localRefundedAmount: row.refundedAmount,
+    cachedFee: row.paypalFee ?? null,
+    cachedNet: row.paypalNet ?? null,
+    cachedSellerProtection: row.sellerProtection ?? null,
+    cachedSettleDate: row.paypalSettleDate ?? null,
+    live,
+    liveError,
+    status: row.status as OrderStatus,
+  };
 }
