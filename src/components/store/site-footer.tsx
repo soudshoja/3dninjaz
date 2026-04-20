@@ -5,6 +5,7 @@ import { BRAND } from "@/lib/brand";
 import { BUSINESS } from "@/lib/business-info";
 import { getSiteSettings } from "@/actions/admin-settings";
 import { SocialLinks, type SocialConfig } from "@/components/store/social-links";
+import { FooterSubscribeForm } from "@/components/store/footer-subscribe-form";
 
 /**
  * Unified customer-facing footer (Phase 4 Plan 04-03 + Phase 11 social wiring).
@@ -53,6 +54,31 @@ export async function SiteFooter() {
       }}
     >
       <div className="max-w-6xl mx-auto px-6 md:px-8 py-12">
+        {/* Newsletter subscribe — Phase 12 */}
+        <div className="mb-10 pb-10 border-b border-zinc-200 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Image
+              src="/icons/ninja/emoji/hello@128.png"
+              alt=""
+              width={40}
+              height={40}
+              className="h-10 w-10 object-contain"
+            />
+            <div>
+              <p
+                className="font-[var(--font-heading)] text-lg"
+                style={{ color: BRAND.ink }}
+              >
+                Get updates from the ninjaz
+              </p>
+              <p className="text-xs text-zinc-500">
+                New drops, restocks, and the occasional tip. No spam.
+              </p>
+            </div>
+          </div>
+          <FooterSubscribeForm />
+        </div>
+
         {/* Link groups */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12 mb-10">
           <div>

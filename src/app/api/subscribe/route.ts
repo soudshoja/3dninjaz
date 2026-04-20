@@ -1,0 +1,108 @@
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import crypto from "node:crypto";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { emailSubscribers } from "@/lib/db/schema";
+import { getSessionUser } from "@/lib/auth-helpers";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+/**
+ * POST /api/subscribe — newsletter signup from the storefront footer (also
+ * reusable from checkout / popups via the `source` field).
+ *
+ * Contract:
+ *   - Always returns `{ ok: true }` on valid submission — the specific branch
+ *     (`already` / `reactivated`) is included as a hint so the UI can tailor
+ *     the success message. Error paths return `{ ok: false, error }` with the
+ *     appropriate status code.
+ *   - Obvious bot input (`email` containing multiple `@`, or failing basic
+ *     Zod validation) silently returns `{ ok: true }` with no DB write — this
+ *     mirrors the pattern for spam honeypots that confuse scrapers rather
+ *     than expose whether the backend accepted the payload.
+ *
+ * NB: rate-limiting is intentionally out of scope for v1 (no shared infra).
+ * Follow-up task: add IP-based token-bucket in middleware once we stand up
+ * Upstash or Redis.
+ */
+
+const Body = z.object({
+  email: z.string().email().max(254),
+  source: z.string().max(50).optional(),
+});
+
+/** Crude bot check — legitimate emails have exactly one `@`. */
+function looksLikeGarbage(email: string): boolean {
+  const atCount = email.split("@").length - 1;
+  if (atCount !== 1) return true;
+  // Emails with spaces, angle brackets, or null bytes are almost certainly
+  // scraped form data that happens to include header junk.
+  if (/[<>\s\0]/.test(email)) return true;
+  return false;
+}
+
+export async function POST(req: NextRequest) {
+  let payload: unknown;
+  try {
+    payload = await req.json();
+  } catch {
+    return NextResponse.json(
+      { ok: false, error: "Invalid JSON body" },
+      { status: 400 },
+    );
+  }
+
+  const parsed = Body.safeParse(payload);
+  if (!parsed.success) {
+    // Silent success — don't tell bots whether the payload was valid.
+    return NextResponse.json({ ok: true, silent: true });
+  }
+
+  const email = parsed.data.email.trim().toLowerCase();
+  const source = parsed.data.source?.trim().toLowerCase() || "footer";
+
+  if (looksLikeGarbage(email)) {
+    return NextResponse.json({ ok: true, silent: true });
+  }
+
+  // Attach the authenticated user id so admin can see which subscribers have
+  // an account tied to them. Not a hard requirement — anonymous subscribes
+  // still succeed.
+  const sessionUser = await getSessionUser().catch(() => null);
+
+  const existing = await db
+    .select()
+    .from(emailSubscribers)
+    .where(eq(emailSubscribers.email, email))
+    .limit(1);
+
+  if (existing.length > 0) {
+    const row = existing[0];
+    if (row.status === "active") {
+      return NextResponse.json({ ok: true, already: true });
+    }
+    // Reactivate a previously unsubscribed/bounced entry.
+    await db
+      .update(emailSubscribers)
+      .set({
+        status: "active",
+        unsubscribedAt: null,
+        source,
+        userId: sessionUser?.id ?? row.userId,
+      })
+      .where(eq(emailSubscribers.id, row.id));
+    return NextResponse.json({ ok: true, reactivated: true });
+  }
+
+  await db.insert(emailSubscribers).values({
+    id: crypto.randomUUID(),
+    email,
+    source,
+    userId: sessionUser?.id ?? null,
+    unsubscribeToken: crypto.randomBytes(16).toString("hex"),
+  });
+
+  return NextResponse.json({ ok: true });
+}
