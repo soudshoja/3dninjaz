@@ -2,7 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { BRAND } from "@/lib/brand";
 import { priceRangeMYR } from "@/lib/format";
-import type { CatalogProduct } from "@/lib/catalog";
+import { pickThumbnail, type CatalogProduct } from "@/lib/catalog";
 import { WishlistButton } from "@/components/store/wishlist-button";
 import { SoldOutBadge } from "@/components/store/sold-out-badge";
 
@@ -30,7 +30,9 @@ export function ProductCard({
   isWishlisted?: boolean;
 }) {
   const accent = ACCENTS[accentIndex % ACCENTS.length];
-  const firstImage = product.images?.[0];
+  // Honour the admin's thumbnail selection; falls back to images[0] when the
+  // configured slot is missing (image deleted after the picker saved).
+  const firstImage = pickThumbnail(product);
   const priceLabel = priceRangeMYR(product.variants);
   // Phase 5 05-04 (INV-01): show Sold Out overlay when EVERY variant has
   // inStock=false. If a product has no variants at all (defensive), do not

@@ -28,6 +28,7 @@ export default async function EditProductPage({
     name: product.name,
     description: product.description,
     images: product.images ?? [],
+    thumbnailIndex: product.thumbnailIndex ?? 0,
     materialType: product.materialType,
     estimatedProductionDays: product.estimatedProductionDays,
     isActive: product.isActive,

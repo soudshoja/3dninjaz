@@ -37,7 +37,16 @@ export const productSchema = z.object({
         .min(1)
         .regex(/^\/uploads\/products\//, "Image URL must be a local upload path")
     )
-    .max(5, "Maximum 5 images allowed"),
+    .max(10, "Maximum 10 images allowed"),
+  // Index into images[] used as the storefront card thumbnail. Negative or
+  // out-of-range values are coerced to 0 in the action layer when persisting.
+  thumbnailIndex: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(9)
+    .optional()
+    .default(0),
   materialType: z.string().optional().default(""),
   estimatedProductionDays: z.coerce
     .number()

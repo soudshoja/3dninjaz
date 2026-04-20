@@ -44,6 +44,21 @@ export type CatalogProduct = Omit<ProductRow, "images"> & {
   category: CategoryRow | null;
 };
 
+/**
+ * Resolve the storefront card image for a product. Honours the admin's
+ * thumbnailIndex selection, but falls back to the first image when the
+ * configured slot is missing (image was deleted after the picker saved).
+ */
+export function pickThumbnail(p: {
+  images: string[];
+  thumbnailIndex?: number | null;
+}): string | undefined {
+  const idx = typeof p.thumbnailIndex === "number" ? p.thumbnailIndex : 0;
+  if (p.images.length === 0) return undefined;
+  if (idx >= 0 && idx < p.images.length) return p.images[idx];
+  return p.images[0];
+}
+
 async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
   if (rows.length === 0) return [];
 

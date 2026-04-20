@@ -35,6 +35,24 @@ function toDecimalOrNull(v: string | undefined | null): string | null {
  * the images column back to a string array at the data-access layer so callers
  * never have to care about the dialect difference.
  */
+/**
+ * Force a thumbnail index back into a valid slot. Defends against:
+ *   - undefined/NaN coming from the form
+ *   - integer that points past the current images.length (image was deleted
+ *     after the picker was last saved)
+ *   - negative integers (form error)
+ */
+function clampThumbnailIndex(
+  raw: number | undefined,
+  imagesLength: number,
+): number {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return 0;
+  if (raw < 0) return 0;
+  if (imagesLength === 0) return 0;
+  if (raw >= imagesLength) return 0;
+  return Math.floor(raw);
+}
+
 function ensureImagesArray(raw: unknown): string[] {
   if (Array.isArray(raw)) return raw.filter((v): v is string => typeof v === "string");
   if (typeof raw === "string") {
@@ -70,12 +88,22 @@ export async function createProduct(
   const baseSlug = slugify(productData.name);
   const slug = `${baseSlug || "product"}-${Date.now().toString(36)}`;
 
+  // Clamp the requested thumbnail index to a valid slot in the images array.
+  // The form validator already bounds it to 0-9, but if images.length is
+  // smaller (uploads removed before save) we coerce back to 0 so storefront
+  // grids never index past the array.
+  const safeThumb = clampThumbnailIndex(
+    productData.thumbnailIndex,
+    productData.images.length,
+  );
+
   await db.insert(products).values({
     id,
     name: productData.name,
     slug,
     description: productData.description,
     images: productData.images,
+    thumbnailIndex: safeThumb,
     materialType: productData.materialType?.trim() || null,
     estimatedProductionDays: productData.estimatedProductionDays ?? null,
     isActive: productData.isActive,
@@ -114,12 +142,18 @@ export async function updateProduct(
 
   const { variants, ...productData } = parsed.data;
 
+  const safeThumb = clampThumbnailIndex(
+    productData.thumbnailIndex,
+    productData.images.length,
+  );
+
   await db
     .update(products)
     .set({
       name: productData.name,
       description: productData.description,
       images: productData.images,
+      thumbnailIndex: safeThumb,
       materialType: productData.materialType?.trim() || null,
       estimatedProductionDays: productData.estimatedProductionDays ?? null,
       isActive: productData.isActive,

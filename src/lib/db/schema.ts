@@ -104,8 +104,12 @@ export const products = mysqlTable("products", {
   description: text("description").notNull(),
   // Relative URLs served from public/uploads/products/<id>/<file>.
   // Stored as JSON array of strings (MySQL has no native array type).
-  // Max 5 enforced at app level (D-03).
+  // Max 10 enforced at app level (raised from 5 post-launch).
   images: json("images").$type<string[]>().notNull().default([]),
+  // Index into `images` that should be used as the storefront card thumbnail.
+  // Defaults to 0 so existing rows behave identically. Out-of-range values
+  // (image deleted after selection) are coerced back to 0 at the read site.
+  thumbnailIndex: int("thumbnail_index").notNull().default(0),
   materialType: varchar("material_type", { length: 64 }),
   estimatedProductionDays: int("estimated_production_days"),
   isActive: boolean("is_active").notNull().default(true), // ADM-04
