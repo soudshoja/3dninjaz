@@ -272,17 +272,20 @@ export const delyvaApi = {
     ),
 
   /**
-   * POST /webhook/subscribe — register a webhook URL for a specific event.
-   * Idempotent on (url, event) per Delyva docs.
+   * POST /webhook — register a webhook URL for a specific event.
+   * Verified against api.delyva.app/v1.0 on 2026-04-20: the endpoint is
+   * `/webhook` (not `/webhook/subscribe`) and only accepts { event, url }.
+   * The `secret` field is rejected; HMAC verification on the receiver uses
+   * DELYVA_WEBHOOK_SHARED_SECRET that Delyva signs outbound calls with.
+   * Multiple subscriptions for the same (event, url) pair create duplicate
+   * rows on Delyva's side — callers should delete duplicates via the
+   * webhook list API if needed.
    */
-  subscribeWebhook: (event: string, url: string, secret: string) =>
-    delyva<{ id?: string | number; event: string; url: string }>(
-      "/webhook/subscribe",
-      {
-        method: "POST",
-        body: JSON.stringify({ event, url, secret }),
-      },
-    ),
+  subscribeWebhook: (event: string, url: string, _secret?: string) =>
+    delyva<{ id?: string | number; event: string; url: string }>("/webhook", {
+      method: "POST",
+      body: JSON.stringify({ event, url }),
+    }),
 
   /**
    * GET /user — account info + apiSecret. Cached at env level; avoid calling
