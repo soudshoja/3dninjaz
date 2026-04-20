@@ -147,6 +147,8 @@ export async function createProduct(
         productId: id,
         size: v.size,
         price: v.price,
+        // Phase 10 (10-01) — per-variant cost price, optional.
+        costPrice: toDecimalOrNull(v.costPrice),
         widthCm: toDecimalOrNull(v.widthCm),
         heightCm: toDecimalOrNull(v.heightCm),
         depthCm: toDecimalOrNull(v.depthCm),
@@ -206,6 +208,8 @@ export async function updateProduct(
         productId: id,
         size: v.size,
         price: v.price,
+        // Phase 10 (10-01) — per-variant cost price, optional.
+        costPrice: toDecimalOrNull(v.costPrice),
         widthCm: toDecimalOrNull(v.widthCm),
         heightCm: toDecimalOrNull(v.heightCm),
         depthCm: toDecimalOrNull(v.depthCm),

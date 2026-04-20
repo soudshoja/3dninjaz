@@ -41,6 +41,7 @@ export default async function EditProductPage({
     variants: product.variants.map((v) => ({
       size: v.size as "S" | "M" | "L",
       price: v.price,
+      costPrice: v.costPrice ?? null,
       widthCm: v.widthCm,
       heightCm: v.heightCm,
       depthCm: v.depthCm,

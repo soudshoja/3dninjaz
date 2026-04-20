@@ -39,6 +39,8 @@ export type ProductFormInitial = {
   variants: Array<{
     size: "S" | "M" | "L";
     price: string;
+    // Phase 10 — per-variant cost price (nullable; admin fills in later).
+    costPrice: string | null;
     widthCm: string | null;
     heightCm: string | null;
     depthCm: string | null;
@@ -56,6 +58,7 @@ type VariantRow = {
   size: "S" | "M" | "L";
   enabled: boolean;
   price: string;
+  costPrice: string;
   widthCm: string;
   heightCm: string;
   depthCm: string;
@@ -81,11 +84,39 @@ function initialVariants(
       size: key,
       enabled: !!existing,
       price: existing?.price ?? "",
+      costPrice: existing?.costPrice ?? "",
       widthCm: existing?.widthCm ?? "",
       heightCm: existing?.heightCm ?? "",
       depthCm: existing?.depthCm ?? "",
     };
   });
+}
+
+/**
+ * Phase 10 (10-01) — live margin readout for a variant row.
+ * Returns { text, tone } where tone drives the colour. Empty cost returns a
+ * muted "—" so admins can see the slot without it looking red/wrong.
+ */
+function computeVariantMargin(
+  priceRaw: string,
+  costRaw: string,
+): { text: string; tone: "muted" | "positive" | "negative" } {
+  if (!costRaw.trim()) {
+    return { text: "Cost empty", tone: "muted" };
+  }
+  const price = parseFloat(priceRaw);
+  const cost = parseFloat(costRaw);
+  if (!Number.isFinite(price) || !Number.isFinite(cost)) {
+    return { text: "—", tone: "muted" };
+  }
+  const margin = price - cost;
+  const pct = price > 0 ? (margin / price) * 100 : 0;
+  const sign = margin >= 0 ? "+" : "";
+  const tone = margin >= 0 ? "positive" : "negative";
+  return {
+    text: `${sign}RM ${margin.toFixed(2)} (${sign}${pct.toFixed(1)}%)`,
+    tone,
+  };
 }
 
 export function ProductForm({
@@ -156,6 +187,10 @@ export function ProductForm({
       if (!v.price || !/^\d+(\.\d{1,2})?$/.test(v.price)) {
         next[`price_${v.size}`] = "Price must be a valid MYR amount";
       }
+      // Cost is optional; validate only when provided.
+      if (v.costPrice && !/^\d+(\.\d{1,2})?$/.test(v.costPrice)) {
+        next[`cost_${v.size}`] = "Cost must be a valid MYR amount";
+      }
     }
 
     if (
@@ -204,6 +239,7 @@ export function ProductForm({
         .map((v) => ({
           size: v.size,
           price: v.price,
+          costPrice: v.costPrice,
           widthCm: v.widthCm,
           heightCm: v.heightCm,
           depthCm: v.depthCm,
@@ -382,7 +418,16 @@ export function ProductForm({
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          {variants.map((v, idx) => (
+          {variants.map((v, idx) => {
+            // Phase 10 — live margin readout beside the cost input.
+            const margin = computeVariantMargin(v.price, v.costPrice);
+            const toneClass =
+              margin.tone === "positive"
+                ? "text-green-600"
+                : margin.tone === "negative"
+                  ? "text-red-500"
+                  : "text-[var(--color-brand-text-muted)]";
+            return (
             <div
               key={v.size}
               className="rounded-md border border-[var(--color-brand-border)] p-4"
@@ -400,7 +445,7 @@ export function ProductForm({
                   </span>
                 </div>
 
-                <div className="grid flex-1 grid-cols-2 gap-3 md:grid-cols-4">
+                <div className="grid flex-1 grid-cols-2 gap-3 md:grid-cols-5">
                   <div className="space-y-1">
                     <Label className="text-xs" htmlFor={`price-${v.size}`}>
                       Price (MYR)
@@ -420,6 +465,31 @@ export function ProductForm({
                     {errors[`price_${v.size}`] && (
                       <p className="text-xs text-red-500">
                         {errors[`price_${v.size}`]}
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs" htmlFor={`cost-${v.size}`}>
+                      Cost (MYR)
+                    </Label>
+                    <Input
+                      id={`cost-${v.size}`}
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="—"
+                      value={v.costPrice}
+                      onChange={(e) =>
+                        updateVariant(idx, { costPrice: e.target.value })
+                      }
+                      disabled={!v.enabled}
+                      className="h-9"
+                    />
+                    <p className={`text-[11px] leading-tight ${toneClass}`}>
+                      {margin.text}
+                    </p>
+                    {errors[`cost_${v.size}`] && (
+                      <p className="text-xs text-red-500">
+                        {errors[`cost_${v.size}`]}
                       </p>
                     )}
                   </div>
@@ -477,7 +547,8 @@ export function ProductForm({
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
           {errors.variants && (
             <p className="text-sm text-red-500">{errors.variants}</p>
           )}

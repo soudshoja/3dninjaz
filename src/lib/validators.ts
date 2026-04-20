@@ -37,6 +37,18 @@ export const productVariantSchema = z.object({
       /^\d+(\.\d{1,2})?$/,
       "Price must be a valid number with up to 2 decimal places"
     ),
+  // Phase 10 (10-01) — per-variant unit cost (MYR). Empty string = leave NULL
+  // in the DB. Admin can fill retroactively from the product form; same
+  // regex as price so both columns stay consistent.
+  costPrice: z
+    .string()
+    .regex(
+      /^\d+(\.\d{1,2})?$/,
+      "Cost must be a valid number with up to 2 decimal places",
+    )
+    .optional()
+    .or(z.literal(""))
+    .default(""),
   widthCm: z.string().optional().default(""),
   heightCm: z.string().optional().default(""),
   depthCm: z.string().optional().default(""),
