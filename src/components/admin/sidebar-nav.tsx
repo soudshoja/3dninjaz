@@ -71,6 +71,7 @@ const GROUPS: NavGroup[] = [
     title: "Marketing",
     items: [
       { href: "/admin/email-templates", label: "Email templates", ninjaIcon: "contact" },
+      { href: "/admin/subscribers", label: "Subscribers", ninjaIcon: "contact" },
       { href: "/admin/coupons", label: "Coupons", ninjaIcon: "tip" },
       {
         href: "/admin/reviews",
