@@ -27,8 +27,12 @@ cd "${APP_DIR}"
 # Activate the CloudLinux Node 20 virtualenv so child processes inherit PATH
 # and shared lib search paths. `activate` defines `node`/`npm` shims but we
 # still invoke node by absolute path below for belt-and-braces.
+# NOTE: CloudLinux's `activate` references $CL_VIRTUAL_ENV unconditionally
+# which trips `set -u`. Relax nounset just around the source call.
 # shellcheck disable=SC1091
+set +u
 source /home/ninjaz/nodevenv/apps/3dninjaz_v1/20/bin/activate
+set -u
 
 # Clean slate — kill any leftover node serving server.js for this user. The
 # `|| true` prevents set -e from tripping when there's nothing to kill.
