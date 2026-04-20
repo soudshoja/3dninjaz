@@ -1,7 +1,12 @@
 import "server-only";
 import { db } from "@/lib/db";
-import { products, productVariants, categories } from "@/lib/db/schema";
-import { and, eq, desc, inArray } from "drizzle-orm";
+import {
+  products,
+  productVariants,
+  categories,
+  subcategories,
+} from "@/lib/db/schema";
+import { and, asc, eq, desc, inArray, or } from "drizzle-orm";
 
 // ============================================================================
 // MariaDB 10.11 note — Drizzle's relational `db.query.products.findMany({ with })`
@@ -35,6 +40,7 @@ function ensureImagesArray(raw: unknown): string[] {
 type ProductRow = typeof products.$inferSelect;
 type VariantRow = typeof productVariants.$inferSelect;
 type CategoryRow = typeof categories.$inferSelect;
+type SubcategoryRow = typeof subcategories.$inferSelect;
 
 export type CatalogVariant = VariantRow;
 
@@ -42,6 +48,25 @@ export type CatalogProduct = Omit<ProductRow, "images"> & {
   images: string[];
   variants: CatalogVariant[];
   category: CategoryRow | null;
+  subcategory: SubcategoryRow | null;
+};
+
+/**
+ * Category tree node consumed by the storefront nav + shop sidebar. Keeps
+ * only the fields the UI actually renders, so we don't leak admin-only
+ * columns (position is kept so the storefront matches admin ordering).
+ */
+export type CategoryTreeNode = {
+  id: string;
+  name: string;
+  slug: string;
+  position: number;
+  subcategories: {
+    id: string;
+    name: string;
+    slug: string;
+    position: number;
+  }[];
 };
 
 /**
@@ -79,6 +104,17 @@ async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
           .where(inArray(categories.id, categoryIds))
       : [];
 
+  const subcategoryIds = Array.from(
+    new Set(rows.map((p) => p.subcategoryId).filter((v): v is string => !!v)),
+  );
+  const subcategoryRows =
+    subcategoryIds.length > 0
+      ? await db
+          .select()
+          .from(subcategories)
+          .where(inArray(subcategories.id, subcategoryIds))
+      : [];
+
   const variantByProduct = new Map<string, VariantRow[]>();
   for (const v of variantRows) {
     const bucket = variantByProduct.get(v.productId) ?? [];
@@ -86,12 +122,16 @@ async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
     variantByProduct.set(v.productId, bucket);
   }
   const categoryById = new Map(categoryRows.map((c) => [c.id, c]));
+  const subcategoryById = new Map(subcategoryRows.map((s) => [s.id, s]));
 
   return rows.map((p) => ({
     ...p,
     images: ensureImagesArray(p.images),
     variants: variantByProduct.get(p.id) ?? [],
     category: p.categoryId ? categoryById.get(p.categoryId) ?? null : null,
+    subcategory: p.subcategoryId
+      ? subcategoryById.get(p.subcategoryId) ?? null
+      : null,
   }));
 }
 
@@ -130,11 +170,54 @@ export async function getActiveProductBySlug(
 }
 
 export async function getActiveCategories(): Promise<CategoryRow[]> {
-  return db.select().from(categories).orderBy(categories.name);
+  return db
+    .select()
+    .from(categories)
+    .orderBy(asc(categories.position), asc(categories.name));
+}
+
+/**
+ * Phase 8 (08-01) — hierarchical tree for the nav mega-menu and the shop
+ * filter sidebar. Empty categories (zero subcategories) are kept so admins
+ * can pre-create placeholder categories; the consuming UI chooses whether
+ * to hide them.
+ */
+export async function getActiveCategoryTree(): Promise<CategoryTreeNode[]> {
+  const cats = await db
+    .select()
+    .from(categories)
+    .orderBy(asc(categories.position), asc(categories.name));
+  if (cats.length === 0) return [];
+
+  const subs = await db
+    .select()
+    .from(subcategories)
+    .where(
+      inArray(
+        subcategories.categoryId,
+        cats.map((c) => c.id),
+      ),
+    )
+    .orderBy(asc(subcategories.position), asc(subcategories.name));
+
+  return cats.map((c) => ({
+    id: c.id,
+    name: c.name,
+    slug: c.slug,
+    position: c.position,
+    subcategories: subs
+      .filter((s) => s.categoryId === c.id)
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        slug: s.slug,
+        position: s.position,
+      })),
+  }));
 }
 
 export async function getActiveProductsByCategorySlug(
-  categorySlug: string
+  categorySlug: string,
 ): Promise<{ category: CategoryRow | null; products: CatalogProduct[] }> {
   const [category] = await db
     .select()
@@ -143,13 +226,97 @@ export async function getActiveProductsByCategorySlug(
     .limit(1);
   if (!category) return { category: null, products: [] };
 
+  // Phase 8 transition — a product is in a category if EITHER the legacy
+  // products.category_id matches OR products.subcategory_id belongs to a
+  // subcategory whose parent is this category. We pull the subcategory IDs
+  // in a small pre-query to keep the main WHERE simple.
+  const subRows = await db
+    .select({ id: subcategories.id })
+    .from(subcategories)
+    .where(eq(subcategories.categoryId, category.id));
+  const subIds = subRows.map((s) => s.id);
+
+  const predicate =
+    subIds.length > 0
+      ? or(
+          eq(products.categoryId, category.id),
+          inArray(products.subcategoryId, subIds),
+        )
+      : eq(products.categoryId, category.id);
+
+  const rows = await db
+    .select()
+    .from(products)
+    .where(and(eq(products.isActive, true), predicate))
+    .orderBy(desc(products.createdAt));
+
+  return { category, products: await hydrateProducts(rows) };
+}
+
+/**
+ * Filter by subcategory slug. Optional categorySlug narrows disambiguation
+ * when the same subcategory slug exists under multiple parents (e.g. every
+ * category has a "general"). Returns both the resolved subcategory and its
+ * parent so the page can render a breadcrumb.
+ */
+export async function getActiveProductsBySubcategorySlug(
+  subcategorySlug: string,
+  categorySlug?: string,
+): Promise<{
+  category: CategoryRow | null;
+  subcategory: SubcategoryRow | null;
+  products: CatalogProduct[];
+}> {
+  let parentCat: CategoryRow | null = null;
+  if (categorySlug) {
+    const [c] = await db
+      .select()
+      .from(categories)
+      .where(eq(categories.slug, categorySlug))
+      .limit(1);
+    if (!c) return { category: null, subcategory: null, products: [] };
+    parentCat = c;
+  }
+
+  const [sub] = parentCat
+    ? await db
+        .select()
+        .from(subcategories)
+        .where(
+          and(
+            eq(subcategories.categoryId, parentCat.id),
+            eq(subcategories.slug, subcategorySlug),
+          ),
+        )
+        .limit(1)
+    : await db
+        .select()
+        .from(subcategories)
+        .where(eq(subcategories.slug, subcategorySlug))
+        .limit(1);
+
+  if (!sub) return { category: parentCat, subcategory: null, products: [] };
+
+  if (!parentCat) {
+    const [c] = await db
+      .select()
+      .from(categories)
+      .where(eq(categories.id, sub.categoryId))
+      .limit(1);
+    parentCat = c ?? null;
+  }
+
   const rows = await db
     .select()
     .from(products)
     .where(
-      and(eq(products.isActive, true), eq(products.categoryId, category.id))
+      and(eq(products.isActive, true), eq(products.subcategoryId, sub.id)),
     )
     .orderBy(desc(products.createdAt));
 
-  return { category, products: await hydrateProducts(rows) };
+  return {
+    category: parentCat,
+    subcategory: sub,
+    products: await hydrateProducts(rows),
+  };
 }

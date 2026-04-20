@@ -2,42 +2,41 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
-import { Menu, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Menu, X, ChevronDown, ChevronRight } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import { Logo } from "@/components/brand/logo";
 import { UserNav } from "@/components/auth/user-nav";
 import { CartButton } from "@/components/store/cart-button";
+import type { CategoryTreeNode } from "@/lib/catalog";
 
 /**
- * Unified customer-facing navigation (Phase 4 Plan 04-03).
+ * Unified customer-facing navigation (Phase 4 Plan 04-03, expanded in 08-01).
  *
- * Desktop (≥ 768px): logo + Shop / About / Contact links on the right,
- * followed by the cart button and UserNav account menu.
+ * Desktop (>= 768px): logo + Shop (with a hover mega-menu of categories +
+ * their subcategories) / About / Contact links on the right, followed by the
+ * cart button and UserNav account menu.
  *
- * Mobile (< 768px): logo on the left, cart button kept in the header so
- * customers can still reach the bag, and a hamburger button that opens an
- * inline disclosure (no shadcn Sheet dependency — the Phase 2 install set
- * doesn't include it). The disclosure renders links at ≥ 48px tap targets
- * per DECISIONS.md D-04. Disclosure auto-closes on route change so the
- * menu doesn't linger after a Link click.
+ * Mobile (< 768px): logo left, cart button kept in the header, hamburger
+ * toggles a full inline disclosure that includes a nested, expandable list
+ * of categories and subcategories.
  *
- * Keyboard: Escape closes the mobile menu. The button's aria-expanded /
- * aria-controls pair announce state to assistive tech. Focus is returned
- * to the toggle button when the menu closes.
- *
- * Sticky + blurred so it remains accessible during long-page scrolling
- * without obscuring content (small height + 90% opacity keeps content
- * legible behind it).
+ * The category tree is loaded once by the server layout and passed in as
+ * a prop, so the nav component renders the same markup on every page
+ * without re-querying.
  */
-export function SiteNav() {
+export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [shopOpen, setShopOpen] = useState(false);
+  const [expandedCat, setExpandedCat] = useState<string | null>(null);
+  const shopRef = useRef<HTMLDivElement>(null);
 
-  // Close whenever route changes — mirrors common mobile-nav UX. Without
-  // this a Link tap keeps the sheet visible over the destination page.
+  // Close whenever route changes — standard mobile-nav UX.
   useEffect(() => {
     setOpen(false);
+    setShopOpen(false);
+    setExpandedCat(null);
   }, [pathname]);
 
   // Escape-to-close + body scroll lock while the mobile menu is open.
@@ -55,8 +54,25 @@ export function SiteNav() {
     };
   }, [open]);
 
-  const navLinks = [
-    { href: "/shop", label: "Shop" },
+  // Close desktop mega-menu on outside click / Escape.
+  useEffect(() => {
+    if (!shopOpen) return;
+    function onDocClick(e: MouseEvent) {
+      if (!shopRef.current) return;
+      if (!shopRef.current.contains(e.target as Node)) setShopOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setShopOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [shopOpen]);
+
+  const nonShopLinks = [
     { href: "/about", label: "About" },
     { href: "/contact", label: "Contact" },
   ];
@@ -68,23 +84,8 @@ export function SiteNav() {
       style={{ backgroundColor: `${BRAND.cream}E6`, borderColor: "#0B102010" }}
     >
       <div className="max-w-6xl mx-auto flex items-center justify-between px-6 md:px-8 py-3">
-        {/*
-          No aria-label here: the visible wordmark "3D NINJAZ" is the accessible
-          name. Adding aria-label="3D Ninjaz home" created a label/content
-          mismatch (screen readers announced a different label than sighted
-          users saw — WCAG 2.5.3 fail). The Logo image uses alt="3D Ninjaz"
-          so assistive tech still gets a brand cue without duplication.
-         */}
         <Link href="/" className="flex items-center gap-3 min-h-[48px]">
           <Logo size={44} priority />
-          {/*
-            "3D NINJAZ" wordmark rendered in ink only. The previous green
-            accent on the cream nav background had a 1.87:1 contrast ratio
-            (below WCAG AA 4.5:1 for normal text). The green brand accent is
-            preserved in the footer (on the ink background, where the ratio
-            is safe) and in category CTAs — so removing it here costs no
-            brand distinctiveness.
-           */}
           <span
             className="text-xl tracking-wide font-[var(--font-heading)]"
             style={{ color: BRAND.ink }}
@@ -95,7 +96,80 @@ export function SiteNav() {
 
         {/* Desktop links */}
         <div className="hidden md:flex items-center gap-8 text-sm font-semibold">
-          {navLinks.map((l) => (
+          {/* Shop with hover/click mega-menu */}
+          <div ref={shopRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setShopOpen((v) => !v)}
+              onMouseEnter={() => setShopOpen(true)}
+              aria-expanded={shopOpen}
+              aria-haspopup="true"
+              className="inline-flex items-center gap-1 min-h-[48px] hover:opacity-70 transition-opacity"
+            >
+              Shop
+              <ChevronDown className="h-4 w-4" aria-hidden />
+            </button>
+            {shopOpen && categoryTree.length > 0 ? (
+              <div
+                onMouseLeave={() => setShopOpen(false)}
+                className="absolute right-0 top-full mt-2 w-[min(90vw,720px)] rounded-xl border-2 shadow-xl p-5 grid gap-6 grid-cols-2 md:grid-cols-3"
+                style={{
+                  backgroundColor: BRAND.cream,
+                  borderColor: "#0B102020",
+                }}
+                role="menu"
+              >
+                <div className="col-span-2 md:col-span-3 flex items-baseline justify-between pb-2 mb-1 border-b" style={{ borderColor: "#0B102015" }}>
+                  <span
+                    className="font-[var(--font-heading)] text-lg"
+                    style={{ color: BRAND.ink }}
+                  >
+                    SHOP BY SQUAD
+                  </span>
+                  <Link
+                    href="/shop"
+                    className="text-xs font-bold underline"
+                    style={{ color: BRAND.purple }}
+                    onClick={() => setShopOpen(false)}
+                  >
+                    All drops &rarr;
+                  </Link>
+                </div>
+                {categoryTree.map((c) => (
+                  <div key={c.id} className="min-w-0">
+                    <Link
+                      href={`/shop?category=${encodeURIComponent(c.slug)}`}
+                      className="block font-bold mb-2 hover:opacity-70"
+                      style={{ color: BRAND.ink }}
+                      onClick={() => setShopOpen(false)}
+                    >
+                      {c.name}
+                    </Link>
+                    <ul className="space-y-1">
+                      {c.subcategories.length === 0 ? (
+                        <li className="text-xs text-slate-500">
+                          No subcategories
+                        </li>
+                      ) : (
+                        c.subcategories.map((s) => (
+                          <li key={s.id}>
+                            <Link
+                              href={`/shop?category=${encodeURIComponent(c.slug)}&subcategory=${encodeURIComponent(s.slug)}`}
+                              className="block text-sm text-slate-600 hover:text-[color:var(--brand-ink,#0B1020)]"
+                              onClick={() => setShopOpen(false)}
+                            >
+                              {s.name}
+                            </Link>
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          {nonShopLinks.map((l) => (
             <Link
               key={l.href}
               href={l.href}
@@ -133,11 +207,70 @@ export function SiteNav() {
       {open ? (
         <div
           id="site-nav-mobile"
-          className="md:hidden border-t-2"
+          className="md:hidden border-t-2 max-h-[80vh] overflow-y-auto"
           style={{ borderColor: "#0B102010", backgroundColor: BRAND.cream }}
         >
           <ul className="flex flex-col px-6 py-2">
-            {navLinks.map((l) => (
+            <li>
+              <Link
+                href="/shop"
+                className="block py-4 min-h-[48px] font-semibold border-b"
+                style={{ borderColor: "#0B102010", color: BRAND.ink }}
+                onClick={() => setOpen(false)}
+              >
+                Shop — all drops
+              </Link>
+            </li>
+            {categoryTree.map((c) => {
+              const isExpanded = expandedCat === c.id;
+              return (
+                <li key={c.id} className="border-b" style={{ borderColor: "#0B102010" }}>
+                  <button
+                    type="button"
+                    className="flex items-center justify-between w-full py-3 min-h-[48px] font-semibold text-left"
+                    style={{ color: BRAND.ink }}
+                    onClick={() =>
+                      setExpandedCat((curr) => (curr === c.id ? null : c.id))
+                    }
+                    aria-expanded={isExpanded}
+                  >
+                    <span>{c.name}</span>
+                    {isExpanded ? (
+                      <ChevronDown className="h-4 w-4" aria-hidden />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" aria-hidden />
+                    )}
+                  </button>
+                  {isExpanded ? (
+                    <ul className="pb-3 pl-3">
+                      <li>
+                        <Link
+                          href={`/shop?category=${encodeURIComponent(c.slug)}`}
+                          className="block py-2 text-sm min-h-[44px] opacity-80"
+                          style={{ color: BRAND.ink }}
+                          onClick={() => setOpen(false)}
+                        >
+                          All in {c.name}
+                        </Link>
+                      </li>
+                      {c.subcategories.map((s) => (
+                        <li key={s.id}>
+                          <Link
+                            href={`/shop?category=${encodeURIComponent(c.slug)}&subcategory=${encodeURIComponent(s.slug)}`}
+                            className="block py-2 text-sm min-h-[44px]"
+                            style={{ color: BRAND.ink }}
+                            onClick={() => setOpen(false)}
+                          >
+                            {s.name}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </li>
+              );
+            })}
+            {nonShopLinks.map((l) => (
               <li key={l.href}>
                 <Link
                   href={l.href}
@@ -150,11 +283,6 @@ export function SiteNav() {
               </li>
             ))}
           </ul>
-          {/* Account actions area — UserNav ships its own sign-in/register
-              affordances for signed-out users and an account menu for signed-in
-              users. The "mobile" variant renders a flat list (no popover/portal)
-              to avoid a focus-trap clash with this disclosure that previously
-              produced a client-side exception when the avatar was tapped. */}
           <div className="px-6 py-4 border-t" style={{ borderColor: "#0B102010" }}>
             <UserNav variant="mobile" />
           </div>
