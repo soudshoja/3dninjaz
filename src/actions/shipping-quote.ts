@@ -1,0 +1,168 @@
+"use server";
+
+import "server-only";
+import { inArray } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { products } from "@/lib/db/schema";
+import { delyvaApi, DelyvaError } from "@/lib/delyva";
+import { loadShippingConfig } from "@/lib/shipping-config";
+
+// ============================================================================
+// Phase 9 (09-01) — checkout shipping-quote helper (NOT YET WIRED TO UI).
+//
+// The theme agent is currently iterating on storefront checkout. Once their
+// pass lands, a follow-up task will wire `quoteForCart` into the checkout
+// shipping-options widget. For now this is a server-action-only surface:
+//
+//   1. Load shippingConfig (origin + markup + enabled services + threshold).
+//   2. Sum cart weights using products.shippingWeightKg (fallback =
+//      shippingConfig.defaultWeightKg).
+//   3. Call delyvaApi.quote with that weight.
+//   4. Filter by enabledServices allowlist (empty = allow all).
+//   5. Apply markup:  finalPrice = price + price*markupPercent/100 + markupFlat
+//   6. Apply free-shipping threshold: when cartSubtotal >= threshold, all
+//      services are returned with finalPrice=0 (shipping becomes a cost
+//      the store absorbs; the service still needs to be selected so we know
+//      which courier was booked for the order).
+//
+// Do NOT import this from any storefront client component yet — the theme
+// agent will wire it after their theme pass is deployed.
+// ============================================================================
+
+export type CartItemForQuote = {
+  productId: string;
+  quantity: number;
+  unitPrice: number; // MYR
+};
+
+export type CartDestination = {
+  address1: string;
+  address2?: string | null;
+  city: string;
+  state: string;
+  postcode: string;
+  country?: string;
+};
+
+export type QuoteOption = {
+  serviceCode: string;
+  serviceName: string;
+  basePrice: number; // raw price from Delyva (MYR)
+  finalPrice: number; // after markup / free-shipping
+  currency: string;
+  etaMin?: number | null;
+  etaMax?: number | null;
+  freeShipApplied: boolean;
+};
+
+export type QuoteResult =
+  | { ok: true; options: QuoteOption[]; subtotal: number; weightKg: number }
+  | { ok: false; error: string };
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * Server-action entry point consumed by future checkout UI. No auth gate —
+ * this is customer-facing. Rate-limiting / abuse prevention should be
+ * layered on at the route handler in follow-up work (Phase 9 FU-01).
+ */
+export async function quoteForCart(
+  items: CartItemForQuote[],
+  destination: CartDestination,
+): Promise<QuoteResult> {
+  if (!Array.isArray(items) || items.length === 0) {
+    return { ok: false, error: "Cart is empty" };
+  }
+  if (
+    !destination?.postcode ||
+    !/^\d{5}$/.test(destination.postcode.trim())
+  ) {
+    return { ok: false, error: "Valid destination postcode required" };
+  }
+
+  const cfg = await loadShippingConfig();
+
+  // --- weight + subtotal
+  const fallbackWeight = Number(cfg.defaultWeightKg);
+  const productIds = Array.from(new Set(items.map((i) => i.productId)));
+  const prodRows = productIds.length
+    ? await db
+        .select({ id: products.id, weight: products.shippingWeightKg })
+        .from(products)
+        .where(inArray(products.id, productIds))
+    : [];
+  const weights = new Map<string, number>();
+  for (const p of prodRows) {
+    if (p.weight) weights.set(p.id, Number(p.weight));
+  }
+  let totalWeight = 0;
+  let subtotal = 0;
+  for (const it of items) {
+    const w = weights.get(it.productId) ?? fallbackWeight;
+    totalWeight += w * it.quantity;
+    subtotal += it.unitPrice * it.quantity;
+  }
+  if (totalWeight <= 0) totalWeight = fallbackWeight;
+
+  // --- quote
+  try {
+    const q = await delyvaApi.quote({
+      origin: {
+        address1: cfg.originAddress1,
+        address2: cfg.originAddress2 ?? undefined,
+        city: cfg.originCity,
+        state: cfg.originState,
+        postcode: cfg.originPostcode,
+        country: cfg.originCountry,
+      },
+      destination: {
+        address1: destination.address1 ?? "",
+        address2: destination.address2 ?? undefined,
+        city: destination.city,
+        state: destination.state,
+        postcode: destination.postcode.trim(),
+        country: (destination.country ?? "MY").toUpperCase(),
+      },
+      weight: { unit: "kg", value: round2(totalWeight) },
+      itemType: cfg.defaultItemType,
+    });
+
+    const allow = new Set(cfg.enabledServices);
+    const all = q.services ?? [];
+    const filtered = allow.size === 0 ? all : all.filter((s) => allow.has(s.serviceCompany.companyCode));
+
+    // --- markup + free-shipping
+    const markupPct = Number(cfg.markupPercent ?? 0);
+    const markupFlat = Number(cfg.markupFlat ?? 0);
+    const threshold = cfg.freeShippingThreshold ? Number(cfg.freeShippingThreshold) : null;
+    const freeShip = threshold !== null && subtotal >= threshold;
+
+    const options: QuoteOption[] = filtered.map((s) => {
+      const base = Number(s.price.amount);
+      const marked = base + (base * markupPct) / 100 + markupFlat;
+      return {
+        serviceCode: s.serviceCompany.companyCode,
+        serviceName: s.serviceCompany.name,
+        basePrice: round2(base),
+        finalPrice: freeShip ? 0 : round2(marked),
+        currency: s.price.currency ?? "MYR",
+        etaMin: s.etaMin ?? null,
+        etaMax: s.etaMax ?? null,
+        freeShipApplied: freeShip,
+      };
+    });
+
+    return {
+      ok: true,
+      options,
+      subtotal: round2(subtotal),
+      weightKg: round2(totalWeight),
+    };
+  } catch (e) {
+    if (e instanceof DelyvaError)
+      return { ok: false, error: `${e.code}: ${e.message}` };
+    return { ok: false, error: (e as Error).message };
+  }
+}
