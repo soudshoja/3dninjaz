@@ -54,8 +54,10 @@ export function RegisterForm() {
         return;
       }
 
-      // New registrations always land on customer role (D-08).
-      router.push("/");
+      // New registrations always land on customer role (D-08). Drop them
+      // into their account dashboard so they can see orders / addresses
+      // immediately rather than the anonymous storefront.
+      router.push("/account");
       router.refresh();
     } catch (err) {
       console.error("[register] unexpected error:", err);

@@ -10,6 +10,23 @@ import { getPendingReviewCount } from "@/actions/admin-reviews";
 // Phase 7 (07-07) — recon drift sidebar badge.
 import { getReconDriftBadgeCount } from "@/actions/admin-recon";
 
+async function currentAdminPath(): Promise<string> {
+  // Next passes the originally-requested URL on the `x-url` / `referer` set
+  // of headers; fall back to "/admin" so the next= param always has a value.
+  const h = await headers();
+  const xInvokePath = h.get("x-invoke-path");
+  const xUrl = h.get("x-url");
+  if (xInvokePath) return xInvokePath;
+  if (xUrl) {
+    try {
+      return new URL(xUrl).pathname;
+    } catch {
+      /* fall through */
+    }
+  }
+  return "/admin";
+}
+
 // Mobile chip strip — single source of truth for both desktop sidebar and
 // mobile horizontal nav. Phase 5 added 7 entries; the chip strip overflows
 // horizontally and scrolls (intentional, D-04 mobile pattern).
@@ -44,8 +61,16 @@ export default async function AdminLayout({
   // CVE-2025-29927 mitigation).
   const session = await auth.api.getSession({ headers: await headers() });
 
-  if (!session || session.user.role !== "admin") {
-    redirect("/login");
+  if (!session) {
+    // Unauth → /login with deep-link so they return to the intended page.
+    const path = await currentAdminPath();
+    redirect(`/login?next=${encodeURIComponent(path)}`);
+  }
+  if (session.user.role !== "admin") {
+    // Signed-in as customer. Don't leak that /admin exists — send them to
+    // their own dashboard. A flash message would be nice but we don't have a
+    // toast surface in the customer layout yet; deferred.
+    redirect("/account");
   }
 
   // Pending review badge is informational; if the action throws (e.g. DB

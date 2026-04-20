@@ -2,14 +2,45 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+/**
+ * Single login surface for both customers and admins. Post-auth redirect:
+ *   1. If `?next=<path>` is present and role-appropriate → land there.
+ *      (admin can deep-link into /admin/**, customer into /account/**;
+ *      a customer with ?next=/admin gets rerouted to /account instead.)
+ *   2. Otherwise: admin → /admin, customer → /account.
+ *
+ * Same-origin guard on `next` — only accept paths starting with "/" to
+ * prevent open-redirect vectors.
+ */
+function isSafeNext(next: string | null): next is string {
+  if (!next) return false;
+  // Must be a same-origin path, never a full URL, never protocol-relative.
+  return next.startsWith("/") && !next.startsWith("//");
+}
+
+function destinationFor(role: string | undefined, next: string | null): string {
+  const safeNext = isSafeNext(next) ? next : null;
+  if (role === "admin") {
+    // Admins can honor any same-origin `next`.
+    return safeNext ?? "/admin";
+  }
+  // Customers must not be redirected into /admin.
+  if (safeNext && !safeNext.startsWith("/admin")) {
+    return safeNext;
+  }
+  return "/account";
+}
+
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -39,11 +70,7 @@ export function LoginForm() {
           ? (session.data.user as { role?: string }).role
           : undefined;
 
-      if (role === "admin") {
-        router.push("/admin");
-      } else {
-        router.push("/");
-      }
+      router.push(destinationFor(role, next));
       router.refresh();
     } catch (err) {
       console.error("[login] unexpected error:", err);

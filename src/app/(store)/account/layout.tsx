@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth-helpers";
 import { AccountSidebar } from "@/components/account/account-sidebar";
@@ -10,6 +11,21 @@ import { BRAND } from "@/lib/brand";
  */
 export const dynamic = "force-dynamic";
 
+async function currentAccountPath(): Promise<string> {
+  const h = await headers();
+  const xInvokePath = h.get("x-invoke-path");
+  const xUrl = h.get("x-url");
+  if (xInvokePath) return xInvokePath;
+  if (xUrl) {
+    try {
+      return new URL(xUrl).pathname;
+    } catch {
+      /* fall through */
+    }
+  }
+  return "/account";
+}
+
 export default async function AccountLayout({
   children,
 }: {
@@ -17,7 +33,8 @@ export default async function AccountLayout({
 }) {
   const user = await getSessionUser();
   if (!user) {
-    redirect("/login?next=/account");
+    const path = await currentAccountPath();
+    redirect(`/login?next=${encodeURIComponent(path)}`);
   }
 
   return (
