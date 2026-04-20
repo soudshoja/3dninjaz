@@ -5,10 +5,10 @@
 # Purpose: enforce HTTPS + emit security headers once the Next.js app takes
 # over the domain root. See README.md in this directory for the swap steps.
 #
-# This file is NOT currently in use — the preview at 3dninjaz.com/v1 lives
-# behind LSWS reverse-proxy userdata config (see DEPLOY-NOTES.md). During
-# the dev phase the live public_html/ still serves the coming-soon static
-# files and its own .htaccess (if any).
+# This file is NOT currently in use — the app is served at app.3dninjaz.com
+# via LSWS reverse-proxy userdata config (see DEPLOY-NOTES.md). During
+# the dev phase the live public_html/ on 3dninjaz.com still serves the
+# coming-soon static files and its own .htaccess (if any).
 #
 # LAUNCH DAY: rename this file to `.htaccess` and drop it into
 # /home/ninjaz/public_html/ — after document root has been flipped to the
@@ -57,9 +57,9 @@ RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
 # --- (Optional) Node.js proxy pass-through ----------------------------------
 # cPanel's Node.js Selector (selectorctl) normally auto-writes its own
-# Apache userdata file pointing /v1 or / at 127.0.0.1:<app port>. If we
-# ever move to a flat .htaccess proxy model instead, the block below is
-# the template. Uncomment + set PORT to match the Node app's listen port
+# Apache userdata file pointing / at 127.0.0.1:<app port>. If we ever
+# move to a flat .htaccess proxy model instead, the block below is the
+# template. Uncomment + set PORT to match the Node app's listen port
 # before enabling.
 #
 # <IfModule mod_rewrite.c>

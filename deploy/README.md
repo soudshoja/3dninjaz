@@ -13,9 +13,11 @@ that require a manual swap via cPanel File Manager or SSH + root approval.
 
 - The Next.js app runs as the `ninjaz` cPanel user on `127.0.0.1:3100`
   (via `nohup node server.js`). See `.planning/phases/04-brand-launch/DEPLOY-NOTES.md`.
-- LSWS reverse-proxies `https://3dninjaz.com/v1` → that Node app, using
+- LSWS reverse-proxies `https://app.3dninjaz.com/` → that Node app, using
   an Apache userdata drop-in at:
-  `/etc/apache2/conf.d/userdata/*/2_4/ninjaz/3dninjaz.com/3dninjaz_v1.conf`
+  `/etc/apache2/conf.d/userdata/*/2_4/ninjaz/app.3dninjaz.com/app_3dninjaz.conf`
+  (previous preview mounted at `3dninjaz.com/v1` via a `<Location "/v1">` block —
+  that config has been superseded by the subdomain mount).
 - The preview does **not** currently require the `.htaccess` in this
   directory. The coming-soon static site still owns `public_html/` and
   is served from the root of `3dninjaz.com`.
