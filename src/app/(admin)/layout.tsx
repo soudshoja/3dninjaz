@@ -103,6 +103,23 @@ export default async function AdminLayout({
             3D Ninjaz Admin
           </span>
         </Link>
+        {/*
+          Phase 10 — "View Storefront" link so admins aren't trapped inside
+          /admin/*. Same tab so the browser back button returns to admin.
+        */}
+        <Link
+          href="/"
+          className="mt-4 flex items-center gap-2 rounded-md border border-[var(--color-brand-border)] px-3 py-2 text-sm text-[var(--color-brand-text-muted)] transition-colors hover:bg-[var(--color-brand-surface)] hover:text-[var(--color-brand-primary)]"
+        >
+          <Image
+            src="/icons/ninja/nav/home@128.png"
+            alt=""
+            width={24}
+            height={24}
+            className="h-6 w-6 object-contain shrink-0"
+          />
+          <span>View Storefront</span>
+        </Link>
         <SidebarNav
           pendingReviewCount={pendingReviewCount}
           reconDriftCount={reconDriftCount}
@@ -126,10 +143,24 @@ export default async function AdminLayout({
                 3D Ninjaz Admin
               </span>
             </Link>
-            {/* Mobile sign-out — desktop sidebar already has SignOutButton at
-                its bottom; the mobile header lacked any way to sign out, so
-                admins were stuck in /admin without a logout affordance. */}
-            <div className="shrink-0">
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Phase 10 — mobile shortcut to storefront home. */}
+              <Link
+                href="/"
+                aria-label="View storefront"
+                className="inline-flex items-center justify-center rounded-md border border-[var(--color-brand-border)] p-1.5 text-[var(--color-brand-text-muted)] hover:bg-[var(--color-brand-surface)] hover:text-[var(--color-brand-primary)]"
+              >
+                <Image
+                  src="/icons/ninja/nav/home@128.png"
+                  alt=""
+                  width={24}
+                  height={24}
+                  className="h-6 w-6 object-contain"
+                />
+              </Link>
+              {/* Mobile sign-out — desktop sidebar already has SignOutButton at
+                  its bottom; the mobile header lacked any way to sign out, so
+                  admins were stuck in /admin without a logout affordance. */}
               <SignOutButton />
             </div>
           </div>
