@@ -1,10 +1,32 @@
 import { z } from "zod";
 
+// Phase 8 (08-01) — slug is optional on input; action layer derives from
+// name when omitted. When present, it is re-slugified defensively before
+// persisting so admins can paste a friendly string and still get a safe
+// URL-safe slug in the DB.
 export const categorySchema = z.object({
   name: z
     .string()
     .min(1, "Category name is required")
-    .max(50, "Category name too long (max 50 chars)"),
+    .max(100, "Category name too long (max 100 chars)"),
+  slug: z
+    .string()
+    .max(120, "Slug too long (max 120 chars)")
+    .optional(),
+});
+
+export const subcategorySchema = z.object({
+  categoryId: z
+    .string()
+    .uuid("Invalid parent category"),
+  name: z
+    .string()
+    .min(1, "Subcategory name is required")
+    .max(120, "Subcategory name too long (max 120 chars)"),
+  slug: z
+    .string()
+    .max(120, "Slug too long (max 120 chars)")
+    .optional(),
 });
 
 export const productVariantSchema = z.object({

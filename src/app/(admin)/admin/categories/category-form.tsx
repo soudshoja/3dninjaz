@@ -8,9 +8,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+/**
+ * Phase 8 — "Add category" card. Slug is optional; when empty, the server
+ * derives it from the name via slugify(). When supplied, it's re-slugified
+ * on the server so admins can paste loose text and still end up with a
+ * safe URL segment.
+ */
 export function CategoryForm() {
   const router = useRouter();
   const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -20,6 +27,7 @@ export function CategoryForm() {
 
     const fd = new FormData();
     fd.set("name", name);
+    fd.set("slug", slug);
 
     startTransition(async () => {
       const result = await createCategory(fd);
@@ -29,13 +37,14 @@ export function CategoryForm() {
           setError(err);
         } else {
           const first = Object.values(err).find(
-            (v): v is string[] => Array.isArray(v) && v.length > 0
+            (v): v is string[] => Array.isArray(v) && v.length > 0,
           );
           setError(first?.[0] ?? "Unable to create category.");
         }
         return;
       }
       setName("");
+      setSlug("");
       router.refresh();
     });
   }
@@ -45,16 +54,33 @@ export function CategoryForm() {
       onSubmit={onSubmit}
       className="rounded-lg border border-[var(--color-brand-border)] bg-white p-4"
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+      <div className="flex flex-col gap-3 md:flex-row md:items-end">
         <div className="flex-1 space-y-2">
-          <Label htmlFor="category-name">New Category Name</Label>
+          <Label htmlFor="category-name">New Category</Label>
           <Input
             id="category-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Figurines, Phone Cases, Home Decor"
-            maxLength={50}
+            placeholder="e.g. Home & Decor"
+            maxLength={100}
             required
+            disabled={pending}
+            className="h-10"
+          />
+        </div>
+        <div className="flex-1 space-y-2">
+          <Label htmlFor="category-slug">
+            Slug{" "}
+            <span className="text-xs text-[var(--color-brand-text-muted)]">
+              (optional — auto from name)
+            </span>
+          </Label>
+          <Input
+            id="category-slug"
+            value={slug}
+            onChange={(e) => setSlug(e.target.value)}
+            placeholder="e.g. home-and-decor"
+            maxLength={120}
             disabled={pending}
             className="h-10"
           />

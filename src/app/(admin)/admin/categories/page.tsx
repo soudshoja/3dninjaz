@@ -1,16 +1,8 @@
 import type { Metadata } from "next";
 import { FolderOpen } from "lucide-react";
-import { getCategoriesWithCounts } from "@/actions/categories";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { getCategoriesWithSubcategories } from "@/actions/categories";
 import { CategoryForm } from "./category-form";
-import { CategoryRowActions } from "./category-row-actions";
+import { CategoryTree } from "./category-tree";
 
 export const metadata: Metadata = {
   title: "Admin · Categories",
@@ -18,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default async function AdminCategoriesPage() {
-  const list = await getCategoriesWithCounts();
+  const tree = await getCategoriesWithSubcategories();
 
   return (
     <div className="space-y-6">
@@ -27,13 +19,14 @@ export default async function AdminCategoriesPage() {
           Categories
         </h1>
         <p className="text-sm text-[var(--color-brand-text-muted)]">
-          Organize your products with categories.
+          Organize products with a 2-level menu: categories contain
+          subcategories, and products live in subcategories.
         </p>
       </div>
 
       <CategoryForm />
 
-      {list.length === 0 ? (
+      {tree.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-[var(--color-brand-border)] bg-white p-12 text-center">
           <FolderOpen className="h-10 w-10 text-[var(--color-brand-text-muted)]" />
           <h2 className="font-heading text-lg">No categories yet</h2>
@@ -42,38 +35,7 @@ export default async function AdminCategoriesPage() {
           </p>
         </div>
       ) : (
-        <div className="rounded-lg border border-[var(--color-brand-border)] bg-white">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Slug</TableHead>
-                <TableHead className="w-24 text-center">Products</TableHead>
-                <TableHead className="w-16 text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {list.map((cat) => (
-                <TableRow key={cat.id}>
-                  <TableCell className="font-medium">{cat.name}</TableCell>
-                  <TableCell className="text-[var(--color-brand-text-muted)]">
-                    {cat.slug}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {cat.productCount}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <CategoryRowActions
-                      id={cat.id}
-                      name={cat.name}
-                      productCount={cat.productCount}
-                    />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <CategoryTree tree={tree} />
       )}
     </div>
   );
