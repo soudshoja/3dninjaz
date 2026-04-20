@@ -12,7 +12,7 @@
 # via environment-scoped GitHub Secrets before the workflow can run green.
 #
 # Secrets (per-environment, set via `gh secret set --env <env>`):
-#   SSH_HOST             e.g. 208.110.93.90
+#   SSH_HOST             e.g. 152.53.86.223
 #   SSH_USER             e.g. ninjaz        (NOT root — deploy runs as app user)
 #   SSH_PORT             e.g. 22
 #   SSH_PRIVATE_KEY      PEM contents of a dedicated CI key
