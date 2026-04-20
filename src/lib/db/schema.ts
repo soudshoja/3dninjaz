@@ -201,6 +201,11 @@ export const orderStatusValues = [
   "cancelled",
 ] as const;
 
+// Phase 7 (07-01) — additive enum for distinguishing customer-self-checkout
+// orders ('web') from admin-booked manual orders ('manual'). Default 'web' so
+// every existing row remains unchanged after migration. Per D-07-05.
+export const orderSourceTypeValues = ["web", "manual"] as const;
+
 export const orders = mysqlTable("orders", {
   id: varchar("id", { length: 36 })
     .primaryKey()
@@ -234,6 +239,24 @@ export const orders = mysqlTable("orders", {
     .default("Malaysia"),
   // Admin-only internal notes (D3-18)
   notes: text("notes"),
+  // Phase 7 (07-01) — additive columns for manual-order, refund-tracking, and
+  // PayPal-financials mirror. Every column is nullable or has a default so
+  // existing Phase 3-6 rows remain valid. Per D-07-05, D-07-06, D-07-08.
+  sourceType: mysqlEnum("source_type", orderSourceTypeValues)
+    .notNull()
+    .default("web"),
+  customItemName: varchar("custom_item_name", { length: 200 }),
+  customItemDescription: text("custom_item_description"),
+  // MariaDB stores JSON as LONGTEXT; the read site uses ensureJsonArray helper
+  // (CLAUDE.md quirk).
+  customImages: json("custom_images").$type<string[]>(),
+  refundedAmount: decimal("refunded_amount", { precision: 10, scale: 2 })
+    .notNull()
+    .default("0.00"),
+  paypalFee: decimal("paypal_fee", { precision: 10, scale: 2 }),
+  paypalNet: decimal("paypal_net", { precision: 10, scale: 2 }),
+  sellerProtection: varchar("seller_protection", { length: 32 }),
+  paypalSettleDate: timestamp("paypal_settle_date"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
 });
@@ -628,6 +651,105 @@ export function seedShippingRates(): ShippingRateSeed[] {
     flatRate: "0.00",
   }));
 }
+
+// ============================================================================
+// Phase 7 (07-01) — Manual Orders + PayPal Ops Mirror tables
+//
+// New tables: payment_links, dispute_cache, recon_runs.
+// Per D-07-06, D-07-07, D-07-08 of the phase context.
+//
+// Notes:
+//   - All UUIDs are app-generated (randomUUID) per CLAUDE.md MariaDB quirk.
+//     The SQL DEFAULT (UUID()) here is a fallback for direct DB inserts.
+//   - JSON columns become LONGTEXT in MariaDB. Read sites must JSON.parse.
+//   - dispute_cache.orderId is NULLABLE because some PayPal disputes may not
+//     map cleanly to a local order (admin must run sync to resolve).
+//   - recon_runs.runDate is UNIQUE so the cron is idempotent (re-running for
+//     the same MYT date is a no-op).
+// ============================================================================
+
+export const paymentLinks = mysqlTable(
+  "payment_links",
+  {
+    id: varchar("id", { length: 36 })
+      .primaryKey()
+      .default(sql`(UUID())`),
+    orderId: varchar("order_id", { length: 36 })
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    token: varchar("token", { length: 64 }).notNull().unique(),
+    expiresAt: timestamp("expires_at").notNull(),
+    usedAt: timestamp("used_at"),
+    createdBy: varchar("created_by", { length: 36 })
+      .notNull()
+      .references(() => user.id),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    orderIdx: index("payment_links_order_idx").on(t.orderId),
+  }),
+);
+
+export const disputeCache = mysqlTable(
+  "dispute_cache",
+  {
+    id: varchar("id", { length: 36 })
+      .primaryKey()
+      .default(sql`(UUID())`),
+    disputeId: varchar("dispute_id", { length: 64 }).notNull().unique(),
+    // NULLABLE — set when sync resolves the PayPal seller_transaction_id back
+    // to our orders.paypalCaptureId.
+    orderId: varchar("order_id", { length: 36 }).references(() => orders.id, {
+      onDelete: "set null",
+    }),
+    status: varchar("status", { length: 32 }).notNull(),
+    reason: varchar("reason", { length: 64 }),
+    amount: decimal("amount", { precision: 10, scale: 2 }),
+    currency: varchar("currency", { length: 3 }),
+    createDate: timestamp("create_date").notNull(),
+    updateDate: timestamp("update_date").notNull(),
+    lastSyncedAt: timestamp("last_synced_at").notNull().defaultNow(),
+    // Stored as LONGTEXT in MariaDB; full PayPal payload for evidence/audit.
+    rawJson: mediumtext("raw_json"),
+  },
+  (t) => ({
+    statusIdx: index("dispute_cache_status_idx").on(t.status),
+    orderIdx: index("dispute_cache_order_idx").on(t.orderId),
+  }),
+);
+
+export const reconRuns = mysqlTable("recon_runs", {
+  id: varchar("id", { length: 36 })
+    .primaryKey()
+    .default(sql`(UUID())`),
+  // UNIQUE — one run per MYT date so the cron is idempotent.
+  runDate: varchar("run_date", { length: 10 }).notNull().unique(),
+  ranAt: timestamp("ran_at").notNull(),
+  totalPaypalTxns: int("total_paypal_txns").notNull(),
+  totalLocalTxns: int("total_local_txns").notNull(),
+  driftCount: int("drift_count").notNull().default(0),
+  driftJson: mediumtext("drift_json"),
+  status: varchar("status", { length: 16 }).notNull(),
+  errorMessage: text("error_message"),
+});
+
+export const paymentLinksRelations = relations(paymentLinks, ({ one }) => ({
+  order: one(orders, {
+    fields: [paymentLinks.orderId],
+    references: [orders.id],
+  }),
+  creator: one(user, {
+    fields: [paymentLinks.createdBy],
+    references: [user.id],
+  }),
+}));
+
+export const disputeCacheRelations = relations(disputeCache, ({ one }) => ({
+  order: one(orders, {
+    fields: [disputeCache.orderId],
+    references: [orders.id],
+  }),
+}));
 
 export function seedEmailTemplates(): EmailTemplateSeed[] {
   // Stub HTML — Wave 3 plan 05-06 replaces with the real template content

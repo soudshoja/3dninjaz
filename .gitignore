@@ -67,3 +67,7 @@ next-env.d.ts
 /logopng.png
 /ninjalogo.jpeg
 /example.jpeg
+
+# Phase 7 (07-01) — recon JSON snapshots are gitignored (PayPal txn IDs are
+# sensitive per T-07-X-recon-leak)
+.planning/intel/
