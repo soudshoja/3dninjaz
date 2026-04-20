@@ -4,7 +4,7 @@ import "server-only";
 import { inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { products } from "@/lib/db/schema";
-import { delyvaApi, DelyvaError } from "@/lib/delyva";
+import { delyvaApi, DelyvaError, parseQuoteServices } from "@/lib/delyva";
 import { loadShippingConfig } from "@/lib/shipping-config";
 
 // ============================================================================
@@ -145,9 +145,20 @@ export async function quoteForCart(
       itemType: cfg.defaultItemType,
     });
 
+    // Defensive parser — see src/lib/delyva.ts parseQuoteServices for the
+    // full shape discussion. Accepts either the nested current response
+    // (services[].service.code / service.serviceCompany) or the legacy flat
+    // shape (services[].serviceCompany.companyCode).
+    const all = parseQuoteServices(q);
     const allow = new Set(cfg.enabledServices);
-    const all = q.services ?? [];
-    const filtered = allow.size === 0 ? all : all.filter((s) => allow.has(s.serviceCompany.companyCode));
+    const filtered =
+      allow.size === 0
+        ? all
+        : all.filter(
+            (s) =>
+              allow.has(s.serviceCode) ||
+              (s.companyCode !== null && allow.has(s.companyCode)),
+          );
 
     // --- markup + free-shipping
     const markupPct = Number(cfg.markupPercent ?? 0);
@@ -159,13 +170,15 @@ export async function quoteForCart(
       const base = Number(s.price.amount);
       const marked = base + (base * markupPct) / 100 + markupFlat;
       return {
-        serviceCode: s.serviceCompany.companyCode,
-        serviceName: s.serviceCompany.name,
+        // The bookable code passed back into POST /order — must be
+        // service.code (e.g. "SPXDMY-PN-BD1"), NOT companyCode.
+        serviceCode: s.serviceCode,
+        serviceName: s.serviceName,
         basePrice: round2(base),
         finalPrice: freeShip ? 0 : round2(marked),
         currency: s.price.currency ?? "MYR",
-        etaMin: s.etaMin ?? null,
-        etaMax: s.etaMax ?? null,
+        etaMin: s.etaMin,
+        etaMax: s.etaMax,
         freeShipApplied: freeShip,
       };
     });

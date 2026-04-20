@@ -64,21 +64,129 @@ export type QuoteInput = {
   serviceAddon?: DelyvaServiceAddon[];
 };
 
+/**
+ * Real shape of an entry in the /service/instantQuote `services[]` array.
+ *
+ * Verified live against api.delyva.app/v1.0 on 2026-04-20. Earlier doc drafts
+ * claimed a flat `serviceCompany.companyCode` at the top level — that is
+ * incorrect. The useful identifiers live inside the nested `service` object:
+ *
+ *   - `service.code`            e.g. "SPXDMY-PN-BD1"   <-- this is what you
+ *     pass to POST /order as `serviceCode`
+ *   - `service.name`            e.g. "SPX Express"
+ *   - `service.serviceType`     e.g. "NDD" | "NDD-DROP" | "COD-NDD" | "INSTANT"
+ *   - `service.serviceCompany.companyCode`  e.g. "SPXDMY"  <-- courier brand,
+ *     useful for grouping/allowlisting multiple rate tiers of the same courier
+ *   - `service.serviceCompany.name`         e.g. "SPX Express"
+ *   - `service.serviceCompany.logo`
+ *
+ * Responses may also include entries that lack either block. All callers
+ * should parse defensively — see `parseQuoteServices()` below.
+ */
+export type QuoteServiceCompany = {
+  id?: number;
+  companyCode: string;
+  name: string;
+  logo?: string;
+};
+
+export type QuoteServiceInner = {
+  id?: number;
+  code: string;
+  name?: string;
+  serviceType?: string;
+  serviceCompany?: QuoteServiceCompany;
+  operationType?: { cod?: boolean; pickup?: boolean; dropoff?: boolean };
+};
+
 export type QuoteService = {
-  serviceCompany: {
-    companyCode: string;
-    name: string;
-    logo?: string;
-  };
   price: { amount: number; currency: string };
+  weight?: { value: number };
+  distance?: { value: number; unit: string };
   etaMin?: number; // minutes
   etaMax?: number;
-  // Other fields exist on the response — we surface the important ones only.
+  service?: QuoteServiceInner;
+  // Defensive: some legacy responses surfaced a flat serviceCompany at the
+  // top level. Keep optional so we can parse either shape.
+  serviceCompany?: QuoteServiceCompany;
 };
 
 export type QuoteResponse = {
   services: QuoteService[];
 };
+
+/**
+ * Normalized shape our app code consumes downstream — a single code+name+price
+ * tuple that hides the nested / legacy structural variance of Delyva's response.
+ */
+export type NormalizedQuoteOption = {
+  serviceCode: string; // e.g. "SPXDMY-PN-BD1" — pass to POST /order
+  serviceName: string; // e.g. "SPX Express" — human label
+  companyCode: string | null; // e.g. "SPXDMY" — brand grouping (optional)
+  companyName: string | null; // e.g. "SPX Express"
+  companyLogo: string | null;
+  price: { amount: number; currency: string };
+  etaMin: number | null;
+  etaMax: number | null;
+  serviceType: string | null;
+};
+
+/**
+ * Defensive parser for the `services[]` array returned by /service/instantQuote.
+ *
+ * Handles:
+ *  - Null / undefined / missing `services` field → []
+ *  - Null entries in the array (Delyva occasionally returns placeholders)
+ *  - Either shape: `{ service: { code, serviceCompany } }` (current) OR
+ *    `{ serviceCompany: { companyCode } }` (legacy flat shape — unlikely now)
+ *  - Entries with neither code nor companyCode → dropped
+ */
+export function parseQuoteServices(
+  raw: QuoteResponse | { services?: unknown } | null | undefined,
+): NormalizedQuoteOption[] {
+  const list = Array.isArray(raw?.services) ? (raw!.services as unknown[]) : [];
+  const out: NormalizedQuoteOption[] = [];
+  for (const entry of list) {
+    if (!entry || typeof entry !== "object") continue;
+    const s = entry as QuoteService;
+    const inner = s.service;
+    const flatCompany = s.serviceCompany;
+    const innerCompany = inner?.serviceCompany;
+
+    // Identifier used for booking — prefer the nested service.code; fall back
+    // to companyCode only if the inner object is missing (legacy).
+    const serviceCode =
+      inner?.code ??
+      innerCompany?.companyCode ??
+      flatCompany?.companyCode ??
+      null;
+    if (!serviceCode) continue;
+
+    const serviceName =
+      inner?.name ??
+      innerCompany?.name ??
+      flatCompany?.name ??
+      serviceCode;
+
+    const company = innerCompany ?? flatCompany ?? null;
+
+    const priceAmount = Number(s.price?.amount ?? 0);
+    const priceCurrency = s.price?.currency ?? "MYR";
+
+    out.push({
+      serviceCode,
+      serviceName,
+      companyCode: company?.companyCode ?? null,
+      companyName: company?.name ?? null,
+      companyLogo: company?.logo ?? null,
+      price: { amount: priceAmount, currency: priceCurrency },
+      etaMin: typeof s.etaMin === "number" ? s.etaMin : null,
+      etaMax: typeof s.etaMax === "number" ? s.etaMax : null,
+      serviceType: inner?.serviceType ?? null,
+    });
+  }
+  return out;
+}
 
 export type InventoryItem = {
   name: string;

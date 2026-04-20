@@ -60,12 +60,15 @@ export function OrderShipmentPanel({ orderId, shipment }: Props) {
       setQuoteLoading(false);
       if (res.ok) {
         const mapped: Service[] = res.services.map((s) => ({
-          serviceCode: s.serviceCompany.companyCode,
-          serviceName: s.serviceCompany.name,
+          // serviceCode is the bookable id (service.code e.g. "SPXDMY-PN-BD1")
+          // — what POST /order expects. Previously we mistakenly passed the
+          // brand-level companyCode which caused undefined access.
+          serviceCode: s.serviceCode,
+          serviceName: s.serviceName,
           price: Number(s.price.amount),
           currency: s.price.currency ?? "MYR",
-          etaMin: s.etaMin ?? null,
-          etaMax: s.etaMax ?? null,
+          etaMin: s.etaMin,
+          etaMax: s.etaMax,
         }));
         setServices(mapped);
         if (mapped[0]) setSelectedCode(mapped[0].serviceCode);

@@ -13,7 +13,7 @@ import {
   products,
 } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth-helpers";
-import { delyvaApi, DelyvaError } from "@/lib/delyva";
+import { delyvaApi, DelyvaError, parseQuoteServices } from "@/lib/delyva";
 import type { InventoryItem, DelyvaContact } from "@/lib/delyva";
 import { DELYVA_EVENTS_TO_REGISTER } from "@/lib/delyva-events";
 import {
@@ -201,21 +201,34 @@ export async function testDelyvaConnection(): Promise<ConnectionResult> {
 }
 
 /**
+ * Normalized service row surfaced to admin / checkout UI. `serviceCode` is the
+ * field that gets persisted to `order_shipments.service_code` and passed back
+ * to POST /order when booking — it is the nested `service.code` from the
+ * Delyva response (e.g. "SPXDMY-PN-BD1"), NOT the brand-level `companyCode`.
+ */
+export type NormalizedService = {
+  serviceCode: string;
+  serviceName: string;
+  companyCode: string | null;
+  companyName: string | null;
+  companyLogo: string | null;
+  price: { amount: number; currency: string };
+  etaMin: number | null;
+  etaMax: number | null;
+  serviceType: string | null;
+};
+
+/**
  * Probe Delyva for available services by running a KL→PJ sample quote.
- * Response type widened to an array of plain objects so the client bundle
- * doesn't need to import the QuoteService type from @/lib/delyva.
+ *
+ * Defensive parsing — see `parseQuoteServices()` in src/lib/delyva.ts. The
+ * real response shape is `services[].service.{code,name,serviceCompany.*}`
+ * (verified against api.delyva.app/v1.0 on 2026-04-20); an older assumption
+ * that entries had a flat top-level `serviceCompany.companyCode` was wrong
+ * and caused "Cannot read properties of undefined (reading 'companyCode')".
  */
 export async function listDelyvaServices(): Promise<
-  | {
-      ok: true;
-      services: Array<{
-        serviceCompany: { companyCode: string; name: string; logo?: string };
-        price: { amount: number; currency: string };
-        etaMin?: number | null;
-        etaMax?: number | null;
-      }>;
-    }
-  | { ok: false; error: string }
+  { ok: true; services: NormalizedService[] } | { ok: false; error: string }
 > {
   await requireAdmin();
   const cfg = await loadShippingConfig();
@@ -239,16 +252,7 @@ export async function listDelyvaServices(): Promise<
       weight: { unit: "kg", value: 1 },
       itemType: cfg.defaultItemType,
     });
-    const services = (q.services ?? []).map((s) => ({
-      serviceCompany: {
-        companyCode: s.serviceCompany.companyCode,
-        name: s.serviceCompany.name,
-        logo: s.serviceCompany.logo,
-      },
-      price: { amount: Number(s.price.amount), currency: s.price.currency ?? "MYR" },
-      etaMin: s.etaMin ?? null,
-      etaMax: s.etaMax ?? null,
-    }));
+    const services = parseQuoteServices(q);
     return { ok: true, services };
   } catch (e) {
     if (e instanceof DelyvaError)
@@ -321,16 +325,7 @@ export async function getOrderShipment(
 }
 
 export async function quoteRatesForOrder(orderId: string): Promise<
-  | {
-      ok: true;
-      services: Array<{
-        serviceCompany: { companyCode: string; name: string; logo?: string };
-        price: { amount: number; currency: string };
-        etaMin?: number | null;
-        etaMax?: number | null;
-      }>;
-    }
-  | { ok: false; error: string }
+  { ok: true; services: NormalizedService[] } | { ok: false; error: string }
 > {
   await requireAdmin();
   const row = await db
@@ -365,23 +360,20 @@ export async function quoteRatesForOrder(orderId: string): Promise<
       weight: { unit: "kg", value: Math.max(weight, Number(cfg.defaultWeightKg)) },
       itemType: cfg.defaultItemType,
     });
+    const all = parseQuoteServices(q);
+    // Allowlist matches either the bookable serviceCode (e.g. "SPXDMY-PN-BD1")
+    // or the courier brand companyCode (e.g. "SPXDMY") — admin may have saved
+    // either shape across the bug's lifetime, and matching both is harmless.
     const allow = new Set(cfg.enabledServices);
-    const all = q.services ?? [];
     const filtered =
-      allow.size === 0 ? all : all.filter((s) => allow.has(s.serviceCompany.companyCode));
-    return {
-      ok: true,
-      services: filtered.map((s) => ({
-        serviceCompany: {
-          companyCode: s.serviceCompany.companyCode,
-          name: s.serviceCompany.name,
-          logo: s.serviceCompany.logo,
-        },
-        price: { amount: Number(s.price.amount), currency: s.price.currency ?? "MYR" },
-        etaMin: s.etaMin ?? null,
-        etaMax: s.etaMax ?? null,
-      })),
-    };
+      allow.size === 0
+        ? all
+        : all.filter(
+            (s) =>
+              allow.has(s.serviceCode) ||
+              (s.companyCode !== null && allow.has(s.companyCode)),
+          );
+    return { ok: true, services: filtered };
   } catch (e) {
     if (e instanceof DelyvaError)
       return { ok: false, error: `${e.code}: ${e.message}` };

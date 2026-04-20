@@ -92,9 +92,13 @@ export function DelyvaConfigForm({ initial }: Props) {
       .then((res) => {
         if (!alive) return;
         if (res.ok) {
+          // Note — serviceCode here is the bookable code (e.g. "SPXDMY-PN-BD1");
+          // the old variable name `companyCode` is kept for form-state compat
+          // since `enabledServices` persists the same string and the admin
+          // UI has always shown one tick per rate tier, not per brand.
           const opts: ServiceOption[] = res.services.map((s) => ({
-            companyCode: s.serviceCompany.companyCode,
-            name: s.serviceCompany.name,
+            companyCode: s.serviceCode,
+            name: s.serviceName,
             priceAmount: Number(s.price.amount),
             currency: s.price.currency ?? "MYR",
           }));
