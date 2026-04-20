@@ -22,8 +22,14 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// Retail/ops sequence: overview → catalog → orders → payments/finance →
+// customers → merchandising → ops/config → self. Reordered 2026-04-20 so the
+// daily-use items (Dashboard, Products, Orders, Disputes, Reconciliation)
+// sit at the top of the scan path and admin-config sinks to the bottom.
 const items = [
+  // Overview
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  // Catalog
   { href: "/admin/products", label: "Products", icon: Package, exact: false },
   {
     href: "/admin/categories",
@@ -31,13 +37,18 @@ const items = [
     icon: FolderOpen,
     exact: false,
   },
+  { href: "/admin/inventory", label: "Inventory", icon: Boxes, exact: false },
+  {
+    href: "/admin/products/import",
+    label: "Bulk import",
+    icon: Upload,
+    exact: true,
+  },
+  // Orders + fulfilment
   { href: "/admin/orders", label: "Orders", icon: Receipt, exact: false },
-  // Phase post-launch — PayPal transactions report (admin sees what they'd
-  // see in the PayPal dashboard without needing to log in there).
+  // Payments / finance / disputes — grouped so post-sale ops hang together.
   { href: "/admin/payments", label: "Payments", icon: Wallet, exact: false },
-  // Phase 7 (07-06) — buyer disputes mirror.
   { href: "/admin/disputes", label: "Disputes", icon: Scale, exact: false },
-  // Phase 7 (07-07) — nightly PayPal reconciliation reports.
   {
     href: "/admin/recon",
     label: "Reconciliation",
@@ -45,22 +56,9 @@ const items = [
     exact: false,
     badge: "reconDriftCount" as const,
   },
-  // Phase 5 admin extensions
-  { href: "/admin/users", label: "Users", icon: Users, exact: false },
-  { href: "/admin/inventory", label: "Inventory", icon: Boxes, exact: false },
+  // Customers + merchandising
+  { href: "/admin/users", label: "Customers", icon: Users, exact: false },
   { href: "/admin/coupons", label: "Coupons", icon: Tag, exact: false },
-  {
-    href: "/admin/products/import",
-    label: "Bulk import",
-    icon: Upload,
-    exact: true,
-  },
-  {
-    href: "/admin/email-templates",
-    label: "Email templates",
-    icon: Mail,
-    exact: false,
-  },
   {
     href: "/admin/reviews",
     label: "Reviews",
@@ -68,8 +66,16 @@ const items = [
     exact: false,
     badge: "pendingReviewCount" as const,
   },
+  // Ops / configuration
   { href: "/admin/shipping", label: "Shipping", icon: Truck, exact: false },
+  {
+    href: "/admin/email-templates",
+    label: "Email templates",
+    icon: Mail,
+    exact: false,
+  },
   { href: "/admin/settings", label: "Settings", icon: Settings, exact: false },
+  // Self
   { href: "/admin/profile", label: "Profile", icon: UserCog, exact: false },
 ];
 

@@ -13,22 +13,23 @@ import { getReconDriftBadgeCount } from "@/actions/admin-recon";
 // Mobile chip strip — single source of truth for both desktop sidebar and
 // mobile horizontal nav. Phase 5 added 7 entries; the chip strip overflows
 // horizontally and scrolls (intentional, D-04 mobile pattern).
+// Same retail/ops sequence as SidebarNav — single source of truth mirrored
+// here because the mobile strip has no dependency on the desktop component.
 const MOBILE_CHIPS = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/products", label: "Products" },
   { href: "/admin/categories", label: "Categories" },
+  { href: "/admin/inventory", label: "Inventory" },
+  { href: "/admin/products/import", label: "Bulk import" },
   { href: "/admin/orders", label: "Orders" },
   { href: "/admin/payments", label: "Payments" },
-  // Phase 7 (07-06, 07-07)
   { href: "/admin/disputes", label: "Disputes" },
   { href: "/admin/recon", label: "Reconciliation" },
-  { href: "/admin/users", label: "Users" },
-  { href: "/admin/inventory", label: "Inventory" },
+  { href: "/admin/users", label: "Customers" },
   { href: "/admin/coupons", label: "Coupons" },
-  { href: "/admin/products/import", label: "Bulk import" },
-  { href: "/admin/email-templates", label: "Email templates" },
   { href: "/admin/reviews", label: "Reviews" },
   { href: "/admin/shipping", label: "Shipping" },
+  { href: "/admin/email-templates", label: "Email templates" },
   { href: "/admin/settings", label: "Settings" },
   { href: "/admin/profile", label: "Profile" },
 ];
