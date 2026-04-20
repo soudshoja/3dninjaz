@@ -52,13 +52,13 @@ export function CartDrawer() {
         <div className="flex-1 overflow-y-auto px-5 divide-y divide-black/10">
           {items.length === 0 ? (
             <div className="py-16 text-center">
-              <p className="text-lg font-bold mb-2">Your bag is empty.</p>
-              <p className="text-slate-600 mb-6">Pick something stealthy.</p>
+              <p className="text-lg font-bold mb-2 text-zinc-900">Your bag is empty.</p>
+              <p className="text-zinc-600 mb-6">Pick something stealthy.</p>
               <Link
                 href="/shop"
                 onClick={() => setOpen(false)}
-                className="inline-flex items-center rounded-full px-6 py-3 font-bold text-white min-h-[48px]"
-                style={{ backgroundColor: BRAND.ink }}
+                className="inline-flex items-center rounded-full px-6 py-3 font-bold min-h-[48px] shadow-[0_4px_0_rgba(11,16,32,0.15)]"
+                style={{ backgroundColor: BRAND.green, color: BRAND.ink }}
               >
                 Browse drops
               </Link>
@@ -71,8 +71,8 @@ export function CartDrawer() {
         {items.length > 0 ? (
           <DrawerFooter>
             <div className="flex items-center justify-between mb-3">
-              <span className="text-sm text-slate-600">Subtotal</span>
-              <span className="font-[var(--font-heading)] text-2xl">
+              <span className="text-sm text-zinc-600">Subtotal</span>
+              <span className="font-[var(--font-heading)] text-2xl text-zinc-900">
                 {formatMYR(subtotal)}
               </span>
             </div>
@@ -80,8 +80,7 @@ export function CartDrawer() {
               <Link
                 href="/bag"
                 onClick={() => setOpen(false)}
-                className="flex-1 inline-flex items-center justify-center rounded-full px-5 py-3 font-bold border-2 min-h-[48px]"
-                style={{ borderColor: BRAND.ink, color: BRAND.ink }}
+                className="flex-1 inline-flex items-center justify-center rounded-full px-5 py-3 font-bold border-2 border-zinc-300 text-zinc-800 hover:bg-zinc-50 min-h-[48px]"
               >
                 View bag
               </Link>
@@ -89,7 +88,7 @@ export function CartDrawer() {
               <Link
                 href="/checkout"
                 onClick={() => setOpen(false)}
-                className="flex-1 inline-flex items-center justify-center rounded-full px-5 py-3 font-bold shadow-[0_6px_0_rgba(0,0,0,0.35)] hover:translate-y-[2px] hover:shadow-[0_4px_0_rgba(0,0,0,0.35)] transition min-h-[60px]"
+                className="flex-1 inline-flex items-center justify-center rounded-full px-5 py-3 font-bold shadow-[0_4px_0_rgba(11,16,32,0.15)] hover:translate-y-[2px] hover:shadow-[0_2px_0_rgba(11,16,32,0.15)] transition min-h-[60px]"
                 style={{ backgroundColor: BRAND.green, color: BRAND.ink }}
               >
                 Checkout

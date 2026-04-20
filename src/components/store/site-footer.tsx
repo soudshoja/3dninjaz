@@ -39,25 +39,24 @@ export function SiteFooter() {
 
   return (
     <footer
-      className="border-t-2"
+      className="border-t border-zinc-200"
       style={{
-        backgroundColor: BRAND.ink,
-        color: BRAND.cream,
-        borderColor: BRAND.ink,
+        backgroundColor: "#FAFAFA",
+        color: BRAND.ink,
       }}
     >
       <div className="max-w-6xl mx-auto px-6 md:px-8 py-12">
         {/* Link groups */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12 mb-10">
           <div>
-            <h2 className="font-[var(--font-heading)] text-sm tracking-[0.2em] text-white/60 mb-3">
+            <h2 className="font-[var(--font-heading)] text-sm tracking-[0.2em] text-zinc-500 mb-3">
               SHOP
             </h2>
             <ul className="flex flex-col">
               <li>
                 <Link
                   href="/"
-                  className="block py-3 min-h-[48px] hover:text-white text-white/80"
+                  className="block py-3 min-h-[48px] text-zinc-700 hover:text-zinc-900"
                 >
                   Home
                 </Link>
@@ -65,7 +64,7 @@ export function SiteFooter() {
               <li>
                 <Link
                   href="/shop"
-                  className="block py-3 min-h-[48px] hover:text-white text-white/80"
+                  className="block py-3 min-h-[48px] text-zinc-700 hover:text-zinc-900"
                 >
                   Shop all
                 </Link>
@@ -74,14 +73,14 @@ export function SiteFooter() {
           </div>
 
           <div>
-            <h2 className="font-[var(--font-heading)] text-sm tracking-[0.2em] text-white/60 mb-3">
+            <h2 className="font-[var(--font-heading)] text-sm tracking-[0.2em] text-zinc-500 mb-3">
               COMPANY
             </h2>
             <ul className="flex flex-col">
               <li>
                 <Link
                   href="/about"
-                  className="block py-3 min-h-[48px] hover:text-white text-white/80"
+                  className="block py-3 min-h-[48px] text-zinc-700 hover:text-zinc-900"
                 >
                   About
                 </Link>
@@ -89,7 +88,7 @@ export function SiteFooter() {
               <li>
                 <Link
                   href="/contact"
-                  className="block py-3 min-h-[48px] hover:text-white text-white/80"
+                  className="block py-3 min-h-[48px] text-zinc-700 hover:text-zinc-900"
                 >
                   Contact
                 </Link>
@@ -98,14 +97,14 @@ export function SiteFooter() {
           </div>
 
           <div>
-            <h2 className="font-[var(--font-heading)] text-sm tracking-[0.2em] text-white/60 mb-3">
+            <h2 className="font-[var(--font-heading)] text-sm tracking-[0.2em] text-zinc-500 mb-3">
               LEGAL
             </h2>
             <ul className="flex flex-col">
               <li>
                 <Link
                   href="/privacy"
-                  className="block py-3 min-h-[48px] hover:text-white text-white/80"
+                  className="block py-3 min-h-[48px] text-zinc-700 hover:text-zinc-900"
                 >
                   Privacy Policy
                 </Link>
@@ -113,7 +112,7 @@ export function SiteFooter() {
               <li>
                 <Link
                   href="/terms"
-                  className="block py-3 min-h-[48px] hover:text-white text-white/80"
+                  className="block py-3 min-h-[48px] text-zinc-700 hover:text-zinc-900"
                 >
                   Terms of Service
                 </Link>
@@ -123,17 +122,14 @@ export function SiteFooter() {
         </div>
 
         {/* Brand + socials row */}
-        <div
-          className="flex flex-col md:flex-row items-center md:items-center justify-between gap-6 pt-8 border-t text-center md:text-left"
-          style={{ borderColor: "rgba(255,255,255,0.1)" }}
-        >
+        <div className="flex flex-col md:flex-row items-center md:items-center justify-between gap-6 pt-8 border-t border-zinc-200 text-center md:text-left">
           <div className="flex items-center gap-3">
             <Logo size={40} />
             <div className="flex flex-col">
-              <span className="font-[var(--font-heading)] tracking-wide">
+              <span className="font-[var(--font-heading)] tracking-wide text-zinc-900">
                 3D <span style={{ color: BRAND.green }}>NINJAZ</span>
               </span>
-              <span className="text-xs text-white/60">
+              <span className="text-xs" style={{ color: BRAND.blue }}>
                 © {year} {BUSINESS.legalName} · {BUSINESS.city},{" "}
                 {BUSINESS.country}
               </span>
@@ -146,13 +142,9 @@ export function SiteFooter() {
           >
             {/* Instagram */}
             {isPlaceholderSocial(BUSINESS.socials.instagram) ? (
-              // role="img" is required when setting aria-label on a non-
-              // interactive <span>; without it, Axe / Lighthouse flag the
-              // aria-label as a prohibited attribute on an implicit-generic
-              // element (WAI-ARIA 1.2 §5.2.8.4).
               <span
                 role="img"
-                className={`${socialIconClass} text-white/30`}
+                className={`${socialIconClass} text-zinc-300`}
                 aria-label="Instagram (coming soon)"
                 title="Instagram (coming soon)"
               >
@@ -163,7 +155,7 @@ export function SiteFooter() {
                 href={BUSINESS.socials.instagram}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={`${socialIconClass} text-white/80 hover:bg-white/10 hover:text-white`}
+                className={`${socialIconClass} text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900`}
                 aria-label="Instagram"
               >
                 <Camera className="h-5 w-5" aria-hidden />
@@ -174,10 +166,9 @@ export function SiteFooter() {
                 is the closest neutral "social audio/video" icon available
                 without adding a new dependency. */}
             {isPlaceholderSocial(BUSINESS.socials.tiktok) ? (
-              // role="img" required — see Instagram placeholder above.
               <span
                 role="img"
-                className={`${socialIconClass} text-white/30`}
+                className={`${socialIconClass} text-zinc-300`}
                 aria-label="TikTok (coming soon)"
                 title="TikTok (coming soon)"
               >
@@ -188,7 +179,7 @@ export function SiteFooter() {
                 href={BUSINESS.socials.tiktok}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={`${socialIconClass} text-white/80 hover:bg-white/10 hover:text-white`}
+                className={`${socialIconClass} text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900`}
                 aria-label="TikTok"
               >
                 <Music2 className="h-5 w-5" aria-hidden />
@@ -198,7 +189,7 @@ export function SiteFooter() {
             {/* Email — always concrete (D-04) */}
             <a
               href={BUSINESS.socials.email}
-              className={`${socialIconClass} text-white/80 hover:bg-white/10 hover:text-white`}
+              className={`${socialIconClass} text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900`}
               aria-label={`Email ${BUSINESS.contactEmail}`}
             >
               <Mail className="h-5 w-5" aria-hidden />

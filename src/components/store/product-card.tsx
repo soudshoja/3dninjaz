@@ -48,7 +48,7 @@ export async function ProductCard({
     <div className="relative group">
       <Link
         href={`/products/${product.slug}`}
-        className="block rounded-[28px] bg-white shadow-lg hover:-translate-y-1 hover:shadow-xl transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+        className="block rounded-[28px] bg-white border border-zinc-200 shadow-sm hover:-translate-y-1 hover:shadow-md transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
         style={{ outlineColor: accent }}
         aria-label={`${product.name} — ${priceLabel}`}
       >
@@ -87,8 +87,7 @@ export async function ProductCard({
             truncates — on very narrow cards the title compresses instead. */}
       <div className="p-4 md:p-5 flex items-center justify-between gap-3">
         <h3
-          className="min-w-0 font-[var(--font-heading)] text-lg md:text-xl truncate"
-          style={{ color: BRAND.ink }}
+          className="min-w-0 font-[var(--font-heading)] text-lg md:text-xl truncate text-zinc-900"
         >
           {product.name}
         </h3>

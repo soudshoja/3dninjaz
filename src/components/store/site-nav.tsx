@@ -106,8 +106,7 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
   return (
     <nav
       aria-label="Primary"
-      className="sticky top-0 z-40 border-b-2 backdrop-blur"
-      style={{ backgroundColor: `${BRAND.cream}E6`, borderColor: "#0B102010" }}
+      className="sticky top-0 z-40 border-b border-zinc-200 backdrop-blur bg-white/90"
     >
       <div className="max-w-6xl mx-auto flex items-center justify-between px-6 md:px-8 py-3">
         <Link href="/" className="flex items-center gap-3 min-h-[48px]">
@@ -138,14 +137,10 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
             {shopOpen && categoryTree.length > 0 ? (
               <div
                 onMouseLeave={() => setShopOpen(false)}
-                className="absolute right-0 top-full mt-2 w-[min(90vw,720px)] rounded-xl border-2 shadow-xl p-5 grid gap-6 grid-cols-2 md:grid-cols-3"
-                style={{
-                  backgroundColor: BRAND.cream,
-                  borderColor: "#0B102020",
-                }}
+                className="absolute right-0 top-full mt-2 w-[min(90vw,720px)] rounded-xl border border-zinc-200 shadow-xl p-5 grid gap-6 grid-cols-2 md:grid-cols-3 bg-white"
                 role="menu"
               >
-                <div className="col-span-2 md:col-span-3 flex items-baseline justify-between pb-2 mb-1 border-b" style={{ borderColor: "#0B102015" }}>
+                <div className="col-span-2 md:col-span-3 flex items-baseline justify-between pb-2 mb-1 border-b border-zinc-100">
                   <span
                     className="font-[var(--font-heading)] text-lg"
                     style={{ color: BRAND.ink }}
@@ -233,15 +228,14 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
       {open ? (
         <div
           id="site-nav-mobile"
-          className="md:hidden border-t-2 max-h-[80vh] overflow-y-auto"
-          style={{ borderColor: "#0B102010", backgroundColor: BRAND.cream }}
+          className="md:hidden border-t border-zinc-200 max-h-[80vh] overflow-y-auto bg-white"
         >
           <ul className="flex flex-col px-6 py-2">
             <li>
               <Link
                 href="/shop"
-                className="flex items-center gap-3 py-4 min-h-[48px] font-semibold border-b"
-                style={{ borderColor: "#0B102010", color: BRAND.ink }}
+                className="flex items-center gap-3 py-4 min-h-[48px] font-semibold border-b border-zinc-100"
+                style={{ color: BRAND.ink }}
                 onClick={() => setOpen(false)}
               >
                 <MobileNavIcon name="shop" />
@@ -251,7 +245,7 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
             {categoryTree.map((c) => {
               const isExpanded = expandedCat === c.id;
               return (
-                <li key={c.id} className="border-b" style={{ borderColor: "#0B102010" }}>
+                <li key={c.id} className="border-b border-zinc-100">
                   <button
                     type="button"
                     className="flex items-center justify-between w-full py-3 min-h-[48px] font-semibold text-left"
@@ -273,8 +267,7 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
                       <li>
                         <Link
                           href={`/shop?category=${encodeURIComponent(c.slug)}`}
-                          className="block py-2 text-sm min-h-[44px] opacity-80"
-                          style={{ color: BRAND.ink }}
+                          className="block py-2 text-sm min-h-[44px] text-zinc-600"
                           onClick={() => setOpen(false)}
                         >
                           All in {c.name}
@@ -284,8 +277,7 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
                         <li key={s.id}>
                           <Link
                             href={`/shop?category=${encodeURIComponent(c.slug)}&subcategory=${encodeURIComponent(s.slug)}`}
-                            className="block py-2 text-sm min-h-[44px]"
-                            style={{ color: BRAND.ink }}
+                            className="block py-2 text-sm min-h-[44px] text-zinc-700"
                             onClick={() => setOpen(false)}
                           >
                             {s.name}
@@ -303,8 +295,8 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
                 <li key={l.href}>
                   <Link
                     href={l.href}
-                    className="flex items-center gap-3 py-4 min-h-[48px] font-semibold border-b last:border-b-0"
-                    style={{ borderColor: "#0B102010", color: BRAND.ink }}
+                    className="flex items-center gap-3 py-4 min-h-[48px] font-semibold border-b border-zinc-100 last:border-b-0"
+                    style={{ color: BRAND.ink }}
                     onClick={() => setOpen(false)}
                   >
                     {iconName ? <MobileNavIcon name={iconName} /> : null}
@@ -323,7 +315,7 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
               );
             })}
           </ul>
-          <div className="px-6 py-4 border-t" style={{ borderColor: "#0B102010" }}>
+          <div className="px-6 py-4 border-t border-zinc-200">
             <UserNav variant="mobile" />
           </div>
         </div>

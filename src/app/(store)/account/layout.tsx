@@ -39,11 +39,11 @@ export default async function AccountLayout({
 
   return (
     <main
-      className="min-h-screen"
-      style={{ backgroundColor: BRAND.cream, color: BRAND.ink }}
+      className="min-h-screen bg-white"
+      style={{ color: BRAND.ink }}
     >
       <div className="mx-auto max-w-6xl px-4 py-8 md:py-12">
-        <h1 className="font-[var(--font-heading)] text-3xl md:text-4xl mb-6">
+        <h1 className="font-[var(--font-heading)] text-3xl md:text-4xl mb-6 text-zinc-900">
           My account
         </h1>
         <div className="md:grid md:grid-cols-[220px_1fr] md:gap-8">

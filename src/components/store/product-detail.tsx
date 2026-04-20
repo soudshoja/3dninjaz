@@ -113,8 +113,7 @@ export function ProductDetail({
         ) : null}
 
         <h1
-          className="font-[var(--font-heading)] text-3xl md:text-5xl leading-tight mb-2"
-          style={{ color: BRAND.ink }}
+          className="font-[var(--font-heading)] text-3xl md:text-5xl leading-tight mb-2 text-zinc-900"
         >
           {product.name}
         </h1>
@@ -126,13 +125,13 @@ export function ProductDetail({
         ) : null}
 
         <p
-          className="inline-flex self-start rounded-full px-5 py-2 text-lg font-bold text-white mb-6"
-          style={{ backgroundColor: BRAND.ink }}
+          className="inline-flex self-start rounded-full px-5 py-2 text-lg font-bold mb-6"
+          style={{ backgroundColor: BRAND.green, color: BRAND.ink }}
         >
           {priceLabel}
         </p>
 
-        <p className="text-base leading-relaxed mb-6" style={{ color: BRAND.ink }}>
+        <p className="text-base leading-relaxed mb-6 text-zinc-700">
           {product.description}
         </p>
 
@@ -168,20 +167,14 @@ export function ProductDetail({
         </p>
 
         {/* Material + how-it's-made — PROD-05 */}
-        <section
-          className="mt-6 rounded-2xl border-2 p-5"
-          style={{ borderColor: BRAND.ink }}
-        >
-          <h2
-            className="font-[var(--font-heading)] text-xl mb-2"
-            style={{ color: BRAND.ink }}
-          >
+        <section className="mt-6 rounded-2xl border border-zinc-200 p-5 bg-white">
+          <h2 className="font-[var(--font-heading)] text-xl mb-2 text-zinc-900">
             Material &amp; craft
           </h2>
-          <p className="text-sm text-slate-700 mb-2">
+          <p className="text-sm text-zinc-700 mb-2">
             <span className="font-bold">Material:</span> {material}
           </p>
-          <p className="text-sm text-slate-700">
+          <p className="text-sm text-zinc-700">
             Every piece is printed to order on our Kuala Lumpur printers, layer
             by ninja layer. Hand-finished, inspected, then shipped straight to
             your door.

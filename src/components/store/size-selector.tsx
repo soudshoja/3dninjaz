@@ -91,12 +91,12 @@ export function SizeSelector({
                     ? "#cbd5e1"
                     : isSelected
                       ? accent
-                      : BRAND.ink,
+                      : "#D4D4D8", // zinc-300
                   boxShadow: soldOut
                     ? "none"
                     : isSelected
-                      ? `0 6px 0 rgba(0,0,0,0.35)`
-                      : "0 3px 0 rgba(0,0,0,0.15)",
+                      ? `0 4px 0 rgba(11,16,32,0.18)`
+                      : "0 2px 0 rgba(11,16,32,0.08)",
                 }}
               >
                 <span className="font-[var(--font-heading)] text-3xl">{v.size}</span>

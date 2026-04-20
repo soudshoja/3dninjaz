@@ -26,32 +26,29 @@ export default async function OrdersIndexPage() {
 
   return (
     <main
-      className="min-h-screen"
-      style={{ backgroundColor: BRAND.cream, color: BRAND.ink }}
+      className="min-h-screen bg-white"
+      style={{ color: BRAND.ink }}
     >
       <div className="mx-auto max-w-3xl px-4 py-8 md:py-14">
         <header className="mb-6 md:mb-10">
-          <h1 className="font-[var(--font-heading)] text-3xl md:text-5xl">
+          <h1 className="font-[var(--font-heading)] text-3xl md:text-5xl text-zinc-900">
             Your orders
           </h1>
-          <p className="mt-2 text-slate-700">
+          <p className="mt-2 text-zinc-600">
             Every drop you&apos;ve locked in.
           </p>
         </header>
 
         {rows.length === 0 ? (
-          <div
-            className="rounded-2xl p-8 text-center"
-            style={{ backgroundColor: "#ffffff" }}
-          >
-            <p className="text-lg font-bold mb-2">No orders yet.</p>
-            <p className="text-slate-600 mb-6">
+          <div className="rounded-2xl p-8 text-center bg-white border border-zinc-200 shadow-sm">
+            <p className="text-lg font-bold mb-2 text-zinc-900">No orders yet.</p>
+            <p className="text-zinc-600 mb-6">
               Pick out something stealthy from the shop.
             </p>
             <Link
               href="/shop"
-              className="inline-flex items-center rounded-full px-6 py-3 font-bold text-white min-h-[48px]"
-              style={{ backgroundColor: BRAND.ink }}
+              className="inline-flex items-center rounded-full px-6 py-3 font-bold min-h-[48px] shadow-[0_4px_0_rgba(11,16,32,0.15)]"
+              style={{ backgroundColor: BRAND.green, color: BRAND.ink }}
             >
               Browse drops
             </Link>

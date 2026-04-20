@@ -6,10 +6,12 @@ import { BRAND } from "@/lib/brand";
 import { getActiveCategoryTree } from "@/lib/catalog";
 
 /**
- * Customer-facing route-group layout. Cream background, ink text,
- * unified SiteNav + SiteFooter. Phase 8: loads the category tree once
- * here and passes it to the client SiteNav so every page renders the
- * mega-menu without a per-page round-trip.
+ * Customer-facing route-group layout. Lightened (2026-04-20): mostly-white
+ * storefront base, ink text. Accent colors (blue/green/purple) used as
+ * per-component pops, not as full-section fills. Admin retains its own
+ * chrome — this surface change does not propagate across route groups.
+ * Phase 8: loads the category tree once here and passes it to the client
+ * SiteNav so every page renders the mega-menu without a per-page round-trip.
  *
  * Failure-isolation: if the tree fetch throws (cold DB, pool blip) we
  * fall back to an empty list so the layout still renders — the nav
@@ -26,7 +28,7 @@ export default async function StoreLayout({ children }: { children: ReactNode })
 
   return (
     <div
-      style={{ backgroundColor: BRAND.cream, color: BRAND.ink }}
+      style={{ backgroundColor: "#FFFFFF", color: BRAND.ink }}
       className="min-h-screen flex flex-col"
     >
       <SiteNav categoryTree={categoryTree} />

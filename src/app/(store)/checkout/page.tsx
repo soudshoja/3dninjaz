@@ -31,15 +31,15 @@ export default async function CheckoutPage() {
 
   return (
     <main
-      className="min-h-screen"
-      style={{ backgroundColor: BRAND.cream, color: BRAND.ink }}
+      className="min-h-screen bg-white"
+      style={{ color: BRAND.ink }}
     >
       <div className="mx-auto max-w-6xl px-4 py-8 md:py-14">
         <header className="mb-6 md:mb-10">
-          <h1 className="font-[var(--font-heading)] text-3xl md:text-5xl">
+          <h1 className="font-[var(--font-heading)] text-3xl md:text-5xl text-zinc-900">
             Checkout
           </h1>
-          <p className="mt-2 text-slate-700">
+          <p className="mt-2 text-zinc-600">
             Enter your shipping details and complete payment with PayPal.
           </p>
         </header>

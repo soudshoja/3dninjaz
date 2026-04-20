@@ -50,14 +50,13 @@ export default async function ShopPage({
   const wishedIds = await getWishlistedProductIds(products.map((p) => p.id));
 
   return (
-    <div className="pb-24">
-      <section className="pt-10 md:pt-16 pb-6" style={{ backgroundColor: BRAND.cream }}>
+    <div className="pb-24 bg-white">
+      <section className="pt-10 md:pt-16 pb-6 border-b border-zinc-100 bg-white">
         <div className="max-w-6xl mx-auto px-6">
           <div className="flex items-center gap-3 mb-4">
             <Shuriken className="w-7 h-7" fill={BRAND.purple} />
             <h1
-              className="font-[var(--font-heading)] text-4xl md:text-6xl tracking-tight"
-              style={{ color: BRAND.ink }}
+              className="font-[var(--font-heading)] text-4xl md:text-6xl tracking-tight text-zinc-900"
             >
               {headline.toUpperCase()}
             </h1>
@@ -65,7 +64,7 @@ export default async function ShopPage({
           {breadcrumb ? (
             <nav
               aria-label="Breadcrumb"
-              className="text-sm text-slate-600 mb-2 flex items-center flex-wrap gap-1"
+              className="text-sm text-zinc-500 mb-2 flex items-center flex-wrap gap-1"
             >
               {breadcrumb.map((crumb, i) => (
                 <span key={`${crumb.href ?? "cur"}-${i}`} className="flex items-center gap-1">
@@ -75,7 +74,7 @@ export default async function ShopPage({
                       {crumb.label}
                     </Link>
                   ) : (
-                    <span className="font-semibold" style={{ color: BRAND.ink }}>
+                    <span className="font-semibold text-zinc-900">
                       {crumb.label}
                     </span>
                   )}
@@ -83,7 +82,7 @@ export default async function ShopPage({
               ))}
             </nav>
           ) : null}
-          <p className="text-base text-slate-600">
+          <p className="text-base text-zinc-500">
             {products.length} {products.length === 1 ? "product" : "products"}
           </p>
         </div>

@@ -32,17 +32,17 @@ export default function ContactPage() {
         />
         <span
           className="inline-block rounded-full px-3 py-1 text-xs font-bold uppercase tracking-[0.2em]"
-          style={{ backgroundColor: BRAND.ink, color: BRAND.cream }}
+          style={{ backgroundColor: BRAND.green, color: BRAND.ink }}
         >
           Contact
         </span>
         <h1
           id="contact-title"
-          className="mt-4 font-heading text-4xl sm:text-5xl"
+          className="mt-4 font-heading text-4xl sm:text-5xl text-zinc-900"
         >
           Get in touch.
         </h1>
-        <p className="mt-3 text-base sm:text-lg" style={{ color: "#475569" }}>
+        <p className="mt-3 text-base sm:text-lg text-zinc-600">
           We reply fastest on WhatsApp.
         </p>
       </header>
@@ -61,7 +61,7 @@ export default function ContactPage() {
       <dl className="mt-12 grid gap-4 sm:grid-cols-2">
         <div
           className="rounded-2xl p-5"
-          style={{ backgroundColor: BRAND.cream, border: "2px solid #E2E8F0" }}
+          style={{ backgroundColor: "#FAFAFA", border: "1px solid #E4E4E7" }}
         >
           <dt className="font-heading text-sm uppercase tracking-wider opacity-70">
             Email
@@ -78,7 +78,7 @@ export default function ContactPage() {
 
         <div
           className="rounded-2xl p-5"
-          style={{ backgroundColor: BRAND.cream, border: "2px solid #E2E8F0" }}
+          style={{ backgroundColor: "#FAFAFA", border: "1px solid #E4E4E7" }}
         >
           <dt className="font-heading text-sm uppercase tracking-wider opacity-70">
             Business hours
@@ -88,7 +88,7 @@ export default function ContactPage() {
 
         <div
           className="rounded-2xl p-5 sm:col-span-2"
-          style={{ backgroundColor: BRAND.cream, border: "2px solid #E2E8F0" }}
+          style={{ backgroundColor: "#FAFAFA", border: "1px solid #E4E4E7" }}
         >
           <dt className="font-heading text-sm uppercase tracking-wider opacity-70">
             Location

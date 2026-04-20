@@ -76,8 +76,8 @@ export default async function WishlistPage() {
                 />
                 <Link
                   href={`/products/${product.slug}`}
-                  className="inline-flex items-center justify-center min-h-[48px] px-4 rounded-lg font-bold text-sm"
-                  style={{ backgroundColor: BRAND.ink, color: BRAND.cream }}
+                  className="inline-flex items-center justify-center min-h-[48px] px-4 rounded-lg font-bold text-sm shadow-[0_2px_0_rgba(11,16,32,0.12)]"
+                  style={{ backgroundColor: BRAND.green, color: BRAND.ink }}
                 >
                   View &amp; add to bag
                 </Link>

@@ -73,8 +73,8 @@ export default async function OrderDetailPage({
 
   return (
     <main
-      className="min-h-screen"
-      style={{ backgroundColor: BRAND.cream, color: BRAND.ink }}
+      className="min-h-screen bg-white"
+      style={{ color: BRAND.ink }}
     >
       <div className="mx-auto max-w-3xl px-4 py-8 md:py-14">
         {justPaid ? (

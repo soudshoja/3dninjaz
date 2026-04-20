@@ -54,15 +54,15 @@ export default function BagPage() {
         </p>
 
         {items.length === 0 ? (
-          <div className="rounded-3xl bg-white p-10 text-center shadow-lg">
-            <p className="text-xl font-bold mb-2" style={{ color: BRAND.ink }}>
+          <div className="rounded-3xl bg-white p-10 text-center border border-zinc-200 shadow-sm">
+            <p className="text-xl font-bold mb-2 text-zinc-900">
               Your bag is empty.
             </p>
-            <p className="text-slate-600 mb-6">Pick something stealthy.</p>
+            <p className="text-zinc-600 mb-6">Pick something stealthy.</p>
             <Link
               href="/shop"
-              className="inline-flex items-center rounded-full px-8 py-4 font-bold text-white shadow-[0_6px_0_rgba(0,0,0,0.35)] min-h-[60px]"
-              style={{ backgroundColor: BRAND.ink }}
+              className="inline-flex items-center rounded-full px-8 py-4 font-bold shadow-[0_4px_0_rgba(11,16,32,0.15)] hover:translate-y-[2px] hover:shadow-[0_2px_0_rgba(11,16,32,0.15)] transition min-h-[60px]"
+              style={{ backgroundColor: BRAND.green, color: BRAND.ink }}
             >
               Browse drops
             </Link>
@@ -77,16 +77,16 @@ export default function BagPage() {
               ))}
             </ul>
 
-            <aside className="rounded-3xl bg-white p-6 shadow-lg h-fit lg:sticky lg:top-24">
-              <h2 className="font-[var(--font-heading)] text-2xl mb-4">
+            <aside className="rounded-3xl bg-white p-6 border border-zinc-200 shadow-sm h-fit lg:sticky lg:top-24">
+              <h2 className="font-[var(--font-heading)] text-2xl mb-4 text-zinc-900">
                 Order summary
               </h2>
               <dl className="space-y-2 mb-4">
                 <div className="flex items-center justify-between">
-                  <dt className="text-slate-600">Subtotal</dt>
-                  <dd className="font-bold">{formatMYR(subtotal)}</dd>
+                  <dt className="text-zinc-600">Subtotal</dt>
+                  <dd className="font-bold text-zinc-900">{formatMYR(subtotal)}</dd>
                 </div>
-                <div className="flex items-center justify-between text-sm text-slate-500">
+                <div className="flex items-center justify-between text-sm text-zinc-500">
                   <dt>Shipping</dt>
                   <dd>Calculated at checkout</dd>
                 </div>
@@ -94,15 +94,14 @@ export default function BagPage() {
               {/* /checkout is a Phase 3 target; D-03 accepts a 404 until then. */}
               <Link
                 href="/checkout"
-                className="w-full inline-flex items-center justify-center rounded-full px-6 py-4 font-bold text-lg shadow-[0_6px_0_rgba(0,0,0,0.35)] hover:translate-y-[2px] hover:shadow-[0_4px_0_rgba(0,0,0,0.35)] transition min-h-[60px]"
+                className="w-full inline-flex items-center justify-center rounded-full px-6 py-4 font-bold text-lg shadow-[0_4px_0_rgba(11,16,32,0.15)] hover:translate-y-[2px] hover:shadow-[0_2px_0_rgba(11,16,32,0.15)] transition min-h-[60px]"
                 style={{ backgroundColor: BRAND.green, color: BRAND.ink }}
               >
                 Checkout · {formatMYR(subtotal)}
               </Link>
               <Link
                 href="/shop"
-                className="w-full inline-flex items-center justify-center rounded-full px-6 py-3 font-semibold text-sm mt-3 border-2 min-h-[48px]"
-                style={{ borderColor: BRAND.ink, color: BRAND.ink }}
+                className="w-full inline-flex items-center justify-center rounded-full px-6 py-3 font-semibold text-sm mt-3 border-2 min-h-[48px] border-zinc-300 text-zinc-700 hover:bg-zinc-50"
               >
                 Keep shopping
               </Link>

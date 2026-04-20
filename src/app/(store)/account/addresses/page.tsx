@@ -20,8 +20,8 @@ export default async function AddressesPage() {
         </h2>
         <Link
           href="/account/addresses/new"
-          className="inline-flex items-center justify-center min-h-[60px] px-5 rounded-lg font-bold"
-          style={{ backgroundColor: BRAND.ink, color: BRAND.cream }}
+          className="inline-flex items-center justify-center min-h-[60px] px-5 rounded-lg font-bold shadow-[0_2px_0_rgba(11,16,32,0.12)]"
+          style={{ backgroundColor: BRAND.green, color: BRAND.ink }}
         >
           + Add an address
         </Link>
