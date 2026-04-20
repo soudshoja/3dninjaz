@@ -3,6 +3,7 @@ import {
   varchar,
   text,
   mediumtext,
+  longtext,
   boolean,
   int,
   decimal,
@@ -158,6 +159,13 @@ export const products = mysqlTable("products", {
     () => subcategories.id,
     { onDelete: "set null" }
   ),
+  // Phase 9 (09-01) — shipping dimensions for Delyva courier pricing. All
+  // nullable so existing rows stay valid; when absent we fall back to
+  // shippingConfig.defaultWeightKg + a cubical default dimension server-side.
+  shippingWeightKg: decimal("shipping_weight_kg", { precision: 8, scale: 3 }),
+  shippingLengthCm: int("shipping_length_cm"),
+  shippingWidthCm: int("shipping_width_cm"),
+  shippingHeightCm: int("shipping_height_cm"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at")
     .notNull()
@@ -806,6 +814,98 @@ export const paymentLinksRelations = relations(paymentLinks, ({ one }) => ({
 export const disputeCacheRelations = relations(disputeCache, ({ one }) => ({
   order: one(orders, {
     fields: [disputeCache.orderId],
+    references: [orders.id],
+  }),
+}));
+
+// ============================================================================
+// Phase 9 (09-01) — Delyva delivery integration
+//
+// New tables: shipping_config (singleton), order_shipments (1:1 with orders
+// in phase 1 — enforced by uq_shipments_order UNIQUE).
+// New columns on products: shippingWeightKg + shippingLength/Width/HeightCm
+// (all nullable, declared in products() above).
+//
+// MariaDB quirks (CLAUDE.md):
+//   - JSON stored as LONGTEXT — serviceSnapshot + enabledServices are
+//     longtext("…") and the read sites must JSON.parse.
+//   - App-generated UUIDs via crypto.randomUUID() on INSERT.
+//   - shipping_config is a singleton — id='default' — so repeated
+//     INSERT…ON DUPLICATE KEY UPDATE is idempotent.
+// ============================================================================
+
+export const shippingConfig = mysqlTable("shipping_config", {
+  id: varchar("id", { length: 36 }).primaryKey(), // always 'default'
+  originAddress1: varchar("origin_address1", { length: 255 }).notNull(),
+  originAddress2: varchar("origin_address2", { length: 255 }),
+  originCity: varchar("origin_city", { length: 100 }).notNull(),
+  originState: varchar("origin_state", { length: 100 }).notNull(),
+  originPostcode: varchar("origin_postcode", { length: 10 }).notNull(),
+  originCountry: varchar("origin_country", { length: 2 })
+    .notNull()
+    .default("MY"),
+  originContactName: varchar("origin_contact_name", { length: 100 }).notNull(),
+  originContactEmail: varchar("origin_contact_email", { length: 150 }).notNull(),
+  originContactPhone: varchar("origin_contact_phone", { length: 30 }).notNull(),
+  defaultItemType: mysqlEnum("default_item_type", [
+    "PARCEL",
+    "PACKAGE",
+    "BULKY",
+  ])
+    .notNull()
+    .default("PACKAGE"),
+  // Fallback weight when the product row has no shippingWeightKg set.
+  defaultWeightKg: decimal("default_weight_kg", { precision: 8, scale: 3 })
+    .notNull()
+    .default("0.5"),
+  markupPercent: decimal("markup_percent", { precision: 5, scale: 2 })
+    .notNull()
+    .default("0"),
+  markupFlat: decimal("markup_flat", { precision: 8, scale: 2 })
+    .notNull()
+    .default("0"),
+  // NULL disables free shipping; non-null = MYR threshold on cart subtotal.
+  freeShippingThreshold: decimal("free_shipping_threshold", {
+    precision: 10,
+    scale: 2,
+  }),
+  // JSON array of Delyva companyCodes — empty/null means "allow all".
+  enabledServices: longtext("enabled_services"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+});
+
+export const orderShipments = mysqlTable(
+  "order_shipments",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    orderId: varchar("order_id", { length: 36 }).notNull(),
+    // Delyva's numeric id stored as string — stays safe across BIGINT ranges.
+    delyvaOrderId: varchar("delyva_order_id", { length: 50 }),
+    serviceCode: varchar("service_code", { length: 50 }),
+    consignmentNo: varchar("consignment_no", { length: 100 }),
+    trackingNo: varchar("tracking_no", { length: 100 }),
+    statusCode: int("status_code"),
+    statusMessage: varchar("status_message", { length: 255 }),
+    personnelName: varchar("personnel_name", { length: 100 }),
+    personnelPhone: varchar("personnel_phone", { length: 30 }),
+    // MYR — final price admin/customer paid (after markup rules).
+    quotedPrice: decimal("quoted_price", { precision: 10, scale: 2 }),
+    // JSON — full service object from the quote at booking time.
+    serviceSnapshot: longtext("service_snapshot"),
+    lastTrackingEventAt: timestamp("last_tracking_event_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({
+    // Phase 1: one shipment per order. Split shipments are a future feature.
+    orderIdUnique: unique("uq_shipments_order").on(t.orderId),
+  }),
+);
+
+export const orderShipmentsRelations = relations(orderShipments, ({ one }) => ({
+  order: one(orders, {
+    fields: [orderShipments.orderId],
     references: [orders.id],
   }),
 }));
