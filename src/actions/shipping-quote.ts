@@ -15,12 +15,17 @@ import { loadShippingConfig } from "@/lib/shipping-config";
 // shipping-options widget. For now this is a server-action-only surface:
 //
 //   1. Load shippingConfig (origin + markup + enabled services + threshold).
-//   2. Sum cart weights using products.shippingWeightKg (fallback =
-//      shippingConfig.defaultWeightKg).
-//   3. Call delyvaApi.quote with that weight.
-//   4. Filter by enabledServices allowlist (empty = allow all).
-//   5. Apply markup:  finalPrice = price + price*markupPercent/100 + markupFlat
-//   6. Apply free-shipping threshold: when cartSubtotal >= threshold, all
+//   2. Sum cart weights: totalWeight = Σ (product.shippingWeightKg × quantity)
+//      across every line item. Fallback per-unit weight = defaultWeightKg.
+//      Example: 5 × 500g items → 2.5 kg total sent to Delyva.
+//   3. Guard: if totalWeight > 30 kg (Delyva single-parcel cap) return a
+//      friendly error instead of quoting — we don't auto-split parcels yet.
+//   4. Call delyvaApi.quote with weight ONLY (no dimensions). Delyva will
+//      price on actual weight; volumetric is skipped until we store real
+//      per-product box dims and can aggregate them properly.
+//   5. Filter by enabledServices allowlist (empty = allow all).
+//   6. Apply markup:  finalPrice = price + price*markupPercent/100 + markupFlat
+//   7. Apply free-shipping threshold: when cartSubtotal >= threshold, all
 //      services are returned with finalPrice=0 (shipping becomes a cost
 //      the store absorbs; the service still needs to be selected so we know
 //      which courier was booked for the order).
@@ -105,6 +110,17 @@ export async function quoteForCart(
     subtotal += it.unitPrice * it.quantity;
   }
   if (totalWeight <= 0) totalWeight = fallbackWeight;
+
+  // Delyva single-parcel max is 30 kg for most courier services. We don't
+  // currently split orders across multiple parcels, so surface a friendly
+  // error and let the customer contact us or split the order themselves.
+  const MAX_PARCEL_WEIGHT_KG = 30;
+  if (totalWeight > MAX_PARCEL_WEIGHT_KG) {
+    return {
+      ok: false,
+      error: `Your order is ${round2(totalWeight)} kg which exceeds the ${MAX_PARCEL_WEIGHT_KG} kg single-parcel limit. Please split into smaller orders or contact us to arrange shipping.`,
+    };
+  }
 
   // --- quote
   try {
