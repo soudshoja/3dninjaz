@@ -20,6 +20,9 @@ import { PaymentLinkCard } from "@/components/admin/payment-link-card";
 // Phase 7 (07-04) — PayPal financials mirror for paid orders.
 import { getPaymentDetail } from "@/actions/admin-payments";
 import { PaymentFinancialsPanel } from "@/components/admin/payment-financials-panel";
+// Phase 9 (09-01) — Delyva shipment panel (book / print label / track).
+import { getOrderShipment } from "@/actions/shipping";
+import { OrderShipmentPanel } from "@/components/admin/order-shipment-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +66,11 @@ export default async function AdminOrderDetailPage({
   const paymentDetail = row.paypalCaptureId
     ? await getPaymentDetail(row.id)
     : null;
+
+  // Phase 9 (09-01) — load the Delyva shipment mirror (1:1 with orders).
+  // Cheap indexed SELECT; no API call here — actual Delyva calls happen
+  // on the client when the admin clicks "Book courier" or "Refresh status".
+  const shipment = await getOrderShipment(row.id);
 
   return (
     <main
@@ -277,6 +285,14 @@ export default async function AdminOrderDetailPage({
               </p>
             </section>
           ) : null}
+
+          <section
+            className="rounded-2xl p-4 md:p-6 md:col-span-2"
+            style={{ backgroundColor: "#ffffff" }}
+          >
+            <h2 className="font-[var(--font-heading)] text-xl mb-3">Shipping</h2>
+            <OrderShipmentPanel orderId={row.id} shipment={shipment} />
+          </section>
 
           <section
             className="rounded-2xl p-4 md:p-6 md:col-span-2"
