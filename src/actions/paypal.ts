@@ -129,6 +129,10 @@ export async function createPayPalOrder(
     productImage: string | null;
     size: "S" | "M" | "L";
     unitPrice: string; // Drizzle decimal string, kept verbatim
+    // Phase 10 (10-01) — snapshot of productVariants.costPrice at checkout
+    // time. NULL if the variant has no cost set yet; admin can backfill via
+    // the order detail page's Costs & Profit panel.
+    unitCost: string | null;
     quantity: number;
     lineTotal: string;
   };
@@ -161,6 +165,8 @@ export async function createPayPalOrder(
       productImage: firstImage,
       size: v.size,
       unitPrice: v.price,
+      // Drizzle returns decimal as string | null; pass through as-is.
+      unitCost: v.costPrice ?? null,
       quantity,
       lineTotal: line.toFixed(2),
     };
@@ -378,6 +384,9 @@ export async function createPayPalOrder(
         productImage: s.productImage,
         size: s.size,
         unitPrice: s.unitPrice,
+        // Phase 10 (10-01) — cost snapshot at order creation. NULL when the
+        // variant has no costPrice set yet.
+        unitCost: s.unitCost,
         quantity: s.quantity,
         lineTotal: s.lineTotal,
       })),
