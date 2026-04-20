@@ -29,6 +29,25 @@ function MobileNavIcon({ name }: { name: string }) {
 }
 
 /**
+ * Compact 18px ninja icon for the desktop nav links. Sits to the LEFT
+ * of the link text with a small gap. Hidden on narrow tablet widths so
+ * the nav stays uncrowded. `src` accepts any path under /icons/ninja/
+ * (both nav/ and emoji/ folders), since Contact reuses the envelope
+ * emoji ninja.
+ */
+function DesktopNavIcon({ src }: { src: string }) {
+  return (
+    <Image
+      src={src}
+      alt=""
+      width={18}
+      height={18}
+      className="hidden xl:inline-block h-[18px] w-[18px] object-contain shrink-0"
+    />
+  );
+}
+
+/**
  * Unified customer-facing navigation (Phase 4 Plan 04-03, expanded in 08-01).
  *
  * Desktop (>= 768px): logo + Shop (with a hover mega-menu of categories +
@@ -91,11 +110,21 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
   }, [shopOpen]);
 
   const nonShopLinks = [
-    { href: "/about", label: "About" },
-    { href: "/contact", label: "Contact" },
+    {
+      href: "/about",
+      label: "About",
+      desktopIcon: "/icons/ninja/nav/about.png",
+    },
+    {
+      href: "/contact",
+      label: "Contact",
+      desktopIcon: "/icons/ninja/emoji/contact.png",
+    },
   ];
-  // Only used inside the mobile disclosure. Desktop links stay text-only
-  // for a cleaner 68px nav bar.
+  // Slugs for the mobile disclosure (MobileNavIcon expects a nav/ filename).
+  // Desktop link icons are declared inline on each entry above via
+  // `desktopIcon`, because Contact reuses the emoji/ folder and mobile
+  // hard-codes the envelope ninja separately below.
   const MOBILE_ICONS: Record<string, string> = {
     "/about": "about",
     // Contact page gets the envelope emoji — there's no contact ninja in
@@ -129,8 +158,9 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
               onMouseEnter={() => setShopOpen(true)}
               aria-expanded={shopOpen}
               aria-haspopup="true"
-              className="inline-flex items-center gap-1 min-h-[48px] hover:opacity-70 transition-opacity"
+              className="inline-flex items-center gap-2 min-h-[48px] hover:opacity-70 transition-opacity"
             >
+              <DesktopNavIcon src="/icons/ninja/nav/shop.png" />
               Shop
               <ChevronDown className="h-4 w-4" aria-hidden />
             </button>
@@ -194,8 +224,9 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
             <Link
               key={l.href}
               href={l.href}
-              className="inline-flex items-center min-h-[48px] hover:opacity-70 transition-opacity"
+              className="inline-flex items-center gap-2 min-h-[48px] hover:opacity-70 transition-opacity"
             >
+              <DesktopNavIcon src={l.desktopIcon} />
               {l.label}
             </Link>
           ))}
