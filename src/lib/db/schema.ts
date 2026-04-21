@@ -197,6 +197,13 @@ export const productVariants = mysqlTable("product_variants", {
   // available after migration; lowStockThreshold is null until admin sets it.
   inStock: boolean("in_stock").notNull().default(true),
   lowStockThreshold: int("low_stock_threshold"),
+  // Phase 13 — optional stock tracking per variant.
+  // stock: quantity on hand (ignored when track_stock = 0).
+  // trackStock: when false (default), variant is on-demand — always available,
+  //   stock column is ignored, no OOS badge ever shown. When true, the stock
+  //   value is checked at checkout and decremented on capture.
+  stock: int("stock").notNull().default(0),
+  trackStock: boolean("track_stock").notNull().default(false),
 });
 
 // ============================================================================
