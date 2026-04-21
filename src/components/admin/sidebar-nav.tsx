@@ -29,7 +29,6 @@ const GROUPS: NavGroup[] = [
     items: [
       { href: "/admin/products", label: "Products", ninjaIcon: "shop" },
       { href: "/admin/categories", label: "Categories", ninjaIcon: "portfolio" },
-      { href: "/admin/inventory", label: "Inventory", ninjaIcon: "portfolio" },
       {
         href: "/admin/products/import",
         label: "Bulk import",
