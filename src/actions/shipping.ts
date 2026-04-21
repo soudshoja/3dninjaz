@@ -846,9 +846,14 @@ export async function refreshServiceCatalog(): Promise<RefreshCatalogResult> {
 
   const cfg = await loadShippingConfig();
 
+  // Probe corridors: **from the origin (KL) to key destinations across MY**.
+  // This discovers which courier services are available for shipments from
+  // the origin to each region (not intra-city services within each destination).
+  // Fewer services may be available to remote regions (e.g., Sabah/Sarawak) —
+  // the catalog reflects the realistic set of nationwide options.
   const PROBES = [
     {
-      name: "KL",
+      name: "KL→KL (local)",
       destination: {
         address1: "",
         city: "Kuala Lumpur",
@@ -858,7 +863,7 @@ export async function refreshServiceCatalog(): Promise<RefreshCatalogResult> {
       },
     },
     {
-      name: "Penang",
+      name: "KL→Penang",
       destination: {
         address1: "",
         city: "George Town",
@@ -868,7 +873,7 @@ export async function refreshServiceCatalog(): Promise<RefreshCatalogResult> {
       },
     },
     {
-      name: "JB",
+      name: "KL→JB",
       destination: {
         address1: "",
         city: "Johor Bahru",
@@ -878,7 +883,7 @@ export async function refreshServiceCatalog(): Promise<RefreshCatalogResult> {
       },
     },
     {
-      name: "KK",
+      name: "KL→KK",
       destination: {
         address1: "",
         city: "Kota Kinabalu",
@@ -888,7 +893,7 @@ export async function refreshServiceCatalog(): Promise<RefreshCatalogResult> {
       },
     },
     {
-      name: "Kuching",
+      name: "KL→Kuching",
       destination: {
         address1: "",
         city: "Kuching",

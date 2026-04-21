@@ -36,13 +36,13 @@ type RefreshState =
   | { state: "ok"; uniqueServices: number; newlyAdded: number }
   | { state: "error"; error: string };
 
-// Probe corridors used during catalog refresh
+// Probe corridors used during catalog refresh (from origin to each destination)
 const PROBE_CORRIDORS = [
-  "Kuala Lumpur",
-  "Penang",
-  "Johor Bahru",
-  "Kota Kinabalu",
-  "Kuching",
+  "KL→KL (local)",
+  "KL→Penang",
+  "KL→JB",
+  "KL→KK",
+  "KL→Kuching",
 ];
 
 type Props = {
