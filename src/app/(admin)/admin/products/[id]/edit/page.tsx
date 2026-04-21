@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getProduct } from "@/actions/products";
 import { getCategories, getAllSubcategories } from "@/actions/categories";
+import { getStoreSettingsCached } from "@/lib/store-settings";
 import {
   ProductForm,
   type ProductFormInitial,
@@ -21,9 +22,10 @@ export default async function EditProductPage({
   const product = await getProduct(id);
   if (!product) notFound();
 
-  const [categories, subcategories] = await Promise.all([
+  const [categories, subcategories, storeSettings] = await Promise.all([
     getCategories(),
     getAllSubcategories(),
+    getStoreSettingsCached(),
   ]);
 
   const initialData: ProductFormInitial = {
@@ -48,7 +50,23 @@ export default async function EditProductPage({
       // Phase 13 — stock tracking fields; default to on-demand for older rows.
       trackStock: v.trackStock ?? false,
       stock: v.stock ?? 0,
+      // Phase 14 — cost breakdown fields
+      filamentGrams: v.filamentGrams ?? null,
+      printTimeHours: v.printTimeHours ?? null,
+      laborMinutes: v.laborMinutes ?? null,
+      otherCostBreakdown: v.otherCost ?? null,
+      filamentRateOverride: v.filamentRateOverride ?? null,
+      laborRateOverride: v.laborRateOverride ?? null,
+      costPriceManual: v.costPriceManual ?? false,
     })),
+  };
+
+  const storeRates = {
+    filamentCostPerKg: storeSettings.defaultFilamentCostPerKg,
+    electricityCostPerKwh: storeSettings.defaultElectricityCostPerKwh,
+    electricityKwhPerHour: storeSettings.defaultElectricityKwhPerHour,
+    laborRatePerHour: storeSettings.defaultLaborRatePerHour,
+    overheadPercent: storeSettings.defaultOverheadPercent,
   };
 
   return (
@@ -69,6 +87,7 @@ export default async function EditProductPage({
           categoryId: s.categoryId,
           name: s.name,
         }))}
+        storeRates={storeRates}
       />
     </div>
   );

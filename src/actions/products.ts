@@ -12,6 +12,8 @@ import { eq, desc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { productSchema, type ProductInput } from "@/lib/validators";
 import { requireAdmin } from "@/lib/auth-helpers";
+import { computeVariantCost } from "@/lib/cost-breakdown";
+import { getStoreSettingsCached } from "@/lib/store-settings";
 
 export type ProductActionResult =
   | { success: true; productId?: string }
@@ -142,21 +144,54 @@ export async function createProduct(
   });
 
   if (variants.length > 0) {
+    // Phase 14 — fetch store rates once for cost computation.
+    const storeSettings = await getStoreSettingsCached();
+    const storeRates = {
+      filamentCostPerKg: storeSettings.defaultFilamentCostPerKg,
+      electricityCostPerKwh: storeSettings.defaultElectricityCostPerKwh,
+      electricityKwhPerHour: storeSettings.defaultElectricityKwhPerHour,
+      laborRatePerHour: storeSettings.defaultLaborRatePerHour,
+      overheadPercent: storeSettings.defaultOverheadPercent,
+    };
+
     await db.insert(productVariants).values(
-      variants.map((v) => ({
-        productId: id,
-        size: v.size,
-        price: v.price,
-        // Phase 10 (10-01) — per-variant cost price, optional.
-        costPrice: toDecimalOrNull(v.costPrice),
-        widthCm: toDecimalOrNull(v.widthCm),
-        heightCm: toDecimalOrNull(v.heightCm),
-        depthCm: toDecimalOrNull(v.depthCm),
-        // Phase 13 — optional stock tracking. trackStock=false means on-demand;
-        // stock value is stored either way so toggling ON later works immediately.
-        trackStock: v.trackStock,
-        stock: v.stock,
-      }))
+      variants.map((v) => {
+        // Phase 14 — compute cost_price from breakdown (or keep manual value).
+        const breakdown = computeVariantCost(
+          {
+            costPriceManual: v.costPriceManual,
+            costPrice: v.costPrice,
+            filamentGrams: v.filamentGrams,
+            printTimeHours: v.printTimeHours,
+            laborMinutes: v.laborMinutes,
+            otherCost: v.otherCostBreakdown,
+            filamentRateOverride: v.filamentRateOverride,
+            laborRateOverride: v.laborRateOverride,
+          },
+          storeRates,
+        );
+        const computedCostPrice =
+          breakdown.total > 0 ? String(breakdown.total.toFixed(2)) : toDecimalOrNull(v.costPrice);
+        return {
+          productId: id,
+          size: v.size,
+          price: v.price,
+          costPrice: computedCostPrice,
+          widthCm: toDecimalOrNull(v.widthCm),
+          heightCm: toDecimalOrNull(v.heightCm),
+          depthCm: toDecimalOrNull(v.depthCm),
+          trackStock: v.trackStock,
+          stock: v.stock,
+          // Phase 14 breakdown columns
+          filamentGrams: toDecimalOrNull(v.filamentGrams),
+          printTimeHours: toDecimalOrNull(v.printTimeHours),
+          laborMinutes: toDecimalOrNull(v.laborMinutes),
+          otherCost: toDecimalOrNull(v.otherCostBreakdown),
+          filamentRateOverride: toDecimalOrNull(v.filamentRateOverride),
+          laborRateOverride: toDecimalOrNull(v.laborRateOverride),
+          costPriceManual: v.costPriceManual ?? false,
+        };
+      })
     );
   }
 
@@ -207,21 +242,53 @@ export async function updateProduct(
   await db.delete(productVariants).where(eq(productVariants.productId, id));
 
   if (variants.length > 0) {
+    // Phase 14 — fetch store rates once for cost computation.
+    const storeSettings = await getStoreSettingsCached();
+    const storeRates = {
+      filamentCostPerKg: storeSettings.defaultFilamentCostPerKg,
+      electricityCostPerKwh: storeSettings.defaultElectricityCostPerKwh,
+      electricityKwhPerHour: storeSettings.defaultElectricityKwhPerHour,
+      laborRatePerHour: storeSettings.defaultLaborRatePerHour,
+      overheadPercent: storeSettings.defaultOverheadPercent,
+    };
+
     await db.insert(productVariants).values(
-      variants.map((v) => ({
-        productId: id,
-        size: v.size,
-        price: v.price,
-        // Phase 10 (10-01) — per-variant cost price, optional.
-        costPrice: toDecimalOrNull(v.costPrice),
-        widthCm: toDecimalOrNull(v.widthCm),
-        heightCm: toDecimalOrNull(v.heightCm),
-        depthCm: toDecimalOrNull(v.depthCm),
-        // Phase 13 — optional stock tracking. trackStock=false means on-demand;
-        // stock value is stored either way so toggling ON later works immediately.
-        trackStock: v.trackStock,
-        stock: v.stock,
-      }))
+      variants.map((v) => {
+        const breakdown = computeVariantCost(
+          {
+            costPriceManual: v.costPriceManual,
+            costPrice: v.costPrice,
+            filamentGrams: v.filamentGrams,
+            printTimeHours: v.printTimeHours,
+            laborMinutes: v.laborMinutes,
+            otherCost: v.otherCostBreakdown,
+            filamentRateOverride: v.filamentRateOverride,
+            laborRateOverride: v.laborRateOverride,
+          },
+          storeRates,
+        );
+        const computedCostPrice =
+          breakdown.total > 0 ? String(breakdown.total.toFixed(2)) : toDecimalOrNull(v.costPrice);
+        return {
+          productId: id,
+          size: v.size,
+          price: v.price,
+          costPrice: computedCostPrice,
+          widthCm: toDecimalOrNull(v.widthCm),
+          heightCm: toDecimalOrNull(v.heightCm),
+          depthCm: toDecimalOrNull(v.depthCm),
+          trackStock: v.trackStock,
+          stock: v.stock,
+          // Phase 14 breakdown columns
+          filamentGrams: toDecimalOrNull(v.filamentGrams),
+          printTimeHours: toDecimalOrNull(v.printTimeHours),
+          laborMinutes: toDecimalOrNull(v.laborMinutes),
+          otherCost: toDecimalOrNull(v.otherCostBreakdown),
+          filamentRateOverride: toDecimalOrNull(v.filamentRateOverride),
+          laborRateOverride: toDecimalOrNull(v.laborRateOverride),
+          costPriceManual: v.costPriceManual ?? false,
+        };
+      })
     );
   }
 
