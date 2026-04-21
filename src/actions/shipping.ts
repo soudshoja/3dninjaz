@@ -922,9 +922,15 @@ export async function refreshServiceCatalog(): Promise<RefreshCatalogResult> {
         itemType: cfg.defaultItemType,
       });
       const services = parseQuoteServices(q);
+      console.log(
+        `[refreshServiceCatalog] probe ${probe.name}: found ${services.length} service(s)`,
+      );
       totalProbed += services.length;
       for (const svc of services) {
         if (!seen.has(svc.serviceCode)) {
+          console.log(
+            `[refreshServiceCatalog] adding service: ${svc.serviceCode} (${svc.serviceName} by ${svc.companyCode})`,
+          );
           seen.set(svc.serviceCode, svc);
         }
       }
@@ -957,11 +963,28 @@ export async function refreshServiceCatalog(): Promise<RefreshCatalogResult> {
   let newlyAdded = 0;
 
   for (const [serviceCode, svc] of seen.entries()) {
-    if (existingCodes.has(serviceCode)) {
-      // UPDATE — refresh probe data but DO NOT touch is_enabled.
-      await db
-        .update(shippingServiceCatalog)
-        .set({
+    try {
+      if (existingCodes.has(serviceCode)) {
+        // UPDATE — refresh probe data but DO NOT touch is_enabled.
+        const result = await db
+          .update(shippingServiceCatalog)
+          .set({
+            companyCode: svc.companyCode ?? "",
+            companyName: svc.companyName ?? "",
+            serviceName: svc.serviceName ?? null,
+            serviceType: svc.serviceType ?? null,
+            samplePrice: svc.price.amount.toFixed(2),
+            etaMinMinutes: svc.etaMin ?? null,
+            etaMaxMinutes: svc.etaMax ?? null,
+            lastSeenAt: now,
+          })
+          .where(eq(shippingServiceCatalog.serviceCode, serviceCode));
+        console.log(`[refreshServiceCatalog] updated service ${serviceCode}`);
+      } else {
+        // INSERT — new service, default is_enabled = true.
+        await db.insert(shippingServiceCatalog).values({
+          id: randomUUID(),
+          serviceCode,
           companyCode: svc.companyCode ?? "",
           companyName: svc.companyName ?? "",
           serviceName: svc.serviceName ?? null,
@@ -969,25 +992,17 @@ export async function refreshServiceCatalog(): Promise<RefreshCatalogResult> {
           samplePrice: svc.price.amount.toFixed(2),
           etaMinMinutes: svc.etaMin ?? null,
           etaMaxMinutes: svc.etaMax ?? null,
+          isEnabled: true,
           lastSeenAt: now,
-        })
-        .where(eq(shippingServiceCatalog.serviceCode, serviceCode));
-    } else {
-      // INSERT — new service, default is_enabled = true.
-      await db.insert(shippingServiceCatalog).values({
-        id: randomUUID(),
-        serviceCode,
-        companyCode: svc.companyCode ?? "",
-        companyName: svc.companyName ?? "",
-        serviceName: svc.serviceName ?? null,
-        serviceType: svc.serviceType ?? null,
-        samplePrice: svc.price.amount.toFixed(2),
-        etaMinMinutes: svc.etaMin ?? null,
-        etaMaxMinutes: svc.etaMax ?? null,
-        isEnabled: true,
-        lastSeenAt: now,
-      });
-      newlyAdded++;
+        });
+        console.log(`[refreshServiceCatalog] inserted service ${serviceCode}`);
+        newlyAdded++;
+      }
+    } catch (e) {
+      console.error(
+        `[refreshServiceCatalog] error upserting ${serviceCode}:`,
+        (e as Error).message,
+      );
     }
   }
 
