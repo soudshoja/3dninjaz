@@ -57,6 +57,12 @@ export async function updateStoreSettings(
     freeShipThreshold: formData.get("freeShipThreshold") || null,
     sstEnabled: formData.get("sstEnabled") === "true",
     sstRate: formData.get("sstRate") || "6.00",
+    // Phase 14 — cost defaults (empty string → null → 0 in compute helper)
+    defaultFilamentCostPerKg: formData.get("defaultFilamentCostPerKg") || null,
+    defaultElectricityCostPerKwh: formData.get("defaultElectricityCostPerKwh") || null,
+    defaultElectricityKwhPerHour: formData.get("defaultElectricityKwhPerHour") || null,
+    defaultLaborRatePerHour: formData.get("defaultLaborRatePerHour") || null,
+    defaultOverheadPercent: formData.get("defaultOverheadPercent") || "0",
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0].message };
@@ -85,6 +91,12 @@ export async function updateStoreSettings(
       freeShipThreshold: data.freeShipThreshold ?? null,
       sstEnabled: data.sstEnabled,
       sstRate: data.sstRate,
+      // Phase 14 — cost defaults
+      defaultFilamentCostPerKg: data.defaultFilamentCostPerKg || null,
+      defaultElectricityCostPerKwh: data.defaultElectricityCostPerKwh || null,
+      defaultElectricityKwhPerHour: data.defaultElectricityKwhPerHour || null,
+      defaultLaborRatePerHour: data.defaultLaborRatePerHour || null,
+      defaultOverheadPercent: data.defaultOverheadPercent ?? "0",
     })
     .where(eq(storeSettings.id, "default"));
 

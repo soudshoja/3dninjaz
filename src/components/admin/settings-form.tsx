@@ -23,6 +23,12 @@ type Initial = {
   freeShipThreshold: string | null;
   sstEnabled: boolean;
   sstRate: string;
+  // Phase 14 — cost defaults
+  defaultFilamentCostPerKg: string;
+  defaultElectricityCostPerKwh: string;
+  defaultElectricityKwhPerHour: string;
+  defaultLaborRatePerHour: string;
+  defaultOverheadPercent: string;
 };
 
 // Phase 11 — social platforms rendered with branded ninja icons. The `key`
@@ -362,6 +368,146 @@ export function SettingsForm({ initial }: { initial: Initial }) {
           />
         </div>
       </div>
+
+      {/* ============================================================
+          Cost Defaults (Phase 14)
+          Used as fallback rates when a variant has no per-variant override.
+          All fields optional — leave blank to treat that rate as 0.
+          ============================================================ */}
+      <section
+        className="rounded-2xl border-2 p-5 space-y-5"
+        style={{ borderColor: `${BRAND.ink}22`, backgroundColor: "#FAFAFA" }}
+        aria-labelledby="sf-cost-heading"
+      >
+        <div>
+          <h2
+            id="sf-cost-heading"
+            className="font-[var(--font-heading)] text-lg"
+          >
+            Cost Defaults
+          </h2>
+          <p className="text-xs text-slate-600 mt-1">
+            Store-wide rates used to auto-compute variant costs. Each variant
+            can override filament and labor rates individually. Leave a field
+            blank to treat that component as zero.
+          </p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label
+              htmlFor="sf-defaultFilamentCostPerKg"
+              className="block text-sm font-semibold mb-1"
+            >
+              Filament cost per kg (MYR)
+            </label>
+            <input
+              id="sf-defaultFilamentCostPerKg"
+              name="defaultFilamentCostPerKg"
+              type="text"
+              inputMode="decimal"
+              defaultValue={initial.defaultFilamentCostPerKg}
+              className="w-full rounded-xl border-2 px-4 py-3 text-sm min-h-[48px] bg-white"
+              style={{ borderColor: `${BRAND.ink}33` }}
+              placeholder="e.g. 80.00"
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Common PLA ~MYR 60–100/kg; PETG ~MYR 80–120/kg.
+            </p>
+          </div>
+
+          <div>
+            <label
+              htmlFor="sf-defaultLaborRatePerHour"
+              className="block text-sm font-semibold mb-1"
+            >
+              Labor rate per hour (MYR)
+            </label>
+            <input
+              id="sf-defaultLaborRatePerHour"
+              name="defaultLaborRatePerHour"
+              type="text"
+              inputMode="decimal"
+              defaultValue={initial.defaultLaborRatePerHour}
+              className="w-full rounded-xl border-2 px-4 py-3 text-sm min-h-[48px] bg-white"
+              style={{ borderColor: `${BRAND.ink}33` }}
+              placeholder="e.g. 15.00"
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Covers setup, post-processing, and packing time.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label
+              htmlFor="sf-defaultElectricityCostPerKwh"
+              className="block text-sm font-semibold mb-1"
+            >
+              Electricity cost per kWh (MYR)
+            </label>
+            <input
+              id="sf-defaultElectricityCostPerKwh"
+              name="defaultElectricityCostPerKwh"
+              type="text"
+              inputMode="decimal"
+              defaultValue={initial.defaultElectricityCostPerKwh}
+              className="w-full rounded-xl border-2 px-4 py-3 text-sm min-h-[48px] bg-white"
+              style={{ borderColor: `${BRAND.ink}33` }}
+              placeholder="e.g. 0.5700"
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              TNB residential: ~MYR 0.29–0.57/kWh depending on tier.
+            </p>
+          </div>
+
+          <div>
+            <label
+              htmlFor="sf-defaultElectricityKwhPerHour"
+              className="block text-sm font-semibold mb-1"
+            >
+              Printer power draw (kWh/hr)
+            </label>
+            <input
+              id="sf-defaultElectricityKwhPerHour"
+              name="defaultElectricityKwhPerHour"
+              type="text"
+              inputMode="decimal"
+              defaultValue={initial.defaultElectricityKwhPerHour}
+              className="w-full rounded-xl border-2 px-4 py-3 text-sm min-h-[48px] bg-white"
+              style={{ borderColor: `${BRAND.ink}33` }}
+              placeholder="0.150"
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Typical FDM printer: 0.100–0.200 kWh/hr. Default 0.150 (150W).
+            </p>
+          </div>
+        </div>
+
+        <div className="max-w-xs">
+          <label
+            htmlFor="sf-defaultOverheadPercent"
+            className="block text-sm font-semibold mb-1"
+          >
+            Overhead (% of subtotal)
+          </label>
+          <input
+            id="sf-defaultOverheadPercent"
+            name="defaultOverheadPercent"
+            type="text"
+            inputMode="decimal"
+            defaultValue={initial.defaultOverheadPercent || "0"}
+            className="w-full rounded-xl border-2 px-4 py-3 text-sm min-h-[48px] bg-white"
+            style={{ borderColor: `${BRAND.ink}33` }}
+            placeholder="0"
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            Flat % added to (filament + electricity + labor + other) to cover
+            packaging materials, consumables, and miscellaneous expenses.
+          </p>
+        </div>
+      </section>
 
       {error ? (
         <p

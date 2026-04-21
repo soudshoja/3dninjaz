@@ -57,6 +57,46 @@ export const productVariantSchema = z.object({
   // trackStock = true           → check + decrement stock at checkout.
   trackStock: z.boolean().default(false),
   stock: z.coerce.number().int().min(0).default(0),
+  // Phase 14 — cost breakdown fields. All optional / nullable.
+  // When costPriceManual=true, costPrice is the authoritative total; the
+  // breakdown fields are ignored in the compute helper.
+  filamentGrams: z
+    .string()
+    .regex(/^\d+(\.\d{1,2})?$/, "Must be a positive decimal")
+    .optional()
+    .or(z.literal(""))
+    .default(""),
+  printTimeHours: z
+    .string()
+    .regex(/^\d+(\.\d{1,2})?$/, "Must be a positive decimal")
+    .optional()
+    .or(z.literal(""))
+    .default(""),
+  laborMinutes: z
+    .string()
+    .regex(/^\d+(\.\d{1})?$/, "Must be a positive decimal")
+    .optional()
+    .or(z.literal(""))
+    .default(""),
+  otherCostBreakdown: z
+    .string()
+    .regex(/^\d+(\.\d{1,2})?$/, "Must be a positive decimal")
+    .optional()
+    .or(z.literal(""))
+    .default(""),
+  filamentRateOverride: z
+    .string()
+    .regex(/^\d+(\.\d{1,2})?$/, "Must be a positive decimal")
+    .optional()
+    .or(z.literal(""))
+    .default(""),
+  laborRateOverride: z
+    .string()
+    .regex(/^\d+(\.\d{1,2})?$/, "Must be a positive decimal")
+    .optional()
+    .or(z.literal(""))
+    .default(""),
+  costPriceManual: z.boolean().default(false),
 });
 
 export type ProductVariantInput = z.infer<typeof productVariantSchema>;
@@ -467,6 +507,35 @@ export const storeSettingsSchema = z.object({
     .string()
     .regex(/^\d+(\.\d{1,2})?$/)
     .default("6.00"),
+  // Phase 14 — cost defaults (all optional; NULL = 0 in compute helper)
+  defaultFilamentCostPerKg: z
+    .string()
+    .regex(/^\d+(\.\d{1,2})?$/, "Must be a positive decimal")
+    .optional()
+    .or(z.literal(""))
+    .nullable(),
+  defaultElectricityCostPerKwh: z
+    .string()
+    .regex(/^\d+(\.\d{1,4})?$/, "Must be a positive decimal")
+    .optional()
+    .or(z.literal(""))
+    .nullable(),
+  defaultElectricityKwhPerHour: z
+    .string()
+    .regex(/^\d+(\.\d{1,3})?$/, "Must be a positive decimal")
+    .optional()
+    .or(z.literal(""))
+    .nullable(),
+  defaultLaborRatePerHour: z
+    .string()
+    .regex(/^\d+(\.\d{1,2})?$/, "Must be a positive decimal")
+    .optional()
+    .or(z.literal(""))
+    .nullable(),
+  defaultOverheadPercent: z
+    .string()
+    .regex(/^\d+(\.\d{1,2})?$/, "Must be a positive decimal")
+    .default("0"),
 });
 export type StoreSettingsInput = z.infer<typeof storeSettingsSchema>;
 

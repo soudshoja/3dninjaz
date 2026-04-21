@@ -48,6 +48,12 @@ export default async function AdminSettingsPage() {
             freeShipThreshold: settings.freeShipThreshold ?? null,
             sstEnabled: !!settings.sstEnabled,
             sstRate: settings.sstRate,
+            // Phase 14 — cost defaults
+            defaultFilamentCostPerKg: settings.defaultFilamentCostPerKg ?? "",
+            defaultElectricityCostPerKwh: settings.defaultElectricityCostPerKwh ?? "",
+            defaultElectricityKwhPerHour: settings.defaultElectricityKwhPerHour ?? "",
+            defaultLaborRatePerHour: settings.defaultLaborRatePerHour ?? "",
+            defaultOverheadPercent: settings.defaultOverheadPercent ?? "0",
           }}
         />
       </div>
