@@ -31,6 +31,12 @@ export const auth = betterAuth({
       },
     },
   },
+  trustedOrigins: [
+    process.env.BETTER_AUTH_URL || "http://localhost:3000",
+    "https://app.3dninjaz.com", // Production domain
+    "http://localhost:3000", // Local development
+    "http://127.0.0.1:3000", // Local development (IP)
+  ],
   plugins: [
     admin({
       defaultRole: "customer", // D-08: all registrations default to customer

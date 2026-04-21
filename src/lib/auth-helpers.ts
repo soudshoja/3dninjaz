@@ -13,7 +13,8 @@ import { user as userTable } from "@/lib/db/schema";
  */
 export async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session || session.user.role !== "admin") {
+  const userWithRole = session?.user as unknown as { role: string } | undefined;
+  if (!session || userWithRole?.role !== "admin") {
     throw new Error("Forbidden");
   }
   return session;

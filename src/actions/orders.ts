@@ -57,7 +57,8 @@ export async function getMyOrder(orderId: string) {
   if (!row) return null;
   // T-03-21 (D3-22): only owner OR admin may read. Same null return for both
   // "not found" and "not yours" — blocks email enumeration.
-  if (row.userId !== user.id && user.role !== "admin") return null;
+  const userWithRole = user as unknown as { id: string; role: string };
+  if (row.userId !== userWithRole.id && userWithRole.role !== "admin") return null;
   return row;
 }
 
@@ -71,7 +72,8 @@ export async function resendOrderConfirmationEmail(
   }
 
   const row = await db.query.orders.findFirst({ where: eq(orders.id, orderId) });
-  if (!row || (row.userId !== user.id && user.role !== "admin")) {
+  const userWithRole = user as unknown as { id: string; role: string };
+  if (!row || (row.userId !== userWithRole.id && userWithRole.role !== "admin")) {
     // Same response shape for "not found" and "not yours" (T-03-21).
     return { ok: false, error: "Order not found." };
   }

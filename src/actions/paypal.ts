@@ -581,6 +581,7 @@ export async function getOrderForCurrentUser(orderId: string) {
     with: { items: true },
   });
   if (!row) return null;
-  if (row.userId !== user.id && user.role !== "admin") return null;
+  const userWithRole = user as unknown as { id: string; role: string };
+  if (row.userId !== userWithRole.id && userWithRole.role !== "admin") return null;
   return row;
 }

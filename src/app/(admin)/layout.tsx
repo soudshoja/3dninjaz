@@ -67,7 +67,8 @@ export default async function AdminLayout({
     const path = await currentAdminPath();
     redirect(`/login?next=${encodeURIComponent(path)}`);
   }
-  if (session.user.role !== "admin") {
+  const userWithRole = session.user as unknown as { role: string };
+  if (userWithRole.role !== "admin") {
     // Signed-in as customer. Don't leak that /admin exists — send them to
     // their own dashboard. A flash message would be nice but we don't have a
     // toast surface in the customer layout yet; deferred.

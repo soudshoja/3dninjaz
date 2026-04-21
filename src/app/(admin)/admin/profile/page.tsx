@@ -58,7 +58,7 @@ export default async function AdminProfilePage() {
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-slate-600">Role</dt>
-              <dd className="font-semibold">{session.user.role}</dd>
+              <dd className="font-semibold">{(session.user as unknown as { role: string }).role}</dd>
             </div>
           </dl>
           <p className="text-xs text-slate-500 mb-4">

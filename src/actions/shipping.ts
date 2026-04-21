@@ -705,7 +705,8 @@ export async function getMyOrderTracking(
     .limit(1);
   if (orderRows.length === 0) return null;
   const order = orderRows[0];
-  if (order.userId !== user.id && user.role !== "admin") {
+  const userWithRole = user as unknown as { id: string; role: string };
+  if (order.userId !== userWithRole.id && userWithRole.role !== "admin") {
     // Same null shape for "not found" and "not yours" — blocks enumeration.
     return null;
   }
