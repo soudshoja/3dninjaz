@@ -182,7 +182,7 @@ Do not make direct repo edits outside a GSD workflow unless the user explicitly 
 > This section is managed by `generate-claude-profile` -- do not edit manually.
 <!-- GSD:profile-end -->
 
-## Pivots & Production Quirks (2026-04-19 → 2026-04-20)
+## Pivots & Production Quirks (2026-04-19 → 2026-04-21)
 
 ### Stack pivot from initial plan
 - **Project renamed**: Print Ninjaz → **3D Ninjaz** (domain `3dninjaz.com`, logo `/public/logo.png`)
@@ -202,25 +202,41 @@ Do not make direct repo edits outside a GSD workflow unless the user explicitly 
 - Library version 1.6.2 API: `authClient.requestPasswordReset(...)` — NOT the older `forgetPassword` name
 - Admin seed: two-step via `auth.api.signUpEmail` (uses Better Auth password pipeline) then direct Drizzle `update(user).set({ role: 'admin' })`. `auth.api.createUser` ignores `role` outside an authenticated admin session. Seed script `scripts/seed-admin.ts` is idempotent.
 - Admin-auth check: **handler-level `requireAdmin()` as first `await` in every admin server action** (CVE-2025-29927 — middleware alone is bypassable). See `src/lib/auth-helpers.ts`.
+- **`trustedOrigins` required** — Better Auth rejects cross-origin POSTs (e.g. admin forms from `https://3dninjaz.com`) unless the origin is listed in `trustedOrigins` in `src/lib/auth.ts`. Fixed in commit `d421bd9`. Add any new prod domain here before deploy.
+- **`user.role` TypeScript typing** — Better Auth's generated `Session` type does not include `role` by default. Cast via `(session.user as { role: string }).role` or extend the type declaration in `src/types/auth.d.ts`.
+- **Admin password rotation** — run `ADMIN_RESET_PASSWORD=1 npx tsx scripts/seed-admin.ts` to rotate admin password in-place without touching sessions or user id.
 
-### cPanel + LiteSpeed deploy topology
-- Server: cPanel + CloudLinux + LiteSpeed 6.3.4 Enterprise
-- **LSWS does NOT support Apache `mod_passenger`** — CloudLinux-generated `.htaccess` Passenger directives in `public_html/v1/` are ignored
-- Working pattern: **Node app listens on localhost port, Apache userdata ProxyPass forwards** `/v1` → `http://127.0.0.1:3100/v1`
-- Apache userdata config: `/etc/apache2/conf.d/userdata/{std,ssl}/2_4/ninjaz/3dninjaz.com/3dninjaz_v1.conf` with `ProxyPass` + `ProxyPassReverse` + `ProxyPreserveHost On` inside a `<Location "/v1">` block. After editing, `/usr/local/lsws/bin/lswsctrl reload` (graceful SIGUSR1 — no downtime for other users).
-- App node binary: `/home/ninjaz/nodevenv/apps/3dninjaz_v1/20/bin/node` (CloudLinux Node 20 via `cloudlinux-selector create --interpreter nodejs`)
+### Delyva shipping quirks
+- **`instantQuote` service parsing** — some Delyva couriers return `companyCode` as a flat string rather than a nested object. Always defensively parse: `typeof service.companyCode === 'string' ? service.companyCode : service.companyCode?.code`. Fixed in `754e493`.
+- **30kg parcel cap** — Delyva rejects shipments over 30kg per parcel. Weight sum = `product.weightKg × qty` per line, then split across parcels at 30kg each. Cap guard in `src/lib/delyva.ts`.
+- **Webhook process survival** — wrap the Node process with `setsid` in `start.sh` so Delyva webhook HTTP responses closing the stream don't send SIGPIPE to the parent. Fixed in `61df023`.
+- **Webhook idempotency** — `order_shipments.delyvaShipmentId` has a UNIQUE constraint. Duplicate webhook deliveries are caught by `ER_DUP_ENTRY` and silently no-op.
+
+### Deploy topology (2026-04-21 — current)
+- **Storefront:** `https://app.3dninjaz.com/` (Next.js 15 on Node 20.x, port `127.0.0.1:3100`)
+- **Apex:** `https://3dninjaz.com/` — still serves a static coming-soon page, to be decommissioned on launch day
+- **`NEXT_PUBLIC_BASE_PATH` is NOT set**; app serves at subdomain root
+- **Server:** cPanel + CloudLinux + LiteSpeed 6.3.4 Enterprise
+- **LSWS does NOT support Apache `mod_passenger`** — Node app must be reverse-proxied via Apache userdata
+- **Apache userdata config:** `/etc/apache2/conf.d/userdata/{std,ssl}/2_4/ninjaz/app.3dninjaz.com/3dninjaz_app_proxy.conf` with `ProxyPass "/"` + `ProxyPassReverse "/"` + `ProxyPreserveHost On` inside a `<Location "/">` block. Forwards `/` → `http://127.0.0.1:3100/`. After editing, `/usr/local/lsws/bin/lswsctrl reload` (graceful SIGUSR1 — no downtime for other users).
+- **App node binary:** `/opt/alt/alt-nodejs20/root/usr/bin/node` (CloudLinux Node 20)
 - **SSH is key-only for root** — user password auth is blocked. For unattended tasks use: root via key (full server), FTP via user/password (files only), cPanel UAPI via Basic auth at `https://152.53.86.223:2083/execute/<Module>/<fn>` (per-user scoped)
-- Node app persistence: currently `nohup` — **dies on reboot**. Production requires systemd user unit or cron `@reboot` start script. See `.planning/phases/04-brand-launch/DEPLOY-NOTES.md`
+- **Node app persistence:** `@reboot` cron registered — survives server reboot. See `.planning/phases/04-brand-launch/DEPLOY-NOTES.md`
 - **Never run `lswsctrl restart`** (hard restart) — other users affected. Graceful `reload` is fine.
+- **Apache static error pages** — `public/errors/502.html`, `503.html`, `504.html` served via Apache `Alias /errors` + `ErrorDocument` directives. These bypass the Node proxy and show when Node is down.
+- **Base UI `DropdownMenuLabel` quirk** — must be wrapped in `DropdownMenuGroup`; Base UI 1.3 asserts `MenuGroupRootContext` at render time. See `51a90c9`.
+- **`isomorphic-dompurify` breaks prod** — uses ESM-only imports that fail `require()` in CommonJS prod bundles. Replaced with in-repo allowlist sanitizer in `src/lib/sanitize.ts`. Do not re-add `isomorphic-dompurify`.
 
-### Preview site
-- `https://3dninjaz.com/v1` — Next.js app (sandbox PayPal)
-- `https://3dninjaz.com/` — coming-soon static (launch-day swap planned)
+### Launch preview
+- `https://app.3dninjaz.com/` — Next.js storefront (live PayPal sandbox as of 2026-04-20)
+- `https://3dninjaz.com/` — coming-soon static (apex, to be swapped at launch)
 - Test buyer: `sb-shnvz50688339@personal.example.com` / `_s!Cw2Wp` (sandbox MYR 5000)
 
-### Launch-day blockers (tracked in `.planning/phases/04-brand-launch/LAUNCH-CHECKLIST.md`)
-- Real WhatsApp MY number (D-01 placeholder `60000000000`)
-- Social handles Instagram + TikTok (D-05 placeholders `#`)
+### Launch-day blockers (tracked in `.planning/GO-LIVE-READINESS.md`)
+- Real WhatsApp MY number — edit at `/admin/settings` (placeholder `60000000000`)
+- Social handles Instagram + TikTok — edit at `/admin/settings`
 - `public/logo.png` 1.5 MB → WebP ~200 KB (LCP blocker)
-- `PAYPAL_ENV=live` in prod env — switched 2026-04-20 (OAuth verified, `reporting/search/read` scope active)
-- Remove `<meta robots="noindex">` from coming-soon
+- ~~`PAYPAL_ENV=live` in prod env~~ — DONE 2026-04-20
+- Privacy policy + Terms of Service pages — not yet built
+- Remove `<meta robots="noindex">` from coming-soon apex page (or swap domain on launch day)
+- ~~Rebuild without `/v1` basePath before domain swap~~ — N/A (app already serves at subdomain root with no basePath)

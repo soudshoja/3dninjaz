@@ -89,7 +89,7 @@ usedAt      TIMESTAMP NULL      set on first successful capture
 createdBy   VARCHAR(36) FK user.id  the admin who generated it
 createdAt   TIMESTAMP NOT NULL DEFAULT NOW()
 ```
-**Public URL:** `https://3dninjaz.com/v1/payment-links/<token>` — token only, NEVER customer email/name in URL (T-07-X-PII-on-payment-link).
+**Public URL:** `https://app.3dninjaz.com/payment-links/<token>` (or apex domain post-launch) — token only, NEVER customer email/name in URL (T-07-X-PII-on-payment-link).
 
 ### D-07-07 — `dispute_cache` table (new)
 ```

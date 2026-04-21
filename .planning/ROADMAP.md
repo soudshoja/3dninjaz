@@ -160,20 +160,60 @@ Plans:
 **Plans**: 9 plans
 
 Plans:
-- [ ] 07-01-PLAN.md — Schema additions (payment_links, dispute_cache, recon_runs) + 9 new orders columns + sharp/dotenv deps + raw-SQL migration applicator + .gitignore intel dir (Wave 1)
-- [ ] 07-02-PLAN.md — PayPal SDK extensions: disputesController, getCaptureDetails, paypal-refund.ts, paypal-disputes.ts, paypal-reporting.ts with OAuth + raw-fetch fallback (Wave 1)
-- [ ] 07-03-PLAN.md — /admin/orders/new manual order form + payment-links server actions + public /payment-links/[token] page with PayPal Smart Button (Wave 2)
-- [ ] 07-04-PLAN.md — /admin/payments enriched (gross/fee/net/seller-protection/settle) + /admin/payments/[orderId] detail with PaymentFinancialsPanel + cache hydration on first live fetch (Wave 2)
-- [ ] 07-05-PLAN.md — /admin/payments/[orderId]/refund: refund-form with two-step confirm + cap + rate-limit + PAYMENT.CAPTURE.REFUNDED idempotent webhook handler (Wave 2)
-- [ ] 07-06-PLAN.md — /admin/disputes list + /admin/disputes/[id] detail with evidence uploader + accept-claim + escalate-to-arbiter (Wave 3)
-- [ ] 07-07-PLAN.md — Nightly recon cron (CJS) + /admin/recon history + drift dashboard widget + sidebar drift badge + cPanel cron registration (Wave 3)
-- [ ] 07-08-PLAN.md — sharp image-pipeline (3 widths × 3 formats) + ResponsiveProductImage + storefront srcset wiring + Cache-Control headers + backfill script (Wave 4)
-- [ ] 07-09-PLAN.md — Branded 404/500/maintenance pages + middleware MAINTENANCE_MODE redirect + error-reporting helper (Wave 4)
+- [x] 07-01-PLAN.md — Schema additions (payment_links, dispute_cache, recon_runs) + 9 new orders columns + sharp/dotenv deps + raw-SQL migration applicator + .gitignore intel dir (Wave 1)
+- [x] 07-02-PLAN.md — PayPal SDK extensions: disputesController, getCaptureDetails, paypal-refund.ts, paypal-disputes.ts, paypal-reporting.ts with OAuth + raw-fetch fallback (Wave 1)
+- [x] 07-03-PLAN.md — /admin/orders/new manual order form + payment-links server actions + public /payment-links/[token] page with PayPal Smart Button (Wave 2)
+- [x] 07-04-PLAN.md — /admin/payments enriched (gross/fee/net/seller-protection/settle) + /admin/payments/[orderId] detail with PaymentFinancialsPanel + cache hydration on first live fetch (Wave 2)
+- [x] 07-05-PLAN.md — /admin/payments/[orderId]/refund: refund-form with two-step confirm + cap + rate-limit + PAYMENT.CAPTURE.REFUNDED idempotent webhook handler (Wave 2)
+- [x] 07-06-PLAN.md — /admin/disputes list + /admin/disputes/[id] detail with evidence uploader + accept-claim + escalate-to-arbiter (Wave 3)
+- [x] 07-07-PLAN.md — Nightly recon cron (CJS) + /admin/recon history + drift dashboard widget + sidebar drift badge + cPanel cron registration (Wave 3)
+- [x] 07-08-PLAN.md — sharp image-pipeline (3 widths × 3 formats) + ResponsiveProductImage + storefront srcset wiring + Cache-Control headers + backfill script (Wave 4)
+- [x] 07-09-PLAN.md — Branded 404/500/maintenance pages + middleware MAINTENANCE_MODE redirect + error-reporting helper (Wave 4)
+
+### Phase 8: Delyva Shipping
+**Goal**: Integrate Delyva courier — live rate quotes at checkout, admin books shipments + prints labels, HMAC-verified webhooks, admin shipping config.
+**Status**: COMPLETE (2026-04-20)
+See: `.planning/phases/08-delyva-shipping/COMPLETION.md`
+
+### Phase 9: Theme + UX Polish
+**Goal**: Lighten storefront theme; fix admin nav; About Us page; ninja mascot icons; branded Apache error pages; auth login unification; CI gate.
+**Status**: COMPLETE (2026-04-20)
+See: `.planning/phases/09-theme-ux-polish/COMPLETION.md`
+
+### Phase 10: Cost & Profit Tracking
+**Goal**: Track material costs per variant, snapshot at checkout, show profit in admin.
+**Status**: COMPLETE (2026-04-20/21)
+See: `.planning/phases/10-cost-profit/COMPLETION.md`
+
+### Phase 11: Site Settings + Social
+**Goal**: Per-platform social URL fields in admin settings; PayPal live switch complete.
+**Status**: COMPLETE (2026-04-20)
+See: `.planning/phases/11-site-settings-social/COMPLETION.md`
+
+### Phase 12: Email System
+**Goal**: Expand from 2 → 12 transactional templates; newsletter subscriber signup + admin management + unsubscribe flow.
+**Status**: COMPLETE (2026-04-20/21)
+See: `.planning/phases/12-email-system/COMPLETION.md`
+
+### Phase 13: Per-Variant Inventory Track Stock
+**Goal**: Optional `track_stock` flag per variant; OOS badge only when tracking enabled; inventory inline in product form.
+**Status**: COMPLETE (2026-04-21)
+See: `.planning/phases/13-inventory-tracking/COMPLETION.md`
+
+### Phase 14: Cost Breakdown with Store Defaults
+**Goal**: Replace single cost_price with filament/electricity/labor/overhead breakdown using store defaults; auto-computed cost_price; Better Auth trustedOrigins fix.
+**Status**: COMPLETE (2026-04-21)
+See: `.planning/phases/14-cost-breakdown/COMPLETION.md`
+
+### Phase 15: Customer + Admin Shipment Tracking
+**Goal**: Live Delyva tracking timeline on customer order page and enriched admin shipment panel.
+**Status**: COMPLETE (2026-04-20)
+See: `.planning/phases/15-customer-tracking/COMPLETION.md`
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
+Phases execute in numeric order: 1 → 2 → ... → 15
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -183,4 +223,12 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 4. Brand + Launch | 4/4 | Complete | 2026-04-20 |
 | 5. Admin Extensions | 7/7 | Complete | 2026-04-19 |
 | 6. Customer Account | 7/7 | Complete | 2026-04-19 |
-| 7. Manual Orders + Image Pipeline + Custom Errors | 0/9 | Not started | - |
+| 7. Manual Orders + Image Pipeline + Custom Errors | 9/9 | Complete | 2026-04-20 |
+| 8. Delyva Shipping | — | Complete | 2026-04-20 |
+| 9. Theme + UX Polish | — | Complete | 2026-04-20 |
+| 10. Cost & Profit Tracking | — | Complete | 2026-04-21 |
+| 11. Site Settings + Social | — | Complete | 2026-04-20 |
+| 12. Email System | — | Complete | 2026-04-21 |
+| 13. Per-Variant Inventory Track Stock | — | Complete | 2026-04-21 |
+| 14. Cost Breakdown with Store Defaults | — | Complete | 2026-04-21 |
+| 15. Customer + Admin Shipment Tracking | — | Complete | 2026-04-20 |

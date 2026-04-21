@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: "Phase 07 complete — manual orders + PayPal ops mirror + image pipeline + branded errors all live."
-last_updated: "2026-04-20T02:10:00.000Z"
-last_activity: 2026-04-20 -- Phase 07 complete (9/9 plans, ADM-16..ADM-23 + IMG-01..IMG-03 + ERR-01..ERR-03 closed)
+status: pre-launch
+stopped_at: "Phases 08-15 complete — Delyva shipping, theme polish, cost/profit, social settings, 12 email templates, inventory tracking, cost breakdown, customer tracking all live. Awaiting admin go-live actions."
+last_updated: "2026-04-21T00:00:00.000Z"
+last_activity: 2026-04-21 -- Phases 08-15 complete (55 session commits). See GO-LIVE-READINESS.md for launch blockers.
 progress:
-  total_phases: 7
-  completed_phases: 7
+  total_phases: 15
+  completed_phases: 15
   total_plans: 39
   completed_plans: 39
   percent: 100
@@ -21,16 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-12)
 
 **Core value:** Customers can easily browse and buy unique 3D printed products with a simple, clean shopping experience.
-**Current focus:** Phase 07 complete. Manual orders end-to-end with PayPal payment links, /admin/payments mirrors PayPal Activity dashboard, refund flow with two-step confirm + idempotent webhook, dispute management, nightly recon cron (waiting on PayPal Reporting feature enablement — Q-07-08), sharp image pipeline with WebP/AVIF/JPEG variants + long-cache headers, branded 404/500/maintenance pages with maintenance-mode middleware.
+**Current focus:** All 15 phases complete. Session 2026-04-20/21 shipped: Delyva courier integration (phases 08), theme lightening + UX polish (09), cost/profit tracking (10), site settings + social fields (11), 12 email templates + newsletter subscribers (12), per-variant inventory track_stock (13), cost breakdown with store defaults (14), customer + admin shipment tracking (15). PayPal live. Better Auth trustedOrigins fixed. 55 commits total this session.
+
+**Next action:** Human-gated launch — see `.planning/GO-LIVE-READINESS.md`.
 
 ## Current Position
 
-Phase: 07 (Manual Orders + PayPal Ops Mirror + Image Pipeline + Custom Errors) — COMPLETE (all 9 plans)
-Next Phase: v1.0 launch (human-gated launch checklist + verifier sweeps for Phases 5/6/7)
-Status: All 39 v1.0 plans complete across 7 phases
-Last activity: 2026-04-20 -- Phase 07 deployed live; cron registered; PayPal Reporting NOT_AUTHORIZED logged to recon_runs (Q-07-08 — admin contacts PayPal support)
+Phase: 15 (Customer + Admin Shipment Tracking) — COMPLETE
+Next Phase: GO-LIVE — admin must complete checklist items in GO-LIVE-READINESS.md
+Status: All code complete. Pre-launch admin actions remain.
+Last activity: 2026-04-21 -- Phases 08-15 complete; GO-LIVE-READINESS.md written
 
-Progress: [██████████] 100%
+Progress: [██████████] 100% (code) | Pre-launch admin actions pending
 
 ## Performance Metrics
 
@@ -87,7 +89,7 @@ Recent decisions affecting current work:
 - 2026-04-19 (Phase 2 DECISIONS.md D-03): `/checkout` returns 404 until Phase 3 ships. Accepted; link exists now in drawer + /bag page.
 - 2026-04-19 (Phase 2 DECISIONS.md D-04): Mobile-first is non-negotiable. 390×844 + 375×667 viewports validated. Tap targets 48px secondary / 60px primary. Vaul bottom-sheet on ≤768px.
 - 2026-04-19 (Phase 2): Cart persisted via Zustand `persist` middleware at localStorage key `print-ninjaz-cart-v1`. `isDrawerOpen` excluded via `partialize` so reload doesn't reopen drawer. MAX_PER_LINE=10 soft cap (D2-20).
-- 2026-04-20 (Phase 4 DECISIONS.md D-07): Deploy via cPanel Node.js app. Preview live at `3dninjaz.com/v1` via LSWS reverse-proxy to `127.0.0.1:3100`. Document-root swap at launch per DEPLOY-NOTES.md.
+- 2026-04-20 (Phase 4 DECISIONS.md D-07): Deploy via cPanel Node.js app. Initial plan: preview at `3dninjaz.com/v1`. Revised 2026-04-21: app now lives at `app.3dninjaz.com/` (subdomain root, no basePath).
 - 2026-04-20 (Phase 4 Plan 04-04): Next.js 15 file-based `robots.ts` + `sitemap.ts`. Sitemap is DB-backed (getActiveProducts + getActiveCategories), preview-aware via NEXT_PUBLIC_SITE_URL, fail-soft on DB failure. `.htaccess` with HTTPS+HSTS+security-headers STAGED in `deploy/` for launch-day swap — not auto-applied.
 - 2026-04-20 (Phase 4 Plan 04-04): Node app reboot survival via cron `@reboot` + start script (Option A); systemd user unit documented as Option B. cPanel does not expose `loginctl enable-linger` by default, so cron is the reliable path.
 - 2026-04-20 (Phase 4 Plan 04-04): HSTS max-age 63072000 (2 years) + preload ready. Submission to hstspreload.org deferred to post-launch +6 months.
@@ -115,37 +117,39 @@ Recent decisions affecting current work:
 - 2026-04-20 (Phase 7 07-07): Q-07-08 PayPal Reporting API NOT_AUTHORIZED on first cron run — script writes status='error' + errorMessage to recon_runs as designed; admin will see badge + dashboard widget pointing at /admin/recon. Reporting feature must be enabled by PayPal support before drift detection can begin. Cron registered at @daily on cPanel.
 - 2026-04-20 (Phase 7 07-08): writeUpload return shape changed from file URL to base URL (directory). pickImage(baseUrl) reads manifest.json and emits 3 sources (avif/webp/jpeg) with srcset enumerating all widths. ProductCard converted to async server component. ProductGallery (client) accepts pre-resolved PictureData[] from PDP page (server). Cache-Control: public, max-age=31536000, immutable on /uploads/*.
 - 2026-04-20 (Phase 7 07-09): Q-07-05 default applied — env-only MAINTENANCE_MODE toggle. BrandedFiveHundred props strictly { requestId, reset? } — error.message/stack NEVER passed (T-07-09-error-page-leak). /payment-links/** added to maintenance allowlist (customers paying for manual orders shouldn't be blocked).
-- 2026-04-20 (Phase 7 deploy): Two deploy iterations needed — first build had no basePath (404s for everything); second build with NEXT_PUBLIC_BASE_PATH=/v1 + custom server.js that strips /v1 prefix before passing to Next handler. server.js now honours HOST=127.0.0.1 from start.sh (was binding to public IP via HOSTNAME env). All routes verified live: /v1/admin/orders/new (307 auth), /v1/admin/payments (307), /v1/admin/disputes (307), /v1/admin/recon (307), /v1/some-bogus (404 branded), /v1/payment-links/invalid (200 branded "not found"), /v1/maintenance (200), /v1/api/paypal/webhook POST (400 missing sig). sharp 0.34.5 installed natively on cPanel CloudLinux Node 20.
+- 2026-04-20 (Phase 7 deploy iteration 2): build with NEXT_PUBLIC_BASE_PATH=/v1 + custom server.js that strips /v1 prefix before passing to Next handler. server.js honours HOST=127.0.0.1 from start.sh. All routes verified live on `/v1/` subpath. sharp 0.34.5 installed natively on cPanel CloudLinux Node 20.
+- 2026-04-21 (Phase 7 / deploy revised): App topology changed from `/v1` subpath to subdomain root (`app.3dninjaz.com/`). No basePath in the bundle. Custom server.js still in place but no longer strips basePath (Apache now proxies `/` instead of `/v1`). Documentation updated in CLAUDE.md, DEPLOY-NOTES.md, LAUNCH-CHECKLIST.md to reflect current state.
 
 ### Pending Todos
 
-- **Launch (human-gated, not a code plan)** — follow `.planning/phases/04-brand-launch/LAUNCH-CHECKLIST.md`:
-  - D-01 WhatsApp number swap (now in /admin/settings — admin can edit at runtime via 05-04 settings form)
-  - D-05 Instagram + TikTok URLs (also editable via /admin/settings)
-  - Logo WebP optimisation (DEF-04-03-04)
-  - PayPal env → live in cPanel Node app env vars
-  - Document root swap (DEPLOY-NOTES.md Path A)
-  - Upload `deploy/htaccess-launch.txt` as `/home/ninjaz/public_html/.htaccess`
-  - Submit sitemap to Google Search Console
+- **Launch (human-gated)** — see `.planning/GO-LIVE-READINESS.md` for the full checklist. Top blockers:
+  - WhatsApp real number at `/admin/settings` (placeholder `60000000000`)
+  - Instagram + TikTok URLs at `/admin/settings`
+  - Logo WebP optimisation (`public/logo.png` 1.55 MB → WebP ~200 KB)
+  - ~~Document root swap + rebuild without basePath~~ — N/A (app already at subdomain root, no basePath)
+  - Privacy policy + Terms of Service pages (not yet built)
+  - Submit sitemap to Google Search Console post-launch
   - `git tag v1.0.0 && git push --tags`
-- Phase 5 + Phase 6 verifier sweeps (`/gsd-verify-phase 05` and `/gsd-verify-phase 06`).
+- PayPal Reporting API enablement — contact PayPal support (Q-07-08 NOT_AUTHORIZED).
 - 24h cleanup cron for `public/uploads/imports/` (deferred from 05-05).
-- Optional follow-up: migrate storefront pages (about/contact/privacy/terms/whatsapp-cta) from `business-info.ts` BUSINESS const to `getStoreSettingsCached()` so admin edits surface without code change. Currently business-info.ts retained for back-compat; 05-04 added the DB-backed accessor only.
+- `order_cancelled` email send trigger (template exists; admin cancel action not yet built).
+- `review_request` scheduled send 3 days post-delivery (template exists; cron task not built).
+- Auto stock decrement on order capture (Phase 13 deferred item).
+- Optional: migrate `business-info.ts` static consts to `getStoreSettingsCached()` so About/Contact pages reflect admin edits without redeploy.
 
 ### Blockers/Concerns
 
 - **Logo LCP (DEF-04-03-04):** `public/logo.png` at 1.55 MB dominates LCP on every route — MUST optimise to WebP before launch.
-- **basePath rebuild required at swap:** preview tarball built with `NEXT_PUBLIC_BASE_PATH=/v1`. Rebuild with empty basePath before flipping document root, or the app serves 404s for `_next/static/*`. See DEPLOY-NOTES.md.
+- ~~**basePath rebuild required at swap**~~ — N/A (2026-04-21): app now serves at subdomain root with no basePath. Domain swap is Apache/DNS only, no rebuild needed.
 - **HSTS lockout risk:** 2-year HSTS with preload is strong; cert renewal failure would lock users out. cPanel AutoSSL renewal monitoring required.
-- **Node app reboot survival:** `@reboot /home/ninjaz/apps/3dninjaz_v1/start.sh` cron is registered (verified by Phase 7 deploy crontab listing).
+- **Node app reboot survival:** `@reboot /home/ninjaz/apps/3dninjaz/start.sh` cron is registered (verified by Phase 7 deploy crontab listing).
 - **D-01 WhatsApp placeholder** + **D-05 social handles** still stubs — both are hard blockers for launch (checklist step 1 + 2).
 - Email deliverability to Malaysian addresses — Phase 3 smoke test pending; re-verify against real MY ISP in LAUNCH-CHECKLIST.md step 12.
 - **PayPal Reporting API NOT_AUTHORIZED (Q-07-08):** Phase 7 nightly recon cron is installed but first run errored with NOT_AUTHORIZED. Admin must contact PayPal support to enable the Reporting feature on the live merchant account. Until then, recon_runs.status='error' on every run; drift detection is paused but admin sees the error on /admin/recon.
 - **Sharp deploy footprint:** sharp native binaries add ~80MB to node_modules but are required for the Phase 7 image pipeline. Install was clean on cPanel CloudLinux Node 20 — no fallback needed.
-- **Custom server.js basePath stripping:** Apache forwards `/v1/*` -> `127.0.0.1:3100/v1/*` and Next does NOT auto-strip basePath at the request layer. Custom server.js now manually strips `/v1` prefix before calling `handle(req, res, parsedUrl)`. If anyone re-deploys WITHOUT this server.js, every route will 404. See `/home/ninjaz/apps/3dninjaz_v1/server.js`.
 
 ## Session Continuity
 
-Last session: 2026-04-20T02:10:00.000Z
-Stopped at: Phase 07 complete (all 9 plans). Manual orders + PayPal ops mirror + sharp image pipeline + branded errors live on https://3dninjaz.com/v1. Cron registered. Q-07-08 NOT_AUTHORIZED handled gracefully.
-Resume file: .planning/LAUNCH-CHECKLIST.md (Phase 4) for human-gated launch tasks; run `/gsd-verify-phase 05`, `/gsd-verify-phase 06`, `/gsd-verify-phase 07` to validate. Then PayPal Support contact for Reporting API enablement (Q-07-08).
+Last session: 2026-04-21T00:00:00.000Z (session ran 2026-04-20 → 2026-04-21)
+Stopped at: Phases 08-15 complete. 55 commits. Delyva shipping, theme polish, cost/profit, social settings, 12 email templates + newsletter, inventory track_stock, cost breakdown with store defaults, customer + admin tracking all live. PayPal live. Better Auth trustedOrigins fixed. GO-LIVE-READINESS.md written.
+Resume file: `.planning/GO-LIVE-READINESS.md` — admin must complete checklist before flipping the domain. Contact PayPal support for Reporting API (Q-07-08).

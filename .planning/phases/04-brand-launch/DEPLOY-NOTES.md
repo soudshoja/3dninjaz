@@ -4,21 +4,21 @@
 **Deploy mechanism (D-07):** Node.js app managed by cPanel Node.js Selector
   → see https://docs.cpanel.net/knowledge-base/web-services/how-to-install-a-node.js-application/
 
-Last updated: 2026-04-19 (Plan 04-04 execution)
+Last updated: 2026-04-21 (Documentation cleanup — app moved to subdomain root)
 
 ---
 
-## Current preview state
+## Current state (2026-04-21 onwards)
 
-The live preview is `https://3dninjaz.com/v1`. It runs the full Next.js
-app against production MariaDB with `PAYPAL_ENV=sandbox`. The root
-`https://3dninjaz.com/` still serves the static coming-soon page from
-`public_html/`.
+The storefront is `https://app.3dninjaz.com/` (live). It runs the full Next.js
+app against production MariaDB with `PAYPAL_ENV=live`. The apex
+`https://3dninjaz.com/` still serves a static coming-soon page from
+`public_html/` (to be decommissioned at full launch).
 
-### Runtime topology
+### Runtime topology (current)
 
 ```
-customer (https://3dninjaz.com/v1/*)
+customer (https://app.3dninjaz.com/*)
   │
   │ TLS terminated by LSWS on the cPanel host
   │
@@ -26,17 +26,21 @@ customer (https://3dninjaz.com/v1/*)
 LSWS (LiteSpeed Web Server, port 443/80)
   │
   │ Apache userdata drop-in:
-  │ /etc/apache2/conf.d/userdata/*/2_4/ninjaz/3dninjaz.com/3dninjaz_v1.conf
+  │ /etc/apache2/conf.d/userdata/*/2_4/ninjaz/app.3dninjaz.com/3dninjaz_app_proxy.conf
   │
-  │ ProxyPass /v1 http://127.0.0.1:3100/
-  │ ProxyPassReverse /v1 http://127.0.0.1:3100/
+  │ ProxyPass / http://127.0.0.1:3100/
+  │ ProxyPassReverse / http://127.0.0.1:3100/
   │
   ▼
 Node.js (Next.js 15 custom server)
   /home/ninjaz/apps/3dninjaz/server.js
   listening on 127.0.0.1:3100
-  started via: nohup /opt/alt/alt-nodejs20/root/usr/bin/node server.js &
+  started via: /home/ninjaz/apps/3dninjaz/start.sh (bash script, @reboot cron)
 ```
+
+### Historical note: /v1 topology (2026-04-19 to 2026-04-20)
+
+The initial preview used a `/v1` subpath with `NEXT_PUBLIC_BASE_PATH=/v1` baked into the bundle. This approach was replaced on 2026-04-21 to serve the app at the subdomain root (`app.3dninjaz.com`), eliminating the need for basePath rewrites at domain swap time.
 
 ### How the Node app is currently started
 
@@ -147,15 +151,15 @@ cron before flipping document root").
 
 Both files are in `.gitignore`. Verify with `git check-ignore -v .env.production`.
 
-### Values that MUST flip at launch
+### Values that were flipped (2026-04-20)
 
-| Key                   | Preview value | Launch value                            |
+| Key                   | Preview value | Current value                           |
 | --------------------- | ------------- | --------------------------------------- |
-| `PAYPAL_ENV`          | `sandbox`     | `live`                                  |
-| `PAYPAL_CLIENT_ID`    | sandbox ID    | live ID from PayPal merchant dashboard  |
-| `PAYPAL_CLIENT_SECRET`| sandbox secret| live secret                             |
-| `NEXT_PUBLIC_BASE_PATH` | `/v1`       | empty (launch swap means `/` is the app)|
-| `NEXT_PUBLIC_SITE_URL`| `https://3dninjaz.com/v1` (if set) | `https://3dninjaz.com`         |
+| `PAYPAL_ENV`          | `sandbox`     | `live` — ✅ DONE (2026-04-20)           |
+| `PAYPAL_CLIENT_ID`    | sandbox ID    | live ID — ✅ DONE                      |
+| `PAYPAL_CLIENT_SECRET`| sandbox secret| live secret — ✅ DONE                  |
+| `NEXT_PUBLIC_BASE_PATH` | (N/A — never used in current build) | (not set, app at root) |
+| `NEXT_PUBLIC_SITE_URL`| (N/A)         | (not explicitly set, defaults to `https://app.3dninjaz.com`) |
 
 ### Values that stay the same
 
@@ -185,124 +189,73 @@ disown
 
 ---
 
-## How to flip preview → production
+## How to move from app.3dninjaz.com → 3dninjaz.com (apex swap)
 
-The preview lives at `/v1`; the production swap moves it to `/`. Two
-execution paths:
+**Current state:** App is on `app.3dninjaz.com/` (subdomain) with no basePath.
+At full launch, the operator may choose to move the live app to the apex
+`3dninjaz.com/` and retire the coming-soon page.
 
-### Path A (recommended): edit LSWS userdata config
+### Execution path: Apache userdata + document root swap
 
-1. Back up the current userdata config:
-
-   ```bash
-   sudo cp /etc/apache2/conf.d/userdata/*/2_4/ninjaz/3dninjaz.com/3dninjaz_v1.conf \
-           /root/backups/3dninjaz_v1.conf.$(date +%Y%m%d-%H%M%S)
-   ```
-
-2. Edit the userdata file. Change the `Location /v1` block to
-   `Location /`:
-
-   ```apache
-   # BEFORE
-   <IfModule LiteSpeed>
-     Include /etc/apache2/conf.d/userdata/*/2_4/ninjaz/3dninjaz.com/*.conf
-     ProxyPass /v1 http://127.0.0.1:3100/
-     ProxyPassReverse /v1 http://127.0.0.1:3100/
-   </IfModule>
-
-   # AFTER
-   <IfModule LiteSpeed>
-     ProxyPass / http://127.0.0.1:3100/
-     ProxyPassReverse / http://127.0.0.1:3100/
-   </IfModule>
-   ```
-
-3. Update `NEXT_PUBLIC_BASE_PATH` in the Node app's env vars (remove
-   or set to empty string). Restart the Node app so Next.js picks up
-   the change (basePath is read at build time — may require a rebuild
-   if the tarball was compiled with `/v1` baked in; see build notes
-   below).
-
-4. Rename coming-soon to rollback copy:
+1. Back up the current userdata configs:
 
    ```bash
-   mv /home/ninjaz/public_html /home/ninjaz/public_html_old
-   mkdir -p /home/ninjaz/public_html
+   sudo cp /etc/apache2/conf.d/userdata/*/2_4/ninjaz/app.3dninjaz.com/* \
+           /root/backups/app.3dninjaz.com.$(date +%Y%m%d-%H%M%S).tar
    ```
 
-   > Alternatively, leave `public_html/` intact but override the
-   > domain's document root to a blank directory. Renaming is simpler.
+2. Move or alias the app vhost to the apex domain. Two options:
 
-5. Upload `deploy/htaccess-launch.txt` to
-   `/home/ninjaz/public_html/.htaccess`.
+   **Option A (Simplest):** Reconfigure Apache to proxy the apex to the same app:
+   - Edit `/etc/apache2/conf.d/userdata/{std,ssl}/2_4/ninjaz/3dninjaz.com/3dninjaz_apex_proxy.conf`
+   - Set `ProxyPass "/"` + `ProxyPassReverse "/"` → `http://127.0.0.1:3100/`
+   - Same Node app on `127.0.0.1:3100` serves both `app.3dninjaz.com` and `3dninjaz.com`
 
-6. Rebuild + restart Apache:
+   **Option B (Safer for rollback):** Keep the app on `app.3dninjaz.com`, add a redirect:
+   - Add permanent redirect `3dninjaz.com/* → app.3dninjaz.com/*`
+   - Search engines migrate to the new canonical URL over time
+
+3. Update `BETTER_AUTH_URL` in env vars if the canonical domain is changing (see `src/lib/auth.ts`).
+
+4. Remove or archive the coming-soon `public_html/` to avoid directory conflicts.
+
+5. Rebuild + reload Apache + test:
 
    ```bash
    sudo /scripts/rebuildhttpdconf
-   sudo /scripts/restartsrv_httpd
+   sudo /usr/local/lsws/bin/lswsctrl reload   # graceful reload, no downtime
    ```
 
-7. Smoke test (see LAUNCH-CHECKLIST.md step 11).
-
-### Path B: cPanel "Change Document Root"
-
-If the operator prefers a UI-driven swap:
-
-1. cPanel → Domains → `3dninjaz.com` → "Configuration" →
-   "Document Root" → change from `public_html` to, say,
-   `apps/3dninjaz/public` (or a symlinked dir).
-2. Update the LSWS userdata file so ProxyPass uses `/` instead of `/v1`.
-3. Same rebuild/restart sequence.
-
-Path A is preferred because it minimises cPanel-UI actions that can
-be difficult to audit/rollback.
+6. Smoke test (see LAUNCH-CHECKLIST.md post-launch checklist).
 
 ### Rollback (if smoke test fails)
 
-The rollback window is ~60 seconds. Reverse the swap:
+The rollback window is ~60 seconds:
 
-1. `mv /home/ninjaz/public_html_old /home/ninjaz/public_html`
-2. Restore the backed-up LSWS userdata file.
-3. Rebuild + restart Apache.
-4. Re-enable `NEXT_PUBLIC_BASE_PATH=/v1` + re-point Node app to serve
-   at `/v1` again.
+1. Restore the backed-up userdata configs.
+2. Rebuild + reload Apache.
+3. Verify the app is still live on `app.3dninjaz.com/`.
 
-Document in the launch-day journal the exact time of rollback + the
-first failing smoke-test step so we can diagnose before retrying.
+No rebuild or basePath changes needed—the app was already serving at root.
 
 ---
 
-## Build notes — why basePath matters
+## Build notes — basePath is NOT used
 
-`next.config.ts` reads `NEXT_PUBLIC_BASE_PATH` at BUILD time:
+Unlike the old `/v1` topology, the current app does NOT use `NEXT_PUBLIC_BASE_PATH`.
+`next.config.ts` reads:
 
 ```ts
-const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
-
-const nextConfig: NextConfig = {
-  basePath,
-  assetPrefix: basePath || undefined,
-};
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";  // always empty string
 ```
 
-The preview tarball was built with `NEXT_PUBLIC_BASE_PATH=/v1`, so
-all asset URLs and internal links include `/v1/` prefixes. Flipping
-LSWS userdata from `/v1` to `/` WITHOUT a rebuild will produce broken
-links (browser requests `/v1/_next/static/...` but server responds 404
-because proxy now strips `/v1`).
+This means:
+- Asset URLs are at root (`/_next/static/...`, not `/{basePath}/_next/...`)
+- Domain swap does NOT require a rebuild
+- Moving from `app.3dninjaz.com` to `3dninjaz.com` is a pure Apache/DNS change
 
-**Launch plan MUST either:**
-
-1. Rebuild the app with `NEXT_PUBLIC_BASE_PATH=` empty BEFORE the
-   document-root swap, OR
-2. Keep the preview live at `/v1` AND add a separate redirect from
-   `/` → `/v1` (temporary), OR
-3. Rebuild AND swap in the same change window.
-
-Option 3 is the recommended path. Build locally with empty basePath,
-re-tarball, SFTP upload, extract over `/home/ninjaz/apps/3dninjaz/`,
-restart Node, THEN flip the userdata config.
+**Historical note:** The 2026-04-19 preview used `NEXT_PUBLIC_BASE_PATH=/v1` to serve
+at a subpath. That was replaced on 2026-04-21 with subdomain-root topology.
 
 ---
 
@@ -339,9 +292,9 @@ The launch-day tasks in `LAUNCH-CHECKLIST.md` depend on this document:
 
 | Risk                         | Mitigation                                                                           |
 | ---------------------------- | ------------------------------------------------------------------------------------ |
-| Host reboot kills Node app   | Cron `@reboot` + start script (Fix A above).                                         |
+| Host reboot kills Node app   | Cron `@reboot` + start script in `scripts/start.sh` — ✅ DONE (2026-04-20).           |
 | HSTS lockout on cert renewal failure | cPanel AutoSSL renewal monitoring; add alert on cert expiry < 14 days.       |
-| basePath mismatch at swap    | Rebuild WITH `NEXT_PUBLIC_BASE_PATH=` empty BEFORE document-root flip.               |
+| basePath mismatch at swap    | ✅ N/A — app serves at root with no basePath. Domain swap is Apache/DNS only.        |
 | PayPal live creds leak       | Env vars in cPanel Node app UI only; `.env.production` never committed; .gitignore   |
 | Uploaded product images lost on redeploy | Symlink `public/uploads` → `/home/ninjaz/persistent_uploads/`           |
 | Coming-soon noindex reaches live | Already flagged in `LAUNCH-CHECKLIST.md` step 4; removed on launch day.          |
@@ -350,9 +303,13 @@ The launch-day tasks in `LAUNCH-CHECKLIST.md` depend on this document:
 
 ## Decision log for this plan
 
-- **Preview strategy (D-07 partial):** Node app on `127.0.0.1:3100` +
-  LSWS ProxyPass `/v1` → app. Works today; survives launch swap with
-  a rebuild.
+- **Subdomain-root topology (D-07 revised, 2026-04-21):** Node app on `127.0.0.1:3100` +
+  LSWS ProxyPass `/` → app, served at `app.3dninjaz.com/`. No basePath in the bundle.
+  Simplifies launch: domain swap is pure Apache config + DNS, no rebuild needed.
+  Replaces earlier `/v1` subpath approach.
+- **App already deployed on subdomain:** The current live app is `https://app.3dninjaz.com/`
+  with no `/v1` subpath. The older Phase 7 decision to use `/v1` was superseded
+  during Phase 7 execution (2026-04-20).
 - **`.htaccess` staged, not committed to public_html:** File lives in
   `deploy/htaccess-launch.txt` so rollout is explicit. Commiting it
   directly to public_html would overwrite the coming-soon .htaccess
@@ -360,7 +317,6 @@ The launch-day tasks in `LAUNCH-CHECKLIST.md` depend on this document:
 - **Rollback via rename, not delete:** `public_html` → `public_html_old`
   keeps the coming-soon files alive on disk. Delete only after the
   launch is confirmed stable for ~1 week.
-- **Hard cap on auto-fix rule scope:** Plan 04-04 does NOT rebuild the
-  app, does NOT redeploy the tarball, does NOT change the current
-  preview behavior. All launch-day mutations are on the launch
-  checklist for the human operator to execute.
+- **Hard cap on auto-fix rule scope:** Plan 04-04 established the initial
+  deploy scaffold; subsequent iterations (Phase 7) adjusted the topology.
+  All launch-day mutations are on the launch checklist for the human operator.
