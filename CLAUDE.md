@@ -212,6 +212,12 @@ Do not make direct repo edits outside a GSD workflow unless the user explicitly 
 - **Webhook process survival** — wrap the Node process with `setsid` in `start.sh` so Delyva webhook HTTP responses closing the stream don't send SIGPIPE to the parent. Fixed in `61df023`.
 - **Webhook idempotency** — `order_shipments.delyvaShipmentId` has a UNIQUE constraint. Duplicate webhook deliveries are caught by `ER_DUP_ENTRY` and silently no-op.
 
+### Session 2026-04-21 new quirks
+- **Delyva `itemType` shipping type distinction** — `itemType: PACKAGE` routes to Grab-only fulfillment; standard couriers (Pos Laju, GDEx, J&T, City-Link) require `itemType: PARCEL`. Auto-detected from product.isStandardParcel flag. See `src/lib/delyva.ts` instantQuote handler.
+- **Next.js standalone build does not bundle Markdown** — files in `src/content/` are not tree-shaken into the standalone output. Email templates stored as DB rows + rendered via `renderTemplate()` instead (schema in Phase 12). See `src/lib/email-renderer.ts`.
+- **Base UI Tabs component state quirk** — initial `value` prop on Tabs requires exact match to one of the tab `value` strings; SSR mismatch between server-rendered default and client hydration causes "Hydration mismatch" console error. Always derive `activeTab` state from query param or default explicitly on both sides.
+- **Better Auth `Session.user.role` is untyped** — library v1.6.2 infers role from the database but doesn't include it in the TypeScript `User` type. Cast at access sites: `(session.user as { role: string }).role`. Type stub in `src/types/auth.d.ts`.
+
 ### Deploy topology (2026-04-21 — current)
 - **Storefront:** `https://app.3dninjaz.com/` (Next.js 15 on Node 20.x, port `127.0.0.1:3100`)
 - **Apex:** `https://3dninjaz.com/` — still serves a static coming-soon page, to be decommissioned on launch day

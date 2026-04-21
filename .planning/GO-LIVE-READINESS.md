@@ -8,12 +8,12 @@
 
 ## What Admin Must Do Before Flipping Live (Top Priority)
 
-1. Fill real WhatsApp number + Instagram/TikTok URLs at `/admin/settings`
+1. ✅ ~~Build Privacy Policy + Terms of Service pages~~ — DONE (2026-04-21)
 2. Optimise logo: `public/logo.png` (1.55 MB) → WebP ~200 KB, replace file, redeploy
-3. Build Privacy Policy + Terms of Service pages (code, not admin task)
-4. ~~Rebuild app without `/v1` basePath~~ — N/A (already serves at subdomain root with no basePath set)
-5. Fill cost defaults at `/admin/settings` (filament/g, electricity/kWh, labor/hr, overhead %)
-6. Send a test order end-to-end with live PayPal to verify capture + email delivery
+3. Fill real WhatsApp number + Instagram/TikTok URLs at `/admin/settings`
+4. Fill cost defaults at `/admin/settings` (filament/g, electricity/kWh, labor/hr, overhead %)
+5. Send a test order end-to-end with live PayPal to verify capture + email delivery
+6. Verify shipping origin + contact email/phone at `/admin/shipping` + `/admin/settings`
 
 ---
 
@@ -87,8 +87,8 @@
 | About Us copy | ✅ Ready | Aligned with user spec in commit `9660ca6`. |
 | Contact info real | ⚠️ Needs admin action | WhatsApp `60000000000` is a placeholder. Fill real number at `/admin/settings`. |
 | Social URLs | ⚠️ Needs admin action | Instagram + TikTok are `#` placeholders. Fill at `/admin/settings`. Footer hides icons when empty — no broken links. |
-| Privacy policy page | ❌ Blocked | No `/privacy` page exists. Required for PDPA compliance — registration checkbox links to it. Must be built before launch. |
-| Terms of service page | ❌ Blocked | No `/terms` page exists. Needed for legal coverage. Build before launch. |
+| Privacy policy page | ✅ Ready | Page exists at `/privacy` (built in Phase 15). |
+| Terms of service page | ✅ Ready | Page exists at `/terms` (built in Phase 15). |
 | Error pages branded | ✅ Ready | 404, 500, maintenance pages + Apache 502/503/504 static fallbacks all live. |
 
 ---
@@ -147,11 +147,10 @@
 
 ## Summary Verdict
 
-**NOT ready to launch yet.** Two hard code blockers exist, plus several admin actions required.
+**NOT ready to launch yet.** No code blockers remain, but several admin actions are required before flipping live.
 
 ### Hard Blockers (code work needed before launch)
-1. **Privacy Policy page** (`/privacy`) — PDPA 2010 compliance; registration consent checkbox links to it
-2. **Terms of Service page** (`/terms`) — legal coverage
+(None — all code complete as of 2026-04-21)
 
 ### Admin Actions Required Before Launch (no code needed)
 1. Fill real WhatsApp number + Instagram/TikTok at `/admin/settings`

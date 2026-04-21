@@ -21,7 +21,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-12)
 
 **Core value:** Customers can easily browse and buy unique 3D printed products with a simple, clean shopping experience.
-**Current focus:** All 15 phases complete. Session 2026-04-20/21 shipped: Delyva courier integration (phases 08), theme lightening + UX polish (09), cost/profit tracking (10), site settings + social fields (11), 12 email templates + newsletter subscribers (12), per-variant inventory track_stock (13), cost breakdown with store defaults (14), customer + admin shipment tracking (15). PayPal live. Better Auth trustedOrigins fixed. 55 commits total this session.
+**Current focus:** All 15 phases complete. Session 2026-04-20/21 shipped: Delyva courier integration (phases 08), theme lightening + UX polish (09), cost/profit tracking (10), site settings + social fields (11), 12 email templates + newsletter subscribers (12), per-variant inventory track_stock (13), cost breakdown with store defaults (14), customer + admin shipment tracking (15). PayPal live. Better Auth trustedOrigins fixed. 52 commits total this session. App live at https://app.3dninjaz.com/ (subdomain root, no basePath).
+
+**Session 2026-04-21 closeout:**
+- All 52 session commits deployed + verified live
+- Master + dev branches synced
+- Delyva service catalog fix deployed (admin clicks Refresh → populates ~100 services from Grab/Pos Laju/GDEx/J&T/City-Link)
+- PayPal live + reporting scope grant pending (Q-07-08)
+- Admin guide live at `/admin/guide` with 32 articles + launch checklist link
+- Email system complete: 12 templates wired, lifecycle triggers for order_confirmation/paid/shipped/delivered + password_reset/email_verification/newsletter
+- Social icons + subscribers list + About Us + error pages (404/500/maintenance) all live
+- Theme lightened, brand icons added, cost breakdown UI polished
+- Outstanding admin tasks before launch: fill WhatsApp/Instagram/TikTok, fill cost defaults, place live PayPal test order, verify email delivery, optimize logo to WebP
+- Node persistence confirmed working; SSL + sitemap ready
+- Not ready to launch until admin data tasks complete + privacy/terms pages built + logo optimized
 
 **Next action:** Human-gated launch — see `.planning/GO-LIVE-READINESS.md`.
 
