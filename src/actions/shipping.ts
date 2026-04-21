@@ -3,13 +3,14 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   orders,
   orderItems,
   orderShipments,
   shippingConfig,
+  shippingServiceCatalog,
   products,
 } from "@/lib/db/schema";
 import { requireAdmin, getSessionUser } from "@/lib/auth-helpers";
@@ -805,4 +806,296 @@ export async function refreshShipmentStatus(
       return { ok: false, error: `${e.code}: ${e.message}` };
     return { ok: false, error: (e as Error).message };
   }
+}
+
+// ============================================================================
+// Phase 15 — Service catalog (multi-corridor probe + admin toggle)
+// ============================================================================
+
+export type ServiceCatalogRow = {
+  id: string;
+  serviceCode: string;
+  companyCode: string;
+  companyName: string;
+  serviceName: string | null;
+  serviceType: string | null;
+  samplePrice: string | null;
+  etaMinMinutes: number | null;
+  etaMaxMinutes: number | null;
+  isEnabled: boolean;
+  lastSeenAt: Date;
+};
+
+export type RefreshCatalogResult =
+  | {
+      ok: true;
+      totalProbed: number;
+      uniqueServices: number;
+      newlyAdded: number;
+    }
+  | { ok: false; error: string };
+
+/**
+ * Multi-corridor Delyva probe — discovers the union of all courier services
+ * across 5 representative MY destinations. Results are upserted into
+ * shipping_service_catalog, preserving any existing is_enabled values.
+ * requireAdmin() is the first await (CVE-2025-29927).
+ */
+export async function refreshServiceCatalog(): Promise<RefreshCatalogResult> {
+  await requireAdmin();
+
+  const cfg = await loadShippingConfig();
+
+  const PROBES = [
+    {
+      name: "KL",
+      destination: {
+        address1: "",
+        city: "Kuala Lumpur",
+        state: "WP Kuala Lumpur",
+        postcode: "50450",
+        country: "MY",
+      },
+    },
+    {
+      name: "Penang",
+      destination: {
+        address1: "",
+        city: "George Town",
+        state: "Pulau Pinang",
+        postcode: "10200",
+        country: "MY",
+      },
+    },
+    {
+      name: "JB",
+      destination: {
+        address1: "",
+        city: "Johor Bahru",
+        state: "Johor",
+        postcode: "80100",
+        country: "MY",
+      },
+    },
+    {
+      name: "KK",
+      destination: {
+        address1: "",
+        city: "Kota Kinabalu",
+        state: "Sabah",
+        postcode: "88000",
+        country: "MY",
+      },
+    },
+    {
+      name: "Kuching",
+      destination: {
+        address1: "",
+        city: "Kuching",
+        state: "Sarawak",
+        postcode: "93000",
+        country: "MY",
+      },
+    },
+  ] as const;
+
+  const origin = {
+    address1: cfg.originAddress1,
+    address2: cfg.originAddress2 ?? undefined,
+    city: cfg.originCity,
+    state: cfg.originState,
+    postcode: cfg.originPostcode,
+    country: cfg.originCountry,
+  };
+
+  // Collect unique services across all probe corridors.
+  // Key = serviceCode; value = last-seen NormalizedService entry.
+  const seen = new Map<string, NormalizedService>();
+  let totalProbed = 0;
+
+  for (const probe of PROBES) {
+    try {
+      const q = await delyvaApi.quote({
+        origin,
+        destination: probe.destination,
+        weight: { unit: "kg", value: 1 },
+        itemType: cfg.defaultItemType,
+      });
+      const services = parseQuoteServices(q);
+      totalProbed += services.length;
+      for (const svc of services) {
+        if (!seen.has(svc.serviceCode)) {
+          seen.set(svc.serviceCode, svc);
+        }
+      }
+    } catch (e) {
+      // A single corridor failure (e.g. no service to Sabah) should not abort
+      // the whole refresh. Log and continue.
+      console.warn(
+        `[refreshServiceCatalog] probe ${probe.name} failed:`,
+        (e as Error).message,
+      );
+    }
+  }
+
+  if (seen.size === 0) {
+    return {
+      ok: false,
+      error:
+        "All corridor probes failed — check DELYVA_API_KEY and origin address",
+    };
+  }
+
+  // Load existing catalog rows to determine which are new and to preserve
+  // is_enabled. We compare by serviceCode (the UNIQUE key).
+  const existingRows = await db
+    .select({ serviceCode: shippingServiceCatalog.serviceCode })
+    .from(shippingServiceCatalog);
+  const existingCodes = new Set(existingRows.map((r) => r.serviceCode));
+
+  const now = new Date();
+  let newlyAdded = 0;
+
+  for (const [serviceCode, svc] of seen.entries()) {
+    if (existingCodes.has(serviceCode)) {
+      // UPDATE — refresh probe data but DO NOT touch is_enabled.
+      await db
+        .update(shippingServiceCatalog)
+        .set({
+          companyCode: svc.companyCode ?? "",
+          companyName: svc.companyName ?? "",
+          serviceName: svc.serviceName ?? null,
+          serviceType: svc.serviceType ?? null,
+          samplePrice: svc.price.amount.toFixed(2),
+          etaMinMinutes: svc.etaMin ?? null,
+          etaMaxMinutes: svc.etaMax ?? null,
+          lastSeenAt: now,
+        })
+        .where(eq(shippingServiceCatalog.serviceCode, serviceCode));
+    } else {
+      // INSERT — new service, default is_enabled = true.
+      await db.insert(shippingServiceCatalog).values({
+        id: randomUUID(),
+        serviceCode,
+        companyCode: svc.companyCode ?? "",
+        companyName: svc.companyName ?? "",
+        serviceName: svc.serviceName ?? null,
+        serviceType: svc.serviceType ?? null,
+        samplePrice: svc.price.amount.toFixed(2),
+        etaMinMinutes: svc.etaMin ?? null,
+        etaMaxMinutes: svc.etaMax ?? null,
+        isEnabled: true,
+        lastSeenAt: now,
+      });
+      newlyAdded++;
+    }
+  }
+
+  revalidatePath("/admin/shipping/delyva");
+  return {
+    ok: true,
+    totalProbed,
+    uniqueServices: seen.size,
+    newlyAdded,
+  };
+}
+
+/**
+ * Return all catalog rows sorted by company_name then service_code.
+ * requireAdmin() is first await.
+ */
+export async function getServiceCatalog(): Promise<ServiceCatalogRow[]> {
+  await requireAdmin();
+  const rows = await db
+    .select()
+    .from(shippingServiceCatalog)
+    .orderBy(
+      shippingServiceCatalog.companyName,
+      shippingServiceCatalog.serviceCode,
+    );
+  return rows.map((r) => ({
+    id: r.id,
+    serviceCode: r.serviceCode,
+    companyCode: r.companyCode,
+    companyName: r.companyName,
+    serviceName: r.serviceName ?? null,
+    serviceType: r.serviceType ?? null,
+    samplePrice: r.samplePrice ?? null,
+    etaMinMinutes: r.etaMinMinutes ?? null,
+    etaMaxMinutes: r.etaMaxMinutes ?? null,
+    isEnabled: Boolean(r.isEnabled),
+    lastSeenAt: r.lastSeenAt,
+  }));
+}
+
+/**
+ * Toggle a single service tier on/off.
+ * requireAdmin() is first await.
+ */
+export async function updateServiceEnabled(
+  serviceCode: string,
+  enabled: boolean,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
+  if (!serviceCode?.trim()) return { ok: false, error: "serviceCode required" };
+  await db
+    .update(shippingServiceCatalog)
+    .set({ isEnabled: enabled })
+    .where(eq(shippingServiceCatalog.serviceCode, serviceCode));
+  revalidatePath("/admin/shipping/delyva");
+  return { ok: true };
+}
+
+/**
+ * Bulk toggle all rate tiers under a courier brand.
+ * requireAdmin() is first await.
+ */
+export async function updateCompanyEnabled(
+  companyCode: string,
+  enabled: boolean,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
+  if (!companyCode?.trim()) return { ok: false, error: "companyCode required" };
+  await db
+    .update(shippingServiceCatalog)
+    .set({ isEnabled: enabled })
+    .where(eq(shippingServiceCatalog.companyCode, companyCode));
+  revalidatePath("/admin/shipping/delyva");
+  return { ok: true };
+}
+
+/**
+ * Batch persist is_enabled changes for multiple service codes at once.
+ * Accepts a map of { [serviceCode]: enabled }. requireAdmin() is first await.
+ */
+export async function batchUpdateServiceEnabled(
+  changes: Record<string, boolean>,
+): Promise<{ ok: true; updated: number } | { ok: false; error: string }> {
+  await requireAdmin();
+  const entries = Object.entries(changes);
+  if (entries.length === 0) return { ok: true, updated: 0 };
+
+  // Split into enable / disable batches and do two bulk UPDATEs.
+  const toEnable = entries
+    .filter(([, v]) => v)
+    .map(([k]) => k);
+  const toDisable = entries
+    .filter(([, v]) => !v)
+    .map(([k]) => k);
+
+  if (toEnable.length > 0) {
+    await db
+      .update(shippingServiceCatalog)
+      .set({ isEnabled: true })
+      .where(inArray(shippingServiceCatalog.serviceCode, toEnable));
+  }
+  if (toDisable.length > 0) {
+    await db
+      .update(shippingServiceCatalog)
+      .set({ isEnabled: false })
+      .where(inArray(shippingServiceCatalog.serviceCode, toDisable));
+  }
+
+  revalidatePath("/admin/shipping/delyva");
+  return { ok: true, updated: entries.length };
 }

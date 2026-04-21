@@ -983,6 +983,45 @@ export const orderShipmentsRelations = relations(orderShipments, ({ one }) => ({
 }));
 
 // ============================================================================
+// Phase 15 — Delyva service catalog
+//
+// One row per rate-tier code (e.g. "JNTMY-PN-BD1"). Populated by the admin
+// clicking "Refresh catalog" which probes multiple corridors to discover the
+// union of all services Delyva offers. Admin can toggle each tier on/off;
+// checkout reads this table as the allowed-service filter.
+//
+// MariaDB quirks (CLAUDE.md):
+//   - App-generated UUIDs via crypto.randomUUID() on INSERT.
+//   - UPSERT: INSERT + ON DUPLICATE KEY UPDATE (MariaDB has no native UPSERT).
+//     The action layer does this manually to preserve is_enabled.
+//   - service_code is UNIQUE (uq_catalog_service_code) — the natural key.
+// ============================================================================
+
+export const shippingServiceCatalog = mysqlTable(
+  "shipping_service_catalog",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    serviceCode: varchar("service_code", { length: 100 }).notNull().unique(),
+    companyCode: varchar("company_code", { length: 50 }).notNull().default(""),
+    companyName: varchar("company_name", { length: 120 }).notNull().default(""),
+    serviceName: varchar("service_name", { length: 120 }),
+    serviceType: varchar("service_type", { length: 20 }),
+    samplePrice: decimal("sample_price", { precision: 10, scale: 2 }),
+    etaMinMinutes: int("eta_min_minutes"),
+    etaMaxMinutes: int("eta_max_minutes"),
+    // Admin toggle — 1 = enabled (shown at checkout), 0 = hidden.
+    isEnabled: boolean("is_enabled").notNull().default(true),
+    lastSeenAt: timestamp("last_seen_at").notNull().defaultNow(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({
+    companyIdx: index("idx_catalog_company").on(t.companyCode),
+    enabledIdx: index("idx_catalog_enabled").on(t.isEnabled),
+  }),
+);
+
+// ============================================================================
 // Phase 12 — Email subscribers (newsletter)
 //
 // Rows are created by the storefront footer subscribe form (/api/subscribe)

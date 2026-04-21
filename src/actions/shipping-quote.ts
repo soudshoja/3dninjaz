@@ -1,9 +1,9 @@
 "use server";
 
 import "server-only";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { products } from "@/lib/db/schema";
+import { products, shippingServiceCatalog } from "@/lib/db/schema";
 import { delyvaApi, DelyvaError, parseQuoteServices } from "@/lib/delyva";
 import { loadShippingConfig } from "@/lib/shipping-config";
 
@@ -150,15 +150,34 @@ export async function quoteForCart(
     // (services[].service.code / service.serviceCompany) or the legacy flat
     // shape (services[].serviceCompany.companyCode).
     const all = parseQuoteServices(q);
-    const allow = new Set(cfg.enabledServices);
-    const filtered =
-      allow.size === 0
-        ? all
-        : all.filter(
-            (s) =>
-              allow.has(s.serviceCode) ||
-              (s.companyCode !== null && allow.has(s.companyCode)),
-          );
+
+    // Phase 15: filter by shipping_service_catalog.is_enabled.
+    // If the catalog table is empty (never refreshed), fall back to returning
+    // all services (backward-compat with pre-Phase-15 installs).
+    const catalogEnabledRows = await db
+      .select({ serviceCode: shippingServiceCatalog.serviceCode })
+      .from(shippingServiceCatalog)
+      .where(eq(shippingServiceCatalog.isEnabled, true));
+
+    let filtered: typeof all;
+    if (catalogEnabledRows.length === 0) {
+      // Catalog not populated yet — show everything (same as old behaviour).
+      // Legacy fallback: also respect the old shipping_config.enabledServices
+      // JSON column if it has entries, so stores that never run the Phase 15
+      // migration still work.
+      const legacyAllow = new Set(cfg.enabledServices);
+      filtered =
+        legacyAllow.size === 0
+          ? all
+          : all.filter(
+              (s) =>
+                legacyAllow.has(s.serviceCode) ||
+                (s.companyCode !== null && legacyAllow.has(s.companyCode)),
+            );
+    } else {
+      const enabledSet = new Set(catalogEnabledRows.map((r) => r.serviceCode));
+      filtered = all.filter((s) => enabledSet.has(s.serviceCode));
+    }
 
     // --- markup + free-shipping
     const markupPct = Number(cfg.markupPercent ?? 0);

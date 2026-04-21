@@ -20,6 +20,11 @@ import {
   refreshShipmentStatus as _refreshShipmentStatus,
   quoteRatesForOrder as _quoteRatesForOrder,
   getOrderShipment as _getOrderShipment,
+  refreshServiceCatalog as _refreshServiceCatalog,
+  getServiceCatalog as _getServiceCatalog,
+  updateServiceEnabled as _updateServiceEnabled,
+  updateCompanyEnabled as _updateCompanyEnabled,
+  batchUpdateServiceEnabled as _batchUpdateServiceEnabled,
 } from "./shipping";
 
 export async function testDelyvaConnection() {
@@ -56,4 +61,34 @@ export async function quoteRatesForOrder(orderId: string) {
 
 export async function getOrderShipment(orderId: string) {
   return _getOrderShipment(orderId);
+}
+
+// Phase 15 — catalog actions
+
+export async function refreshServiceCatalog() {
+  return _refreshServiceCatalog();
+}
+
+export async function getServiceCatalog() {
+  return _getServiceCatalog();
+}
+
+export async function updateServiceEnabled(
+  serviceCode: string,
+  enabled: boolean,
+) {
+  return _updateServiceEnabled(serviceCode, enabled);
+}
+
+export async function updateCompanyEnabled(
+  companyCode: string,
+  enabled: boolean,
+) {
+  return _updateCompanyEnabled(companyCode, enabled);
+}
+
+export async function batchUpdateServiceEnabled(
+  changes: Record<string, boolean>,
+) {
+  return _batchUpdateServiceEnabled(changes);
 }
