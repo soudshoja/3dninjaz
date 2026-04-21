@@ -204,6 +204,18 @@ export const productVariants = mysqlTable("product_variants", {
   //   value is checked at checkout and decremented on capture.
   stock: int("stock").notNull().default(0),
   trackStock: boolean("track_stock").notNull().default(false),
+  // Phase 14 — cost breakdown fields. All nullable so existing rows stay valid.
+  // When costPriceManual=1 the existing costPrice is authoritative (admin typed
+  // a total manually). When 0, costPrice is auto-computed from the breakdown and
+  // persisted on save. storeSettings provides the rate defaults; these fields
+  // are per-variant overrides.
+  filamentGrams: decimal("filament_grams", { precision: 8, scale: 2 }),
+  printTimeHours: decimal("print_time_hours", { precision: 6, scale: 2 }),
+  laborMinutes: decimal("labor_minutes", { precision: 6, scale: 1 }),
+  otherCost: decimal("other_cost", { precision: 10, scale: 2 }),
+  filamentRateOverride: decimal("filament_rate_override", { precision: 8, scale: 2 }),
+  laborRateOverride: decimal("labor_rate_override", { precision: 8, scale: 2 }),
+  costPriceManual: boolean("cost_price_manual").notNull().default(false),
 });
 
 // ============================================================================
@@ -664,6 +676,16 @@ export const storeSettings = mysqlTable("store_settings", {
   // SST (Malaysian Sales & Service Tax). Default OFF per Phase 4 D-03.
   sstEnabled: boolean("sst_enabled").notNull().default(false),
   sstRate: decimal("sst_rate", { precision: 4, scale: 2 }).notNull().default("6.00"),
+  // Phase 14 — store-level cost defaults. All nullable so zero-config deployments
+  // work out of the box (missing rate → that cost component is treated as 0).
+  // Admins set these once in /admin/settings; each variant can override filament
+  // and labor rates individually. electricityKwhPerHour defaults to 0.15 (150W)
+  // in the compute helper when NULL.
+  defaultFilamentCostPerKg: decimal("default_filament_cost_per_kg", { precision: 8, scale: 2 }),
+  defaultElectricityCostPerKwh: decimal("default_electricity_cost_per_kwh", { precision: 8, scale: 4 }),
+  defaultElectricityKwhPerHour: decimal("default_electricity_kwh_per_hour", { precision: 6, scale: 3 }),
+  defaultLaborRatePerHour: decimal("default_labor_rate_per_hour", { precision: 8, scale: 2 }),
+  defaultOverheadPercent: decimal("default_overhead_percent", { precision: 5, scale: 2 }).notNull().default("0"),
   updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
 });
 
