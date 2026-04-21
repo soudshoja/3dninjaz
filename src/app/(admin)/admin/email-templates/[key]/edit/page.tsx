@@ -13,7 +13,20 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const VALID_KEYS: TemplateKey[] = ["order_confirmation", "password_reset"];
+const VALID_KEYS: TemplateKey[] = [
+  "order_confirmation",
+  "order_shipped",
+  "order_delivered",
+  "order_refunded",
+  "order_cancelled",
+  "password_reset",
+  "password_changed",
+  "welcome",
+  "newsletter_welcome",
+  "newsletter_unsubscribed",
+  "dispute_opened_customer",
+  "dispute_opened_admin",
+];
 
 type PageProps = { params: Promise<{ key: string }> };
 

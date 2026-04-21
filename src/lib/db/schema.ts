@@ -1002,27 +1002,326 @@ export const emailSubscribers = mysqlTable(
   }),
 );
 
+function brandedEmailTemplate(
+  headingEmoji: string,
+  heading: string,
+  body: string,
+  cta?: { text: string; url: string },
+  ctaColor: string = "#2563EB"
+): string {
+  const ctaHtml = cta
+    ? `<tr><td align="center" style="padding:16px 32px 32px">
+        <a href="{{${cta.url}}}" style="display:inline-block;padding:12px 28px;background:${ctaColor};color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px">${cta.text}</a>
+      </td></tr>`
+    : "";
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{subject}}</title>
+</head>
+<body style="margin:0;padding:0;background:#FAFAFA;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#3f3f46">
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#FAFAFA;border-collapse:collapse">
+  <tr>
+    <td align="center" style="padding:32px 16px">
+      <table role="presentation" cellpadding="0" cellspacing="0" width="560" style="max-width:100%;background:#ffffff;border:1px solid #e4e4e7;border-radius:12px;border-collapse:collapse">
+        <tr>
+          <td align="center" style="padding:32px 32px 16px;border-collapse:collapse">
+            <img src="https://app.3dninjaz.com/icons/ninja/logo.png" alt="3D Ninjaz" width="200" style="display:block;max-width:100%;height:auto">
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:0 32px 16px;border-collapse:collapse">
+            <div style="font-size:80px">${headingEmoji}</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:8px 32px 0;color:#0B1020;font-size:24px;font-weight:600;line-height:1.3;text-align:center;border-collapse:collapse">
+            ${heading}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 32px 32px;color:#3f3f46;font-size:15px;line-height:1.6;border-collapse:collapse">
+            ${body}
+          </td>
+        </tr>
+        ${ctaHtml}
+        <tr>
+          <td style="padding:16px 32px 32px;border-top:1px solid #f1f5f9;color:#71717a;font-size:13px;line-height:1.5;text-align:center;border-collapse:collapse">
+            <p style="margin:0 0 8px">© {{current_year}} 3D Ninjaz · Kuala Lumpur, Malaysia</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>`;
+}
+
 export function seedEmailTemplates(): EmailTemplateSeed[] {
-  // Stub HTML — Wave 3 plan 05-06 replaces with the real template content
-  // pulled from src/lib/email/order-confirmation.ts.
   return [
     {
       key: "order_confirmation",
-      subject: "Your 3D Ninjaz order {{order_number}} is confirmed",
-      html: `<!doctype html><html><body style="font-family:Arial,sans-serif;background:#F7FAF4;color:#0B1020;padding:24px;"><h1>Thanks, {{customer_name}}!</h1><p>Your order {{order_number}} is confirmed. Total: {{order_total}}.</p>{{items_table}}<p><a href="{{order_link}}">View your order</a></p></body></html>`,
+      subject: "Order #{{order_number}} confirmed — thanks from 3D Ninjaz 🥷",
+      html: brandedEmailTemplate(
+        "✓",
+        "Your order is confirmed!",
+        `<p>Thanks, {{customer_name}}!</p>
+        <p>Your order <strong>#{{order_number}}</strong> is confirmed.</p>
+        <p><strong>Total:</strong> {{order_total}}</p>
+        {{items_table}}
+        <p style="margin-top:16px">We'll prepare your 3D printed items and ship them ASAP.</p>`,
+        { text: "View Order", url: "order_link" }
+      ),
       variables: [
         "customer_name",
         "order_number",
         "order_total",
         "order_link",
         "items_table",
+        "store_name",
+        "store_url",
+        "current_year",
+      ],
+    },
+    {
+      key: "order_shipped",
+      subject: "Your 3D Ninjaz order is on its way! ({{courier_name}})",
+      html: brandedEmailTemplate(
+        "📦",
+        "Your order is shipped!",
+        `<p>Hey {{customer_name}},</p>
+        <p>Your order <strong>#{{order_number}}</strong> has been dispatched.</p>
+        <p><strong>Courier:</strong> {{courier_name}}<br>
+        <strong>Tracking:</strong> {{tracking_no}}<br>
+        <strong>Consignment:</strong> {{consignment_no}}</p>
+        <p style="margin-top:16px">Click below to track your delivery in real-time.</p>`,
+        { text: "Track Package", url: "tracking_link" }
+      ),
+      variables: [
+        "customer_name",
+        "order_number",
+        "courier_name",
+        "tracking_no",
+        "consignment_no",
+        "tracking_link",
+        "order_link",
+        "store_name",
+        "store_url",
+        "current_year",
+      ],
+    },
+    {
+      key: "order_delivered",
+      subject: "Your 3D Ninjaz order has been delivered 🎉",
+      html: brandedEmailTemplate(
+        "🎉",
+        "Delivered!",
+        `<p>Hey {{customer_name}},</p>
+        <p>Your order <strong>#{{order_number}}</strong> has been delivered to your doorstep.</p>
+        <p style="margin-top:16px">We hope you love your 3D printed items! If you have any questions, feel free to reach out.</p>`,
+        { text: "View Order", url: "order_link" }
+      ),
+      variables: [
+        "customer_name",
+        "order_number",
+        "order_link",
+        "store_name",
+        "store_url",
+        "current_year",
+      ],
+    },
+    {
+      key: "order_refunded",
+      subject: "Refund processed for order #{{order_number}}",
+      html: brandedEmailTemplate(
+        "💰",
+        "Your refund has been processed",
+        `<p>Hi {{customer_name}},</p>
+        <p>We've refunded <strong>{{refund_amount}}</strong> for order <strong>#{{order_number}}</strong>.</p>
+        <p style="margin-top:16px">The refund should appear in your account within 3-5 business days.</p>
+        <p>If you have questions, contact us at <a href="mailto:{{support_email}}" style="color:#2563EB">{{support_email}}</a></p>`,
+        { text: "View Order", url: "order_link" }
+      ),
+      variables: [
+        "customer_name",
+        "order_number",
+        "refund_amount",
+        "order_link",
+        "support_email",
+        "store_name",
+        "store_url",
+        "current_year",
+      ],
+    },
+    {
+      key: "order_cancelled",
+      subject: "Order #{{order_number}} has been cancelled",
+      html: brandedEmailTemplate(
+        "❌",
+        "Order cancelled",
+        `<p>Hi {{customer_name}},</p>
+        <p>Your order <strong>#{{order_number}}</strong> has been cancelled.</p>
+        <p><strong>Reason:</strong> {{cancellation_reason}}</p>
+        <p style="margin-top:16px">If this was unexpected, please contact us at <a href="mailto:{{support_email}}" style="color:#2563EB">{{support_email}}</a></p>`,
+        { text: "Contact Support", url: "support_email" }
+      ),
+      variables: [
+        "customer_name",
+        "order_number",
+        "cancellation_reason",
+        "order_link",
+        "support_email",
+        "store_name",
+        "store_url",
+        "current_year",
       ],
     },
     {
       key: "password_reset",
       subject: "Reset your 3D Ninjaz password",
-      html: `<!doctype html><html><body style="font-family:Arial,sans-serif;background:#F7FAF4;color:#0B1020;padding:24px;"><h1>Hi {{customer_name}},</h1><p>Click below to reset your password. The link expires in 1 hour.</p><p><a href="{{reset_link}}">Reset password</a></p><p>If you did not request this, ignore this email.</p></body></html>`,
-      variables: ["customer_name", "reset_link"],
+      html: brandedEmailTemplate(
+        "🔑",
+        "Reset your password",
+        `<p>Hi {{customer_name}},</p>
+        <p>We received a request to reset your password. Click the link below to create a new password.</p>
+        <p style="margin-top:16px;font-size:13px;color:#666">This link expires in 1 hour. If you didn't request this, ignore this email.</p>`,
+        { text: "Reset Password", url: "reset_link" }
+      ),
+      variables: [
+        "customer_name",
+        "reset_link",
+        "store_name",
+        "store_url",
+        "current_year",
+      ],
+    },
+    {
+      key: "password_changed",
+      subject: "Your 3D Ninjaz password was changed",
+      html: brandedEmailTemplate(
+        "✓",
+        "Password updated",
+        `<p>Hi {{customer_name}},</p>
+        <p>Your password has been successfully changed.</p>
+        <p style="margin-top:16px">If you didn't make this change, please contact us immediately at <a href="mailto:{{support_email}}" style="color:#2563EB">{{support_email}}</a></p>`,
+        undefined
+      ),
+      variables: [
+        "customer_name",
+        "store_name",
+        "store_url",
+        "current_year",
+        "support_email",
+      ],
+    },
+    {
+      key: "welcome",
+      subject: "Welcome to 3D Ninjaz! 🥷",
+      html: brandedEmailTemplate(
+        "👋",
+        "Welcome to 3D Ninjaz!",
+        `<p>Hi {{customer_name}},</p>
+        <p>Your account is ready to go. Browse our collection of unique 3D printed items and start shopping.</p>
+        <p style="margin-top:16px">We can't wait to see what you'll love!</p>`,
+        { text: "Shop Now", url: "shop_link", }
+      ),
+      variables: [
+        "customer_name",
+        "store_name",
+        "store_url",
+        "current_year",
+        "shop_link",
+      ],
+    },
+    {
+      key: "newsletter_welcome",
+      subject: "You're in! News from the 3D Ninjaz crew",
+      html: brandedEmailTemplate(
+        "📬",
+        "Welcome to our newsletter!",
+        `<p>Thanks for subscribing to 3D Ninjaz news.</p>
+        <p>You'll be the first to hear about new products, exclusive deals, and behind-the-scenes 3D printing stories.</p>
+        <p style="margin-top:24px;font-size:13px;color:#71717a">
+          <a href="{{unsubscribe_link}}" style="color:#71717a">Unsubscribe</a>
+        </p>`,
+        undefined
+      ),
+      variables: [
+        "subscriber_email",
+        "store_name",
+        "store_url",
+        "current_year",
+        "unsubscribe_link",
+      ],
+    },
+    {
+      key: "newsletter_unsubscribed",
+      subject: "You've been unsubscribed from 3D Ninjaz updates",
+      html: brandedEmailTemplate(
+        "👋",
+        "You've unsubscribed",
+        `<p>Your email has been removed from our mailing list.</p>
+        <p>You won't receive any further emails from us, but you can always resubscribe anytime from our website.</p>`,
+        undefined
+      ),
+      variables: [
+        "subscriber_email",
+        "store_name",
+        "store_url",
+        "current_year",
+      ],
+    },
+    {
+      key: "dispute_opened_customer",
+      subject: "Dispute opened for order #{{order_number}}",
+      html: brandedEmailTemplate(
+        "⚠️",
+        "Dispute notification",
+        `<p>Hi {{customer_name}},</p>
+        <p>A dispute has been opened on your order <strong>#{{order_number}}</strong>.</p>
+        <p><strong>Reason:</strong> {{dispute_reason}}</p>
+        <p style="margin-top:16px">We're investigating and will keep you updated. Contact us at <a href="mailto:{{support_email}}" style="color:#2563EB">{{support_email}}</a> if you have additional details.</p>`,
+        { text: "View Order", url: "order_link" }
+      ),
+      variables: [
+        "customer_name",
+        "order_number",
+        "dispute_reason",
+        "order_link",
+        "support_email",
+        "store_name",
+        "store_url",
+        "current_year",
+      ],
+    },
+    {
+      key: "dispute_opened_admin",
+      subject: "ADMIN: Dispute opened on order #{{order_number}}",
+      html: brandedEmailTemplate(
+        "⚠️",
+        "New dispute alert",
+        `<p>A dispute has been opened.</p>
+        <p><strong>Customer:</strong> {{customer_name}}<br>
+        <strong>Order:</strong> #{{order_number}}<br>
+        <strong>Reason:</strong> {{dispute_reason}}<br>
+        <strong>Amount:</strong> {{dispute_amount}}</p>
+        <p style="margin-top:16px">Click below to view details and respond.</p>`,
+        { text: "Review Dispute", url: "admin_link" },
+        "#8B5CF6"
+      ),
+      variables: [
+        "customer_name",
+        "order_number",
+        "dispute_reason",
+        "dispute_amount",
+        "admin_link",
+        "store_name",
+        "current_year",
+      ],
     },
   ];
 }

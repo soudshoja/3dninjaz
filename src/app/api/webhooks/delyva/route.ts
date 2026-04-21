@@ -2,7 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import crypto from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { orderShipments } from "@/lib/db/schema";
+import { orderShipments, orders } from "@/lib/db/schema";
+import { sendOrderDeliveredEmail } from "@/actions/send-emails";
+import { formatOrderNumber } from "@/lib/orders";
 
 // ============================================================================
 // Phase 9 (09-01) — Delyva webhook receiver.
@@ -123,6 +125,46 @@ export async function POST(req: NextRequest) {
           lastTrackingEventAt: eventAt,
         })
         .where(eq(orderShipments.delyvaOrderId, delyvaOrderId));
+
+      // Send delivery confirmation email when statusCode === 400 (delivered)
+      if (data.statusCode === 400) {
+        try {
+          // Find the order associated with this shipment to get customer info
+          const shipment = await db
+            .select({
+              orderId: orderShipments.orderId,
+            })
+            .from(orderShipments)
+            .where(eq(orderShipments.delyvaOrderId, delyvaOrderId))
+            .limit(1);
+
+          if (shipment.length > 0) {
+            const order = await db
+              .select({
+                id: orders.id,
+                customerEmail: orders.customerEmail,
+                shippingName: orders.shippingName,
+              })
+              .from(orders)
+              .where(eq(orders.id, shipment[0].orderId))
+              .limit(1);
+
+            if (order.length > 0) {
+              void sendOrderDeliveredEmail({
+                customerEmail: order[0].customerEmail,
+                customerName: order[0].shippingName,
+                orderNumber: formatOrderNumber(order[0].id),
+                orderId: order[0].id,
+              }).catch((err) =>
+                console.error("[delyva-webhook] delivery email failed:", err)
+              );
+            }
+          }
+        } catch (err) {
+          console.error("[delyva-webhook] failed to send delivery email:", err);
+          // Don't block the webhook response
+        }
+      }
     } catch (err) {
       console.error("delyva webhook DB update failed", err);
       // Return 200 anyway — retrying won't fix a schema/DB issue and we have

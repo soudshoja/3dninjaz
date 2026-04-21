@@ -26,6 +26,8 @@ import {
   rowToShippingConfig,
 } from "@/lib/shipping-config";
 import type { ShippingConfigRow as ShippingConfigRowType } from "@/lib/shipping-config";
+import { sendOrderShippedEmail } from "@/actions/send-emails";
+import { formatOrderNumber } from "@/lib/orders";
 
 // ============================================================================
 // Phase 9 (09-01) — admin-side shipping configuration + Delyva-backed order
@@ -565,6 +567,21 @@ export async function bookShipmentForOrder(
     });
 
     revalidatePath(`/admin/orders/${orderId}`);
+
+    // Send order shipped notification email (fire-and-forget).
+    const courierName = order.shippingServiceName || "Your courier";
+    void sendOrderShippedEmail({
+      customerEmail: order.customerEmail,
+      customerName: order.shippingName,
+      orderNumber: formatOrderNumber(order.id),
+      courierName,
+      trackingNo: details?.trackingNo || "pending",
+      consignmentNo: details?.consignmentNo || "pending",
+      orderId: order.id,
+    }).catch((err) =>
+      console.error("[bookShipment] shipped email failed:", err)
+    );
+
     return {
       ok: true,
       shipmentId,

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
+import { sendWelcomeEmail } from "@/actions/send-emails";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,6 +54,11 @@ export function RegisterForm() {
         setError(result.error.message ?? "Unable to create account.");
         return;
       }
+
+      // Send welcome email (fire-and-forget — don't block redirect if it fails).
+      void sendWelcomeEmail(email, name).catch((err) =>
+        console.error("[register] welcome email failed:", err)
+      );
 
       // New registrations always land on customer role (D-08). Drop them
       // into their account dashboard so they can see orders / addresses

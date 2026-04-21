@@ -13,16 +13,44 @@ export const metadata: Metadata = {
 
 const TEMPLATE_LABELS: Record<string, string> = {
   order_confirmation: "Order confirmation",
+  order_shipped: "Order shipped",
+  order_delivered: "Order delivered",
+  order_refunded: "Order refunded",
+  order_cancelled: "Order cancelled",
   password_reset: "Password reset",
+  password_changed: "Password changed",
+  welcome: "Welcome email",
+  newsletter_welcome: "Newsletter welcome",
+  newsletter_unsubscribed: "Newsletter unsubscribed",
+  dispute_opened_customer: "Dispute opened (customer)",
+  dispute_opened_admin: "Dispute opened (admin)",
 };
 
 export default async function AdminEmailTemplatesPage() {
   await requireAdmin();
   let rows = await listEmailTemplates();
-  if (rows.length < 2) {
-    // Lazy-seed both templates so the queue always has the expected 2 rows.
-    await renderTemplate("order_confirmation", {});
-    await renderTemplate("password_reset", {});
+  const EXPECTED_COUNT = 12;
+  if (rows.length < EXPECTED_COUNT) {
+    // Lazy-seed all templates on first page load.
+    const keys = [
+      "order_confirmation",
+      "order_shipped",
+      "order_delivered",
+      "order_refunded",
+      "order_cancelled",
+      "password_reset",
+      "password_changed",
+      "welcome",
+      "newsletter_welcome",
+      "newsletter_unsubscribed",
+      "dispute_opened_customer",
+      "dispute_opened_admin",
+    ] as const;
+    for (const key of keys) {
+      await renderTemplate(key, {}).catch((err) =>
+        console.error(`Failed to seed ${key}:`, err)
+      );
+    }
     rows = await listEmailTemplates();
   }
 

@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { emailSubscribers } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/auth-helpers";
+import { sendNewsletterWelcomeEmail } from "@/actions/send-emails";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -93,16 +94,28 @@ export async function POST(req: NextRequest) {
         userId: sessionUser?.id ?? row.userId,
       })
       .where(eq(emailSubscribers.id, row.id));
+
+    // Send welcome email on reactivation (fire-and-forget).
+    void sendNewsletterWelcomeEmail(email, row.unsubscribeToken || crypto.randomBytes(16).toString("hex")).catch((err) =>
+      console.error("[subscribe] reactivation email failed:", err)
+    );
+
     return NextResponse.json({ ok: true, reactivated: true });
   }
 
+  const unsubscribeToken = crypto.randomBytes(16).toString("hex");
   await db.insert(emailSubscribers).values({
     id: crypto.randomUUID(),
     email,
     source,
     userId: sessionUser?.id ?? null,
-    unsubscribeToken: crypto.randomBytes(16).toString("hex"),
+    unsubscribeToken,
   });
+
+  // Send welcome email on new subscription (fire-and-forget).
+  void sendNewsletterWelcomeEmail(email, unsubscribeToken).catch((err) =>
+    console.error("[subscribe] welcome email failed:", err)
+  );
 
   return NextResponse.json({ ok: true });
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { emailSubscribers } from "@/lib/db/schema";
+import { sendNewsletterUnsubscribedEmail } from "@/actions/send-emails";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +34,7 @@ export async function GET(req: NextRequest) {
   const rows = await db
     .select({
       id: emailSubscribers.id,
+      email: emailSubscribers.email,
       status: emailSubscribers.status,
     })
     .from(emailSubscribers)
@@ -50,6 +52,11 @@ export async function GET(req: NextRequest) {
       .update(emailSubscribers)
       .set({ status: "unsubscribed", unsubscribedAt: new Date() })
       .where(eq(emailSubscribers.id, row.id));
+
+    // Send unsubscribed confirmation email (fire-and-forget).
+    void sendNewsletterUnsubscribedEmail(row.email).catch((err) =>
+      console.error("[unsubscribe] confirmation email failed:", err)
+    );
   }
 
   return NextResponse.redirect(unsubscribedUrl, { status: 302 });

@@ -28,6 +28,7 @@ import {
   changePasswordSchema,
   profileUpdateSchema,
 } from "@/lib/validators";
+import { sendPasswordChangedEmail } from "@/actions/send-emails";
 
 export async function updateProfile(input: unknown) {
   const session = await requireUser();
@@ -78,7 +79,7 @@ export async function changeEmail(input: unknown) {
 }
 
 export async function changePassword(input: unknown) {
-  await requireUser();
+  const session = await requireUser();
   const parsed = changePasswordSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false as const, error: parsed.error.issues[0].message };
@@ -95,6 +96,12 @@ export async function changePassword(input: unknown) {
       },
       headers: await headers(),
     });
+
+    // Send password changed confirmation email (fire-and-forget).
+    void sendPasswordChangedEmail(session.user.email, session.user.name).catch(
+      (err) => console.error("[changePassword] email failed:", err)
+    );
+
     return { ok: true as const, message: "Password updated." };
   } catch (err) {
     console.error("[changePassword] Better Auth error", err);

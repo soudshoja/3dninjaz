@@ -44,7 +44,11 @@ export async function GET(req: NextRequest) {
   } catch {
     // Non-admin / not logged in — redirect to /login (307 preserves method,
     // but GET redirect is what a download button user would expect).
-    const url = new URL("/login", req.url);
+    // Use BETTER_AUTH_URL from env to construct the absolute URL, since req.url
+    // may be the proxied local address (http://127.0.0.1:3100) instead of the
+    // public origin (https://app.3dninjaz.com).
+    const baseUrl = process.env.BETTER_AUTH_URL || "http://localhost:3000";
+    const url = new URL("/login", baseUrl);
     url.searchParams.set("next", "/admin/subscribers");
     return NextResponse.redirect(url, { status: 307 });
   }

@@ -8,6 +8,8 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import { issueCaptureRefund } from "@/lib/paypal-refund";
 import { checkRateLimit } from "@/lib/rate-limit";
 import type { OrderStatus } from "@/lib/orders";
+import { sendOrderRefundedEmail } from "@/actions/send-emails";
+import { formatOrderNumber } from "@/lib/orders";
 
 /**
  * Phase 7 (07-05) — refund server action.
@@ -113,6 +115,17 @@ export async function issueRefund(
     console.error("[admin-refunds] DB update failed:", err);
     // PayPal already refunded — webhook will reconcile if this transient.
   }
+
+  // Send refund confirmation email (fire-and-forget).
+  void sendOrderRefundedEmail({
+    customerEmail: row.customerEmail,
+    customerName: row.shippingName,
+    orderNumber: formatOrderNumber(input.orderId),
+    refundAmount: `RM ${newRefunded.toFixed(2)}`,
+    orderId: input.orderId,
+  }).catch((err) =>
+    console.error("[admin-refunds] refund email failed:", err)
+  );
 
   revalidatePath(`/admin/payments/${input.orderId}`);
   revalidatePath(`/admin/orders/${input.orderId}`);

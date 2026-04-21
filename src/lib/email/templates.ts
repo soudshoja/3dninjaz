@@ -23,7 +23,19 @@ import { sanitiseEmailHtml, escapeHtml } from "@/lib/email/sanitize";
 //   4) Strip tags for the plain-text fallback (htmlToText)
 // ============================================================================
 
-export type TemplateKey = "order_confirmation" | "password_reset";
+export type TemplateKey =
+  | "order_confirmation"
+  | "order_shipped"
+  | "order_delivered"
+  | "order_refunded"
+  | "order_cancelled"
+  | "password_reset"
+  | "password_changed"
+  | "welcome"
+  | "newsletter_welcome"
+  | "newsletter_unsubscribed"
+  | "dispute_opened_customer"
+  | "dispute_opened_admin";
 
 export const availableVariables: Record<TemplateKey, string[]> = {
   order_confirmation: [
@@ -32,12 +44,104 @@ export const availableVariables: Record<TemplateKey, string[]> = {
     "order_total",
     "order_link",
     "items_table",
-    // Optional — substituted with the empty string if the order has no
-    // PayPal capture id yet (status === "pending"). Templates can guard
-    // around it with surrounding markup.
     "paypal_capture_id",
+    "store_name",
+    "store_url",
+    "current_year",
   ],
-  password_reset: ["customer_name", "reset_link"],
+  order_shipped: [
+    "customer_name",
+    "order_number",
+    "courier_name",
+    "tracking_no",
+    "consignment_no",
+    "tracking_link",
+    "order_link",
+    "store_name",
+    "store_url",
+    "current_year",
+  ],
+  order_delivered: [
+    "customer_name",
+    "order_number",
+    "order_link",
+    "store_name",
+    "store_url",
+    "current_year",
+  ],
+  order_refunded: [
+    "customer_name",
+    "order_number",
+    "refund_amount",
+    "order_link",
+    "support_email",
+    "store_name",
+    "store_url",
+    "current_year",
+  ],
+  order_cancelled: [
+    "customer_name",
+    "order_number",
+    "cancellation_reason",
+    "order_link",
+    "support_email",
+    "store_name",
+    "store_url",
+    "current_year",
+  ],
+  password_reset: [
+    "customer_name",
+    "reset_link",
+    "store_name",
+    "store_url",
+    "current_year",
+  ],
+  password_changed: [
+    "customer_name",
+    "store_name",
+    "store_url",
+    "current_year",
+    "support_email",
+  ],
+  welcome: [
+    "customer_name",
+    "store_name",
+    "store_url",
+    "current_year",
+    "shop_link",
+  ],
+  newsletter_welcome: [
+    "subscriber_email",
+    "store_name",
+    "store_url",
+    "current_year",
+    "unsubscribe_link",
+  ],
+  newsletter_unsubscribed: [
+    "subscriber_email",
+    "store_name",
+    "store_url",
+    "current_year",
+  ],
+  dispute_opened_customer: [
+    "customer_name",
+    "order_number",
+    "dispute_reason",
+    "order_link",
+    "support_email",
+    "store_name",
+    "store_url",
+    "current_year",
+  ],
+  dispute_opened_admin: [
+    "customer_name",
+    "order_number",
+    "dispute_reason",
+    "dispute_amount",
+    "admin_link",
+    "store_name",
+    "current_year",
+  ],
 };
 
 // Variables whose value is a pre-built HTML fragment — they go through
