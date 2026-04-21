@@ -918,34 +918,43 @@ export async function refreshServiceCatalog(): Promise<RefreshCatalogResult> {
   const seen = new Map<string, NormalizedService>();
   let totalProbed = 0;
 
+  // Delyva itemType governs which couriers are returned:
+  //   - PARCEL: most couriers (J&T, SPX, Pos Malaysia, Grab Express, etc.) — use this
+  //   - PACKAGE: Grab-only (special type) — limited utility
+  //   - BULKY: returns zero results in most cases
+  // Probe both PARCEL and PACKAGE to capture maximum coverage, then merge the union.
+  const ITEM_TYPES_TO_PROBE: Array<"PARCEL" | "PACKAGE"> = ["PARCEL", "PACKAGE"];
+
   for (const probe of PROBES) {
-    try {
-      const q = await delyvaApi.quote({
-        origin,
-        destination: probe.destination,
-        weight: { unit: "kg", value: 1 },
-        itemType: cfg.defaultItemType,
-      });
-      const services = parseQuoteServices(q);
-      console.log(
-        `[refreshServiceCatalog] probe ${probe.name}: found ${services.length} service(s)`,
-      );
-      totalProbed += services.length;
-      for (const svc of services) {
-        if (!seen.has(svc.serviceCode)) {
-          console.log(
-            `[refreshServiceCatalog] adding service: ${svc.serviceCode} (${svc.serviceName} by ${svc.companyCode})`,
-          );
-          seen.set(svc.serviceCode, svc);
+    for (const itemType of ITEM_TYPES_TO_PROBE) {
+      try {
+        const q = await delyvaApi.quote({
+          origin,
+          destination: probe.destination,
+          weight: { unit: "kg", value: 1 },
+          itemType,
+        });
+        const services = parseQuoteServices(q);
+        console.log(
+          `[refreshServiceCatalog] probe ${probe.name} (itemType=${itemType}): found ${services.length} service(s)`,
+        );
+        totalProbed += services.length;
+        for (const svc of services) {
+          if (!seen.has(svc.serviceCode)) {
+            console.log(
+              `[refreshServiceCatalog] adding service: ${svc.serviceCode} (${svc.serviceName} by ${svc.companyCode})`,
+            );
+            seen.set(svc.serviceCode, svc);
+          }
         }
+      } catch (e) {
+        // A single corridor+itemType failure should not abort the whole refresh.
+        // Log and continue.
+        console.warn(
+          `[refreshServiceCatalog] probe ${probe.name} (itemType=${itemType}) failed:`,
+          (e as Error).message,
+        );
       }
-    } catch (e) {
-      // A single corridor failure (e.g. no service to Sabah) should not abort
-      // the whole refresh. Log and continue.
-      console.warn(
-        `[refreshServiceCatalog] probe ${probe.name} failed:`,
-        (e as Error).message,
-      );
     }
   }
 
