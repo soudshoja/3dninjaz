@@ -17,10 +17,11 @@ export function BrandedNotFound() {
         <Image
           src="/icons/ninja/errors/404.png"
           alt="3D Ninjaz ninja with a magnifying glass — page not found"
-          width={240}
-          height={240}
+          width={256}
+          height={256}
+          sizes="256px"
           priority
-          className="mx-auto mb-6 h-[240px] w-[240px] object-contain"
+          className="mx-auto mb-6 h-[256px] w-[256px] object-contain"
         />
         <h1 className="font-[var(--font-heading)] text-3xl md:text-4xl mb-3">
           The ninja went stealth on this page
