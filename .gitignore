@@ -75,3 +75,4 @@ next-env.d.ts
 # Claude Code local config — skills, settings, plugin metadata
 .claude/
 backups/
+public/logo-original-backup.png
