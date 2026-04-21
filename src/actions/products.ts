@@ -152,6 +152,10 @@ export async function createProduct(
         widthCm: toDecimalOrNull(v.widthCm),
         heightCm: toDecimalOrNull(v.heightCm),
         depthCm: toDecimalOrNull(v.depthCm),
+        // Phase 13 — optional stock tracking. trackStock=false means on-demand;
+        // stock value is stored either way so toggling ON later works immediately.
+        trackStock: v.trackStock,
+        stock: v.stock,
       }))
     );
   }
@@ -213,6 +217,10 @@ export async function updateProduct(
         widthCm: toDecimalOrNull(v.widthCm),
         heightCm: toDecimalOrNull(v.heightCm),
         depthCm: toDecimalOrNull(v.depthCm),
+        // Phase 13 — optional stock tracking. trackStock=false means on-demand;
+        // stock value is stored either way so toggling ON later works immediately.
+        trackStock: v.trackStock,
+        stock: v.stock,
       }))
     );
   }

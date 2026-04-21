@@ -45,6 +45,9 @@ export default async function EditProductPage({
       widthCm: v.widthCm,
       heightCm: v.heightCm,
       depthCm: v.depthCm,
+      // Phase 13 — stock tracking fields; default to on-demand for older rows.
+      trackStock: v.trackStock ?? false,
+      stock: v.stock ?? 0,
     })),
   };
 

@@ -52,6 +52,11 @@ export const productVariantSchema = z.object({
   widthCm: z.string().optional().default(""),
   heightCm: z.string().optional().default(""),
   depthCm: z.string().optional().default(""),
+  // Phase 13 — optional per-variant stock tracking.
+  // trackStock = false (default) → on-demand, always available, stock ignored.
+  // trackStock = true           → check + decrement stock at checkout.
+  trackStock: z.boolean().default(false),
+  stock: z.coerce.number().int().min(0).default(0),
 });
 
 export type ProductVariantInput = z.infer<typeof productVariantSchema>;

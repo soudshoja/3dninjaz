@@ -44,6 +44,9 @@ export type ProductFormInitial = {
     widthCm: string | null;
     heightCm: string | null;
     depthCm: string | null;
+    // Phase 13 — optional stock tracking.
+    trackStock: boolean;
+    stock: number;
   }>;
 };
 
@@ -62,6 +65,9 @@ type VariantRow = {
   widthCm: string;
   heightCm: string;
   depthCm: string;
+  // Phase 13 — optional stock tracking per variant.
+  trackStock: boolean;
+  stock: string; // string for the controlled input; coerced to int on submit.
 };
 
 const SIZES: Array<{ key: "S" | "M" | "L"; label: string }> = [
@@ -88,6 +94,9 @@ function initialVariants(
       widthCm: existing?.widthCm ?? "",
       heightCm: existing?.heightCm ?? "",
       depthCm: existing?.depthCm ?? "",
+      // Phase 13 — default OFF (on-demand) so existing products are unaffected.
+      trackStock: existing?.trackStock ?? false,
+      stock: existing ? String(existing.stock ?? 0) : "0",
     };
   });
 }
@@ -243,6 +252,9 @@ export function ProductForm({
           widthCm: v.widthCm,
           heightCm: v.heightCm,
           depthCm: v.depthCm,
+          // Phase 13 — pass through stock tracking fields.
+          trackStock: v.trackStock,
+          stock: v.trackStock ? Math.max(0, parseInt(v.stock, 10) || 0) : 0,
         })),
     };
 
@@ -445,104 +457,148 @@ export function ProductForm({
                   </span>
                 </div>
 
-                <div className="grid flex-1 grid-cols-2 gap-3 md:grid-cols-5">
-                  <div className="space-y-1">
-                    <Label className="text-xs" htmlFor={`price-${v.size}`}>
-                      Price (MYR)
-                    </Label>
-                    <Input
-                      id={`price-${v.size}`}
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="0.00"
-                      value={v.price}
-                      onChange={(e) =>
-                        updateVariant(idx, { price: e.target.value })
-                      }
-                      disabled={!v.enabled}
-                      className="h-9"
-                    />
-                    {errors[`price_${v.size}`] && (
-                      <p className="text-xs text-red-500">
-                        {errors[`price_${v.size}`]}
+                <div className="flex-1 space-y-3">
+                  {/* Row 1: Price, Cost, Width, Height, Depth */}
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+                    <div className="space-y-1">
+                      <Label className="text-xs" htmlFor={`price-${v.size}`}>
+                        Price (MYR)
+                      </Label>
+                      <Input
+                        id={`price-${v.size}`}
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        value={v.price}
+                        onChange={(e) =>
+                          updateVariant(idx, { price: e.target.value })
+                        }
+                        disabled={!v.enabled}
+                        className="h-9"
+                      />
+                      {errors[`price_${v.size}`] && (
+                        <p className="text-xs text-red-500">
+                          {errors[`price_${v.size}`]}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs" htmlFor={`cost-${v.size}`}>
+                        Cost (MYR)
+                      </Label>
+                      <Input
+                        id={`cost-${v.size}`}
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="—"
+                        value={v.costPrice}
+                        onChange={(e) =>
+                          updateVariant(idx, { costPrice: e.target.value })
+                        }
+                        disabled={!v.enabled}
+                        className="h-9"
+                      />
+                      <p className={`text-[11px] leading-tight ${toneClass}`}>
+                        {margin.text}
                       </p>
+                      {errors[`cost_${v.size}`] && (
+                        <p className="text-xs text-red-500">
+                          {errors[`cost_${v.size}`]}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs" htmlFor={`w-${v.size}`}>
+                        Width (cm)
+                      </Label>
+                      <Input
+                        id={`w-${v.size}`}
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="—"
+                        value={v.widthCm}
+                        onChange={(e) =>
+                          updateVariant(idx, { widthCm: e.target.value })
+                        }
+                        disabled={!v.enabled}
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs" htmlFor={`h-${v.size}`}>
+                        Height (cm)
+                      </Label>
+                      <Input
+                        id={`h-${v.size}`}
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="—"
+                        value={v.heightCm}
+                        onChange={(e) =>
+                          updateVariant(idx, { heightCm: e.target.value })
+                        }
+                        disabled={!v.enabled}
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs" htmlFor={`d-${v.size}`}>
+                        Depth (cm)
+                      </Label>
+                      <Input
+                        id={`d-${v.size}`}
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="—"
+                        value={v.depthCm}
+                        onChange={(e) =>
+                          updateVariant(idx, { depthCm: e.target.value })
+                        }
+                        disabled={!v.enabled}
+                        className="h-9"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 2: Stock tracking (Phase 13) */}
+                  <div className="flex flex-wrap items-center gap-4 pt-1 border-t border-[var(--color-brand-border)]">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={v.trackStock}
+                        disabled={!v.enabled}
+                        onChange={(e) =>
+                          updateVariant(idx, { trackStock: e.target.checked })
+                        }
+                        className="h-4 w-4 rounded border-gray-300 accent-[var(--color-brand-primary)]"
+                      />
+                      <span className="text-xs font-medium">Track stock</span>
+                    </label>
+                    {v.trackStock ? (
+                      <div className="flex items-center gap-2">
+                        <Label className="text-xs whitespace-nowrap" htmlFor={`stock-${v.size}`}>
+                          Qty on hand
+                        </Label>
+                        <Input
+                          id={`stock-${v.size}`}
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          step={1}
+                          placeholder="0"
+                          value={v.stock}
+                          onChange={(e) =>
+                            updateVariant(idx, { stock: e.target.value })
+                          }
+                          disabled={!v.enabled}
+                          className="h-9 w-24"
+                        />
+                      </div>
+                    ) : (
+                      <span className="text-xs text-[var(--color-brand-text-muted)]">
+                        On-demand — no stock limit
+                      </span>
                     )}
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs" htmlFor={`cost-${v.size}`}>
-                      Cost (MYR)
-                    </Label>
-                    <Input
-                      id={`cost-${v.size}`}
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="—"
-                      value={v.costPrice}
-                      onChange={(e) =>
-                        updateVariant(idx, { costPrice: e.target.value })
-                      }
-                      disabled={!v.enabled}
-                      className="h-9"
-                    />
-                    <p className={`text-[11px] leading-tight ${toneClass}`}>
-                      {margin.text}
-                    </p>
-                    {errors[`cost_${v.size}`] && (
-                      <p className="text-xs text-red-500">
-                        {errors[`cost_${v.size}`]}
-                      </p>
-                    )}
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs" htmlFor={`w-${v.size}`}>
-                      Width (cm)
-                    </Label>
-                    <Input
-                      id={`w-${v.size}`}
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="—"
-                      value={v.widthCm}
-                      onChange={(e) =>
-                        updateVariant(idx, { widthCm: e.target.value })
-                      }
-                      disabled={!v.enabled}
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs" htmlFor={`h-${v.size}`}>
-                      Height (cm)
-                    </Label>
-                    <Input
-                      id={`h-${v.size}`}
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="—"
-                      value={v.heightCm}
-                      onChange={(e) =>
-                        updateVariant(idx, { heightCm: e.target.value })
-                      }
-                      disabled={!v.enabled}
-                      className="h-9"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs" htmlFor={`d-${v.size}`}>
-                      Depth (cm)
-                    </Label>
-                    <Input
-                      id={`d-${v.size}`}
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="—"
-                      value={v.depthCm}
-                      onChange={(e) =>
-                        updateVariant(idx, { depthCm: e.target.value })
-                      }
-                      disabled={!v.enabled}
-                      className="h-9"
-                    />
                   </div>
                 </div>
               </div>
