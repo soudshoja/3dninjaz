@@ -273,8 +273,13 @@ export function SidebarNav({
         );
       })}
 
-      {/* Profile — flat, bottom, separator above */}
-      <div className="mt-6 border-t border-[var(--color-brand-border)] pt-3">
+      {/* Profile + Guide — flat, bottom, separator above */}
+      <div className="mt-6 border-t border-[var(--color-brand-border)] pt-3 flex flex-col gap-1">
+        {renderItem({
+          href: "/admin/guide",
+          label: "Guide",
+          ninjaIcon: "tip",
+        })}
         {renderItem({
           href: "/admin/profile",
           label: "Profile",

@@ -14,6 +14,8 @@ import { AnalyticsFunnel } from "@/components/admin/analytics-funnel";
 import { AnalyticsTopProducts } from "@/components/admin/analytics-top-products";
 // Phase 7 (07-07) — recon drift surface on dashboard.
 import { ReconDriftWidget } from "@/components/admin/recon-drift-widget";
+// Admin guide launch banner — shown until admin visits /admin/guide/launch.
+import { LaunchBanner } from "@/components/admin/guide/launch-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +50,9 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
+      {/* Launch checklist banner — dismissible, hidden after visit */}
+      <LaunchBanner />
+
       <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3">
           <Image
