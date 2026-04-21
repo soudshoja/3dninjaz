@@ -7,10 +7,12 @@ type Variant = {
   id: string;
   size: "S" | "M" | "L";
   price: string;
-  // Phase 5 05-04 — per-variant inventory toggle (INV-01). Optional so this
-  // component is backwards-compatible with callers that haven't passed the
-  // field through yet.
+  // Phase 5 05-04 — legacy boolean toggle (kept for back-compat).
   inStock?: boolean;
+  // Phase 13 — optional stock tracking. When trackStock=false (default/on-demand)
+  // the variant is always available regardless of stock value.
+  trackStock?: boolean;
+  stock?: number;
 };
 
 const SIZE_LABEL: Record<Variant["size"], string> = {
@@ -60,9 +62,13 @@ export function SizeSelector({
         {variants.map((v) => {
           const isSelected = selectedSize === v.size;
           const accent = ACCENTS[v.size];
-          // inStock undefined → treat as in-stock (back-compat). Only an
-          // explicit false greys the chip out.
-          const soldOut = v.inStock === false;
+          // Phase 13: sold-out only when trackStock=true AND stock<=0.
+          // On-demand variants (trackStock=false, the default) are never sold out.
+          // Falls back to legacy inStock boolean for rows that haven't been
+          // migrated yet (back-compat).
+          const soldOut = v.trackStock === true
+            ? (v.stock ?? 0) <= 0
+            : v.inStock === false;
           return (
             <li key={v.id}>
               <button

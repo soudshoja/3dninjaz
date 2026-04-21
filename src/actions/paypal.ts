@@ -108,11 +108,13 @@ export async function createPayPalOrder(
     if (!v.product?.isActive) {
       return { ok: false, error: "One or more items are no longer available." };
     }
-    // Phase 5 05-04 (T-05-04-tampering): server-side re-check of in-stock
-    // status. Cart could have been added before admin flipped the variant
-    // to sold-out; we refuse the order rather than charge for stock we
-    // can't ship.
-    if (v.inStock === false) {
+    // Phase 13 (T-05-04-tampering): server-side OOS check.
+    // Only block checkout when trackStock=true AND stock is depleted.
+    // On-demand variants (trackStock=false, the default) always pass through.
+    // Legacy inStock=false boolean is also honoured for backwards-compat.
+    const trackedAndOOS = v.trackStock === true && (v.stock ?? 0) <= 0;
+    const legacyOOS = v.trackStock !== true && v.inStock === false;
+    if (trackedAndOOS || legacyOOS) {
       return {
         ok: false,
         error: `${v.product?.name ?? "An item"} (Size ${v.size}) is sold out. Please remove it from your bag.`,

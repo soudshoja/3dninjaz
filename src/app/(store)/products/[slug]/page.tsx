@@ -64,6 +64,9 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
             widthCm: v.widthCm,
             heightCm: v.heightCm,
             depthCm: v.depthCm,
+            // Phase 13 — stock tracking fields for OOS chip logic in SizeSelector.
+            trackStock: v.trackStock ?? false,
+            stock: v.stock ?? 0,
           })),
         }}
         isWishlistedInitial={wished}

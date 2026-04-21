@@ -37,12 +37,14 @@ export async function ProductCard({
   // configured slot is missing (image deleted after the picker saved).
   const firstImage = pickThumbnail(product);
   const priceLabel = priceRangeMYR(product.variants);
-  // Phase 5 05-04 (INV-01): show Sold Out overlay when EVERY variant has
-  // inStock=false. If a product has no variants at all (defensive), do not
-  // show sold out — it is still purchasable / visible per existing rules.
+  // Phase 13: show Sold Out overlay only when EVERY variant that has
+  // trackStock=true is also out of stock (stock=0). On-demand variants
+  // (trackStock=false, the default) are always available and never trigger OOS.
+  // If a product has no tracked variants at all, never show sold out.
+  const trackedVariants = product.variants.filter((v) => v.trackStock);
   const allSoldOut =
-    product.variants.length > 0 &&
-    product.variants.every((v) => v.inStock === false);
+    trackedVariants.length > 0 &&
+    trackedVariants.every((v) => v.stock <= 0);
 
   return (
     <div className="relative group">

@@ -20,9 +20,12 @@ type Variant = {
   widthCm: string | null;
   heightCm: string | null;
   depthCm: string | null;
-  // Phase 5 05-04 — per-variant inventory toggle (INV-01).
-  // Optional for back-compat with callers not yet plumbing this through.
+  // Phase 5 05-04 — legacy boolean toggle (kept for back-compat).
   inStock?: boolean;
+  // Phase 13 — optional stock tracking. When trackStock=false (on-demand)
+  // the size chip is always enabled regardless of stock value.
+  trackStock?: boolean;
+  stock?: number;
 };
 
 type PictureSource = {
