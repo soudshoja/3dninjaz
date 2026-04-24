@@ -1087,20 +1087,22 @@ The cron runs automatically. If you need to run it manually (for example, after 
     href: "/admin/guide/products/overview",
     content: `# Products, variants, and how they work
 
-Every item in your store is a **product**. Each product can have up to three **variants** based on size: Small, Medium, and Large.
+Every item in your store is a **product**. Each product can have up to three **options** (e.g., Size, Color, Part), each with its own set of **values**. The system auto-generates a **variant** for every combination of values — each with its own price, stock, SKU, and image.
 
 ## The structure
 
 \`\`\`
 Product
  ├── Basic info: name, description, category, photos
- └── Variants (sizes)
-      ├── Small — price, optional cost data, optional stock
-      ├── Medium — price, optional cost data, optional stock
-      └── Large — price, optional cost data, optional stock
+ └── Options (e.g. Size, Color)
+      ├── Option values (e.g. Small, Medium, Large)
+      └── Variants — auto-generated for each combination
+           ├── Small / Red — price, cost data, stock, SKU, image
+           ├── Small / Blue — price, cost data, stock, SKU, image
+           └── Medium / Red — price, cost data, stock, SKU, image
 \`\`\`
 
-Each variant is independent. You can sell just Small and Large and skip Medium entirely — simply don't enable that size when creating the product.
+Each variant is independent. You can set different prices, stock levels, and images per variant.
 
 ## Key fields explained
 
@@ -1118,10 +1120,11 @@ Each variant is independent. You can sell just Small and Large and skip Medium e
 
 ## Variants in detail
 
-Each enabled size has:
+Each variant has:
 - **Selling price** — what the customer pays
 - **Cost fields** (optional) — filament grams, print time, labor minutes, used to calculate your profit margin
-- **Dimensions** — width, height, depth in cm (optional, shown on product page)
+- **SKU** — optional internal reference code
+- **Image** — optional per-variant image shown in the gallery when selected
 - **Inventory tracking** — optional; see the [Inventory guide](/admin/guide/products/inventory)
 
 ## Photos
@@ -1364,38 +1367,38 @@ Only turn on stock tracking if you print products in advance and store them phys
 ## Turning on stock tracking
 
 1. Open a product for editing.
-2. In the **Sizes & Pricing** section, expand a size.
+2. In the **Variants** section, expand a variant row.
 3. Toggle **Track stock** on.
 4. Enter the current **stock quantity**.
 5. Click **Save product**.
 
-Once tracking is on for a variant, customers can only add it to their bag if stock > 0. When stock reaches zero, that size shows as "Out of stock" on the product page.
+Once tracking is on for a variant, customers can only add it to their bag if stock > 0. When stock reaches zero, that variant shows as "Out of stock" on the product page.
 
 ## Updating stock
 
 When you receive a new batch of printed items:
 
 1. Open the product for editing.
-2. Update the stock number for each size.
+2. Update the stock number for each variant.
 3. Save.
 
 There's no automated deduction history — the stock number is a simple count you manage manually.
 
 ## Turning tracking off
 
-If you no longer want to track a size:
+If you no longer want to track stock on a variant:
 
 1. Toggle **Track stock** off for that variant.
 2. Save.
 
-The product will become available regardless of any stock number, allowing customers to order freely again.
+The variant will become available regardless of any stock number, allowing customers to order freely again.
 
 ## When stock reaches zero
 
 If tracking is on and stock = 0:
-- The size shows "Out of stock" on the product page
+- The variant shows "Out of stock" on the product page
 - Customers cannot add it to their bag
-- The size is greyed out in the size selector
+- The variant is greyed out in the variant selector
 
 **Common mistake:** If a product is unexpectedly showing as out of stock, check whether tracking was accidentally left on with stock = 0. Toggle tracking off or top up the stock count.`,
   },

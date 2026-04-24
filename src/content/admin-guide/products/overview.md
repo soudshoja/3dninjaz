@@ -7,20 +7,22 @@ order: 1
 
 # Products, variants, and how they work
 
-Every item in your store is a **product**. Each product can have up to three **variants** based on size: Small, Medium, and Large.
+Every item in your store is a **product**. Each product can have up to three **options** (e.g., Size, Color, Part), each with its own set of **values**. The system auto-generates a **variant** for every combination of values — each with its own price, stock, SKU, and image.
 
 ## The structure
 
 ```
 Product
  ├── Basic info: name, description, category, photos
- └── Variants (sizes)
-      ├── Small — price, optional cost data, optional stock
-      ├── Medium — price, optional cost data, optional stock
-      └── Large — price, optional cost data, optional stock
+ └── Options (e.g. Size, Color)
+      ├── Option values (e.g. Small, Medium, Large)
+      └── Variants — auto-generated for each combination
+           ├── Small / Red — price, cost data, stock, SKU, image
+           ├── Small / Blue — price, cost data, stock, SKU, image
+           └── Medium / Red — price, cost data, stock, SKU, image
 ```
 
-Each variant is independent. You can sell just Small and Large and skip Medium entirely — simply don't enable that size when creating the product.
+Each variant is independent. You can set different prices, stock levels, and images per variant.
 
 ## Key fields explained
 
@@ -38,10 +40,11 @@ Each variant is independent. You can sell just Small and Large and skip Medium e
 
 ## Variants in detail
 
-Each enabled size has:
+Each variant has:
 - **Selling price** — what the customer pays
 - **Cost fields** (optional) — filament grams, print time, labor minutes, used to calculate your profit margin
-- **Dimensions** — width, height, depth in cm (optional, shown on product page)
+- **SKU** — optional internal reference code
+- **Image** — optional per-variant image shown in the gallery when selected
 - **Inventory tracking** — optional; see the [Inventory guide](/admin/guide/products/inventory)
 
 ## Photos
