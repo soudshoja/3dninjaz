@@ -106,8 +106,8 @@ async function main() {
     for (const part of PARTS) {
       const valueId = crypto.randomUUID();
       await conn.execute(
-        `INSERT INTO product_option_values (id, option_id, value, position, created_at, updated_at)
-         VALUES (?, ?, ?, ?, NOW(), NOW())`,
+        `INSERT INTO product_option_values (id, option_id, value, position)
+         VALUES (?, ?, ?, ?)`,
         [valueId, optionId, part.name, part.position]
       );
 

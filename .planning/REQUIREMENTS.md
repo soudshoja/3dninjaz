@@ -279,6 +279,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 - [ ] **VAR-05**: Cart, checkout, orders, inventory, cost breakdown, and PayPal line items all reference variantId and surface the composed variant label (e.g., "Medium / Red")
 - [ ] **VAR-06**: Admin can create a parts-based product with 5+ variants and complete an end-to-end PayPal checkout flow
 
+## Phase 17 — Variant Enhancements + Legacy Cleanup + Reactivity
+
+- [ ] **VAR-07**: Admin can set optional per-variant weight in grams; Delyva shipping quote uses the variant weight when present, else falls back to product-level weight, else to 500 g default.
+
 ---
 *Requirements defined: 2026-04-12*
-*Last updated: 2026-04-24 — Phase 16 requirements added (VAR-01..VAR-06)*
+*Last updated: 2026-04-22 — Phase 17 VAR-07 added (per-variant shipping weight, AD-08)*
