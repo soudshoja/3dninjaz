@@ -20,6 +20,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 6: Customer Account** - /account profile, saved addresses, wishlist, product reviews, PDF invoices, cancel/return requests
 - [x] **Phase 7: Manual Orders + Image Pipeline + Custom Errors** - Admin creates one-off custom orders with PayPal payment-link generator, automatic image compression on every upload (WebP/AVIF, size + quality tiers), branded 404/500/maintenance pages
 - [x] **Phase 16: Product Variant System (Generic Options)** - Replace fixed size/color with admin-defined option/value/variant model (cartesian combos, per-variant price/stock/image/SKU). Supports size+color products AND parts-based products in one system.
+- [x] **Phase 17: Variant Enhancements + Legacy Cleanup** - Sale price, variant image upload + PDP swap, bulk edit, OOS hardening, default pre-selection, reactivity contract, pre-variant-era code purged
 
 ## Phase Details
 
@@ -233,6 +234,29 @@ Plans:
 - [x] 16-06-PLAN.md — Inventory / cost breakdown / CSV import adapted to generic variants (Wave 3)
 - [x] 16-07-PLAN.md — Drop legacy size column + parts-product seed + E2E smoke test + COMPLETION.md (Wave 4)
 
+### Phase 17: Variant Enhancements + Legacy Cleanup + Reactivity Guarantee
+**Goal**: Close the 5 critical WooCommerce gaps surfaced by the Phase 16 gap analysis (sale price, variant image upload + PDP swap, bulk edit, OOS graying hardened, default variant pre-selection); codify the admin-editor reactivity contract (every mutation reflects without a full page refresh); and sweep up pre-variant-era code (SizeSelector, SizeGuide, legacyAddToCart, `"S"|"M"|"L"` literals, `widthCm/heightCm/depthCm` references, CSV price_s/m/l back-compat, size-centric admin-guide copy).
+**Depends on**: Phase 16
+**Requirements**: VAR-07, VAR-08, VAR-09, VAR-10, VAR-11 (new — add to REQUIREMENTS.md during planning). VAR-07: Per-variant shipping weight drives Delyva quote (AD-08).
+**Success Criteria** (what must be TRUE):
+  1. Admin can set a per-variant `sale_price` with optional `sale_from` / `sale_to` window; PDP renders strikethrough regular + bold sale + "ON SALE" badge when active
+  2. Admin uploads an image directly in the variant matrix row (reuses Phase 7 image pipeline); PDP gallery swaps primary image to selected variant's image when set
+  3. Admin selects variant rows via checkboxes and applies bulk ops (set-all-price, multiply-by-%, add-fixed-MYR, set-sale-price, toggle-active, delete-selected); single transaction on the server; reactive UI
+  4. Admin marks one variant as default; PDP pre-selects that variant on load; single-default invariant enforced via `setDefaultVariant` transaction
+  5. Out-of-stock combos on the PDP are visually grayed, keyboard-unreachable (`tabIndex=-1`, `aria-disabled=true`), and show `title="Out of stock"` tooltip
+  6. Every admin mutation in `variant-editor.tsx` reflects in the UI without a full page refresh — per the Reactivity Contract (AD-06): Pattern A optimistic + rollback for field edits, Pattern B `getVariantEditorData` refetch for shape-changing ops
+  7. All 19 legacy-cleanup findings from 17-CONTEXT inventory actioned (L-01..L-14, L-16 executed as atomic commits; L-15/L-12/L-17/L-18/L-19 triaged as "no action" or "flagged")
+  8. TypeScript `npx tsc --noEmit` clean; zero new lint errors; PayPal sandbox E2E of sale-priced product captures correct unit price in `order_items.unit_price`
+  9. A variant with non-null `weight_g` drives the Delyva shipping quote for any cart containing that variant, verified by changing the weight and observing a quote delta (VAR-07, AD-08)
+**Plans**: 5 plans
+
+Plans:
+- [x] 17-01-PLAN.md — Schema (sale_price, sale_from, sale_to, is_default) + Zod + raw-SQL migration applicator (Wave 1)
+- [x] 17-02-PLAN.md — Admin variant editor extensions: sale inputs, default toggle, bulk toolbar, image upload per row, reactivity contract enforcement (Wave 1)
+- [x] 17-03-PLAN.md — PDP: effective price + ON SALE badge, default pre-selection, OOS hardening, variant image gallery swap (Wave 2)
+- [x] 17-04-PLAN.md — Legacy cleanup — one atomic commit per finding (SizeSelector/SizeGuide deletion, legacyAddToCart, S|M|L purge, admin-guide rewrite, CSV price_s/m/l removal) (Wave 2)
+- [x] 17-05-PLAN.md — E2E PayPal sandbox smoke test + COMPLETION.md + ROADMAP + STATE update (Wave 3)
+
 ## Progress
 
 **Execution Order:**
@@ -256,3 +280,4 @@ Phases execute in numeric order: 1 → 2 → ... → 15
 | 14. Cost Breakdown with Store Defaults | — | Complete | 2026-04-21 |
 | 15. Customer + Admin Shipment Tracking | — | Complete | 2026-04-20 |
 | 16. Product Variant System (Generic Options) | 7/7 | Complete | 2026-04-22 |
+| 17. Variant Enhancements + Legacy Cleanup | 5/5 | Complete | 2026-04-22 |

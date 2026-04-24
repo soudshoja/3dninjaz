@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: pre-launch
-stopped_at: "Phase 16 complete. Generic variant system shipped across all 7 plans. product_variants.size dropped from schema; run scripts/phase16-cleanup.cjs on live DB. Next: admin go-live tasks (see GO-LIVE-READINESS.md)."
+stopped_at: "Phase 17 complete. Variant system upgraded with sale/image/bulk/default + reactivity contract; legacy size/dimensions code purged. Run scripts/phase17-migrate.cjs on live DB. Next: admin go-live checklist (GO-LIVE-READINESS.md)."
 last_updated: "2026-04-22T00:00:00.000Z"
-last_activity: 2026-04-22 -- Phase 16 (Product Variant System — Generic Options) complete. 7/7 plans shipped. TypeScript clean. COMPLETION.md written.
+last_activity: 2026-04-22 -- Phase 17 (Variant Enhancements + Legacy Cleanup) complete. 5/5 plans shipped. TypeScript clean. COMPLETION.md written.
 progress:
-  total_phases: 16
-  completed_phases: 16
-  total_plans: 46
-  completed_plans: 46
+  total_phases: 17
+  completed_phases: 17
+  total_plans: 51
+  completed_plans: 51
   percent: 100
 ---
 
@@ -40,10 +40,10 @@ See: .planning/PROJECT.md (updated 2026-04-12)
 
 ## Current Position
 
-Phase: 15 (Customer + Admin Shipment Tracking) — COMPLETE
+Phase: 17 (Variant Enhancements + Legacy Cleanup) — COMPLETE
 Next Phase: GO-LIVE — admin must complete checklist items in GO-LIVE-READINESS.md
 Status: All code complete. Pre-launch admin actions remain.
-Last activity: 2026-04-21 -- Phases 08-15 complete; GO-LIVE-READINESS.md written
+Last activity: 2026-04-22 -- Phase 17 complete; 5/5 plans shipped; legacy code purged
 
 Progress: [██████████] 100% (code) | Pre-launch admin actions pending
 
@@ -133,6 +133,15 @@ Recent decisions affecting current work:
 - 2026-04-20 (Phase 7 deploy iteration 2): build with NEXT_PUBLIC_BASE_PATH=/v1 + custom server.js that strips /v1 prefix before passing to Next handler. server.js honours HOST=127.0.0.1 from start.sh. All routes verified live on `/v1/` subpath. sharp 0.34.5 installed natively on cPanel CloudLinux Node 20.
 - 2026-04-21 (Phase 7 / deploy revised): App topology changed from `/v1` subpath to subdomain root (`app.3dninjaz.com/`). No basePath in the bundle. Custom server.js still in place but no longer strips basePath (Apache now proxies `/` instead of `/v1`). Documentation updated in CLAUDE.md, DEPLOY-NOTES.md, LAUNCH-CHECKLIST.md to reflect current state.
 
+- 2026-04-22 (Phase 17 AD-01): Sale price time-gate at read — `isOnSale` computed in `hydrateProductVariants` at query time using `now = new Date()`. No cron or cache invalidation required; stale reads within a single request cycle are acceptable.
+- 2026-04-22 (Phase 17 AD-02): Variant image upload reuses Phase 7 `writeUpload` pipeline (multi-resolution avif/webp/jpeg + manifest). `pickImage(baseUrl)` resolves PictureData server-side in PDP page.tsx; passed as `variantPictures: Record<string, PictureData | null>` prop to ProductDetail.
+- 2026-04-22 (Phase 17 AD-03): Bulk edit via checkbox toolbar in variant-editor.tsx. BulkOp discriminated union: set-price | multiply-price | add-price | set-sale-price | set-active | delete. Single `bulkUpdateVariants` server action; Pattern B refetch after completion.
+- 2026-04-22 (Phase 17 AD-04): OOS combo gating: `disabled` + `aria-disabled` + `tabIndex=-1` + `title="Out of stock"` on both swatch and pill buttons. onClick guard returns early if `!available`.
+- 2026-04-22 (Phase 17 AD-05): Single-default invariant enforced via `db.transaction` in `setDefaultVariant` action: clear all `is_default=false` for product, then set target variant `is_default=true`. App-layer transaction, no DB trigger.
+- 2026-04-22 (Phase 17 AD-06): Reactivity contract for variant-editor.tsx — Pattern A: optimistic update + rollback on error (field edits: price, sale price, stock, SKU, weight). Pattern B: `getVariantEditorData` full refetch after shape-changing ops (generate matrix, add/remove option, image upload, bulk ops, delete). `router.refresh()` never called in any mutation path.
+- 2026-04-22 (Phase 17 AD-07): Legacy cleanup findings (L-01..L-19) executed as atomic commits. Each finding = one commit. ~11 commits landed in 17-04.
+- 2026-04-22 (Phase 17 AD-08): Per-variant shipping weight — `weight_g INT NULL` on `product_variants`. Delyva quote resolution ladder: `variant.weight_g ?? product.shippingWeightKg × 1000 ?? defaultWeightKg` (0.5 kg). `console.warn` emitted on final fallback citing variantId + productId. `CartItemForQuote.variantId` made mandatory; all callers updated.
+
 ### Pending Todos
 
 - **Launch (human-gated)** — see `.planning/GO-LIVE-READINESS.md` for the full checklist. Top blockers:
@@ -164,6 +173,7 @@ Recent decisions affecting current work:
 ### Roadmap Evolution
 
 - 2026-04-24: Phase 16 added — Product Variant System (Generic Options). Replaces rigid `productVariants.size` enum with generic options/values/variants model. Supports size+color AND parts-based products. Plans not yet created.
+- 2026-04-24: Phase 17 added — variant enhancements + reactivity + legacy cleanup. Planned by Opus, executed by Sonnet, deploy: Haiku. Closes the 5 critical WooCommerce gaps surfaced by the Phase 16 gap analysis (sale price, variant image upload + PDP swap, bulk edit toolbar, OOS hardening, default pre-selection), codifies the admin-editor reactivity contract (AD-06 — Pattern A optimistic + Pattern B `getVariantEditorData` refetch; no `router.refresh()` in mutation paths), and executes a 19-finding legacy cleanup sweep (SizeSelector/SizeGuide deletion, `"S"|"M"|"L"` purge, `legacyAddToCart` removal, admin-guide rewrite, CSV price_s/m/l back-compat removal, stale JSDoc comments). Schema adds 5 columns to `product_variants`: `sale_price`, `sale_from`, `sale_to`, `is_default`, `weight_g`. `order_items` schema untouched. 5 plans shipped 2026-04-22.
 
 ## Session Continuity
 
