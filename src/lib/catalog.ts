@@ -3,10 +3,19 @@ import { db } from "@/lib/db";
 import {
   products,
   productVariants,
+  productOptions,
+  productOptionValues,
   categories,
   subcategories,
 } from "@/lib/db/schema";
 import { and, asc, eq, desc, inArray, or } from "drizzle-orm";
+import {
+  composeVariantLabel,
+  legacyVariantToHydrated,
+  type HydratedProductVariants,
+  type HydratedOption,
+  type HydratedVariant,
+} from "@/lib/variants";
 
 // ============================================================================
 // MariaDB 10.11 note — Drizzle's relational `db.query.products.findMany({ with })`
@@ -49,6 +58,9 @@ export type CatalogProduct = Omit<ProductRow, "images"> & {
   variants: CatalogVariant[];
   category: CategoryRow | null;
   subcategory: SubcategoryRow | null;
+  // Phase 16 — generic options/variants (additive; existing callers unaffected)
+  hydratedVariants: HydratedVariant[];
+  options: HydratedOption[];
 };
 
 /**
@@ -115,6 +127,25 @@ async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
           .where(inArray(subcategories.id, subcategoryIds))
       : [];
 
+  // Phase 16 — batch fetch product_options + product_option_values for all products
+  // Single query per table (no N+1), joined in memory.
+  const optionRows = await db
+    .select()
+    .from(productOptions)
+    .where(inArray(productOptions.productId, ids))
+    .orderBy(productOptions.position);
+
+  const optionIds = optionRows.map((o) => o.id);
+  const valueRows =
+    optionIds.length > 0
+      ? await db
+          .select()
+          .from(productOptionValues)
+          .where(inArray(productOptionValues.optionId, optionIds))
+          .orderBy(productOptionValues.position)
+      : [];
+
+  // Build lookup maps
   const variantByProduct = new Map<string, VariantRow[]>();
   for (const v of variantRows) {
     const bucket = variantByProduct.get(v.productId) ?? [];
@@ -124,15 +155,88 @@ async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
   const categoryById = new Map(categoryRows.map((c) => [c.id, c]));
   const subcategoryById = new Map(subcategoryRows.map((s) => [s.id, s]));
 
-  return rows.map((p) => ({
-    ...p,
-    images: ensureImagesArray(p.images),
-    variants: variantByProduct.get(p.id) ?? [],
-    category: p.categoryId ? categoryById.get(p.categoryId) ?? null : null,
-    subcategory: p.subcategoryId
-      ? subcategoryById.get(p.subcategoryId) ?? null
-      : null,
-  }));
+  // Phase 16 — option/value maps keyed by productId and optionId
+  const optionsByProduct = new Map<string, typeof optionRows>();
+  for (const o of optionRows) {
+    const bucket = optionsByProduct.get(o.productId) ?? [];
+    bucket.push(o);
+    optionsByProduct.set(o.productId, bucket);
+  }
+  const valuesByOption = new Map<string, typeof valueRows>();
+  for (const v of valueRows) {
+    const bucket = valuesByOption.get(v.optionId) ?? [];
+    bucket.push(v);
+    valuesByOption.set(v.optionId, bucket);
+  }
+  const valueById = new Map(valueRows.map((v) => [v.id, v]));
+
+  return rows.map((p) => {
+    const rawVariants = variantByProduct.get(p.id) ?? [];
+    const pOptions = optionsByProduct.get(p.id) ?? [];
+
+    // Build HydratedOption[]
+    const hydratedOptions: HydratedOption[] = pOptions.map((o) => ({
+      id: o.id,
+      name: o.name,
+      position: o.position,
+      values: (valuesByOption.get(o.id) ?? []).map((v) => ({
+        id: v.id,
+        value: v.value,
+        position: v.position,
+        swatchHex: v.swatchHex ?? null,
+      })),
+    }));
+
+    // Build HydratedVariant[]
+    const hydratedVariants: HydratedVariant[] = rawVariants.map((v) => {
+      if (!v.option1ValueId) {
+        return legacyVariantToHydrated(v);
+      }
+      const labelParts: string[] = [];
+      for (const vid of [v.option1ValueId, v.option2ValueId, v.option3ValueId]) {
+        if (vid) {
+          const val = valueById.get(vid);
+          if (val) labelParts.push(val.value);
+        }
+      }
+      return {
+        id: v.id,
+        price: v.price,
+        stock: v.stock ?? 0,
+        inStock: v.inStock ?? true,
+        trackStock: v.trackStock ?? false,
+        sku: v.sku ?? null,
+        imageUrl: v.imageUrl ?? null,
+        label: labelParts.length > 0 ? composeVariantLabel(labelParts) : (v.labelCache ?? v.size ?? ""),
+        position: v.position ?? 0,
+        optionValueIds: [
+          v.option1ValueId ?? null,
+          v.option2ValueId ?? null,
+          v.option3ValueId ?? null,
+        ] as [string | null, string | null, string | null],
+        costPrice: v.costPrice ?? null,
+        filamentGrams: v.filamentGrams ?? null,
+        printTimeHours: v.printTimeHours ?? null,
+        laborMinutes: v.laborMinutes ?? null,
+        otherCost: v.otherCost ?? null,
+        filamentRateOverride: v.filamentRateOverride ?? null,
+        laborRateOverride: v.laborRateOverride ?? null,
+        costPriceManual: v.costPriceManual ?? false,
+      };
+    });
+
+    return {
+      ...p,
+      images: ensureImagesArray(p.images),
+      variants: rawVariants,
+      hydratedVariants,
+      options: hydratedOptions,
+      category: p.categoryId ? categoryById.get(p.categoryId) ?? null : null,
+      subcategory: p.subcategoryId
+        ? subcategoryById.get(p.subcategoryId) ?? null
+        : null,
+    };
+  });
 }
 
 export async function getActiveProducts(): Promise<CatalogProduct[]> {
