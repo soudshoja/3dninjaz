@@ -180,7 +180,10 @@ export async function quoteForCart(
         country: (destination.country ?? "MY").toUpperCase(),
       },
       weight: { unit: "kg", value: round2(totalWeight) },
-      itemType: cfg.defaultItemType,
+      // PACKAGE routes to Grab-only (returns 0 standard couriers). Coerce to
+      // PARCEL here so a misconfigured DB value can never silently kill checkout.
+      // See CLAUDE.md "Delyva `itemType` shipping type distinction".
+      itemType: cfg.defaultItemType === "PACKAGE" ? "PARCEL" : cfg.defaultItemType,
     });
 
     // Defensive parser — see src/lib/delyva.ts parseQuoteServices for the
