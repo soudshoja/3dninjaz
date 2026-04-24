@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { orderShipments, orders } from "@/lib/db/schema";
 import { sendOrderDeliveredEmail } from "@/actions/send-emails";
 import { formatOrderNumber } from "@/lib/orders";
+import { getDelyvaWebhookSecret } from "@/lib/delyva";
 
 // ============================================================================
 // Phase 9 (09-01) — Delyva webhook receiver.
@@ -78,7 +79,7 @@ type DelyvaWebhookPayload = {
 export async function POST(req: NextRequest) {
   const raw = await req.text();
   const got = req.headers.get("x-delyvax-hmac-sha256") ?? "";
-  const secret = process.env.DELYVA_API_SECRET ?? "";
+  const secret = getDelyvaWebhookSecret();
 
   if (!verifySignature(raw, got, secret)) {
     return new NextResponse("Invalid signature", { status: 401 });

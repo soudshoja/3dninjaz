@@ -20,6 +20,22 @@ const KEY = process.env.DELYVA_API_KEY ?? "";
 const CUSTOMER_ID = Number(process.env.DELYVA_CUSTOMER_ID ?? 0);
 const COMPANY_CODE = process.env.DELYVA_COMPANY_CODE ?? "my";
 
+/**
+ * Single source for the Delyva webhook HMAC secret. Reads the canonical
+ * DELYVA_WEBHOOK_SECRET first, then falls back to the two legacy names
+ * (DELYVA_WEBHOOK_SHARED_SECRET used during registration, DELYVA_API_SECRET
+ * used historically by the receiver) so a rename in .env.local can be
+ * rolled out without downtime. Set DELYVA_WEBHOOK_SECRET going forward.
+ */
+export function getDelyvaWebhookSecret(): string {
+  return (
+    process.env.DELYVA_WEBHOOK_SECRET ??
+    process.env.DELYVA_WEBHOOK_SHARED_SECRET ??
+    process.env.DELYVA_API_SECRET ??
+    ""
+  );
+}
+
 export class DelyvaError extends Error {
   constructor(
     public code: string,

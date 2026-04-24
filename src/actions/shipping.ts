@@ -14,7 +14,7 @@ import {
   products,
 } from "@/lib/db/schema";
 import { requireAdmin, getSessionUser } from "@/lib/auth-helpers";
-import { delyvaApi, DelyvaError, parseQuoteServices } from "@/lib/delyva";
+import { delyvaApi, DelyvaError, parseQuoteServices, getDelyvaWebhookSecret } from "@/lib/delyva";
 import type { InventoryItem, DelyvaContact, OrderDetails } from "@/lib/delyva";
 import {
   buildTrackingView,
@@ -282,8 +282,8 @@ export async function registerWebhooks(): Promise<
     process.env.BETTER_AUTH_URL ??
     "";
   const url = `${base.replace(/\/$/, "")}/api/webhooks/delyva`;
-  const secret = process.env.DELYVA_WEBHOOK_SHARED_SECRET;
-  if (!secret) return { ok: false, error: "DELYVA_WEBHOOK_SHARED_SECRET missing" };
+  const secret = getDelyvaWebhookSecret();
+  if (!secret) return { ok: false, error: "DELYVA_WEBHOOK_SECRET missing" };
   if (!base) return { ok: false, error: "NEXT_PUBLIC_SITE_URL missing" };
 
   const registered: string[] = [];
