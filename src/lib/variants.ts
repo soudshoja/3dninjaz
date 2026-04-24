@@ -75,6 +75,40 @@ export type HydratedProductVariants = {
 };
 
 // ---------------------------------------------------------------------------
+// resolveEffectivePrice
+// ---------------------------------------------------------------------------
+
+/**
+ * Phase 17 — Resolve the effective unit price for a variant at a given
+ * instant, honoring the sale window (sale_from / sale_to). Centralised so
+ * cart hydration, PDP rendering, and PayPal checkout all snapshot the same
+ * price at capture time. Matches the logic baked into `HydratedVariant`.
+ *
+ * Decision AD-01: the customer pays the price that is active at the
+ * server-now timestamp of checkout — not what the cart was hydrated with.
+ * Since hydration + PayPal-create happen milliseconds apart this is
+ * functionally the same price, but using server-now here keeps truth in
+ * one place.
+ */
+export function resolveEffectivePrice(
+  variant: {
+    price: string;
+    salePrice: string | null;
+    saleFrom: Date | null;
+    saleTo: Date | null;
+  },
+  now: Date = new Date(),
+): { effectivePrice: string; isOnSale: boolean } {
+  const isOnSale =
+    variant.salePrice !== null &&
+    (variant.saleFrom === null || variant.saleFrom.getTime() <= now.getTime()) &&
+    (variant.saleTo === null || variant.saleTo.getTime() >= now.getTime());
+  const effectivePrice =
+    isOnSale && variant.salePrice ? variant.salePrice : variant.price;
+  return { effectivePrice, isOnSale };
+}
+
+// ---------------------------------------------------------------------------
 // composeVariantLabel
 // ---------------------------------------------------------------------------
 

@@ -3,7 +3,7 @@
 import { db } from "@/lib/db";
 import { orders, orderItems, productVariants, productOptionValues } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
-import { composeVariantLabel } from "@/lib/variants";
+import { composeVariantLabel, resolveEffectivePrice } from "@/lib/variants";
 import { randomUUID } from "node:crypto";
 import { getSessionUser } from "@/lib/auth-helpers";
 import { orderAddressSchema, type OrderAddressInput } from "@/lib/validators";
@@ -159,9 +159,16 @@ export async function createPayPalOrder(
     quantity: number;
     lineTotal: string;
   };
+  // Phase 17 — resolve effective (sale-aware) unit price ONCE per checkout-
+  // create at server-now. This is what PayPal sees, what gets snapshotted into
+  // order_items.unitPrice, and what we re-use for the Delyva weight quote.
+  // Reading v.price raw would charge the non-sale price even when the
+  // storefront advertised the sale (D-BLOCKER-1).
+  const priceNow = new Date();
   const snapshots: Snap[] = variantRows.map((v) => {
     const quantity = qtyByVariant.get(v.id)!;
-    const unit = Number(v.price);
+    const { effectivePrice } = resolveEffectivePrice(v, priceNow);
+    const unit = Number(effectivePrice);
     const line = Number((unit * quantity).toFixed(2));
     // product.images is stored as JSON array; MariaDB driver returns it as
     // either array or JSON-stringified array depending on column config.
@@ -201,7 +208,7 @@ export async function createPayPalOrder(
       productSlug: v.product.slug,
       productImage: firstImage,
       variantLabel,
-      unitPrice: v.price,
+      unitPrice: effectivePrice,
       // Drizzle returns decimal as string | null; pass through as-is.
       unitCost: v.costPrice ?? null,
       quantity,
@@ -224,11 +231,15 @@ export async function createPayPalOrder(
       const quote = await quoteForCart(
         input.items.map((i) => {
           const row = variantRows.find((v) => v.id === i.variantId);
+          // Use the server-snapshot unitPrice (already sale-resolved) so the
+          // Delyva free-shipping threshold check matches what we actually
+          // charge the customer.
+          const snap = snapshots.find((s) => s.variantId === i.variantId);
           return {
             productId: row?.productId ?? "",
             variantId: i.variantId,
             quantity: qtyByVariant.get(i.variantId) ?? i.quantity,
-            unitPrice: row ? Number(row.price) : 0,
+            unitPrice: snap ? Number(snap.unitPrice) : 0,
           };
         }),
         {
