@@ -366,7 +366,7 @@ export function DelyvaConfigForm({ initial }: Props) {
       {/* --- 4. Price adjustment --- */}
       <section className="rounded-2xl border-2 p-5" style={border}>
         <h2 className="font-[var(--font-heading)] text-xl mb-3">Price adjustment</h2>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <FieldInput
             label="Markup percent (%)"
             value={values.markupPercent}

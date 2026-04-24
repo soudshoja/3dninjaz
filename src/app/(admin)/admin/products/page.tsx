@@ -40,7 +40,7 @@ export default async function AdminProductsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-heading text-3xl text-[var(--color-brand-text-primary)]">
             Products
@@ -72,8 +72,8 @@ export default async function AdminProductsPage() {
           </Link>
         </div>
       ) : (
-        <div className="rounded-lg border border-[var(--color-brand-border)] bg-white">
-          <Table>
+        <div className="rounded-lg border border-[var(--color-brand-border)] bg-white overflow-x-auto">
+          <Table className="min-w-[640px]">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-16">Image</TableHead>

@@ -42,7 +42,7 @@ export default async function EditProductPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-heading text-3xl text-[var(--color-brand-text-primary)]">
             Edit Product
@@ -53,7 +53,7 @@ export default async function EditProductPage({
         </div>
         <a
           href={`/admin/products/${id}/variants`}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px]"
         >
           Manage Variants →
         </a>

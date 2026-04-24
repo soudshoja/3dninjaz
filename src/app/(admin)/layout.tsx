@@ -90,7 +90,7 @@ export default async function AdminLayout({
   const reconDriftCount = await getReconDriftBadgeCount();
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-gray-50 overflow-x-hidden">
       <aside className="hidden w-64 flex-col border-r border-[var(--color-brand-border)] bg-white p-6 md:flex">
         <Link href="/admin" className="flex items-center gap-2">
           <Image
@@ -195,7 +195,7 @@ export default async function AdminLayout({
             ))}
           </nav>
         </header>
-        <main className="flex-1 p-6 md:p-8">{children}</main>
+        <main className="flex-1 p-3 sm:p-6 md:p-8 min-w-0 overflow-x-hidden">{children}</main>
       </div>
     </div>
   );

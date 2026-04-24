@@ -497,7 +497,7 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
       </div>
 
       {/* Generate matrix */}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-start gap-3">
         <Button
           onClick={handleGenerateMatrix}
           disabled={isPending || !hasAllValues}
@@ -533,7 +533,7 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
 
           {/* Bulk toolbar — shown when at least 1 row selected */}
           {selectedIds.size > 0 && (
-            <div className="px-4 py-3 border-b border-[var(--color-brand-border)] bg-blue-50 flex flex-wrap items-center gap-2">
+            <div className="px-4 py-3 border-b border-[var(--color-brand-border)] bg-blue-50 flex flex-wrap items-center gap-2 sticky bottom-0 z-10 md:static md:z-auto">
               <span className="text-xs font-semibold text-blue-700 mr-2">Bulk ({selectedIds.size}):</span>
 
               {bulkMode === "idle" ? (
@@ -587,10 +587,10 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
           )}
 
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[900px]">
               <thead className="bg-[var(--color-brand-surface)] text-[var(--color-brand-text-muted)]">
                 <tr>
-                  <th className="px-3 py-3">
+                  <th className="px-3 py-3 sticky left-0 bg-[var(--color-brand-surface)] z-10">
                     <input
                       type="checkbox"
                       checked={allSelected}
@@ -599,7 +599,7 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
                       title="Select all"
                     />
                   </th>
-                  <th className="text-left px-4 py-3 font-medium">Variant</th>
+                  <th className="text-left px-4 py-3 font-medium sticky left-10 bg-[var(--color-brand-surface)] z-10 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">Variant</th>
                   <th className="text-left px-4 py-3 font-medium">Price (MYR)</th>
                   <th className="text-left px-4 py-3 font-medium">Sale price</th>
                   <th className="text-left px-4 py-3 font-medium">Stock</th>
@@ -731,7 +731,7 @@ function VariantRow({
   return (
     <tr className={`hover:bg-[var(--color-brand-surface-hover)] ${isSelected ? "bg-blue-50" : ""}`}>
       {/* Checkbox */}
-      <td className="px-3 py-3">
+      <td className={`px-3 py-3 sticky left-0 z-10 ${isSelected ? "bg-blue-50" : "bg-white"}`}>
         <input
           type="checkbox"
           checked={isSelected}
@@ -741,7 +741,7 @@ function VariantRow({
       </td>
 
       {/* Variant label */}
-      <td className="px-4 py-3 font-medium text-[var(--color-brand-text-primary)] min-w-[120px]">
+      <td className={`px-4 py-3 font-medium text-[var(--color-brand-text-primary)] min-w-[120px] sticky left-10 z-10 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)] ${isSelected ? "bg-blue-50" : "bg-white"}`}>
         {variant.label || <span className="text-[var(--color-brand-text-muted)] italic">unlabeled</span>}
       </td>
 
