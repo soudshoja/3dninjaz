@@ -116,6 +116,10 @@ async function run() {
     if (hasStock) {
       console.log("[phase13] skip ADD COLUMN stock (already exists)");
     } else {
+      // NOTE (Phase 17): depth_cm was dropped in Phase 16-07 (scripts/phase16-drop-dimensions.cjs).
+      // This AFTER clause is a no-op on databases where depth_cm no longer exists —
+      // MariaDB's AFTER silently falls back to appending. This migration is historical
+      // and has already run on all live DBs; kept for archaeological clarity.
       await conn.query(`
         ALTER TABLE \`product_variants\`
         ADD COLUMN \`stock\` INT NOT NULL DEFAULT 0
