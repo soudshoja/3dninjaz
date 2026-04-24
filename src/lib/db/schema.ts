@@ -178,7 +178,7 @@ export const products = mysqlTable("products", {
 // ============================================================================
 // Phase 16 — product_options + product_option_values tables
 // Generic options/values model replaces the hardcoded size enum.
-// Positional option1/2/3 columns on product_variants (Shopify-proven pattern).
+// Positional option1..option6 columns on product_variants (Shopify-proven pattern).
 // Legacy size column preserved during dual-read window (dropped in 16-07).
 // ============================================================================
 
@@ -197,7 +197,7 @@ export const productOptions = mysqlTable(
   (t) => ({
     // One option name per product (e.g. can't have two "Size" options)
     productNameUnique: unique("uq_product_option_name").on(t.productId, t.name),
-    // Position uniqueness scoped to product (max 3 options)
+    // Position uniqueness scoped to product (max 6 options)
     productPositionUnique: unique("uq_product_option_position").on(t.productId, t.position),
     productIdx: index("idx_product_options_product").on(t.productId),
   }),

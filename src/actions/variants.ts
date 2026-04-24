@@ -6,7 +6,7 @@
  * All actions gated by requireAdmin() as FIRST await (CVE-2025-29927).
  *
  * Actions (Phase 16):
- *   addProductOption        — insert option at next position (max 3)
+ *   addProductOption        — insert option at next position (max 6)
  *   renameProductOption     — update option name
  *   deleteProductOption     — cascade: delete values + variants using this slot
  *   addOptionValue          — insert value at next position for an option

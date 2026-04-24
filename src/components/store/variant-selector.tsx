@@ -4,7 +4,7 @@
  * Phase 16 — Generic N-option variant selector.
  *
  * Renders swatches for Color options (when swatchHex set on ≥1 value),
- * pill buttons for all other options. Supports 1..3 options.
+ * pill buttons for all other options. Supports 1..6 options.
  *
  * Unavailable combos (no matching variant OR inStock=false when trackStock=true)
  * render in disabled state.
