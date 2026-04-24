@@ -73,9 +73,14 @@ export async function hydrateCartItems(
   const optionValueIds = [
     ...new Set(
       variantRows.flatMap((v) =>
-        [v.option1ValueId, v.option2ValueId, v.option3ValueId].filter(
-          (id): id is string => typeof id === "string",
-        ),
+        [
+          v.option1ValueId,
+          v.option2ValueId,
+          v.option3ValueId,
+          v.option4ValueId,
+          v.option5ValueId,
+          v.option6ValueId,
+        ].filter((id): id is string => typeof id === "string"),
       ),
     ),
   ];
@@ -98,7 +103,14 @@ export async function hydrateCartItems(
 
     // Compose label
     const labelParts: string[] = [];
-    for (const vid of [v.option1ValueId, v.option2ValueId, v.option3ValueId]) {
+    for (const vid of [
+      v.option1ValueId,
+      v.option2ValueId,
+      v.option3ValueId,
+      v.option4ValueId,
+      v.option5ValueId,
+      v.option6ValueId,
+    ]) {
       if (vid) {
         const val = valueById.get(vid);
         if (val) labelParts.push(val.value);
