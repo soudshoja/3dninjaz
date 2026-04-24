@@ -1,15 +1,17 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { BRAND } from "@/lib/brand";
 import { formatMYR, priceRangeMYR } from "@/lib/format";
 import { ProductGallery } from "@/components/store/product-gallery";
 import { SizeSelector } from "@/components/store/size-selector";
+import { VariantSelector } from "@/components/store/variant-selector";
 import { SizeGuide } from "@/components/store/size-guide";
 import { AddToBagButton } from "@/components/store/add-to-bag-button";
 import { WishlistButton } from "@/components/store/wishlist-button";
 import { RatingBadge } from "@/components/store/rating-badge";
+import type { HydratedOption, HydratedVariant } from "@/lib/variants";
 
 type Size = "S" | "M" | "L";
 
@@ -20,10 +22,7 @@ type Variant = {
   widthCm: string | null;
   heightCm: string | null;
   depthCm: string | null;
-  // Phase 5 05-04 — legacy boolean toggle (kept for back-compat).
   inStock?: boolean;
-  // Phase 13 — optional stock tracking. When trackStock=false (on-demand)
-  // the size chip is always enabled regardless of stock value.
   trackStock?: boolean;
   stock?: number;
 };
@@ -45,23 +44,24 @@ type ProductDetailProps = {
     estimatedProductionDays: number | null;
     category: { name: string; slug: string } | null;
     variants: Variant[];
+    // Phase 16 — generic variant system (additive)
+    options?: HydratedOption[];
+    hydratedVariants?: HydratedVariant[];
   };
-  // Phase 6 06-04 — initial wishlist state fetched server-side on PDP page.
   isWishlistedInitial?: boolean;
-  // Phase 6 06-05 — approved-review summary for header rating badge.
   ratingAvg?: number;
   ratingCount?: number;
-  // Phase 7 (07-08) — pre-resolved <picture> sources from manifest.
   pictures?: PictureData[];
 };
 
 const SIZE_ORDER: Record<Size, number> = { S: 0, M: 1, L: 2 };
 
 /**
- * Stateful PDP container. Owns the selected-size state and composes
- * gallery + name + live price + description + size selector + size guide +
- * material/lead-time + Add-to-bag. Props are kept intentionally small so
- * the client bundle only carries what it needs.
+ * Stateful PDP container.
+ *
+ * Phase 16: when `options` + `hydratedVariants` are provided, renders the
+ * generic <VariantSelector> instead of the legacy <SizeSelector>. Falls back
+ * to legacy path when options are missing (defensive).
  */
 export function ProductDetail({
   product,
@@ -70,41 +70,60 @@ export function ProductDetail({
   ratingCount = 0,
   pictures,
 }: ProductDetailProps) {
+  // ----- Legacy path (size-only, pre-phase-16 fallback) -----
   const sortedVariants = useMemo(
     () =>
       [...product.variants].sort(
-        (a, b) => SIZE_ORDER[a.size] - SIZE_ORDER[b.size]
+        (a, b) => SIZE_ORDER[a.size] - SIZE_ORDER[b.size],
       ),
-    [product.variants]
+    [product.variants],
   );
   const [selectedSize, setSelectedSize] = useState<Size | null>(null);
-  const selectedVariant =
+  const legacySelectedVariant =
     sortedVariants.find((v) => v.size === selectedSize) ?? null;
 
-  const priceLabel = selectedVariant
-    ? formatMYR(selectedVariant.price)
-    : priceRangeMYR(sortedVariants);
+  // ----- Phase 16 generic path -----
+  const hasGenericOptions =
+    (product.options?.length ?? 0) > 0 &&
+    (product.hydratedVariants?.length ?? 0) > 0;
 
-  const material = product.materialType ?? "PLA"; // D2-13 fallback
-  const leadDays = product.estimatedProductionDays ?? 7; // D2-14 fallback
+  const [selectedHydrated, setSelectedHydrated] = useState<HydratedVariant | null>(null);
+
+  const handleVariantChange = useCallback((v: HydratedVariant | null) => {
+    setSelectedHydrated(v);
+  }, []);
+
+  // Determine effective selected variant + image
+  const effectiveVariant = hasGenericOptions ? selectedHydrated : legacySelectedVariant;
+  const effectivePrice = effectiveVariant
+    ? formatMYR(effectiveVariant.price)
+    : hasGenericOptions
+      ? priceRangeMYR(product.hydratedVariants ?? [])
+      : priceRangeMYR(sortedVariants);
+
+  // If selected variant has its own image, prepend to gallery
+  const variantImageUrl =
+    hasGenericOptions && selectedHydrated?.imageUrl ? selectedHydrated.imageUrl : null;
+  const galleryImages = variantImageUrl
+    ? [variantImageUrl, ...product.images.filter((i) => i !== variantImageUrl)]
+    : product.images;
+
+  const material = product.materialType ?? "PLA";
+  const leadDays = product.estimatedProductionDays ?? 7;
+  const hasSizeOption = product.options?.some(
+    (o) => o.name.toLowerCase() === "size",
+  );
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-10 md:py-16 grid lg:grid-cols-2 gap-10 md:gap-14">
       <div>
         <ProductGallery
-          images={product.images}
-          pictures={pictures}
+          images={galleryImages}
+          pictures={variantImageUrl ? undefined : pictures}
           alt={product.name}
         />
       </div>
 
-      {/*
-        `min-w-0` on the flex-col right column is required so the size-guide
-        <table> (inside `overflow-x-auto`) can actually shrink to the grid-cell
-        width. Without it, the table's intrinsic width (wider than 320px on
-        small phones) pushes the column wider than the viewport and spills
-        horizontal scroll onto the document.
-       */}
       <div className="min-w-0 flex flex-col">
         {product.category ? (
           <a
@@ -116,9 +135,7 @@ export function ProductDetail({
           </a>
         ) : null}
 
-        <h1
-          className="font-[var(--font-heading)] text-3xl md:text-5xl leading-tight mb-2 text-zinc-900"
-        >
+        <h1 className="font-[var(--font-heading)] text-3xl md:text-5xl leading-tight mb-2 text-zinc-900">
           {product.name}
         </h1>
 
@@ -132,28 +149,48 @@ export function ProductDetail({
           className="inline-flex self-start rounded-full px-5 py-2 text-lg font-bold mb-6"
           style={{ backgroundColor: BRAND.green, color: BRAND.ink }}
         >
-          {priceLabel}
+          {effectivePrice}
         </p>
 
         <p className="text-base leading-relaxed mb-6 text-zinc-700">
           {product.description}
         </p>
 
-        <SizeSelector
-          variants={sortedVariants}
-          selectedSize={selectedSize}
-          onSelect={setSelectedSize}
-        />
+        {/* Phase 16: generic variant selector when options available */}
+        {hasGenericOptions ? (
+          <VariantSelector
+            options={product.options!}
+            variants={product.hydratedVariants!}
+            onVariantChange={handleVariantChange}
+          />
+        ) : (
+          /* Legacy size selector (fallback for pre-backfill or old data) */
+          <SizeSelector
+            variants={sortedVariants}
+            selectedSize={selectedSize}
+            onSelect={setSelectedSize}
+          />
+        )}
 
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex-1 min-w-0">
-            <AddToBagButton
-              selectedVariant={selectedVariant}
-              productId={product.id}
-              productSlug={product.slug}
-              productName={product.name}
-              productImage={product.images[0] ?? null}
-            />
+            {hasGenericOptions ? (
+              <AddToBagButtonV2
+                selectedVariant={selectedHydrated}
+                productId={product.id}
+                productSlug={product.slug}
+                productName={product.name}
+                productImage={product.images[0] ?? null}
+              />
+            ) : (
+              <AddToBagButton
+                selectedVariant={legacySelectedVariant}
+                productId={product.id}
+                productSlug={product.slug}
+                productName={product.name}
+                productImage={product.images[0] ?? null}
+              />
+            )}
           </div>
           <WishlistButton
             productId={product.id}
@@ -162,7 +199,6 @@ export function ProductDetail({
           />
         </div>
 
-        {/* Secure-checkout trust badge — Phase 9b ninja pass */}
         <p className="mt-4 flex items-center gap-2 text-sm text-zinc-600">
           <Image
             src="/icons/ninja/emoji/secure@128.png"
@@ -174,7 +210,6 @@ export function ProductDetail({
           <span>Secure checkout with PayPal.</span>
         </p>
 
-        {/* Lead time notice — PROD-06 */}
         <p
           className="mt-4 rounded-2xl px-4 py-3 text-sm font-medium"
           style={{ backgroundColor: `${BRAND.green}20`, color: BRAND.ink }}
@@ -182,7 +217,6 @@ export function ProductDetail({
           Ships in {leadDays} business days from Kuala Lumpur.
         </p>
 
-        {/* Material + how-it's-made — PROD-05 */}
         <section className="mt-6 rounded-2xl border border-zinc-200 p-5 bg-white">
           <h2 className="font-[var(--font-heading)] text-xl mb-2 text-zinc-900">
             Material &amp; craft
@@ -197,9 +231,54 @@ export function ProductDetail({
           </p>
         </section>
 
-        {/* Size guide — PROD-04 */}
-        <SizeGuide variants={sortedVariants} />
+        {/* Size guide only for products with a Size option (or legacy) */}
+        {(hasSizeOption || !hasGenericOptions) && (
+          <SizeGuide variants={sortedVariants} />
+        )}
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Phase 16 — AddToBagButton variant for variantId-based cart
+// ---------------------------------------------------------------------------
+// Thin wrapper that maps HydratedVariant → the cart store's addItem shape.
+// The cart store is updated in Plan 16-05 to accept variantId directly.
+// During this transition window we pass the legacy shape so the existing
+// cart-store.ts still works without modification.
+
+function AddToBagButtonV2({
+  selectedVariant,
+  productId,
+  productSlug,
+  productName,
+  productImage,
+}: {
+  selectedVariant: HydratedVariant | null;
+  productId: string;
+  productSlug: string;
+  productName: string;
+  productImage: string | null;
+}) {
+  // Bridge: map HydratedVariant to the legacy AddToBagButton shape.
+  // size is still required by cart-store v1; we use "S" as a placeholder
+  // until the cart is upgraded in Plan 16-05.
+  const legacyShape = selectedVariant
+    ? {
+        id: selectedVariant.id,
+        size: "S" as const, // placeholder — overridden in 16-05 cart upgrade
+        price: selectedVariant.price,
+      }
+    : null;
+
+  return (
+    <AddToBagButton
+      selectedVariant={legacyShape}
+      productId={productId}
+      productSlug={productSlug}
+      productName={productName}
+      productImage={productImage}
+    />
   );
 }

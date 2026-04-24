@@ -9,6 +9,8 @@ import { ProductReviews } from "@/components/store/product-reviews";
 // so the client gallery can render avif/webp/jpeg srcset without a server
 // component nested inside it.
 import { pickImage } from "@/lib/image-manifest";
+// Phase 16 — generic variant hydration
+import { hydrateProductVariants } from "@/lib/variants";
 
 type Params = Promise<{ slug: string }>;
 
@@ -35,10 +37,11 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
   // so the heart button on PDP renders with the correct initial fill.
   // Phase 6 06-05 — fetch the approved-review summary for the rating badge
   // in the PDP header, then render the full reviews list below ProductDetail.
-  const [wished, reviewsSummary, pictures] = await Promise.all([
+  const [wished, reviewsSummary, pictures, { options, variants: hydratedVariants }] = await Promise.all([
     isWishlisted(product.id),
     listProductReviews(product.id, { limit: 10 }),
     Promise.all(product.images.map((u) => pickImage(u))),
+    hydrateProductVariants(product.id),
   ]);
 
   // Marshal to a client-safe plain object. Only pass what ProductDetail needs
@@ -68,6 +71,9 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
             trackStock: v.trackStock ?? false,
             stock: v.stock ?? 0,
           })),
+          // Phase 16 — generic options + hydrated variants for VariantSelector
+          options,
+          hydratedVariants,
         }}
         isWishlistedInitial={wished}
         ratingAvg={reviewsSummary.avgRating}
