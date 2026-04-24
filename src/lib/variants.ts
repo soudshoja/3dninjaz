@@ -187,20 +187,21 @@ export async function hydrateProductVariants(
     };
   }
 
-  // Query 2: all option values for these options
+  // Query 2 + 3 race in parallel — values (by optionId) and variants (by
+  // productId) share no dependency on each other's rows.
   const optionIds = optionRows.map((o) => o.id);
-  const valueRows = await db
-    .select()
-    .from(productOptionValues)
-    .where(inArray(productOptionValues.optionId, optionIds))
-    .orderBy(productOptionValues.position);
-
-  // Query 3: variants
-  const variantRows = await db
-    .select()
-    .from(productVariants)
-    .where(eq(productVariants.productId, productId))
-    .orderBy(productVariants.position);
+  const [valueRows, variantRows] = await Promise.all([
+    db
+      .select()
+      .from(productOptionValues)
+      .where(inArray(productOptionValues.optionId, optionIds))
+      .orderBy(productOptionValues.position),
+    db
+      .select()
+      .from(productVariants)
+      .where(eq(productVariants.productId, productId))
+      .orderBy(productVariants.position),
+  ]);
 
   // Build lookup maps
   const valueById = new Map(valueRows.map((v) => [v.id, v]));
