@@ -218,14 +218,14 @@ Do not make direct repo edits outside a GSD workflow unless the user explicitly 
 - **Base UI Tabs component state quirk** — initial `value` prop on Tabs requires exact match to one of the tab `value` strings; SSR mismatch between server-rendered default and client hydration causes "Hydration mismatch" console error. Always derive `activeTab` state from query param or default explicitly on both sides.
 - **Better Auth `Session.user.role` is untyped** — library v1.6.2 infers role from the database but doesn't include it in the TypeScript `User` type. Cast at access sites: `(session.user as { role: string }).role`. Type stub in `src/types/auth.d.ts`.
 
-### Deploy topology (2026-04-21 — current)
-- **Storefront:** `https://app.3dninjaz.com/` (Next.js 15 on Node 20.x, port `127.0.0.1:3100`)
+### Deploy topology (2026-04-24 — current)
+- **Storefront:** `https://app.3dninjaz.com/` (Next.js 15 on Node 20.x, port `127.0.0.1:3000`)
 - **Apex:** `https://3dninjaz.com/` — still serves a static coming-soon page, to be decommissioned on launch day
 - **`NEXT_PUBLIC_BASE_PATH` is NOT set**; app serves at subdomain root
 - **Server:** cPanel + CloudLinux + LiteSpeed 6.3.4 Enterprise
 - **LSWS does NOT support Apache `mod_passenger`** — Node app must be reverse-proxied via Apache userdata
-- **Apache userdata config:** `/etc/apache2/conf.d/userdata/{std,ssl}/2_4/ninjaz/app.3dninjaz.com/3dninjaz_app_proxy.conf` with `ProxyPass "/"` + `ProxyPassReverse "/"` + `ProxyPreserveHost On` inside a `<Location "/">` block. Forwards `/` → `http://127.0.0.1:3100/`. After editing, `/usr/local/lsws/bin/lswsctrl reload` (graceful SIGUSR1 — no downtime for other users).
-- **App node binary:** `/opt/alt/alt-nodejs20/root/usr/bin/node` (CloudLinux Node 20)
+- **Apache userdata config:** `/etc/apache2/conf.d/userdata/{std,ssl}/2_4/ninjaz/app.3dninjaz.com/3dninjaz_app_proxy.conf` with `ProxyPass "/"` + `ProxyPassReverse "/"` + `ProxyPreserveHost On` inside a `<Location "/">` block. Forwards `/` → `http://127.0.0.1:3000/`. After editing, `/usr/local/lsws/bin/lswsctrl reload` (graceful SIGUSR1 — no downtime for other users).
+- **App node binary:** `/home/ninjaz/nodevenv/apps/3dninjaz/20/bin/node` (CloudLinux nodevenv Node 20; verify actual app dir name via `ls /home/ninjaz/apps/`)
 - **SSH is key-only for root** — user password auth is blocked. For unattended tasks use: root via key (full server), FTP via user/password (files only), cPanel UAPI via Basic auth at `https://152.53.86.223:2083/execute/<Module>/<fn>` (per-user scoped)
 - **Node app persistence:** `@reboot` cron registered — survives server reboot. See `.planning/phases/04-brand-launch/DEPLOY-NOTES.md`
 - **Never run `lswsctrl restart`** (hard restart) — other users affected. Graceful `reload` is fine.
