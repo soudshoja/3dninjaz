@@ -28,7 +28,7 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-helpers";
-import { composeVariantLabel } from "@/lib/variants";
+import { composeVariantLabel, hydrateProductVariants } from "@/lib/variants";
 import { variantUpdateSchema } from "@/lib/validators";
 
 export type ActionResult<T = undefined> =
@@ -526,6 +526,18 @@ export async function deleteVariant(variantId: string): Promise<ActionResult> {
 
   if (v) revalidatePath(`/admin/products/${v.productId}/variants`);
   return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// UI re-hydration helper (called by client after mutations to re-sync state)
+// ---------------------------------------------------------------------------
+
+export async function getVariantEditorData(
+  productId: string,
+): Promise<{ data: { options: Awaited<ReturnType<typeof hydrateProductVariants>>["options"]; variants: Awaited<ReturnType<typeof hydrateProductVariants>>["variants"] } } | { error: string }> {
+  await requireAdmin();
+  const { options, variants } = await hydrateProductVariants(productId);
+  return { data: { options, variants } };
 }
 
 // ---------------------------------------------------------------------------

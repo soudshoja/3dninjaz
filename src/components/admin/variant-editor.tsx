@@ -32,6 +32,7 @@ import {
   updateVariant,
   deleteVariant,
   countVariantsAffectedByValueDelete,
+  getVariantEditorData,
 } from "@/actions/variants";
 import type { HydratedOption, HydratedVariant } from "@/lib/variants";
 
@@ -59,9 +60,14 @@ export function VariantEditor({ productId, initialOptions, initialVariants }: Va
     setTimeout(() => setToast(null), 3000);
   }, []);
 
-  const refresh = useCallback(() => {
+  const refresh = useCallback(async () => {
+    const result = await getVariantEditorData(productId);
+    if ("data" in result && result.data) {
+      setOptions(result.data.options);
+      setVariants(result.data.variants);
+    }
     router.refresh();
-  }, [router]);
+  }, [productId, router]);
 
   // ---------------------------------------------------------------------------
   // Option actions
