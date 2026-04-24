@@ -39,7 +39,7 @@ set -u
 pkill -u "$(id -un)" -f 'node server.js' 2>/dev/null || true
 sleep 1
 
-export PORT=3100 HOST=127.0.0.1 HOSTNAME=127.0.0.1 NODE_ENV=production
+export PORT=3000 HOST=127.0.0.1 HOSTNAME=127.0.0.1 NODE_ENV=production
 
 # setsid  — start a fresh session so the parent ssh/su exit cannot SIGHUP us
 # nohup   — extra belt to ignore SIGHUP if setsid is unavailable for any reason
