@@ -136,7 +136,8 @@ export function CsvPreview({ fileName }: { fileName: string }) {
                   <th className="p-3">Row</th>
                   <th className="p-3">Name</th>
                   <th className="p-3">Slug</th>
-                  <th className="p-3">Prices (S/M/L)</th>
+                  <th className="p-3">Options</th>
+                  <th className="p-3 text-center">Variants</th>
                   <th className="p-3">Category</th>
                   <th className="p-3">Images</th>
                 </tr>
@@ -147,9 +148,16 @@ export function CsvPreview({ fileName }: { fileName: string }) {
                     <td className="p-3 font-mono text-xs">{v.rowIndex}</td>
                     <td className="p-3 font-semibold">{v.data.name}</td>
                     <td className="p-3 text-xs font-mono">{v.data.slug}</td>
-                    <td className="p-3 font-mono text-xs">
-                      {v.data.priceS ?? "—"} / {v.data.priceM ?? "—"} /{" "}
-                      {v.data.priceL ?? "—"}
+                    <td className="p-3 text-xs">
+                      {v.data.options.map((o: { name: string; values: string[] }) => (
+                        <div key={o.name}>
+                          <span className="font-semibold">{o.name}:</span>{" "}
+                          {o.values.join(", ")}
+                        </div>
+                      ))}
+                    </td>
+                    <td className="p-3 text-xs font-mono text-center">
+                      {v.data.variantCount}
                     </td>
                     <td className="p-3 text-xs">
                       {v.data.categoryId ? "Linked" : "—"}

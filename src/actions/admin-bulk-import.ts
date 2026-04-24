@@ -1,7 +1,13 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { products, productVariants, categories } from "@/lib/db/schema";
+import {
+  products,
+  productVariants,
+  productOptions,
+  productOptionValues,
+  categories,
+} from "@/lib/db/schema";
 import { randomUUID } from "node:crypto";
 import { unlink } from "node:fs/promises";
 import path from "node:path";
@@ -16,17 +22,123 @@ import {
 } from "@/lib/csv";
 
 // ============================================================================
-// Plan 05-05 admin bulk product import (CSV).
+// Phase 16-06 admin bulk product import (CSV) — updated for generic options.
+//
+// CSV schema (new):
+//   name, slug*, description, category_name*, material_type*, estimated_production_days*,
+//   option1_name, option1_values (pipe-sep), option1_prices (pipe-sep, aligned),
+//   option2_name*, option2_values*, option2_prices*,
+//   option3_name*, option3_values*, option3_prices*,
+//   image_url_1*, image_url_2*, ...
+//
+// Back-compat: price_s/price_m/price_l still accepted and automatically mapped
+// to option1_name="Size", option1_values="S|M|L", option1_prices="{s}|{m}|{l}".
+//
+// On import: product → options → values → cartesian variant matrix.
+// Single transaction; any failure rolls back the entire import.
 //
 // Threat mitigations:
 //   - T-05-05-EoP: requireAdmin() FIRST in every export
-//   - T-05-05-injection: parseCsvStream caps file size + row count + columns
+//   - T-05-05-injection: parseCsvStream caps file size + row count
 //   - T-05-05-SSRF: normalizeCsvRow rejects external URLs
-//   - T-05-05-path-traversal: fileName sanitised via regex; constrained to
-//     public/uploads/imports/
-//   - T-05-05-state: commit runs inside a single db.transaction; any failure
-//     rolls everything back
+//   - T-05-05-path-traversal: fileName sanitised via regex
+//   - T-05-05-state: commit runs inside a single db.transaction
 // ============================================================================
+
+// ---------------------------------------------------------------------------
+// Option parsing helpers
+// ---------------------------------------------------------------------------
+
+type ParsedOption = {
+  name: string;
+  values: string[];
+  prices: (string | null)[]; // aligned to values; null = inherit
+};
+
+/** Parse pipe-separated values, trimming whitespace and dropping empties. */
+function parsePipe(s: string | null | undefined): string[] {
+  if (!s) return [];
+  return s
+    .split("|")
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Derive the option list from a parsed CSV row.
+ * Supports both the legacy price_s/m/l format and the new option1_name/values format.
+ */
+function deriveOptions(z: ReturnType<typeof bulkImportRowSchema.parse>): ParsedOption[] {
+  const options: ParsedOption[] = [];
+
+  // ---- Legacy back-compat path ----
+  const legacyPrices: Array<{ label: string; price: string }> = [];
+  if (z.price_s) legacyPrices.push({ label: "S", price: z.price_s });
+  if (z.price_m) legacyPrices.push({ label: "M", price: z.price_m });
+  if (z.price_l) legacyPrices.push({ label: "L", price: z.price_l });
+
+  if (legacyPrices.length > 0 && !z.option1_name) {
+    // Map legacy S/M/L to a "Size" option
+    return [
+      {
+        name: "Size",
+        values: legacyPrices.map((p) => p.label),
+        prices: legacyPrices.map((p) => p.price),
+      },
+    ];
+  }
+
+  // ---- Generic option path ----
+  for (const slot of [
+    { name: z.option1_name, values: z.option1_values, prices: z.option1_prices },
+    { name: z.option2_name, values: z.option2_values, prices: z.option2_prices },
+    { name: z.option3_name, values: z.option3_values, prices: z.option3_prices },
+  ]) {
+    if (!slot.name || !slot.values) continue;
+    const vals = parsePipe(slot.values);
+    if (vals.length === 0) continue;
+    const rawPrices = parsePipe(slot.prices);
+    const alignedPrices: (string | null)[] = vals.map((_, i) => rawPrices[i] ?? null);
+    options.push({ name: slot.name, values: vals, prices: alignedPrices });
+  }
+
+  return options;
+}
+
+/** Validate option structure and prices; return errors array (empty = valid). */
+function validateOptions(opts: ParsedOption[]): string[] {
+  const errors: string[] = [];
+  if (opts.length === 0) {
+    errors.push("At least one option with values is required (option1_name + option1_values)");
+    return errors;
+  }
+  if (opts.length > 3) {
+    errors.push("Maximum 3 options per product");
+  }
+  const priceRegex = /^\d+(\.\d{1,2})?$/;
+  for (const opt of opts) {
+    if (opt.values.length === 0) {
+      errors.push(`option "${opt.name}": no values provided`);
+    }
+    for (const p of opt.prices) {
+      if (p !== null && !priceRegex.test(p)) {
+        errors.push(`option "${opt.name}": invalid price "${p}" — must be digits with up to 2 decimal places`);
+      }
+    }
+  }
+  // For a cartesian product of options, every combo must have a resolvable price.
+  // Only enforce when prices are provided for the primary option.
+  const primaryPrices = opts[0]?.prices ?? [];
+  const hasSomePrice = primaryPrices.some((p) => p !== null);
+  if (!hasSomePrice) {
+    errors.push(`option "${opts[0]?.name ?? "1"}": at least one price value is required`);
+  }
+  return errors;
+}
+
+// ---------------------------------------------------------------------------
+// Preview row types
+// ---------------------------------------------------------------------------
 
 export type PreviewRowValid = {
   rowIndex: number;
@@ -38,9 +150,8 @@ export type PreviewRowValid = {
     categoryId: string | null;
     materialType: string | null;
     estimatedProductionDays: number | null;
-    priceS: string | null;
-    priceM: string | null;
-    priceL: string | null;
+    options: ParsedOption[];
+    variantCount: number;
   };
 };
 
@@ -67,6 +178,10 @@ function uploadsImportsPath(fileName: string): string {
   return path.join(process.cwd(), "public", "uploads", "imports", fileName);
 }
 
+// ---------------------------------------------------------------------------
+// previewCsv
+// ---------------------------------------------------------------------------
+
 export async function previewCsv(
   fileName: string,
 ): Promise<{ ok: true; result: PreviewResult } | { ok: false; error: string }> {
@@ -81,13 +196,9 @@ export async function previewCsv(
     return { ok: false, error: e instanceof Error ? e.message : "Parse failed" };
   }
 
-  // Pre-load existing slugs for dedup
-  const existingSlugRows = await db
-    .select({ slug: products.slug })
-    .from(products);
+  const existingSlugRows = await db.select({ slug: products.slug }).from(products);
   const existingSlugs = new Set(existingSlugRows.map((r) => r.slug));
 
-  // Pre-load categories so each row can resolve category_name → id
   const categoryRows = await db.select().from(categories);
   const categoriesByName = new Map(
     categoryRows.map((c) => [c.name.toLowerCase(), c.id]),
@@ -124,7 +235,7 @@ export async function previewCsv(
       const found = categoriesByName.get(row.category_name.toLowerCase());
       if (!found) {
         errors.push(
-          `category_name: "${row.category_name}" not found — create the category first via /admin/categories`,
+          `category_name: "${row.category_name}" not found — create it first via /admin/categories`,
         );
       } else {
         categoryId = found;
@@ -137,8 +248,18 @@ export async function previewCsv(
     }
 
     const z = zodParse.data;
+    const options = deriveOptions(z);
+    const optErrors = validateOptions(options);
+    if (optErrors.length > 0) {
+      invalidRows.push({ rowIndex: i + 2, errors: optErrors, raw });
+      return;
+    }
+
+    // Count cartesian variants
+    const variantCount = options.reduce((acc, opt) => acc * opt.values.length, 1);
+
     validRows.push({
-      rowIndex: i + 2, // +1 for 1-indexed, +1 for header row
+      rowIndex: i + 2,
       data: {
         name: z.name,
         slug,
@@ -147,9 +268,8 @@ export async function previewCsv(
         categoryId,
         materialType: z.material_type ?? null,
         estimatedProductionDays: z.estimated_production_days ?? null,
-        priceS: z.price_s ?? null,
-        priceM: z.price_m ?? null,
-        priceL: z.price_l ?? null,
+        options,
+        variantCount,
       },
     });
   });
@@ -168,13 +288,19 @@ export async function previewCsv(
   };
 }
 
-export type CommitResult = {
-  ok: true;
-  results: {
-    successes: string[];
-    failures: Array<{ row: number; error: string }>;
-  };
-} | { ok: false; error: string };
+// ---------------------------------------------------------------------------
+// commitCsvImport
+// ---------------------------------------------------------------------------
+
+export type CommitResult =
+  | {
+      ok: true;
+      results: {
+        successes: string[];
+        failures: Array<{ row: number; error: string }>;
+      };
+    }
+  | { ok: false; error: string };
 
 export async function commitCsvImport(fileName: string): Promise<CommitResult> {
   await requireAdmin();
@@ -205,36 +331,75 @@ export async function commitCsvImport(fileName: string): Promise<CommitResult> {
             isFeatured: false,
           });
 
-          const variants: Array<{
-            id: string;
-            productId: string;
-            size: "S" | "M" | "L";
-            price: string;
-          }> = [];
-          if (v.data.priceS)
-            variants.push({
-              id: randomUUID(),
+          // Insert options and values, then build cartesian variant matrix
+          // optionSlots[i] = array of { optionValueId, pricePart } for option slot i
+          type ValueSlot = { optionValueId: string; pricePart: string | null };
+          const optionSlots: ValueSlot[][] = [];
+
+          for (let optIdx = 0; optIdx < v.data.options.length; optIdx++) {
+            const opt = v.data.options[optIdx];
+            const optionId = randomUUID();
+            await tx.insert(productOptions).values({
+              id: optionId,
               productId,
-              size: "S",
-              price: v.data.priceS,
+              name: opt.name,
+              position: optIdx + 1,
             });
-          if (v.data.priceM)
-            variants.push({
-              id: randomUUID(),
-              productId,
-              size: "M",
-              price: v.data.priceM,
-            });
-          if (v.data.priceL)
-            variants.push({
-              id: randomUUID(),
-              productId,
-              size: "L",
-              price: v.data.priceL,
-            });
-          if (variants.length > 0) {
-            await tx.insert(productVariants).values(variants);
+
+            const slotValues: ValueSlot[] = [];
+            for (let valIdx = 0; valIdx < opt.values.length; valIdx++) {
+              const valueId = randomUUID();
+              await tx.insert(productOptionValues).values({
+                id: valueId,
+                optionId,
+                value: opt.values[valIdx],
+                position: valIdx + 1,
+              });
+              slotValues.push({
+                optionValueId: valueId,
+                pricePart: opt.prices[valIdx] ?? null,
+              });
+            }
+            optionSlots.push(slotValues);
           }
+
+          // Build cartesian product of all option slots
+          // Each combo is an array of ValueSlot (one per option)
+          type Combo = ValueSlot[];
+          let combos: Combo[] = [[]];
+          for (const slot of optionSlots) {
+            const next: Combo[] = [];
+            for (const existing of combos) {
+              for (const val of slot) {
+                next.push([...existing, val]);
+              }
+            }
+            combos = next;
+          }
+
+          // Insert variants — price comes from the first option slot's pricePart
+          // (subsequent option slots' prices are ignored in this version; the
+          // admin can fine-tune via the variant editor).
+          const variantInserts = combos.map((combo, idx) => {
+            const price = combo.find((c) => c.pricePart !== null)?.pricePart ?? "0.00";
+            const [s1, s2, s3] = combo;
+            return {
+              id: randomUUID(),
+              productId,
+              size: "S" as const, // legacy NOT NULL placeholder — removed in 16-07
+              price,
+              position: idx + 1,
+              inStock: true,
+              option1ValueId: s1?.optionValueId ?? null,
+              option2ValueId: s2?.optionValueId ?? null,
+              option3ValueId: s3?.optionValueId ?? null,
+            };
+          });
+
+          if (variantInserts.length > 0) {
+            await tx.insert(productVariants).values(variantInserts);
+          }
+
           successes.push(v.data.slug);
         } catch (err) {
           failures.push({
@@ -246,15 +411,9 @@ export async function commitCsvImport(fileName: string): Promise<CommitResult> {
       }
     });
   } catch {
-    // transaction already rolled back; failures array already captured
-    // the offending row. Reset successes since nothing was committed.
-    return {
-      ok: true,
-      results: { successes: [], failures },
-    };
+    return { ok: true, results: { successes: [], failures } };
   }
 
-  // Delete the temp CSV file after commit (whether success or rollback).
   try {
     await unlink(uploadsImportsPath(safeName));
   } catch {

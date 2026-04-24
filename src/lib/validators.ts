@@ -670,40 +670,53 @@ export const variantUpdateSchema = z.object({
 });
 export type VariantUpdateInput = z.infer<typeof variantUpdateSchema>;
 
-export const bulkImportRowSchema = z
-  .object({
-    name: z.string().min(1).max(100),
-    slug: z
-      .string()
-      .regex(/^[a-z0-9-]+$/, "Slug: lowercase letters, digits, dash only")
-      .max(220)
-      .optional(),
-    description: z.string().min(1),
-    category_name: z.string().optional().nullable(),
-    price_s: z
-      .string()
-      .regex(/^\d+(\.\d{1,2})?$/)
-      .optional()
-      .nullable(),
-    price_m: z
-      .string()
-      .regex(/^\d+(\.\d{1,2})?$/)
-      .optional()
-      .nullable(),
-    price_l: z
-      .string()
-      .regex(/^\d+(\.\d{1,2})?$/)
-      .optional()
-      .nullable(),
-    material_type: z.string().optional().nullable(),
-    estimated_production_days: z.coerce
-      .number()
-      .int()
-      .positive()
-      .optional()
-      .nullable(),
-  })
-  .refine((r) => r.price_s || r.price_m || r.price_l, {
-    message: "At least one of price_s / price_m / price_l is required",
-  });
+/**
+ * Phase 16-06 — CSV import schema (replaces price_s/m/l with generic options).
+ *
+ * New columns:
+ *   option1_name        e.g. "Size"
+ *   option1_values      pipe-separated e.g. "S|M|L"
+ *   option1_prices      pipe-separated, aligned to option1_values e.g. "19.90|24.90|29.90"
+ *   option2_name        optional second option e.g. "Color"
+ *   option2_values      pipe-separated e.g. "Red|Blue"
+ *   option2_prices      (optional) if omitted, all combos share option1 price
+ *   option3_name        optional third option
+ *   option3_values      pipe-separated
+ *   option3_prices      (optional)
+ *
+ * Back-compat: if price_s/price_m/price_l are present (old format) the importer
+ * automatically maps them to option1_name="Size", option1_values="S|M|L",
+ * option1_prices="{price_s}|{price_m}|{price_l}".
+ */
+export const bulkImportRowSchema = z.object({
+  name: z.string().min(1).max(100),
+  slug: z
+    .string()
+    .regex(/^[a-z0-9-]+$/, "Slug: lowercase letters, digits, dash only")
+    .max(220)
+    .optional(),
+  description: z.string().min(1),
+  category_name: z.string().optional().nullable(),
+  material_type: z.string().optional().nullable(),
+  estimated_production_days: z.coerce
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .nullable(),
+  // Legacy size-price columns (back-compat with old CSVs)
+  price_s: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().nullable(),
+  price_m: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().nullable(),
+  price_l: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().nullable(),
+  // Generic option columns (phase 16)
+  option1_name: z.string().max(50).optional().nullable(),
+  option1_values: z.string().optional().nullable(),  // pipe-separated
+  option1_prices: z.string().optional().nullable(),  // pipe-separated, aligned to values
+  option2_name: z.string().max(50).optional().nullable(),
+  option2_values: z.string().optional().nullable(),
+  option2_prices: z.string().optional().nullable(),
+  option3_name: z.string().max(50).optional().nullable(),
+  option3_values: z.string().optional().nullable(),
+  option3_prices: z.string().optional().nullable(),
+});
 export type BulkImportRowInput = z.infer<typeof bulkImportRowSchema>;
