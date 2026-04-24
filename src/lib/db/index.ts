@@ -10,6 +10,9 @@ declare global {
   var __mysqlPool: mysql.Pool | undefined;
 }
 
+// SSL is intentionally NOT configured — the Node app and the MariaDB 10.11
+// instance share the same cPanel host (loopback only), so TLS would add
+// handshake cost for no threat-model benefit.
 function buildPool(): mysql.Pool {
   const url = process.env.DATABASE_URL;
   if (url && url.startsWith("mysql://")) {
@@ -17,8 +20,7 @@ function buildPool(): mysql.Pool {
       uri: url,
       connectionLimit: 10,
       waitForConnections: true,
-      // cPanel MySQL accepts only ASCII-clean passwords we provisioned, so
-      // no special charset handling is needed beyond the default utf8mb4.
+      charset: "utf8mb4",
     });
   }
 
@@ -31,6 +33,7 @@ function buildPool(): mysql.Pool {
     database: process.env.DB_NAME,
     connectionLimit: 10,
     waitForConnections: true,
+    charset: "utf8mb4",
   });
 }
 
