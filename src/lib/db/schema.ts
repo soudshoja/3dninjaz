@@ -272,6 +272,22 @@ export const productVariants = mysqlTable("product_variants", {
   // Denormalized label for fast rendering: "Small / Red", "Head", etc.
   labelCache: varchar("label_cache", { length: 200 }),
   position: int("position").notNull().default(0),
+  // Phase 17 — sale pricing + default-variant flag + per-variant shipping weight
+  //
+  // salePrice: optional lower price. Effective price = salePrice ?? price
+  //   when the sale window is active.
+  // saleFrom, saleTo: UTC TIMESTAMPs. Each nullable — NULL means "no bound on
+  //   that side". Both NULL = active as soon as salePrice is set.
+  // isDefault: admin-marked default combo; at most one per product (app-layer
+  //   transaction enforced in setDefaultVariant).
+  // weightG (AD-08): per-variant Delyva shipping weight override in grams.
+  //   NULL means inherit products.shippingWeightKg × 1000; if that is also
+  //   NULL, quoteForCart falls back to defaultWeightKg and emits a warn log.
+  salePrice: decimal("sale_price", { precision: 10, scale: 2 }),
+  saleFrom: timestamp("sale_from"),
+  saleTo: timestamp("sale_to"),
+  isDefault: boolean("is_default").notNull().default(false),
+  weightG: int("weight_g"),
 });
 
 // ============================================================================

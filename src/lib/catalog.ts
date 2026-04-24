@@ -187,6 +187,7 @@ async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
     }));
 
     // Build HydratedVariant[]
+    const now = new Date();
     const hydratedVariants: HydratedVariant[] = rawVariants.map((v) => {
       const labelParts: string[] = [];
       for (const vid of [v.option1ValueId, v.option2ValueId, v.option3ValueId]) {
@@ -195,6 +196,11 @@ async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
           if (val) labelParts.push(val.value);
         }
       }
+      const isOnSale =
+        v.salePrice !== null &&
+        (v.saleFrom === null || v.saleFrom.getTime() <= now.getTime()) &&
+        (v.saleTo === null || v.saleTo.getTime() >= now.getTime());
+      const effectivePrice = isOnSale ? (v.salePrice as string) : v.price;
       return {
         id: v.id,
         price: v.price,
@@ -218,6 +224,13 @@ async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
         filamentRateOverride: v.filamentRateOverride ?? null,
         laborRateOverride: v.laborRateOverride ?? null,
         costPriceManual: v.costPriceManual ?? false,
+        salePrice: v.salePrice ?? null,
+        saleFrom: v.saleFrom ?? null,
+        saleTo: v.saleTo ?? null,
+        isDefault: v.isDefault ?? false,
+        effectivePrice,
+        isOnSale,
+        weightG: v.weightG ?? null,
       };
     });
 

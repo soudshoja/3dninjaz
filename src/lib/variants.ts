@@ -5,7 +5,6 @@
  *   hydrateProductVariants  — 3-query batch fetch (no LATERAL, per MariaDB quirk)
  *   composeVariantLabel     — "Small / Red" from array of value strings
  *   findVariantByOptions    — lookup by option value IDs
- *   legacyVariantToHydrated — dual-read fallback (pre-backfill rows)
  *
  * MariaDB 10.11 note: NO LATERAL joins. All hydration uses manual multi-query
  * pattern (fetch parents → fetch children by inArray → join in memory).
@@ -54,6 +53,17 @@ export type HydratedVariant = {
   filamentRateOverride: string | null;
   laborRateOverride: string | null;
   costPriceManual: boolean;
+  // Phase 17 — sale pricing + default flag + per-variant weight
+  salePrice: string | null;
+  saleFrom: Date | null;
+  saleTo: Date | null;
+  isDefault: boolean;
+  /** Derived at hydration time: effective price given server-now. */
+  effectivePrice: string;
+  /** Derived: true if sale_price is set AND now is inside [saleFrom, saleTo]. */
+  isOnSale: boolean;
+  /** AD-08 — per-variant shipping weight in grams. NULL = inherit product weight. */
+  weightG: number | null;
 };
 
 export type HydratedProductVariants = {
@@ -99,28 +109,43 @@ export async function hydrateProductVariants(
       .from(productVariants)
       .where(eq(productVariants.productId, productId))
       .orderBy(productVariants.position);
+    const now = new Date();
     return {
       options: [],
-      variants: variantRows.map((v) => ({
-        id: v.id,
-        price: v.price,
-        stock: v.stock ?? 0,
-        inStock: v.inStock ?? true,
-        trackStock: v.trackStock ?? false,
-        sku: v.sku ?? null,
-        imageUrl: v.imageUrl ?? null,
-        label: v.labelCache ?? "",
-        position: v.position ?? 0,
-        optionValueIds: [null, null, null] as [string | null, string | null, string | null],
-        costPrice: v.costPrice ?? null,
-        filamentGrams: v.filamentGrams ?? null,
-        printTimeHours: v.printTimeHours ?? null,
-        laborMinutes: v.laborMinutes ?? null,
-        otherCost: v.otherCost ?? null,
-        filamentRateOverride: v.filamentRateOverride ?? null,
-        laborRateOverride: v.laborRateOverride ?? null,
-        costPriceManual: v.costPriceManual ?? false,
-      })),
+      variants: variantRows.map((v) => {
+        const isOnSale =
+          v.salePrice !== null &&
+          (v.saleFrom === null || v.saleFrom.getTime() <= now.getTime()) &&
+          (v.saleTo === null || v.saleTo.getTime() >= now.getTime());
+        const effectivePrice = isOnSale ? (v.salePrice as string) : v.price;
+        return {
+          id: v.id,
+          price: v.price,
+          stock: v.stock ?? 0,
+          inStock: v.inStock ?? true,
+          trackStock: v.trackStock ?? false,
+          sku: v.sku ?? null,
+          imageUrl: v.imageUrl ?? null,
+          label: v.labelCache ?? "",
+          position: v.position ?? 0,
+          optionValueIds: [null, null, null] as [string | null, string | null, string | null],
+          costPrice: v.costPrice ?? null,
+          filamentGrams: v.filamentGrams ?? null,
+          printTimeHours: v.printTimeHours ?? null,
+          laborMinutes: v.laborMinutes ?? null,
+          otherCost: v.otherCost ?? null,
+          filamentRateOverride: v.filamentRateOverride ?? null,
+          laborRateOverride: v.laborRateOverride ?? null,
+          costPriceManual: v.costPriceManual ?? false,
+          salePrice: v.salePrice ?? null,
+          saleFrom: v.saleFrom ?? null,
+          saleTo: v.saleTo ?? null,
+          isDefault: v.isDefault ?? false,
+          effectivePrice,
+          isOnSale,
+          weightG: v.weightG ?? null,
+        };
+      }),
     };
   }
 
@@ -162,6 +187,7 @@ export async function hydrateProductVariants(
   }));
 
   // Hydrate variants
+  const now = new Date();
   const variants: HydratedVariant[] = variantRows.map((v) => {
     // Compose label from option1/2/3 value lookups
     const labelParts: string[] = [];
@@ -176,6 +202,12 @@ export async function hydrateProductVariants(
       labelParts.length > 0
         ? composeVariantLabel(labelParts)
         : (v.labelCache ?? "");
+
+    const isOnSale =
+      v.salePrice !== null &&
+      (v.saleFrom === null || v.saleFrom.getTime() <= now.getTime()) &&
+      (v.saleTo === null || v.saleTo.getTime() >= now.getTime());
+    const effectivePrice = isOnSale ? (v.salePrice as string) : v.price;
 
     return {
       id: v.id,
@@ -200,6 +232,13 @@ export async function hydrateProductVariants(
       filamentRateOverride: v.filamentRateOverride ?? null,
       laborRateOverride: v.laborRateOverride ?? null,
       costPriceManual: v.costPriceManual ?? false,
+      salePrice: v.salePrice ?? null,
+      saleFrom: v.saleFrom ?? null,
+      saleTo: v.saleTo ?? null,
+      isDefault: v.isDefault ?? false,
+      effectivePrice,
+      isOnSale,
+      weightG: v.weightG ?? null,
     };
   });
 
@@ -228,4 +267,3 @@ export function findVariantByOptions(
   );
 }
 
-// legacyVariantToHydrated removed in phase 16-07 (size column dropped).

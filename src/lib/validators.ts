@@ -664,6 +664,31 @@ export const variantUpdateSchema = z.object({
   filamentRateOverride: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().or(z.literal("")).nullable(),
   laborRateOverride: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().or(z.literal("")).nullable(),
   costPriceManual: z.boolean().optional(),
+  // Phase 17 — sale pricing + default flag + per-variant weight
+  // NOTE: salePrice < price validation is deferred to the server action
+  // (updateVariant / bulkUpdateVariants) because variantUpdateSchema is a
+  // partial patch and price may not be present in the same patch payload.
+  salePrice: z
+    .string()
+    .regex(/^\d+(\.\d{1,2})?$/, "Sale price must be a valid decimal")
+    .optional()
+    .or(z.literal(""))
+    .nullable(),
+  saleFrom: z
+    .string()
+    .datetime({ offset: true })
+    .optional()
+    .or(z.literal(""))
+    .nullable(),
+  saleTo: z
+    .string()
+    .datetime({ offset: true })
+    .optional()
+    .or(z.literal(""))
+    .nullable(),
+  isDefault: z.boolean().optional(),
+  // AD-08 — optional per-variant shipping weight (grams). NULL/omitted = inherit product weight.
+  weightG: z.number().int().min(0).max(50000).nullable().optional(),
 });
 export type VariantUpdateInput = z.infer<typeof variantUpdateSchema>;
 
