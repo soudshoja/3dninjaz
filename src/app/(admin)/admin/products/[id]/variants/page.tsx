@@ -40,6 +40,7 @@ export default async function VariantsPage({
       </div>
       <VariantEditor
         productId={id}
+        productSlug={product.slug}
         initialOptions={options}
         initialVariants={variants}
       />

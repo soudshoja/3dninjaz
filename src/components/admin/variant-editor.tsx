@@ -73,14 +73,16 @@ import {
   type BulkOp,
 } from "@/actions/variants";
 import type { HydratedOption, HydratedVariant } from "@/lib/variants";
+import { generateVariantSku } from "@/lib/variants";
 
 interface VariantEditorProps {
   productId: string;
+  productSlug: string;
   initialOptions: HydratedOption[];
   initialVariants: HydratedVariant[];
 }
 
-export function VariantEditor({ productId, initialOptions, initialVariants }: VariantEditorProps) {
+export function VariantEditor({ productId, productSlug, initialOptions, initialVariants }: VariantEditorProps) {
   const [isPending, startTransition] = useTransition();
   const [options, setOptions] = useState<HydratedOption[]>(initialOptions);
   const [variants, setVariants] = useState<HydratedVariant[]>(initialVariants);
@@ -605,6 +607,7 @@ export function VariantEditor({ productId, initialOptions, initialVariants }: Va
                   <VariantRow
                     key={v.id}
                     variant={v}
+                    productSlug={productSlug}
                     isSelected={selectedIds.has(v.id)}
                     onToggleSelect={toggleSelect}
                     onUpdate={handleUpdateVariantField}
@@ -670,6 +673,7 @@ export function VariantEditor({ productId, initialOptions, initialVariants }: Va
 
 function VariantRow({
   variant,
+  productSlug,
   isSelected,
   onToggleSelect,
   onUpdate,
@@ -681,6 +685,7 @@ function VariantRow({
   isPending,
 }: {
   variant: HydratedVariant;
+  productSlug: string;
   isSelected: boolean;
   onToggleSelect: (id: string) => void;
   onUpdate: (variantId: string, field: string, value: unknown) => void;
@@ -852,17 +857,39 @@ function VariantRow({
 
       {/* SKU */}
       <td className="px-4 py-3">
-        <Input
-          value={sku}
-          onChange={(e) => setSku(e.target.value)}
-          onBlur={() => {
-            if (sku !== (variant.sku ?? "")) {
-              onUpdate(variant.id, "sku", sku || null);
-            }
-          }}
-          placeholder="SKU"
-          className="h-8 w-32 text-sm"
-        />
+        {(() => {
+          const valueLabels = variant.label
+            ? variant.label.split(" / ").filter(Boolean)
+            : [];
+          const autoSku = generateVariantSku(productSlug, valueLabels);
+          return (
+            <div className="flex flex-col gap-0.5">
+              <Input
+                value={sku}
+                onChange={(e) => setSku(e.target.value)}
+                onBlur={() => {
+                  if (sku !== (variant.sku ?? "")) {
+                    onUpdate(variant.id, "sku", sku || null);
+                  }
+                }}
+                placeholder={autoSku}
+                className="h-8 w-36 text-sm font-mono"
+              />
+              {!sku && (
+                <button
+                  type="button"
+                  className="text-xs text-blue-600 hover:underline text-left"
+                  onClick={() => {
+                    setSku(autoSku);
+                    onUpdate(variant.id, "sku", autoSku);
+                  }}
+                >
+                  Use auto
+                </button>
+              )}
+            </div>
+          );
+        })()}
       </td>
 
       {/* Weight (g) — AD-08 */}

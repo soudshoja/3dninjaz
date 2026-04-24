@@ -371,6 +371,14 @@ export async function generateVariantMatrix(
 ): Promise<ActionResult<{ inserted: number }>> {
   await requireAdmin();
 
+  // Fetch product slug for SKU generation
+  const [productRow] = await db
+    .select({ slug: products.slug })
+    .from(products)
+    .where(eq(products.id, productId))
+    .limit(1);
+  const productSlug = productRow?.slug ?? productId;
+
   // Fetch options
   const options = await db
     .select()
@@ -455,6 +463,15 @@ export async function generateVariantMatrix(
     if (combo.v2) labelParts.push(combo.v2.value);
     if (combo.v3) labelParts.push(combo.v3.value);
     const label = composeVariantLabel(labelParts);
+    const autoSku = generateVariantSku(productSlug, labelParts);
+
+    // Defensive: append position suffix if autoSku already used in this batch
+    let sku = autoSku;
+    let skuSuffix = 2;
+    while (existingSet.has(`sku:${sku}`)) {
+      sku = `${autoSku}-${skuSuffix++}`;
+    }
+    existingSet.add(`sku:${sku}`);
 
     await db.insert(productVariants).values({
       id: randomUUID(),
@@ -467,6 +484,7 @@ export async function generateVariantMatrix(
       option2ValueId: v2id,
       option3ValueId: v3id,
       labelCache: label,
+      sku,
       position: inserted,
       costPriceManual: false,
     });
@@ -502,7 +520,47 @@ export async function updateVariant(
   if (data.stock !== undefined) update.stock = data.stock;
   if (data.trackStock !== undefined) update.trackStock = data.trackStock;
   if (data.inStock !== undefined) update.inStock = data.inStock;
-  if (data.sku !== undefined) update.sku = data.sku;
+  if (data.sku !== undefined) {
+    if (data.sku === null || data.sku === "") {
+      // Auto-generate SKU when admin clears the field
+      const [vRow] = await db
+        .select({
+          productId: productVariants.productId,
+          option1ValueId: productVariants.option1ValueId,
+          option2ValueId: productVariants.option2ValueId,
+          option3ValueId: productVariants.option3ValueId,
+          labelCache: productVariants.labelCache,
+        })
+        .from(productVariants)
+        .where(eq(productVariants.id, variantId))
+        .limit(1);
+      if (vRow) {
+        const [pRow] = await db
+          .select({ slug: products.slug })
+          .from(products)
+          .where(eq(products.id, vRow.productId))
+          .limit(1);
+        const valueIds = [vRow.option1ValueId, vRow.option2ValueId, vRow.option3ValueId].filter(Boolean) as string[];
+        let labels: string[] = [];
+        if (valueIds.length > 0) {
+          const valueRows = await db
+            .select({ id: productOptionValues.id, value: productOptionValues.value })
+            .from(productOptionValues)
+            .where(inArray(productOptionValues.id, valueIds));
+          const valueMap = new Map(valueRows.map((r) => [r.id, r.value]));
+          labels = [vRow.option1ValueId, vRow.option2ValueId, vRow.option3ValueId]
+            .filter(Boolean)
+            .map((id) => valueMap.get(id!) ?? "")
+            .filter(Boolean);
+        } else if (vRow.labelCache) {
+          labels = vRow.labelCache.split(" / ").filter(Boolean);
+        }
+        update.sku = generateVariantSku(pRow?.slug ?? vRow.productId, labels);
+      }
+    } else {
+      update.sku = data.sku;
+    }
+  }
   if (data.imageUrl !== undefined) update.imageUrl = data.imageUrl;
   if (data.position !== undefined) update.position = data.position;
   if (data.option1ValueId !== undefined) update.option1ValueId = data.option1ValueId;
