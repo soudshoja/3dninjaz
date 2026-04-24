@@ -49,6 +49,8 @@ export default function robots(): MetadataRoute.Robots {
           "/register",
           "/forgot-password",
           "/reset-password",
+          "/payment-links",
+          "/payment-links/",
         ],
       },
     ],
