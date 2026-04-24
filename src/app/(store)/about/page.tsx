@@ -48,7 +48,7 @@ export default function AboutPage() {
           </span>
           <h1
             id="about-hero"
-            className="mt-5 font-heading text-5xl sm:text-6xl md:text-7xl leading-tight text-zinc-900"
+            className="mt-5 font-heading text-5xl sm:text-6xl md:text-7xl leading-tight text-black"
           >
             About Us
           </h1>
