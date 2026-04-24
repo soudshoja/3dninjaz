@@ -386,7 +386,6 @@ export async function commitCsvImport(fileName: string): Promise<CommitResult> {
             return {
               id: randomUUID(),
               productId,
-              size: "S" as const, // legacy NOT NULL placeholder — removed in 16-07
               price,
               position: idx + 1,
               inStock: true,

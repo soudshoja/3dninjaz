@@ -30,7 +30,6 @@ export const subcategorySchema = z.object({
 });
 
 export const productVariantSchema = z.object({
-  size: z.enum(["S", "M", "L"]),
   price: z
     .string()
     .regex(

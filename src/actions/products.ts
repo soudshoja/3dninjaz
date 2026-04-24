@@ -174,7 +174,6 @@ export async function createProduct(
           breakdown.total > 0 ? String(breakdown.total.toFixed(2)) : toDecimalOrNull(v.costPrice);
         return {
           productId: id,
-          size: v.size,
           price: v.price,
           costPrice: computedCostPrice,
           trackStock: v.trackStock,
@@ -268,7 +267,6 @@ export async function updateProduct(
           breakdown.total > 0 ? String(breakdown.total.toFixed(2)) : toDecimalOrNull(v.costPrice);
         return {
           productId: id,
-          size: v.size,
           price: v.price,
           costPrice: computedCostPrice,
           trackStock: v.trackStock,
