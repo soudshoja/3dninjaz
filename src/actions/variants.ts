@@ -79,8 +79,8 @@ export async function addProductOption(
     .from(productOptions)
     .where(eq(productOptions.productId, productId));
 
-  if (existing.length >= 3) {
-    return { error: "Product supports up to 3 attribute types (e.g., Size, Color, Part). Each option can have unlimited values — add values to existing options to create more variants." };
+  if (existing.length >= 6) {
+    return { error: "Product supports up to 6 attribute types (e.g., Size, Color, Material, Finish, Part, Style). Add more values to existing options to create more variants." };
   }
 
   // Check for duplicate name
@@ -103,7 +103,7 @@ export async function addProductOption(
     ? Math.max(...existing.map((o) => o.position)) + 1
     : 1;
 
-  if (nextPosition > 3) return { error: "Product supports up to 3 attribute types. Add more values to existing options to create more variants." };
+  if (nextPosition > 6) return { error: "Product supports up to 6 attribute types. Add more values to existing options to create more variants." };
 
   const id = randomUUID();
   await db.insert(productOptions).values({
@@ -166,14 +166,20 @@ export async function deleteProductOption(
   let variantsDeleted = 0;
   if (valueIds.length > 0) {
     // Determine which slot this option occupies
-    const slot = option.position; // 1, 2, or 3
+    const slot = option.position; // 1–6
     let whereClause;
     if (slot === 1) {
       whereClause = inArray(productVariants.option1ValueId, valueIds);
     } else if (slot === 2) {
       whereClause = inArray(productVariants.option2ValueId, valueIds);
-    } else {
+    } else if (slot === 3) {
       whereClause = inArray(productVariants.option3ValueId, valueIds);
+    } else if (slot === 4) {
+      whereClause = inArray(productVariants.option4ValueId, valueIds);
+    } else if (slot === 5) {
+      whereClause = inArray(productVariants.option5ValueId, valueIds);
+    } else {
+      whereClause = inArray(productVariants.option6ValueId, valueIds);
     }
     const toDelete = await db
       .select({ id: productVariants.id })
@@ -278,23 +284,19 @@ export async function renameOptionValue(
     })
     .where(eq(productOptionValues.id, valueId));
 
-  // Update label_cache on all variants referencing this value
-  const variants1 = await db
-    .select()
-    .from(productVariants)
-    .where(eq(productVariants.option1ValueId, valueId));
-  const variants2 = await db
-    .select()
-    .from(productVariants)
-    .where(eq(productVariants.option2ValueId, valueId));
-  const variants3 = await db
-    .select()
-    .from(productVariants)
-    .where(eq(productVariants.option3ValueId, valueId));
+  // Update label_cache on all variants referencing this value (slots 1–6)
+  const [variants1, variants2, variants3, variants4, variants5, variants6] = await Promise.all([
+    db.select().from(productVariants).where(eq(productVariants.option1ValueId, valueId)),
+    db.select().from(productVariants).where(eq(productVariants.option2ValueId, valueId)),
+    db.select().from(productVariants).where(eq(productVariants.option3ValueId, valueId)),
+    db.select().from(productVariants).where(eq(productVariants.option4ValueId, valueId)),
+    db.select().from(productVariants).where(eq(productVariants.option5ValueId, valueId)),
+    db.select().from(productVariants).where(eq(productVariants.option6ValueId, valueId)),
+  ]);
 
   // Re-compute labels lazily — the generateVariantMatrix action will handle bulk updates.
   // For now just null out label_cache so the UI falls back to live query.
-  const allAffected = [...variants1, ...variants2, ...variants3];
+  const allAffected = [...variants1, ...variants2, ...variants3, ...variants4, ...variants5, ...variants6];
   if (allAffected.length > 0) {
     await db
       .update(productVariants)
@@ -325,21 +327,17 @@ export async function deleteOptionValue(
     .limit(1);
   if (!val) return { error: "Value not found" };
 
-  // Count affected variants
-  const affected1 = await db
-    .select({ id: productVariants.id })
-    .from(productVariants)
-    .where(eq(productVariants.option1ValueId, valueId));
-  const affected2 = await db
-    .select({ id: productVariants.id })
-    .from(productVariants)
-    .where(eq(productVariants.option2ValueId, valueId));
-  const affected3 = await db
-    .select({ id: productVariants.id })
-    .from(productVariants)
-    .where(eq(productVariants.option3ValueId, valueId));
+  // Count affected variants (slots 1–6)
+  const [affected1, affected2, affected3, affected4, affected5, affected6] = await Promise.all([
+    db.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.option1ValueId, valueId)),
+    db.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.option2ValueId, valueId)),
+    db.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.option3ValueId, valueId)),
+    db.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.option4ValueId, valueId)),
+    db.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.option5ValueId, valueId)),
+    db.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.option6ValueId, valueId)),
+  ]);
 
-  const allAffected = [...affected1, ...affected2, ...affected3];
+  const allAffected = [...affected1, ...affected2, ...affected3, ...affected4, ...affected5, ...affected6];
   if (allAffected.length > 0) {
     await db
       .delete(productVariants)
@@ -411,9 +409,10 @@ export async function generateVariantMatrix(
     }
   }
 
-  // Compute cartesian product
-  type Combo = { v1: typeof allValues[0] | null; v2: typeof allValues[0] | null; v3: typeof allValues[0] | null };
-  let combos: Combo[] = [{ v1: null, v2: null, v3: null }];
+  // Compute cartesian product (supports up to 6 option slots)
+  type ValRow = typeof allValues[0];
+  type Combo = { v1: ValRow | null; v2: ValRow | null; v3: ValRow | null; v4: ValRow | null; v5: ValRow | null; v6: ValRow | null };
+  let combos: Combo[] = [{ v1: null, v2: null, v3: null, v4: null, v5: null, v6: null }];
 
   for (let slot = 0; slot < options.length; slot++) {
     const opt = options[slot];
@@ -424,7 +423,10 @@ export async function generateVariantMatrix(
         const next = { ...existing };
         if (slot === 0) next.v1 = v;
         else if (slot === 1) next.v2 = v;
-        else next.v3 = v;
+        else if (slot === 2) next.v3 = v;
+        else if (slot === 3) next.v4 = v;
+        else if (slot === 4) next.v5 = v;
+        else next.v6 = v;
         expanded.push(next);
       }
     }
@@ -438,15 +440,18 @@ export async function generateVariantMatrix(
       option1ValueId: productVariants.option1ValueId,
       option2ValueId: productVariants.option2ValueId,
       option3ValueId: productVariants.option3ValueId,
+      option4ValueId: productVariants.option4ValueId,
+      option5ValueId: productVariants.option5ValueId,
+      option6ValueId: productVariants.option6ValueId,
     })
     .from(productVariants)
     .where(eq(productVariants.productId, productId));
 
-  const existingKey = (v1: string | null, v2: string | null, v3: string | null) =>
-    `${v1 ?? ""}|${v2 ?? ""}|${v3 ?? ""}`;
+  const existingKey = (v1: string | null, v2: string | null, v3: string | null, v4: string | null, v5: string | null, v6: string | null) =>
+    `${v1 ?? ""}|${v2 ?? ""}|${v3 ?? ""}|${v4 ?? ""}|${v5 ?? ""}|${v6 ?? ""}`;
   const existingSet = new Set(
     existingVariants.map((v) =>
-      existingKey(v.option1ValueId, v.option2ValueId, v.option3ValueId),
+      existingKey(v.option1ValueId, v.option2ValueId, v.option3ValueId, v.option4ValueId, v.option5ValueId, v.option6ValueId),
     ),
   );
 
@@ -456,13 +461,19 @@ export async function generateVariantMatrix(
     const v1id = combo.v1?.id ?? null;
     const v2id = combo.v2?.id ?? null;
     const v3id = combo.v3?.id ?? null;
-    const key = existingKey(v1id, v2id, v3id);
+    const v4id = combo.v4?.id ?? null;
+    const v5id = combo.v5?.id ?? null;
+    const v6id = combo.v6?.id ?? null;
+    const key = existingKey(v1id, v2id, v3id, v4id, v5id, v6id);
     if (existingSet.has(key)) continue;
 
     const labelParts: string[] = [];
     if (combo.v1) labelParts.push(combo.v1.value);
     if (combo.v2) labelParts.push(combo.v2.value);
     if (combo.v3) labelParts.push(combo.v3.value);
+    if (combo.v4) labelParts.push(combo.v4.value);
+    if (combo.v5) labelParts.push(combo.v5.value);
+    if (combo.v6) labelParts.push(combo.v6.value);
     const label = composeVariantLabel(labelParts);
     const autoSku = generateVariantSku(productSlug, labelParts);
 
@@ -484,6 +495,9 @@ export async function generateVariantMatrix(
       option1ValueId: v1id,
       option2ValueId: v2id,
       option3ValueId: v3id,
+      option4ValueId: v4id,
+      option5ValueId: v5id,
+      option6ValueId: v6id,
       labelCache: label,
       sku,
       position: inserted,
@@ -530,6 +544,9 @@ export async function updateVariant(
           option1ValueId: productVariants.option1ValueId,
           option2ValueId: productVariants.option2ValueId,
           option3ValueId: productVariants.option3ValueId,
+          option4ValueId: productVariants.option4ValueId,
+          option5ValueId: productVariants.option5ValueId,
+          option6ValueId: productVariants.option6ValueId,
           labelCache: productVariants.labelCache,
         })
         .from(productVariants)
@@ -541,7 +558,7 @@ export async function updateVariant(
           .from(products)
           .where(eq(products.id, vRow.productId))
           .limit(1);
-        const valueIds = [vRow.option1ValueId, vRow.option2ValueId, vRow.option3ValueId].filter(Boolean) as string[];
+        const valueIds = [vRow.option1ValueId, vRow.option2ValueId, vRow.option3ValueId, vRow.option4ValueId, vRow.option5ValueId, vRow.option6ValueId].filter(Boolean) as string[];
         let labels: string[] = [];
         if (valueIds.length > 0) {
           const valueRows = await db
@@ -549,7 +566,7 @@ export async function updateVariant(
             .from(productOptionValues)
             .where(inArray(productOptionValues.id, valueIds));
           const valueMap = new Map(valueRows.map((r) => [r.id, r.value]));
-          labels = [vRow.option1ValueId, vRow.option2ValueId, vRow.option3ValueId]
+          labels = [vRow.option1ValueId, vRow.option2ValueId, vRow.option3ValueId, vRow.option4ValueId, vRow.option5ValueId, vRow.option6ValueId]
             .filter(Boolean)
             .map((id) => valueMap.get(id!) ?? "")
             .filter(Boolean);
@@ -567,6 +584,9 @@ export async function updateVariant(
   if (data.option1ValueId !== undefined) update.option1ValueId = data.option1ValueId;
   if (data.option2ValueId !== undefined) update.option2ValueId = data.option2ValueId;
   if (data.option3ValueId !== undefined) update.option3ValueId = data.option3ValueId;
+  if (data.option4ValueId !== undefined) update.option4ValueId = data.option4ValueId;
+  if (data.option5ValueId !== undefined) update.option5ValueId = data.option5ValueId;
+  if (data.option6ValueId !== undefined) update.option6ValueId = data.option6ValueId;
   if (data.filamentGrams !== undefined) update.filamentGrams = data.filamentGrams || null;
   if (data.printTimeHours !== undefined) update.printTimeHours = data.printTimeHours || null;
   if (data.laborMinutes !== undefined) update.laborMinutes = data.laborMinutes || null;
@@ -654,13 +674,16 @@ export async function countVariantsAffectedByValueDelete(
 ): Promise<ActionResult<{ count: number }>> {
   await requireAdmin();
 
-  const [a1, a2, a3] = await Promise.all([
+  const [a1, a2, a3, a4, a5, a6] = await Promise.all([
     db.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.option1ValueId, valueId)),
     db.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.option2ValueId, valueId)),
     db.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.option3ValueId, valueId)),
+    db.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.option4ValueId, valueId)),
+    db.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.option5ValueId, valueId)),
+    db.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.option6ValueId, valueId)),
   ]);
 
-  return { success: true, data: { count: a1.length + a2.length + a3.length } };
+  return { success: true, data: { count: a1.length + a2.length + a3.length + a4.length + a5.length + a6.length } };
 }
 
 // ---------------------------------------------------------------------------

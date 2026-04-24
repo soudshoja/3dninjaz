@@ -263,9 +263,13 @@ export const productVariants = mysqlTable("product_variants", {
   costPriceManual: boolean("cost_price_manual").notNull().default(false),
   // Phase 16 — generic option value references (positional, Shopify-style)
   // NULL during dual-read window; set after backfill script runs.
+  // Caveman session: option4/5/6 added to raise cap from 3 → 6.
   option1ValueId: varchar("option1_value_id", { length: 36 }),
   option2ValueId: varchar("option2_value_id", { length: 36 }),
   option3ValueId: varchar("option3_value_id", { length: 36 }),
+  option4ValueId: varchar("option4_value_id", { length: 36 }),
+  option5ValueId: varchar("option5_value_id", { length: 36 }),
+  option6ValueId: varchar("option6_value_id", { length: 36 }),
   // Phase 16 — per-variant fields
   sku: varchar("sku", { length: 64 }),
   imageUrl: text("image_url"),
@@ -383,6 +387,21 @@ export const productVariantsRelations = relations(
       fields: [productVariants.option3ValueId],
       references: [productOptionValues.id],
       relationName: "variant_option3",
+    }),
+    option4Value: one(productOptionValues, {
+      fields: [productVariants.option4ValueId],
+      references: [productOptionValues.id],
+      relationName: "variant_option4",
+    }),
+    option5Value: one(productOptionValues, {
+      fields: [productVariants.option5ValueId],
+      references: [productOptionValues.id],
+      relationName: "variant_option5",
+    }),
+    option6Value: one(productOptionValues, {
+      fields: [productVariants.option6ValueId],
+      references: [productOptionValues.id],
+      relationName: "variant_option6",
     }),
   })
 );

@@ -36,7 +36,7 @@ interface VariantSelectorProps {
   onPreviewChange?: (variant: HydratedVariant | null) => void;
 }
 
-type SelectedValues = [string | null, string | null, string | null];
+type SelectedValues = [string | null, string | null, string | null, string | null, string | null, string | null];
 
 /** True when the variant is in stock OR (Phase 18) preorderable. */
 function isVariantAvailable(v: HydratedVariant): boolean {
@@ -54,7 +54,10 @@ function findMatchingVariant(
       (v) =>
         v.optionValueIds[0] === selected[0] &&
         v.optionValueIds[1] === selected[1] &&
-        v.optionValueIds[2] === selected[2],
+        v.optionValueIds[2] === selected[2] &&
+        v.optionValueIds[3] === selected[3] &&
+        v.optionValueIds[4] === selected[4] &&
+        v.optionValueIds[5] === selected[5],
     ) ?? null
   );
 }
@@ -107,7 +110,7 @@ export function VariantSelector({
     if (available) return [...available.optionValueIds] as SelectedValues;
     // 3. First variant
     const first = variants[0] ?? null;
-    if (!first) return [null, null, null];
+    if (!first) return [null, null, null, null, null, null];
     return [...first.optionValueIds] as SelectedValues;
   }, [variants]);
 
@@ -120,7 +123,7 @@ export function VariantSelector({
     const variant = findMatchingVariant(variants, selected);
     onVariantChange(variant);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected[0], selected[1], selected[2]]);
+  }, [selected[0], selected[1], selected[2], selected[3], selected[4], selected[5]]);
 
   if (options.length === 0) return null;
 

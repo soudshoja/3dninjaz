@@ -471,10 +471,10 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
         ))}
 
         {/* Add option */}
-        {options.length < 3 && (
+        {options.length < 6 && (
           <div className="flex gap-2">
             <Input
-              placeholder="New option name (e.g., Size, Color, Part)"
+              placeholder="New option name (e.g., Size, Color, Material, Part)"
               value={newOptionName}
               onChange={(e) => setNewOptionName(e.target.value)}
               className="h-9"

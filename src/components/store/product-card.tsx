@@ -20,8 +20,32 @@ import { ResponsiveProductImage } from "@/components/storefront/responsive-produ
  * Phase 6 06-04: optional WishlistButton overlay top-right of the image.
  * Parents pass `isWishlisted` via getWishlistedProductIds batch helper to
  * avoid an N+1 query on grid pages.
+ *
+ * Redesign (caveman session): Willow & Co reference — product image as full
+ * hero, pastel tinted bg, sharp corners (no border-radius on card), clean
+ * typography below the image. Kid-friendly, premium-playful for ages 9-17.
+ * Price-from now filters to AVAILABLE variants only (inStock + stock>0 or
+ * untracked or preorder). Falls back to "Sold out" badge + greyed price.
  */
+
+// Soft pastel tints derived from brand palette for the image bg well.
+const PASTEL_TINTS = [
+  "#dce9ff", // blue-tinted cream
+  "#d6f5e3", // green-tinted cream
+  "#ead4f7", // purple-tinted cream
+] as const;
+
 const ACCENTS = [BRAND.blue, BRAND.green, BRAND.purple] as const;
+
+/** A variant is available if the admin marked it in-stock AND
+ *  either: stock tracking is off (on-demand print), stock > 0, or pre-order is on. */
+function isVariantAvailable(v: { inStock: boolean; trackStock: boolean; stock: number; allowPreorder: boolean }): boolean {
+  if (!v.inStock) return false;
+  if (!v.trackStock) return true; // on-demand, always available
+  if (v.stock > 0) return true;
+  if (v.allowPreorder) return true;
+  return false;
+}
 
 export async function ProductCard({
   product,
@@ -33,92 +57,109 @@ export async function ProductCard({
   isWishlisted?: boolean;
 }) {
   const accent = ACCENTS[accentIndex % ACCENTS.length];
+  const pastelBg = PASTEL_TINTS[accentIndex % PASTEL_TINTS.length];
+
   // Honour the admin's thumbnail selection; falls back to images[0] when the
   // configured slot is missing (image deleted after the picker saved).
   const firstImage = pickThumbnail(product);
-  // Phase 17: use hydratedVariants so effectivePrice (sale) is reflected in range.
-  const priceLabel = priceRangeMYR(
-    product.hydratedVariants.length > 0 ? product.hydratedVariants : product.variants,
-  );
-  // Phase 17: show SALE chip when any variant has an active sale.
-  const hasSale = product.hydratedVariants.some((v) => v.isOnSale);
-  // Phase 13: show Sold Out overlay only when EVERY variant that has
-  // trackStock=true is also out of stock (stock=0). On-demand variants
-  // (trackStock=false, the default) are always available and never trigger OOS.
-  // If a product has no tracked variants at all, never show sold out.
-  const trackedVariants = product.variants.filter((v) => v.trackStock);
-  const allSoldOut =
-    trackedVariants.length > 0 &&
-    trackedVariants.every((v) => v.stock <= 0);
+
+  // Available-only price range: filter hydratedVariants to purchasable ones.
+  // Falls back to raw variants for products not yet migrated to Phase 16.
+  const allHydrated = product.hydratedVariants.length > 0 ? product.hydratedVariants : [];
+  const availableVariants = allHydrated.filter(isVariantAvailable);
+  const allSoldOut = allHydrated.length > 0 && availableVariants.length === 0;
+
+  // If no hydrated variants at all (legacy path), fall back to raw variants
+  // with the old simple logic.
+  let priceLabel: string;
+  if (allHydrated.length === 0) {
+    priceLabel = priceRangeMYR(product.variants);
+  } else if (allSoldOut) {
+    priceLabel = "Sold out";
+  } else {
+    priceLabel = priceRangeMYR(availableVariants);
+  }
+
+  // Show SALE chip when any AVAILABLE variant has an active sale.
+  const hasSale = availableVariants.some((v) => v.isOnSale);
 
   return (
     <div className="relative group">
       <Link
         href={`/products/${product.slug}`}
-        className="block rounded-[28px] bg-white border border-zinc-200 shadow-sm hover:-translate-y-1 hover:shadow-md transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+        className={[
+          "block bg-white overflow-hidden",
+          "border-2 border-transparent",
+          "shadow-sm hover:shadow-lg hover:-translate-y-0.5",
+          "transition-all duration-200",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
+          allSoldOut ? "opacity-80" : "",
+        ].join(" ")}
         style={{ outlineColor: accent }}
         aria-label={`${product.name} — ${priceLabel}`}
       >
-      <div
-        className="relative aspect-square rounded-[24px] overflow-hidden"
-        style={{ backgroundColor: `${accent}20` }}
-      >
-        {firstImage ? (
-          <ResponsiveProductImage
-            imageUrl={firstImage}
-            alt={product.name}
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-sm text-slate-500">
-            No image
-          </div>
-        )}
-        {product.isFeatured ? (
-          <span
-            className="absolute top-3 left-3 rounded-full px-3 py-1 text-xs font-bold text-white"
-            style={{ backgroundColor: accent }}
-          >
-            FEATURED
-          </span>
-        ) : null}
-        {hasSale && !product.isFeatured ? (
-          <span
-            className="absolute top-3 left-3 rounded-full px-3 py-1 text-xs font-bold text-white"
-            style={{ backgroundColor: BRAND.purple }}
-          >
-            SALE
-          </span>
-        ) : null}
-        {allSoldOut ? <SoldOutBadge /> : null}
-      </div>
-      {/* p-5 flex row: title + price badge.
-          - `min-w-0` on the flex item (h3) is required for `truncate` to
-            work inside a flex parent (CSS defaults flex items to
-            `min-width: auto`, which prevents shrink below intrinsic content
-            size and pushes the price badge past the 320px viewport edge).
-          - `shrink-0` on the badge is preserved so price never wraps or
-            truncates — on very narrow cards the title compresses instead. */}
-      <div className="p-4 md:p-5 flex items-center justify-between gap-3">
-        <h3
-          className="min-w-0 font-[var(--font-heading)] text-lg md:text-xl truncate text-zinc-900"
+        {/* Hero image — square, flush to all card edges, no border-radius */}
+        <div
+          className="relative aspect-square w-full overflow-hidden"
+          style={{ backgroundColor: pastelBg }}
         >
-          {product.name}
-        </h3>
-        <span
-          className="shrink-0 rounded-full px-3 py-1 text-xs md:text-sm font-bold text-white"
-          style={{ backgroundColor: accent }}
+          {firstImage ? (
+            <ResponsiveProductImage
+              imageUrl={firstImage}
+              alt={product.name}
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+              className="absolute inset-0 h-full w-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-sm font-medium" style={{ color: accent }}>
+              No image yet
+            </div>
+          )}
+
+          {/* Top-left badge — FEATURED or SALE, mutually exclusive */}
+          {product.isFeatured ? (
+            <span
+              className="absolute top-2 left-2 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white"
+              style={{ backgroundColor: accent }}
+            >
+              FEATURED
+            </span>
+          ) : hasSale ? (
+            <span
+              className="absolute top-2 left-2 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white"
+              style={{ backgroundColor: BRAND.purple }}
+            >
+              SALE
+            </span>
+          ) : null}
+
+          {allSoldOut ? <SoldOutBadge /> : null}
+        </div>
+
+        {/* Card footer — white bar with name + price */}
+        <div
+          className="px-3 pt-3 pb-3 border-t-4"
+          style={{ borderColor: accent }}
         >
-          {priceLabel}
-        </span>
-      </div>
+          <h3
+            className="font-[var(--font-heading)] text-[15px] md:text-base leading-snug font-extrabold uppercase tracking-tight line-clamp-2"
+            style={{ color: BRAND.ink }}
+          >
+            {product.name}
+          </h3>
+          <p
+            className="mt-1 text-sm font-bold"
+            style={{ color: allSoldOut ? "#9ca3af" : accent }}
+          >
+            {allSoldOut ? "Sold out" : `from ${priceLabel}`}
+          </p>
+        </div>
       </Link>
 
       {/* Wishlist heart overlay — sibling to the Link (NOT inside) so we
           don't nest interactive elements (HTML invalid). The button uses
           stopPropagation so a click never bubbles into the card link. */}
-      <div className="absolute top-3 right-3 z-10">
+      <div className="absolute top-2 right-2 z-10">
         <WishlistButton
           productId={product.id}
           initialState={isWishlisted}

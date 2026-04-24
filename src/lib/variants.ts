@@ -42,8 +42,8 @@ export type HydratedVariant = {
   imageUrl: string | null;
   label: string;
   position: number;
-  /** [option1ValueId, option2ValueId, option3ValueId] — null slots for unused options */
-  optionValueIds: [string | null, string | null, string | null];
+  /** [option1ValueId…option6ValueId] — null slots for unused options */
+  optionValueIds: [string | null, string | null, string | null, string | null, string | null, string | null];
   // Phase 14 cost breakdown passthrough
   costPrice: string | null;
   filamentGrams: string | null;
@@ -131,7 +131,7 @@ export async function hydrateProductVariants(
           imageUrl: v.imageUrl ?? null,
           label: v.labelCache ?? "",
           position: v.position ?? 0,
-          optionValueIds: [null, null, null] as [string | null, string | null, string | null],
+          optionValueIds: [null, null, null, null, null, null] as [string | null, string | null, string | null, string | null, string | null, string | null],
           costPrice: v.costPrice ?? null,
           filamentGrams: v.filamentGrams ?? null,
           printTimeHours: v.printTimeHours ?? null,
@@ -193,9 +193,9 @@ export async function hydrateProductVariants(
   // Hydrate variants
   const now = new Date();
   const variants: HydratedVariant[] = variantRows.map((v) => {
-    // Compose label from option1/2/3 value lookups
+    // Compose label from option1–6 value lookups
     const labelParts: string[] = [];
-    for (const vid of [v.option1ValueId, v.option2ValueId, v.option3ValueId]) {
+    for (const vid of [v.option1ValueId, v.option2ValueId, v.option3ValueId, v.option4ValueId, v.option5ValueId, v.option6ValueId]) {
       if (vid) {
         const val = valueById.get(vid);
         if (val) labelParts.push(val.value);
@@ -227,7 +227,10 @@ export async function hydrateProductVariants(
         v.option1ValueId ?? null,
         v.option2ValueId ?? null,
         v.option3ValueId ?? null,
-      ],
+        v.option4ValueId ?? null,
+        v.option5ValueId ?? null,
+        v.option6ValueId ?? null,
+      ] as [string | null, string | null, string | null, string | null, string | null, string | null],
       costPrice: v.costPrice ?? null,
       filamentGrams: v.filamentGrams ?? null,
       printTimeHours: v.printTimeHours ?? null,
@@ -257,17 +260,21 @@ export async function hydrateProductVariants(
 /**
  * Find a variant within a hydrated set by matching option value IDs.
  * Null slots in valueIds match variants whose corresponding option slot is also null.
+ * Supports up to 6 option slots.
  */
 export function findVariantByOptions(
   variants: HydratedVariant[],
-  valueIds: [string | null, string | null, string | null],
+  valueIds: [string | null, string | null, string | null, string | null, string | null, string | null],
 ): HydratedVariant | null {
   return (
     variants.find(
       (v) =>
         v.optionValueIds[0] === valueIds[0] &&
         v.optionValueIds[1] === valueIds[1] &&
-        v.optionValueIds[2] === valueIds[2],
+        v.optionValueIds[2] === valueIds[2] &&
+        v.optionValueIds[3] === valueIds[3] &&
+        v.optionValueIds[4] === valueIds[4] &&
+        v.optionValueIds[5] === valueIds[5],
     ) ?? null
   );
 }

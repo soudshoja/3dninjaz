@@ -190,7 +190,7 @@ async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
     const now = new Date();
     const hydratedVariants: HydratedVariant[] = rawVariants.map((v) => {
       const labelParts: string[] = [];
-      for (const vid of [v.option1ValueId, v.option2ValueId, v.option3ValueId]) {
+      for (const vid of [v.option1ValueId, v.option2ValueId, v.option3ValueId, v.option4ValueId, v.option5ValueId, v.option6ValueId]) {
         if (vid) {
           const val = valueById.get(vid);
           if (val) labelParts.push(val.value);
@@ -215,7 +215,10 @@ async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
           v.option1ValueId ?? null,
           v.option2ValueId ?? null,
           v.option3ValueId ?? null,
-        ] as [string | null, string | null, string | null],
+          v.option4ValueId ?? null,
+          v.option5ValueId ?? null,
+          v.option6ValueId ?? null,
+        ] as [string | null, string | null, string | null, string | null, string | null, string | null],
         costPrice: v.costPrice ?? null,
         filamentGrams: v.filamentGrams ?? null,
         printTimeHours: v.printTimeHours ?? null,

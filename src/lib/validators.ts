@@ -649,6 +649,9 @@ export const variantUpdateSchema = z.object({
   option1ValueId: z.string().uuid().optional().nullable(),
   option2ValueId: z.string().uuid().optional().nullable(),
   option3ValueId: z.string().uuid().optional().nullable(),
+  option4ValueId: z.string().uuid().optional().nullable(),
+  option5ValueId: z.string().uuid().optional().nullable(),
+  option6ValueId: z.string().uuid().optional().nullable(),
   // Phase 14 cost breakdown passthrough
   filamentGrams: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().or(z.literal("")).nullable(),
   printTimeHours: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().or(z.literal("")).nullable(),
