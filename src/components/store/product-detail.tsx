@@ -50,28 +50,37 @@ export function ProductDetail({
   variantPictures = {},
 }: ProductDetailProps) {
   const [selectedHydrated, setSelectedHydrated] = useState<HydratedVariant | null>(null);
+  // Fix 3 — hovered variant (hover preview). Takes priority over selectedHydrated
+  // for IMAGE/PRICE/BADGE display. Cleared on mouseleave.
+  const [hoveredHydrated, setHoveredHydrated] = useState<HydratedVariant | null>(null);
 
   const handleVariantChange = useCallback((v: HydratedVariant | null) => {
     setSelectedHydrated(v);
   }, []);
+  const handlePreviewChange = useCallback((v: HydratedVariant | null) => {
+    setHoveredHydrated(v);
+  }, []);
 
-  // Gallery: when the selected variant has a pre-resolved PictureData, prepend it.
+  // What the user sees: hover wins over click for display.
+  const displayedHydrated = hoveredHydrated ?? selectedHydrated;
+
+  // Gallery: when the displayed variant has a pre-resolved PictureData, prepend it.
   const galleryImages = useMemo(() => {
-    const variantPic = selectedHydrated ? variantPictures[selectedHydrated.id] ?? null : null;
+    const variantPic = displayedHydrated ? variantPictures[displayedHydrated.id] ?? null : null;
     if (variantPic) {
       // Prepend variant picture using its fallbackSrc as the image URL key
       return [variantPic.fallbackSrc, ...product.images.filter((i) => i !== variantPic.fallbackSrc)];
     }
     return product.images;
-  }, [selectedHydrated, variantPictures, product.images]);
+  }, [displayedHydrated, variantPictures, product.images]);
 
   const galleryPictures = useMemo<PictureData[] | undefined>(() => {
-    const variantPic = selectedHydrated ? variantPictures[selectedHydrated.id] ?? null : null;
+    const variantPic = displayedHydrated ? variantPictures[displayedHydrated.id] ?? null : null;
     if (variantPic && pictures) {
       return [variantPic, ...pictures];
     }
     return pictures;
-  }, [selectedHydrated, variantPictures, pictures]);
+  }, [displayedHydrated, variantPictures, pictures]);
 
   const material = product.materialType ?? "PLA";
   const leadDays = product.estimatedProductionDays ?? 7;
@@ -88,14 +97,23 @@ export function ProductDetail({
   );
   const soldOut = product.hydratedVariants.length > 0 && visibleVariants.length === 0;
 
-  // Effective price display
-  const effectivePriceDisplay = selectedHydrated
-    ? formatMYR(selectedHydrated.effectivePrice)
+  // Effective price display — hover-aware
+  const effectivePriceDisplay = displayedHydrated
+    ? formatMYR(displayedHydrated.effectivePrice)
     : priceRangeMYR(product.hydratedVariants);
 
-  // Pre-order badge — true when selected variant is OOS (by either dimension:
-  // inStock=false OR tracked+stock=0) AND allow_preorder=true.
+  // Pre-order badge — driven by the DISPLAYED variant (hover-aware) so the
+  // preview shows its pre-order status. Admin-disabled (inStock=false) OR
+  // tracked+stock=0, with allow_preorder=true, counts as pre-order.
   const isPreorder =
+    !!displayedHydrated &&
+    (!displayedHydrated.inStock ||
+      (displayedHydrated.trackStock === true && (displayedHydrated.stock ?? 0) <= 0)) &&
+    displayedHydrated.allowPreorder === true;
+
+  // Add-to-bag stays wired to the SELECTED (clicked) variant — we never add
+  // the hovered variant to the cart.
+  const isPreorderSelected =
     !!selectedHydrated &&
     (!selectedHydrated.inStock ||
       (selectedHydrated.trackStock === true && (selectedHydrated.stock ?? 0) <= 0)) &&
@@ -144,8 +162,8 @@ export function ProductDetail({
           </div>
         )}
 
-        {/* Phase 17 — sale price rendering (AD-01) */}
-        {selectedHydrated?.isOnSale ? (
+        {/* Phase 17 — sale price rendering (AD-01) — hover-aware (Fix 3) */}
+        {displayedHydrated?.isOnSale ? (
           <div className="flex items-center gap-3 mb-6 flex-wrap">
             <span
               className="inline-flex rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider"
@@ -154,13 +172,13 @@ export function ProductDetail({
               On Sale
             </span>
             <span className="text-base font-semibold text-zinc-400 line-through">
-              {formatMYR(selectedHydrated.price)}
+              {formatMYR(displayedHydrated.price)}
             </span>
             <span
               className="inline-flex self-start rounded-full px-5 py-2 text-lg font-bold"
               style={{ backgroundColor: BRAND.green, color: BRAND.ink }}
             >
-              {formatMYR(selectedHydrated.effectivePrice)}
+              {formatMYR(displayedHydrated.effectivePrice)}
             </span>
           </div>
         ) : (
@@ -191,6 +209,7 @@ export function ProductDetail({
             options={product.options}
             variants={product.hydratedVariants}
             onVariantChange={handleVariantChange}
+            onPreviewChange={handlePreviewChange}
           />
         )}
 
@@ -199,7 +218,7 @@ export function ProductDetail({
             <AddToBagButton
               selectedVariant={
                 !soldOut && selectedHydrated
-                  ? { ...selectedHydrated, isPreorder }
+                  ? { ...selectedHydrated, isPreorder: isPreorderSelected }
                   : null
               }
               productId={product.id}

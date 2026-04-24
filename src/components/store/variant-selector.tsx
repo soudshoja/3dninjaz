@@ -30,6 +30,10 @@ interface VariantSelectorProps {
   options: HydratedOption[];
   variants: HydratedVariant[];
   onVariantChange: (variant: HydratedVariant | null) => void;
+  /** Fix 3 — hover preview. Called on mouseenter with the previewed variant,
+   * and on mouseleave with null. Only fires on hover-capable pointers so
+   * touch devices don't accidentally trigger preview on tap. */
+  onPreviewChange?: (variant: HydratedVariant | null) => void;
 }
 
 type SelectedValues = [string | null, string | null, string | null];
@@ -59,12 +63,26 @@ export function VariantSelector({
   options,
   variants: rawVariants,
   onVariantChange,
+  onPreviewChange,
 }: VariantSelectorProps) {
-  // Phase 18 — filter out hidden variants (OOS tracked without preorder).
+  // Phase 18 — filter out hidden variants (OOS without preorder).
   const variants = useMemo(
     () => rawVariants.filter((v) => !isVariantHidden(v)),
     [rawVariants],
   );
+
+  // Fix 3 — hover-preview support. Gate on real hover (pointer devices);
+  // touch devices fire mouseenter weirdly. Default off until we confirm
+  // client-side via matchMedia("(hover: hover)").
+  const [hoverCapable, setHoverCapable] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(hover: hover)");
+    setHoverCapable(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setHoverCapable(e.matches);
+    mq.addEventListener?.("change", handler);
+    return () => mq.removeEventListener?.("change", handler);
+  }, []);
 
   // Derive which option values still have at least one visible variant.
   // An option value is hidden when every variant using it is hidden.
@@ -94,6 +112,8 @@ export function VariantSelector({
   }, [variants]);
 
   const [selected, setSelected] = useState<SelectedValues>(defaultSelected);
+  // Track which pill is currently being hovered (for the dashed-border preview ring).
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
 
   // Notify parent on mount and whenever selection changes
   useEffect(() => {
@@ -112,6 +132,31 @@ export function VariantSelector({
       // by picking the first available value for those slots
       return next;
     });
+  };
+
+  /** Fix 3 — find the best variant to preview when user hovers a pill/swatch.
+   * Prefers matching with other currently-selected values; falls back to
+   * the first variant containing this value in that slot. */
+  const findPreviewVariant = (slotIdx: number, valueId: string): HydratedVariant | null => {
+    const test: SelectedValues = [...selected] as SelectedValues;
+    test[slotIdx] = valueId;
+    const exact = findMatchingVariant(variants, test);
+    if (exact) return exact;
+    return variants.find((v) => v.optionValueIds[slotIdx] === valueId) ?? null;
+  };
+
+  const handleHoverEnter = (slotIdx: number, valueId: string) => {
+    if (!hoverCapable) return;
+    setHoveredKey(`${slotIdx}:${valueId}`);
+    if (!onPreviewChange) return;
+    const v = findPreviewVariant(slotIdx, valueId);
+    if (v) onPreviewChange(v);
+  };
+
+  const handleHoverLeave = () => {
+    if (!hoverCapable) return;
+    setHoveredKey(null);
+    onPreviewChange?.(null);
   };
 
   return (
@@ -144,12 +189,15 @@ export function VariantSelector({
                   const matchingVariant = findMatchingVariant(variants, testSelected);
                   const available = matchingVariant ? isVariantAvailable(matchingVariant) : false;
                   const isSelected = currentValueId === val.id;
+                  const isHovered = hoveredKey === `${slotIdx}:${val.id}`;
 
                   return (
                     <button
                       key={val.id}
                       type="button"
                       onClick={() => { if (available) handleSelect(slotIdx, val.id); }}
+                      onMouseEnter={() => { if (available) handleHoverEnter(slotIdx, val.id); }}
+                      onMouseLeave={handleHoverLeave}
                       disabled={!available}
                       aria-disabled={!available}
                       tabIndex={!available ? -1 : 0}
@@ -176,7 +224,9 @@ export function VariantSelector({
                           backgroundColor: val.swatchHex ?? "#ccc",
                           border: isSelected
                             ? "2px solid var(--color-brand-ink)"
-                            : "1px solid #d1d5db",
+                            : isHovered
+                              ? "2px dashed var(--color-brand-ink)"
+                              : "1px solid #d1d5db",
                           opacity: available ? 1 : 0.35,
                           position: "relative",
                         }}
@@ -204,6 +254,7 @@ export function VariantSelector({
                   const matchingVariant = findMatchingVariant(variants, testSelected);
                   const available = matchingVariant ? isVariantAvailable(matchingVariant) : false;
                   const isSelected = currentValueId === val.id;
+                  const isHovered = hoveredKey === `${slotIdx}:${val.id}`;
 
                   return (
                     <li key={val.id}>
@@ -216,13 +267,18 @@ export function VariantSelector({
                         tabIndex={!available ? -1 : 0}
                         title={!available ? "Out of stock" : val.value}
                         onClick={() => { if (available) handleSelect(slotIdx, val.id); }}
+                        onMouseEnter={() => { if (available) handleHoverEnter(slotIdx, val.id); }}
+                        onMouseLeave={handleHoverLeave}
                         className="rounded-full border-2 px-4 py-2 text-sm font-semibold transition min-h-[48px]"
                         style={{
                           borderColor: !available
                             ? "#cbd5e1"
                             : isSelected
                               ? "var(--color-brand-ink)"
-                              : "#D4D4D8",
+                              : isHovered
+                                ? "var(--color-brand-ink)"
+                                : "#D4D4D8",
+                          borderStyle: isHovered && !isSelected ? "dashed" : "solid",
                           backgroundColor: !available
                             ? "#f1f5f9"
                             : isSelected
