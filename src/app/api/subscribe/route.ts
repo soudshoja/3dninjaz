@@ -6,6 +6,16 @@ import { db } from "@/lib/db";
 import { emailSubscribers } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/auth-helpers";
 import { sendNewsletterWelcomeEmail } from "@/actions/send-emails";
+import { checkRateLimit } from "@/lib/rate-limit";
+
+/** Derive a stable per-client key from forwarded headers. Hashed so raw IPs
+ *  never enter the rate-limit bucket Map. */
+function ipHashFromRequest(req: NextRequest): string {
+  const fwd = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const real = req.headers.get("x-real-ip")?.trim();
+  const raw = fwd || real || "unknown";
+  return crypto.createHash("sha256").update(raw).digest("hex").slice(0, 16);
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,6 +55,21 @@ function looksLikeGarbage(email: string): boolean {
 }
 
 export async function POST(req: NextRequest) {
+  // Risk-12 — 5 submissions per 60s per IP-hash. Blocks obvious scripted
+  // signups; legitimate users never hit this. In-process bucket resets on
+  // deploy, which is fine for v1.
+  const ipHash = ipHashFromRequest(req);
+  const gate = checkRateLimit(`subscribe:${ipHash}`, 5, 60_000);
+  if (!gate.ok) {
+    return NextResponse.json(
+      { ok: false, error: "Too many requests — try again shortly." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(Math.ceil(gate.retryAfterMs / 1000)) },
+      },
+    );
+  }
+
   let payload: unknown;
   try {
     payload = await req.json();

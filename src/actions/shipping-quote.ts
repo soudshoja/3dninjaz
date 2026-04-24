@@ -2,11 +2,14 @@
 
 import "server-only";
 import { inArray } from "drizzle-orm";
+import crypto from "node:crypto";
+import { headers } from "next/headers";
 import { db } from "@/lib/db";
 import { products, productVariants } from "@/lib/db/schema";
 import { delyvaApi, DelyvaError, parseQuoteServices } from "@/lib/delyva";
 import { loadShippingConfig, resolveItemType } from "@/lib/shipping-config";
 import { filterByEnabledCatalog } from "@/lib/delyva-filter";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 // ============================================================================
 // Phase 9 (09-01) — checkout shipping-quote helper (NOT YET WIRED TO UI).
@@ -83,6 +86,23 @@ export async function quoteForCart(
   items: CartItemForQuote[],
   destination: CartDestination,
 ): Promise<QuoteResult> {
+  // Risk-12 — 20 quotes per 60s per IP-hash. Checkout UI already debounces,
+  // so legit users stay well under; scripted abusers hit the cap quickly.
+  const h = await headers();
+  const rawIp =
+    h.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    h.get("x-real-ip")?.trim() ??
+    "unknown";
+  const ipHash = crypto
+    .createHash("sha256")
+    .update(rawIp)
+    .digest("hex")
+    .slice(0, 16);
+  const gate = checkRateLimit(`shipping-quote:${ipHash}`, 20, 60_000);
+  if (!gate.ok) {
+    return { ok: false, error: "Too many quote requests. Try again shortly." };
+  }
+
   if (!Array.isArray(items) || items.length === 0) {
     return { ok: false, error: "Cart is empty" };
   }
