@@ -358,7 +358,8 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
     });
   };
 
-  const hasAllValues = options.length > 0 && options.every((o) => o.values.length > 0);
+  const optionsMissingValues = options.filter((o) => o.values.length === 0);
+  const hasAllValues = options.length > 0 && optionsMissingValues.length === 0;
   const allSelected = variants.length > 0 && selectedIds.size === variants.length;
 
   return (
@@ -465,8 +466,11 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
                 onChange={(e) =>
                   setNewValueInputs((prev) => ({ ...prev, [opt.id]: e.target.value }))
                 }
-                className="h-8 text-sm"
+                className={`h-8 text-sm ${opt.values.length === 0 ? "border-amber-500 ring-1 ring-amber-400" : ""}`}
                 onKeyDown={(e) => e.key === "Enter" && handleAddValue(opt.id)}
+                onBlur={() => {
+                  if ((newValueInputs[opt.id] ?? "").trim()) handleAddValue(opt.id);
+                }}
               />
               <Button size="sm" variant="outline" onClick={() => handleAddValue(opt.id)} disabled={isPending}>
                 <Plus className="h-3 w-3 mr-1" /> Add
@@ -504,7 +508,9 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
           Generate / Refresh Variant Matrix
         </Button>
         {!hasAllValues && options.length > 0 && (
-          <p className="text-sm text-amber-600">Add at least one value to each option first.</p>
+          <p className="text-sm text-amber-600">
+            Needs values: {optionsMissingValues.map((o) => `"${o.name}"`).join(", ")}. Type a value in the option&apos;s input and click &quot;Add&quot; (or press Enter).
+          </p>
         )}
         {options.length === 0 && (
           <p className="text-sm text-[var(--color-brand-text-muted)]">Add options above to generate variants.</p>
