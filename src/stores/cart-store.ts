@@ -30,19 +30,6 @@ export type CartItem = {
   quantity: number;
 };
 
-/** Legacy v1 item shape — kept for migration bridge */
-export type LegacyCartItem = {
-  key: string;
-  productId: string;
-  productSlug: string;
-  name: string;
-  image: string | null;
-  size: "S" | "M" | "L";
-  variantId: string;
-  unitPrice: string;
-  quantity: number;
-};
-
 /** Display-ready item hydrated server-side (returned from hydrateCartItems) */
 export type HydratedCartItem = {
   variantId: string;
@@ -166,7 +153,7 @@ export const useCartStore = create<CartState>()(
         try {
           const v1Raw = localStorage.getItem("print-ninjaz-cart-v1");
           if (!v1Raw) return;
-          const v1 = JSON.parse(v1Raw) as { state?: { items?: LegacyCartItem[] } };
+          const v1 = JSON.parse(v1Raw) as { state?: { items?: { variantId: string; quantity: number }[] } };
           const v1Items = v1?.state?.items ?? [];
           if (v1Items.length > 0) {
             // Migrate: each v1 item has variantId already — map directly
@@ -193,21 +180,3 @@ export const useCartStore = create<CartState>()(
   ),
 );
 
-// ---------------------------------------------------------------------------
-// Legacy shim — called by old add-to-bag patterns during rollout
-// ---------------------------------------------------------------------------
-
-/**
- * @deprecated Use useCartStore.addItem({ variantId }) directly.
- * Accepts the old { productId, size, variantId, ... } shape.
- * Logs a development warning. Remove after 16-07 cleanup.
- */
-export function legacyAddToCart(item: LegacyCartItem) {
-  if (process.env.NODE_ENV === "development") {
-    console.warn(
-      "[cart] legacyAddToCart called — migrate caller to useCartStore.addItem({ variantId })",
-      item,
-    );
-  }
-  useCartStore.getState().addItem({ variantId: item.variantId, quantity: item.quantity });
-}
