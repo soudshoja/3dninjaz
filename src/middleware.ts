@@ -5,12 +5,14 @@ import { NextResponse, type NextRequest } from "next/server";
  *
  * Reads MAINTENANCE_MODE env on the hot path. When truthy, redirects all
  * non-allowlisted routes to /maintenance. Allowlist:
- *   - /admin/**           — admin can still log in to flip the flag back
- *   - /api/paypal/webhook — payments must keep capturing during maintenance
- *   - /api/health*        — uptime checks
- *   - /api/events/track   — admin analytics keep flowing
- *   - /payment-links/**   — customers paying for manual orders shouldn't be blocked
- *   - /maintenance        — avoid redirect loop
+ *   - /admin/**            — admin can still log in to flip the flag back
+ *   - /api/paypal/webhook  — payments must keep capturing during maintenance
+ *   - /api/webhooks/delyva — Delyva tracking webhooks must keep firing so
+ *                            shipments don't stall + delivered emails fire
+ *   - /api/health*         — uptime checks
+ *   - /api/events/track    — admin analytics keep flowing
+ *   - /payment-links/**    — customers paying for manual orders shouldn't be blocked
+ *   - /maintenance         — avoid redirect loop
  *   - /_next/**, /uploads/**, /favicon — static assets
  *
  * Q-07-05 default: env-only toggle (no DB switch).
@@ -19,6 +21,7 @@ import { NextResponse, type NextRequest } from "next/server";
 const ALLOWLIST_PREFIXES = [
   "/admin",
   "/api/paypal/webhook",
+  "/api/webhooks/delyva",
   "/api/health",
   "/api/events/track",
   "/payment-links",
