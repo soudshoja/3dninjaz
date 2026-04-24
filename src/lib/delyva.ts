@@ -436,17 +436,33 @@ export const delyvaApi = {
    * POST /webhook — register a webhook URL for a specific event.
    * Verified against api.delyva.app/v1.0 on 2026-04-20: the endpoint is
    * `/webhook` (not `/webhook/subscribe`) and only accepts { event, url }.
-   * The `secret` field is rejected; HMAC verification on the receiver uses
-   * DELYVA_WEBHOOK_SHARED_SECRET that Delyva signs outbound calls with.
-   * Multiple subscriptions for the same (event, url) pair create duplicate
-   * rows on Delyva's side — callers should delete duplicates via the
-   * webhook list API if needed.
+   * The `secret` field is rejected by the API; HMAC verification on the
+   * receiver uses the account-wide `apiSecret` from GET /user (docs), or
+   * our DELYVA_WEBHOOK_SECRET fallback. To avoid duplicate rows on Delyva's
+   * side, prefer `registerWebhookIfMissing()` which probes `listWebhooks()`
+   * first.
    */
-  subscribeWebhook: (event: string, url: string, _secret?: string) =>
+  subscribeWebhook: (event: string, url: string) =>
     delyva<{ id?: string | number; event: string; url: string }>("/webhook", {
       method: "POST",
       body: JSON.stringify({ event, url }),
     }),
+
+  /**
+   * GET /webhook — list active webhook subscriptions for the authenticated
+   * account. Returns `[{ id, event, url, createdAt? }]`. Used by idempotent
+   * registration so we don't create duplicate (event, url) rows each click.
+   */
+  listWebhooks: () =>
+    delyva<Array<{ id: number | string; event: string; url: string }>>("/webhook"),
+
+  /**
+   * DELETE /webhook/{id} — remove a subscription by id from listWebhooks().
+   * Useful for cleaning up duplicates left behind by older non-idempotent
+   * registration flows.
+   */
+  deleteWebhook: (id: number | string) =>
+    delyva<{ ok?: true }>(`/webhook/${id}`, { method: "DELETE" }),
 
   /**
    * GET /user — account info + apiSecret. Cached at env level; avoid calling

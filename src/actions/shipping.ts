@@ -282,14 +282,48 @@ export async function registerWebhooks(): Promise<
     process.env.BETTER_AUTH_URL ??
     "";
   const url = `${base.replace(/\/$/, "")}/api/webhooks/delyva`;
-  const secret = getDelyvaWebhookSecret();
-  if (!secret) return { ok: false, error: "DELYVA_WEBHOOK_SECRET missing" };
   if (!base) return { ok: false, error: "NEXT_PUBLIC_SITE_URL missing" };
+  // Note: DELYVA_WEBHOOK_SECRET is optional — Delyva's current UI has no HMAC
+  // field, so webhooks arrive unsigned. When set, the receiver enforces HMAC
+  // strictly; when empty, receiver accepts unsigned + logs a warning. The
+  // registration endpoint (`POST /webhook`) does NOT accept a secret field.
+  if (!getDelyvaWebhookSecret()) {
+    console.warn(
+      "[registerWebhooks] DELYVA_WEBHOOK_SECRET missing — webhooks will be accepted unsigned (Delyva UI currently has no HMAC field)",
+    );
+  }
 
   const registered: string[] = [];
   try {
+    // Idempotency: probe existing subscriptions first and skip any
+    // (event, url) pair already registered. Without this, clicking the
+    // admin "Register Webhooks" button twice creates duplicate rows on
+    // Delyva's side and every event is delivered N×. Our in-process
+    // idempotency cache dedupes, but it wastes bandwidth + log noise.
+    // (2026-04-24 cross-check BLOCKER B-1.)
+    let existingKeys = new Set<string>();
+    try {
+      const existing = await delyvaApi.listWebhooks();
+      existingKeys = new Set(
+        (existing ?? [])
+          .filter((w) => w?.url === url)
+          .map((w) => w.event),
+      );
+    } catch (e) {
+      // If list fails (older account, endpoint disabled), fall back to
+      // naive registration. Worst case: duplicates on Delyva's side.
+      console.warn(
+        "[registerWebhooks] listWebhooks failed — proceeding without idempotency probe",
+        (e as Error).message,
+      );
+    }
+
     for (const event of DELYVA_EVENTS_TO_REGISTER) {
-      await delyvaApi.subscribeWebhook(event, url, secret);
+      if (existingKeys.has(event)) {
+        registered.push(`${event} (already)`);
+        continue;
+      }
+      await delyvaApi.subscribeWebhook(event, url);
       registered.push(event);
     }
     return { ok: true, registered, url };
