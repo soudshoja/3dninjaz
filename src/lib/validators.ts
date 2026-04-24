@@ -591,12 +591,6 @@ export const userSuspendSchema = z.object({
 });
 export type UserSuspendInput = z.infer<typeof userSuspendSchema>;
 
-/**
- * Single CSV import row — used by `/admin/products/import` preview pass
- * (ADM-14). At least one of price_s/price_m/price_l is required (a product
- * with no priced variant is unsellable). External image URLs are rejected
- * by the row normaliser, not here.
- */
 // ============================================================================
 // Phase 16 — Variant Options System (AD-01..AD-08)
 // ============================================================================
