@@ -270,6 +270,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 - Mapped to phases: 76
 - Unmapped: 0 ✓
 
+## Phase 16 — Variant System
+
+- [ ] **VAR-01**: Admin can define 1..3 named options per product (e.g., Size, Color, Part) with arbitrary value lists; max 3 options enforced
+- [ ] **VAR-02**: Cartesian variant matrix is auto-generated from defined options; admin can add/delete combos, set per-variant price, stock, SKU, and image
+- [ ] **VAR-03**: Existing products with hardcoded S/M/L size variants are automatically migrated via backfill script with zero customer-visible regression
+- [ ] **VAR-04**: Storefront PDP renders a generic N-option variant selector; price, stock, and image update on each selection; swatches rendered for Color options (when swatchHex set)
+- [ ] **VAR-05**: Cart, checkout, orders, inventory, cost breakdown, and PayPal line items all reference variantId and surface the composed variant label (e.g., "Medium / Red")
+- [ ] **VAR-06**: Admin can create a parts-based product with 5+ variants and complete an end-to-end PayPal checkout flow
+
 ---
 *Requirements defined: 2026-04-12*
-*Last updated: 2026-04-16 — Phase 7 requirements added (ADM-16..ADM-23, IMG-01..IMG-03, ERR-01..ERR-03)*
+*Last updated: 2026-04-24 — Phase 16 requirements added (VAR-01..VAR-06)*

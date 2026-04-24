@@ -175,6 +175,54 @@ export const products = mysqlTable("products", {
   subcategoryIdx: index("idx_products_subcategory").on(t.subcategoryId),
 }));
 
+// ============================================================================
+// Phase 16 — product_options + product_option_values tables
+// Generic options/values model replaces the hardcoded size enum.
+// Positional option1/2/3 columns on product_variants (Shopify-proven pattern).
+// Legacy size column preserved during dual-read window (dropped in 16-07).
+// ============================================================================
+
+export const productOptions = mysqlTable(
+  "product_options",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    productId: varchar("product_id", { length: 36 })
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 64 }).notNull(),
+    position: int("position").notNull().default(1),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({
+    // One option name per product (e.g. can't have two "Size" options)
+    productNameUnique: unique("uq_product_option_name").on(t.productId, t.name),
+    // Position uniqueness scoped to product (max 3 options)
+    productPositionUnique: unique("uq_product_option_position").on(t.productId, t.position),
+    productIdx: index("idx_product_options_product").on(t.productId),
+  }),
+);
+
+export const productOptionValues = mysqlTable(
+  "product_option_values",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    optionId: varchar("option_id", { length: 36 })
+      .notNull()
+      .references(() => productOptions.id, { onDelete: "cascade" }),
+    value: varchar("value", { length: 64 }).notNull(),
+    position: int("position").notNull().default(0),
+    // Optional color swatch for visual picker (Color option type)
+    swatchHex: varchar("swatch_hex", { length: 7 }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    // One value string per option (no "Medium" duplicates)
+    optionValueUnique: unique("uq_option_value").on(t.optionId, t.value),
+    optionIdx: index("idx_option_values_option").on(t.optionId),
+  }),
+);
+
 export const productVariants = mysqlTable("product_variants", {
   id: varchar("id", { length: 36 })
     .primaryKey()
@@ -182,7 +230,7 @@ export const productVariants = mysqlTable("product_variants", {
   productId: varchar("product_id", { length: 36 })
     .notNull()
     .references(() => products.id, { onDelete: "cascade" }),
-  size: mysqlEnum("size", ["S", "M", "L"]).notNull(), // D-13
+  size: mysqlEnum("size", ["S", "M", "L"]).notNull(), // D-13 — preserved during 16-07 dual-read window
   price: decimal("price", { precision: 10, scale: 2 }).notNull(), // MYR
   // Phase 10 (10-01) — per-variant unit cost (MYR). Nullable so existing rows
   // remain valid; the admin fills in cost retroactively. Admin product form
@@ -216,6 +264,17 @@ export const productVariants = mysqlTable("product_variants", {
   filamentRateOverride: decimal("filament_rate_override", { precision: 8, scale: 2 }),
   laborRateOverride: decimal("labor_rate_override", { precision: 8, scale: 2 }),
   costPriceManual: boolean("cost_price_manual").notNull().default(false),
+  // Phase 16 — generic option value references (positional, Shopify-style)
+  // NULL during dual-read window; set after backfill script runs.
+  option1ValueId: varchar("option1_value_id", { length: 36 }),
+  option2ValueId: varchar("option2_value_id", { length: 36 }),
+  option3ValueId: varchar("option3_value_id", { length: 36 }),
+  // Phase 16 — per-variant fields
+  sku: varchar("sku", { length: 64 }),
+  imageUrl: text("image_url"),
+  // Denormalized label for fast rendering: "Small / Red", "Head", etc.
+  labelCache: varchar("label_cache", { length: 200 }),
+  position: int("position").notNull().default(0),
 });
 
 // ============================================================================
@@ -261,7 +320,29 @@ export const productsRelations = relations(products, ({ one, many }) => ({
     references: [subcategories.id],
   }),
   variants: many(productVariants),
+  options: many(productOptions),
 }));
+
+export const productOptionsRelations = relations(
+  productOptions,
+  ({ one, many }) => ({
+    product: one(products, {
+      fields: [productOptions.productId],
+      references: [products.id],
+    }),
+    values: many(productOptionValues),
+  }),
+);
+
+export const productOptionValuesRelations = relations(
+  productOptionValues,
+  ({ one }) => ({
+    option: one(productOptions, {
+      fields: [productOptionValues.optionId],
+      references: [productOptions.id],
+    }),
+  }),
+);
 
 export const productVariantsRelations = relations(
   productVariants,
@@ -269,6 +350,22 @@ export const productVariantsRelations = relations(
     product: one(products, {
       fields: [productVariants.productId],
       references: [products.id],
+    }),
+    // Phase 16 — positional option value references (explicit relationName per FK)
+    option1Value: one(productOptionValues, {
+      fields: [productVariants.option1ValueId],
+      references: [productOptionValues.id],
+      relationName: "variant_option1",
+    }),
+    option2Value: one(productOptionValues, {
+      fields: [productVariants.option2ValueId],
+      references: [productOptionValues.id],
+      relationName: "variant_option2",
+    }),
+    option3Value: one(productOptionValues, {
+      fields: [productVariants.option3ValueId],
+      references: [productOptionValues.id],
+      relationName: "variant_option3",
     }),
   })
 );
@@ -383,6 +480,9 @@ export const orderItems = mysqlTable("order_items", {
   // Nullable if the product had no image at order time
   productImage: text("product_image"),
   size: mysqlEnum("size", ["S", "M", "L"]).notNull(),
+  // Phase 16 — denormalized variant label snapshot ("Small / Red", "Head").
+  // NULL for historical orders (pre-phase-16). New orders always populate.
+  variantLabel: varchar("variant_label", { length: 200 }),
   unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
   // Phase 10 (10-01) — snapshot of productVariants.costPrice at order-creation
   // time. Nullable: historical orders (pre-phase 10) + variants whose cost has

@@ -601,6 +601,75 @@ export type UserSuspendInput = z.infer<typeof userSuspendSchema>;
  * with no priced variant is unsellable). External image URLs are rejected
  * by the row normaliser, not here.
  */
+// ============================================================================
+// Phase 16 — Variant Options System (AD-01..AD-08)
+// ============================================================================
+
+/**
+ * Product option (e.g., "Size", "Color", "Part").
+ * Max 3 options per product enforced at the action layer (Shopify default).
+ */
+export const productOptionSchema = z.object({
+  name: z
+    .string()
+    .min(1, "Option name is required")
+    .max(64, "Option name too long (max 64 chars)"),
+  position: z.number().int().min(1).max(3),
+});
+export type ProductOptionInput = z.infer<typeof productOptionSchema>;
+
+/**
+ * Option value (e.g., "Small", "Red", "Head").
+ * swatchHex is only relevant for Color-type options.
+ */
+export const productOptionValueSchema = z.object({
+  value: z
+    .string()
+    .min(1, "Value is required")
+    .max(64, "Value too long (max 64 chars)"),
+  position: z.number().int().min(0),
+  swatchHex: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Must be a hex color like #ff0000")
+    .optional(),
+});
+export type ProductOptionValueInput = z.infer<typeof productOptionValueSchema>;
+
+/**
+ * Variant update — used by the inline variant matrix editor.
+ * All fields optional so a single-field patch is valid.
+ */
+export const variantUpdateSchema = z.object({
+  price: z
+    .string()
+    .regex(/^\d+(\.\d{1,2})?$/, "Price must be a valid decimal")
+    .optional(),
+  costPrice: z
+    .string()
+    .regex(/^\d+(\.\d{1,2})?$/)
+    .optional()
+    .or(z.literal(""))
+    .nullable(),
+  stock: z.coerce.number().int().min(0).optional(),
+  trackStock: z.boolean().optional(),
+  inStock: z.boolean().optional(),
+  sku: z.string().max(64).optional().nullable(),
+  imageUrl: z.string().url().optional().nullable(),
+  position: z.number().int().min(0).optional(),
+  option1ValueId: z.string().uuid().optional().nullable(),
+  option2ValueId: z.string().uuid().optional().nullable(),
+  option3ValueId: z.string().uuid().optional().nullable(),
+  // Phase 14 cost breakdown passthrough
+  filamentGrams: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().or(z.literal("")).nullable(),
+  printTimeHours: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().or(z.literal("")).nullable(),
+  laborMinutes: z.string().regex(/^\d+(\.\d{1})?$/).optional().or(z.literal("")).nullable(),
+  otherCost: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().or(z.literal("")).nullable(),
+  filamentRateOverride: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().or(z.literal("")).nullable(),
+  laborRateOverride: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().or(z.literal("")).nullable(),
+  costPriceManual: z.boolean().optional(),
+});
+export type VariantUpdateInput = z.infer<typeof variantUpdateSchema>;
+
 export const bulkImportRowSchema = z
   .object({
     name: z.string().min(1).max(100),
