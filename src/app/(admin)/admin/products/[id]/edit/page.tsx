@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getProduct } from "@/actions/products";
 import { getCategories, getAllSubcategories } from "@/actions/categories";
-import { getStoreSettingsCached } from "@/lib/store-settings";
 import {
   ProductForm,
   type ProductFormInitial,
@@ -22,10 +21,9 @@ export default async function EditProductPage({
   const product = await getProduct(id);
   if (!product) notFound();
 
-  const [categories, subcategories, storeSettings] = await Promise.all([
+  const [categories, subcategories] = await Promise.all([
     getCategories(),
     getAllSubcategories(),
-    getStoreSettingsCached(),
   ]);
 
   const initialData: ProductFormInitial = {
@@ -40,16 +38,6 @@ export default async function EditProductPage({
     isFeatured: product.isFeatured,
     categoryId: product.categoryId,
     subcategoryId: product.subcategoryId,
-    // Phase 16-07: size column dropped — variants managed via /admin/products/[id]/variants
-    variants: [],
-  };
-
-  const storeRates = {
-    filamentCostPerKg: storeSettings.defaultFilamentCostPerKg,
-    electricityCostPerKwh: storeSettings.defaultElectricityCostPerKwh,
-    electricityKwhPerHour: storeSettings.defaultElectricityKwhPerHour,
-    laborRatePerHour: storeSettings.defaultLaborRatePerHour,
-    overheadPercent: storeSettings.defaultOverheadPercent,
   };
 
   return (
@@ -63,7 +51,6 @@ export default async function EditProductPage({
             {product.name}
           </p>
         </div>
-        {/* Phase 16 — Manage Variants link (only shown after product exists) */}
         <a
           href={`/admin/products/${id}/variants`}
           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
@@ -79,7 +66,6 @@ export default async function EditProductPage({
           categoryId: s.categoryId,
           name: s.name,
         }))}
-        storeRates={storeRates}
       />
     </div>
   );

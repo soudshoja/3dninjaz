@@ -181,9 +181,6 @@ export type WishlistedItem = {
     id: string;
     productId: string;
     price: string;
-    widthCm: string | null;
-    heightCm: string | null;
-    depthCm: string | null;
   }>;
 };
 

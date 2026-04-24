@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MoreHorizontal, Star, Edit, Trash2, Eye, EyeOff } from "lucide-react";
+import { MoreHorizontal, Star, Edit, Trash2, Eye, EyeOff, Layers } from "lucide-react";
 import {
   deleteProduct,
   toggleProductActive,
@@ -82,6 +82,10 @@ export function ProductRowActions({
           <DropdownMenuItem render={<Link href={`/admin/products/${id}/edit`} />}>
             <Edit className="mr-2 h-4 w-4" />
             Edit
+          </DropdownMenuItem>
+          <DropdownMenuItem render={<Link href={`/admin/products/${id}/variants`} />}>
+            <Layers className="mr-2 h-4 w-4" />
+            Variants
           </DropdownMenuItem>
           <DropdownMenuItem onClick={handleToggleActive}>
             {isActive ? (

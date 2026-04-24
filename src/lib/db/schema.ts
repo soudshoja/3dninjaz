@@ -237,9 +237,6 @@ export const productVariants = mysqlTable("product_variants", {
   // renders a live margin readout; order-level profit summary snapshots this
   // value into order_items.unit_cost at checkout.
   costPrice: decimal("cost_price", { precision: 10, scale: 2 }),
-  widthCm: decimal("width_cm", { precision: 6, scale: 1 }),
-  heightCm: decimal("height_cm", { precision: 6, scale: 1 }),
-  depthCm: decimal("depth_cm", { precision: 6, scale: 1 }),
   // Phase 5 05-01 — per-variant inventory toggle (INV-01) and optional low-stock
   // alert threshold (INV-02). inStock defaults TRUE so existing rows remain
   // available after migration; lowStockThreshold is null until admin sets it.

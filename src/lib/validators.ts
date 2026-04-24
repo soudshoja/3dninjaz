@@ -49,9 +49,6 @@ export const productVariantSchema = z.object({
     .optional()
     .or(z.literal(""))
     .default(""),
-  widthCm: z.string().optional().default(""),
-  heightCm: z.string().optional().default(""),
-  depthCm: z.string().optional().default(""),
   // Phase 13 — optional per-variant stock tracking.
   // trackStock = false (default) → on-demand, always available, stock ignored.
   // trackStock = true           → check + decrement stock at checkout.
@@ -142,7 +139,7 @@ export const productSchema = z.object({
   subcategoryId: z.string().uuid().optional().nullable(),
   variants: z
     .array(productVariantSchema)
-    .min(1, "At least one size variant is required"),
+    .default([]),
 });
 
 export type ProductInput = z.infer<typeof productSchema>;

@@ -19,9 +19,6 @@ type Variant = {
   id: string;
   size?: Size | null; // optional post phase-16-07 (size column dropped)
   price: string;
-  widthCm: string | null;
-  heightCm: string | null;
-  depthCm: string | null;
   inStock?: boolean;
   trackStock?: boolean;
   stock?: number;

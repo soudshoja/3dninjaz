@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { getCategories, getAllSubcategories } from "@/actions/categories";
-import { getStoreSettingsCached } from "@/lib/store-settings";
 import { ProductForm } from "@/components/admin/product-form";
 
 export const metadata: Metadata = {
@@ -9,19 +8,10 @@ export const metadata: Metadata = {
 };
 
 export default async function NewProductPage() {
-  const [categories, subcategories, storeSettings] = await Promise.all([
+  const [categories, subcategories] = await Promise.all([
     getCategories(),
     getAllSubcategories(),
-    getStoreSettingsCached(),
   ]);
-
-  const storeRates = {
-    filamentCostPerKg: storeSettings.defaultFilamentCostPerKg,
-    electricityCostPerKwh: storeSettings.defaultElectricityCostPerKwh,
-    electricityKwhPerHour: storeSettings.defaultElectricityKwhPerHour,
-    laborRatePerHour: storeSettings.defaultLaborRatePerHour,
-    overheadPercent: storeSettings.defaultOverheadPercent,
-  };
 
   return (
     <div className="space-y-6">
@@ -40,7 +30,6 @@ export default async function NewProductPage() {
           categoryId: s.categoryId,
           name: s.name,
         }))}
-        storeRates={storeRates}
       />
     </div>
   );

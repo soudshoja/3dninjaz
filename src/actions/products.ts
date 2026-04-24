@@ -177,9 +177,6 @@ export async function createProduct(
           size: v.size,
           price: v.price,
           costPrice: computedCostPrice,
-          widthCm: toDecimalOrNull(v.widthCm),
-          heightCm: toDecimalOrNull(v.heightCm),
-          depthCm: toDecimalOrNull(v.depthCm),
           trackStock: v.trackStock,
           stock: v.stock,
           // Phase 14 breakdown columns
@@ -274,9 +271,6 @@ export async function updateProduct(
           size: v.size,
           price: v.price,
           costPrice: computedCostPrice,
-          widthCm: toDecimalOrNull(v.widthCm),
-          heightCm: toDecimalOrNull(v.heightCm),
-          depthCm: toDecimalOrNull(v.depthCm),
           trackStock: v.trackStock,
           stock: v.stock,
           // Phase 14 breakdown columns
