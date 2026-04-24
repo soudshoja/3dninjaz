@@ -94,11 +94,13 @@ export function PayPalButton({
   // the same message in two places; here we only surface the "pick a
   // courier" nudge once the address is filled in.
   const disabledReason =
-    address === null || items.length === 0
-      ? null
-      : shipping === null
-        ? "Pick a courier above to continue."
-        : null;
+    items.length === 0
+      ? "Your bag is empty."
+      : address === null
+        ? "Complete your shipping address (name, phone, street, city, state, 5-digit postcode) to see couriers and pay."
+        : shipping === null
+          ? "Pick a courier above to continue."
+          : null;
 
   return (
     <div aria-live="polite">
