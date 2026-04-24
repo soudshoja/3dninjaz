@@ -6,9 +6,10 @@ import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
 import { useCartStore } from "@/stores/cart-store";
 
+// Phase 16: selectedVariant only needs id + price (size kept for display only)
 type SelectedVariant = {
   id: string;
-  size: "S" | "M" | "L";
+  size?: "S" | "M" | "L"; // optional post phase-16
   price: string;
 } | null;
 
@@ -51,14 +52,10 @@ export function AddToBagButton({
 
   const onClick = () => {
     if (!selectedVariant) return;
+    // Phase 16 cart v2: addItem only needs variantId + quantity
     addItem({
-      productId,
-      productSlug,
-      name: productName,
-      image: productImage,
-      size: selectedVariant.size,
       variantId: selectedVariant.id,
-      unitPrice: selectedVariant.price,
+      quantity: 1,
     });
     setFlash(true);
     setOpen(true);

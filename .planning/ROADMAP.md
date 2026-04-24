@@ -19,6 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 5: Admin Extensions** - User mgmt, coupons, inventory toggle, bulk import, store settings UI, analytics, email template editor, reviews moderation, shipping rates
 - [x] **Phase 6: Customer Account** - /account profile, saved addresses, wishlist, product reviews, PDF invoices, cancel/return requests
 - [x] **Phase 7: Manual Orders + Image Pipeline + Custom Errors** - Admin creates one-off custom orders with PayPal payment-link generator, automatic image compression on every upload (WebP/AVIF, size + quality tiers), branded 404/500/maintenance pages
+- [x] **Phase 16: Product Variant System (Generic Options)** - Replace fixed size/color with admin-defined option/value/variant model (cartesian combos, per-variant price/stock/image/SKU). Supports size+color products AND parts-based products in one system.
 
 ## Phase Details
 
@@ -210,6 +211,28 @@ See: `.planning/phases/14-cost-breakdown/COMPLETION.md`
 **Status**: COMPLETE (2026-04-20)
 See: `.planning/phases/15-customer-tracking/COMPLETION.md`
 
+### Phase 16: Product Variant System (Generic Options)
+**Goal**: Replace fixed `productVariants.size` enum with a generic options/values/variants model so admin can define any attribute (Size, Color, Part, Material) per product. Supports current size+color products and new parts-based products (each part a separate variant) without schema changes for new attribute types.
+**Depends on**: Phase 7 (last schema touchpoint); affects Phases 1, 2, 3, 5, 6, 10, 13, 14 downstream
+**Requirements**: VAR-01, VAR-02, VAR-03, VAR-04, VAR-05, VAR-06 (new — add to REQUIREMENTS.md during planning)
+**Success Criteria** (what must be TRUE):
+  1. Admin can create a product and define 1..3 options per product (e.g., "Size", "Color", "Part") with arbitrary value lists (e.g., Size=[S,M,L], Color=[Red,Blue], Part=[Arm,Head,Leg])
+  2. System auto-generates the cartesian variant matrix from options; admin can delete impossible combos, set per-variant price, stock, SKU, and image
+  3. Existing products auto-migrate: each legacy `productVariants` row (size S/M/L) becomes an `options=[Size]` product with one variant per size — zero customer-visible regression
+  4. Storefront PDP shows a variant selector that renders correctly for any option count (swatches for Color, pills for Size/Part) and updates price + stock + image on selection
+  5. Cart, checkout, orders, order_items, inventory track_stock, cost breakdown, and PayPal line items all reference `variant_id` and surface the variant's human-readable label (e.g., "Small / Red" or "Left Arm / Blue")
+  6. Admin can create a "parts-based" product (options=[Part], optional Color) with 5+ variants each with its own price, stock, and image — completes a PayPal purchase end-to-end
+**Plans**: 7 plans
+
+Plans:
+- [x] 16-01-PLAN.md — Schema + migration applicator (options, option_values, variant columns, order_items.variant_label) + Zod + REQUIREMENTS (Wave 1)
+- [x] 16-02-PLAN.md — Backfill existing size variants to option1_value_id + dual-read helpers in src/lib/variants.ts + catalog hydration (Wave 1)
+- [x] 16-03-PLAN.md — Admin /admin/products/[id]/variants — option editor + matrix generator + per-variant inline editor (Wave 2)
+- [x] 16-04-PLAN.md — Storefront PDP variant selector (N options, swatches for Color, pills otherwise) (Wave 2)
+- [x] 16-05-PLAN.md — Cart v2 (variantId only) + checkout/orders rewire + PayPal line items (Wave 3)
+- [x] 16-06-PLAN.md — Inventory / cost breakdown / CSV import adapted to generic variants (Wave 3)
+- [x] 16-07-PLAN.md — Drop legacy size column + parts-product seed + E2E smoke test + COMPLETION.md (Wave 4)
+
 ## Progress
 
 **Execution Order:**
@@ -232,3 +255,4 @@ Phases execute in numeric order: 1 → 2 → ... → 15
 | 13. Per-Variant Inventory Track Stock | — | Complete | 2026-04-21 |
 | 14. Cost Breakdown with Store Defaults | — | Complete | 2026-04-21 |
 | 15. Customer + Admin Shipment Tracking | — | Complete | 2026-04-20 |
+| 16. Product Variant System (Generic Options) | 7/7 | Complete | 2026-04-22 |

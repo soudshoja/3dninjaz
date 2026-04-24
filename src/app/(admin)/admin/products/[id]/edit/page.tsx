@@ -40,25 +40,8 @@ export default async function EditProductPage({
     isFeatured: product.isFeatured,
     categoryId: product.categoryId,
     subcategoryId: product.subcategoryId,
-    variants: product.variants.map((v) => ({
-      size: v.size as "S" | "M" | "L",
-      price: v.price,
-      costPrice: v.costPrice ?? null,
-      widthCm: v.widthCm,
-      heightCm: v.heightCm,
-      depthCm: v.depthCm,
-      // Phase 13 — stock tracking fields; default to on-demand for older rows.
-      trackStock: v.trackStock ?? false,
-      stock: v.stock ?? 0,
-      // Phase 14 — cost breakdown fields
-      filamentGrams: v.filamentGrams ?? null,
-      printTimeHours: v.printTimeHours ?? null,
-      laborMinutes: v.laborMinutes ?? null,
-      otherCostBreakdown: v.otherCost ?? null,
-      filamentRateOverride: v.filamentRateOverride ?? null,
-      laborRateOverride: v.laborRateOverride ?? null,
-      costPriceManual: v.costPriceManual ?? false,
-    })),
+    // Phase 16-07: size column dropped — variants managed via /admin/products/[id]/variants
+    variants: [],
   };
 
   const storeRates = {

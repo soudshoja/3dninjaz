@@ -93,14 +93,34 @@ export async function hydrateProductVariants(
     .orderBy(productOptions.position);
 
   if (optionRows.length === 0) {
-    // No options defined — return empty (storefront uses legacyVariantToHydrated fallback)
+    // No options defined — hydrate variants with label_cache only
     const variantRows = await db
       .select()
       .from(productVariants)
-      .where(eq(productVariants.productId, productId));
+      .where(eq(productVariants.productId, productId))
+      .orderBy(productVariants.position);
     return {
       options: [],
-      variants: variantRows.map(legacyVariantToHydrated),
+      variants: variantRows.map((v) => ({
+        id: v.id,
+        price: v.price,
+        stock: v.stock ?? 0,
+        inStock: v.inStock ?? true,
+        trackStock: v.trackStock ?? false,
+        sku: v.sku ?? null,
+        imageUrl: v.imageUrl ?? null,
+        label: v.labelCache ?? "",
+        position: v.position ?? 0,
+        optionValueIds: [null, null, null] as [string | null, string | null, string | null],
+        costPrice: v.costPrice ?? null,
+        filamentGrams: v.filamentGrams ?? null,
+        printTimeHours: v.printTimeHours ?? null,
+        laborMinutes: v.laborMinutes ?? null,
+        otherCost: v.otherCost ?? null,
+        filamentRateOverride: v.filamentRateOverride ?? null,
+        laborRateOverride: v.laborRateOverride ?? null,
+        costPriceManual: v.costPriceManual ?? false,
+      })),
     };
   }
 
@@ -155,7 +175,7 @@ export async function hydrateProductVariants(
     const label =
       labelParts.length > 0
         ? composeVariantLabel(labelParts)
-        : (v.labelCache ?? v.size ?? "");
+        : (v.labelCache ?? "");
 
     return {
       id: v.id,
@@ -208,69 +228,4 @@ export function findVariantByOptions(
   );
 }
 
-// ---------------------------------------------------------------------------
-// legacyVariantToHydrated (dual-read fallback)
-// ---------------------------------------------------------------------------
-
-/**
- * Convert a raw product_variants row (pre-backfill, option1_value_id IS NULL)
- * into a HydratedVariant using the legacy size column.
- *
- * Used during the dual-read window (phases 16-02 through 16-06) so that any
- * product that hasn't been backfilled yet still renders correctly.
- *
- * REMOVE in 16-07 when size column is dropped.
- */
-export function legacyVariantToHydrated(
-  v: {
-    id: string;
-    price: string;
-    stock?: number | null;
-    inStock?: boolean | null;
-    trackStock?: boolean | null;
-    sku?: string | null;
-    imageUrl?: string | null;
-    labelCache?: string | null;
-    position?: number | null;
-    size?: string | null;
-    option1ValueId?: string | null;
-    option2ValueId?: string | null;
-    option3ValueId?: string | null;
-    costPrice?: string | null;
-    filamentGrams?: string | null;
-    printTimeHours?: string | null;
-    laborMinutes?: string | null;
-    otherCost?: string | null;
-    filamentRateOverride?: string | null;
-    laborRateOverride?: string | null;
-    costPriceManual?: boolean | null;
-  },
-): HydratedVariant {
-  if (process.env.NODE_ENV === "development" && !v.option1ValueId) {
-    console.warn(`[phase16] variant ${v.id} falling back to legacy size column`);
-  }
-  return {
-    id: v.id,
-    price: v.price,
-    stock: v.stock ?? 0,
-    inStock: v.inStock ?? true,
-    trackStock: v.trackStock ?? false,
-    sku: v.sku ?? null,
-    imageUrl: v.imageUrl ?? null,
-    label: v.labelCache ?? v.size ?? "",
-    position: v.position ?? 0,
-    optionValueIds: [
-      v.option1ValueId ?? null,
-      v.option2ValueId ?? null,
-      v.option3ValueId ?? null,
-    ],
-    costPrice: v.costPrice ?? null,
-    filamentGrams: v.filamentGrams ?? null,
-    printTimeHours: v.printTimeHours ?? null,
-    laborMinutes: v.laborMinutes ?? null,
-    otherCost: v.otherCost ?? null,
-    filamentRateOverride: v.filamentRateOverride ?? null,
-    laborRateOverride: v.laborRateOverride ?? null,
-    costPriceManual: v.costPriceManual ?? false,
-  };
-}
+// legacyVariantToHydrated removed in phase 16-07 (size column dropped).

@@ -437,7 +437,6 @@ export async function generateVariantMatrix(
     await db.insert(productVariants).values({
       id: randomUUID(),
       productId,
-      size: "S", // legacy column — required until 16-07
       price: "0.00",
       inStock: false,
       stock: 0,
@@ -499,7 +498,8 @@ export async function updateVariant(
 
   await db
     .update(productVariants)
-    .set(update as Parameters<typeof db.update>[0] extends infer T ? T : never)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .set(update as any)
     .where(eq(productVariants.id, variantId));
 
   // Revalidate — we need the product ID

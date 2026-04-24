@@ -11,7 +11,6 @@ import {
 import { and, asc, eq, desc, inArray, or } from "drizzle-orm";
 import {
   composeVariantLabel,
-  legacyVariantToHydrated,
   type HydratedProductVariants,
   type HydratedOption,
   type HydratedVariant,
@@ -189,9 +188,6 @@ async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
 
     // Build HydratedVariant[]
     const hydratedVariants: HydratedVariant[] = rawVariants.map((v) => {
-      if (!v.option1ValueId) {
-        return legacyVariantToHydrated(v);
-      }
       const labelParts: string[] = [];
       for (const vid of [v.option1ValueId, v.option2ValueId, v.option3ValueId]) {
         if (vid) {
@@ -207,7 +203,7 @@ async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
         trackStock: v.trackStock ?? false,
         sku: v.sku ?? null,
         imageUrl: v.imageUrl ?? null,
-        label: labelParts.length > 0 ? composeVariantLabel(labelParts) : (v.labelCache ?? v.size ?? ""),
+        label: labelParts.length > 0 ? composeVariantLabel(labelParts) : (v.labelCache ?? ""),
         position: v.position ?? 0,
         optionValueIds: [
           v.option1ValueId ?? null,

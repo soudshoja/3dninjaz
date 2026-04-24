@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: pre-launch
-stopped_at: "Phases 08-15 complete — Delyva shipping, theme polish, cost/profit, social settings, 12 email templates, inventory tracking, cost breakdown, customer tracking all live. Awaiting admin go-live actions."
-last_updated: "2026-04-21T00:00:00.000Z"
-last_activity: 2026-04-21 -- Phases 08-15 complete (55 session commits). See GO-LIVE-READINESS.md for launch blockers.
+stopped_at: "Phase 16 complete. Generic variant system shipped across all 7 plans. product_variants.size dropped from schema; run scripts/phase16-cleanup.cjs on live DB. Next: admin go-live tasks (see GO-LIVE-READINESS.md)."
+last_updated: "2026-04-22T00:00:00.000Z"
+last_activity: 2026-04-22 -- Phase 16 (Product Variant System — Generic Options) complete. 7/7 plans shipped. TypeScript clean. COMPLETION.md written.
 progress:
-  total_phases: 15
-  completed_phases: 15
-  total_plans: 39
-  completed_plans: 39
+  total_phases: 16
+  completed_phases: 16
+  total_plans: 46
+  completed_plans: 46
   percent: 100
 ---
 
@@ -160,6 +160,10 @@ Recent decisions affecting current work:
 - Email deliverability to Malaysian addresses — Phase 3 smoke test pending; re-verify against real MY ISP in LAUNCH-CHECKLIST.md step 12.
 - **PayPal Reporting API NOT_AUTHORIZED (Q-07-08):** Phase 7 nightly recon cron is installed but first run errored with NOT_AUTHORIZED. Admin must contact PayPal support to enable the Reporting feature on the live merchant account. Until then, recon_runs.status='error' on every run; drift detection is paused but admin sees the error on /admin/recon.
 - **Sharp deploy footprint:** sharp native binaries add ~80MB to node_modules but are required for the Phase 7 image pipeline. Install was clean on cPanel CloudLinux Node 20 — no fallback needed.
+
+### Roadmap Evolution
+
+- 2026-04-24: Phase 16 added — Product Variant System (Generic Options). Replaces rigid `productVariants.size` enum with generic options/values/variants model. Supports size+color AND parts-based products. Plans not yet created.
 
 ## Session Continuity
 

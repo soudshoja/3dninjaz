@@ -150,7 +150,6 @@ export async function createPayPalOrder(
     productName: string;
     productSlug: string;
     productImage: string | null;
-    size: "S" | "M" | "L";
     variantLabel: string;
     unitPrice: string; // Drizzle decimal string, kept verbatim
     // Phase 10 (10-01) — snapshot of productVariants.costPrice at checkout
@@ -193,7 +192,7 @@ export async function createPayPalOrder(
     const variantLabel =
       labelParts.length > 0
         ? composeVariantLabel(labelParts)
-        : (v.labelCache ?? v.size ?? "");
+        : (v.labelCache ?? "");
 
     return {
       variantId: v.id,
@@ -201,7 +200,6 @@ export async function createPayPalOrder(
       productName: v.product.name,
       productSlug: v.product.slug,
       productImage: firstImage,
-      size: v.size,
       variantLabel,
       unitPrice: v.price,
       // Drizzle returns decimal as string | null; pass through as-is.
@@ -424,7 +422,7 @@ export async function createPayPalOrder(
         productName: s.productName,
         productSlug: s.productSlug,
         productImage: s.productImage,
-        size: s.size,
+        // Phase 16-07: size column dropped; historical orders retain size via order_items.size (nullable)
         // Phase 16-05 — snapshot variant label at order creation time so
         // order history is stable even after option renames.
         variantLabel: s.variantLabel || null,

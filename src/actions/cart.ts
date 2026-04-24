@@ -107,7 +107,7 @@ export async function hydrateCartItems(
     const variantLabel =
       labelParts.length > 0
         ? composeVariantLabel(labelParts)
-        : (v.labelCache ?? v.size ?? "");
+        : (v.labelCache ?? "");
 
     // Determine availability
     const trackedOOS = v.trackStock === true && (v.stock ?? 0) <= 0;

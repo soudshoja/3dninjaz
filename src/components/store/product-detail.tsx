@@ -17,7 +17,7 @@ type Size = "S" | "M" | "L";
 
 type Variant = {
   id: string;
-  size: Size;
+  size?: Size | null; // optional post phase-16-07 (size column dropped)
   price: string;
   widthCm: string | null;
   heightCm: string | null;
@@ -74,7 +74,7 @@ export function ProductDetail({
   const sortedVariants = useMemo(
     () =>
       [...product.variants].sort(
-        (a, b) => SIZE_ORDER[a.size] - SIZE_ORDER[b.size],
+        (a, b) => (SIZE_ORDER[a.size ?? "S"] ?? 0) - (SIZE_ORDER[b.size ?? "S"] ?? 0),
       ),
     [product.variants],
   );
@@ -166,7 +166,7 @@ export function ProductDetail({
         ) : (
           /* Legacy size selector (fallback for pre-backfill or old data) */
           <SizeSelector
-            variants={sortedVariants}
+            variants={sortedVariants as Parameters<typeof SizeSelector>[0]["variants"]}
             selectedSize={selectedSize}
             onSelect={setSelectedSize}
           />
@@ -184,7 +184,7 @@ export function ProductDetail({
               />
             ) : (
               <AddToBagButton
-                selectedVariant={legacySelectedVariant}
+                selectedVariant={legacySelectedVariant as Parameters<typeof AddToBagButton>[0]["selectedVariant"]}
                 productId={product.id}
                 productSlug={product.slug}
                 productName={product.name}
@@ -233,7 +233,7 @@ export function ProductDetail({
 
         {/* Size guide only for products with a Size option (or legacy) */}
         {(hasSizeOption || !hasGenericOptions) && (
-          <SizeGuide variants={sortedVariants} />
+          <SizeGuide variants={sortedVariants as Parameters<typeof SizeGuide>[0]["variants"]} />
         )}
       </div>
     </div>

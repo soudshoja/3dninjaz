@@ -230,7 +230,7 @@ export const productVariants = mysqlTable("product_variants", {
   productId: varchar("product_id", { length: 36 })
     .notNull()
     .references(() => products.id, { onDelete: "cascade" }),
-  size: mysqlEnum("size", ["S", "M", "L"]).notNull(), // D-13 — preserved during 16-07 dual-read window
+  // Phase 16-07: size column dropped — run scripts/phase16-cleanup.cjs on live DB.
   price: decimal("price", { precision: 10, scale: 2 }).notNull(), // MYR
   // Phase 10 (10-01) — per-variant unit cost (MYR). Nullable so existing rows
   // remain valid; the admin fills in cost retroactively. Admin product form
@@ -479,7 +479,9 @@ export const orderItems = mysqlTable("order_items", {
   productSlug: varchar("product_slug", { length: 220 }).notNull(),
   // Nullable if the product had no image at order time
   productImage: text("product_image"),
-  size: mysqlEnum("size", ["S", "M", "L"]).notNull(),
+  // Phase 16-07: size preserved for historical order rendering fallback.
+  // New orders may have NULL size when placed after the phase-16 backfill.
+  size: mysqlEnum("size", ["S", "M", "L"]),
   // Phase 16 — denormalized variant label snapshot ("Small / Red", "Head").
   // NULL for historical orders (pre-phase-16). New orders always populate.
   variantLabel: varchar("variant_label", { length: 200 }),

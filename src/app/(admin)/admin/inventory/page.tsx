@@ -112,7 +112,7 @@ export default async function AdminInventoryPage() {
     const label =
       labelParts.length > 0
         ? composeVariantLabel(labelParts)
-        : (v.labelCache ?? v.size ?? "(default)");
+        : (v.labelCache ?? "(default)");
 
     const trackedOOS = v.trackStock === true && (v.stock ?? 0) <= 0;
     const legacyOOS = v.trackStock !== true && v.inStock === false;

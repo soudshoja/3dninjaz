@@ -62,7 +62,6 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
             : null,
           variants: product.variants.map((v) => ({
             id: v.id,
-            size: v.size,
             price: v.price,
             widthCm: v.widthCm,
             heightCm: v.heightCm,

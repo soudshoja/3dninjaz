@@ -180,7 +180,6 @@ export type WishlistedItem = {
   variants: Array<{
     id: string;
     productId: string;
-    size: "S" | "M" | "L";
     price: string;
     widthCm: string | null;
     heightCm: string | null;
@@ -221,7 +220,7 @@ export async function listMyWishlist(): Promise<WishlistedItem[]> {
           .select()
           .from(productVariants)
           .where(inArray(productVariants.productId, productIds))
-          .orderBy(asc(productVariants.size))
+          .orderBy(asc(productVariants.position))
       : [];
 
   const productById = new Map(
