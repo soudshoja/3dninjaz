@@ -73,7 +73,7 @@ import {
   type BulkOp,
 } from "@/actions/variants";
 import type { HydratedOption, HydratedVariant } from "@/lib/variants";
-import { generateVariantSku } from "@/lib/variants";
+import { generateVariantSku } from "@/lib/sku";
 
 interface VariantEditorProps {
   productId: string;

@@ -53,7 +53,8 @@ async function revalidateProductSurfaces(productId: string): Promise<void> {
 }
 import { requireAdmin } from "@/lib/auth-helpers";
 import { writeUpload, deleteUpload } from "@/lib/storage";
-import { composeVariantLabel, generateVariantSku, hydrateProductVariants } from "@/lib/variants";
+import { composeVariantLabel, hydrateProductVariants } from "@/lib/variants";
+import { generateVariantSku } from "@/lib/sku";
 import { variantUpdateSchema } from "@/lib/validators";
 
 export type ActionResult<T = undefined> =
