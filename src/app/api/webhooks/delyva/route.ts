@@ -81,8 +81,16 @@ export async function POST(req: NextRequest) {
   const got = req.headers.get("x-delyvax-hmac-sha256") ?? "";
   const secret = getDelyvaWebhookSecret();
 
-  if (!verifySignature(raw, got, secret)) {
-    return new NextResponse("Invalid signature", { status: 401 });
+  // Delyva's current UI has no HMAC secret field — webhooks arrive unsigned.
+  // If no secret is configured on our side, accept unsigned deliveries and
+  // log a warning so the admin can add one when Delyva exposes the option.
+  // When a secret IS configured we enforce HMAC strictly.
+  if (secret) {
+    if (!verifySignature(raw, got, secret)) {
+      return new NextResponse("Invalid signature", { status: 401 });
+    }
+  } else {
+    console.warn("[delyva-webhook] no DELYVA_WEBHOOK_SECRET set — accepting unsigned delivery");
   }
 
   let payload: DelyvaWebhookPayload;

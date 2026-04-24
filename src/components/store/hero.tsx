@@ -52,9 +52,6 @@ export function Hero() {
           <br />
           <span style={{ color: BRAND.green }}>Shipped across Malaysia.</span>
         </h1>
-        <p className="mt-6 max-w-xl mx-auto text-base md:text-lg font-medium text-zinc-600">
-          Pick your piece. Choose your size. Three ninjas. One print job.
-        </p>
         <div className="mt-10 flex flex-wrap gap-4 justify-center">
           <Link
             href="/shop"

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { BRAND } from "@/lib/brand";
 import { Shuriken } from "@/components/brand/shuriken";
@@ -82,9 +83,9 @@ export default function AboutPage() {
               </p>
               <p>
                 By day, we go to school… but by night, we turn into 3D printing
-                ninjas <span aria-label="ninja">🥷</span> and bring our ideas to
-                life! From fun toys to awesome custom designs, we&rsquo;re
-                always thinking of new things to make and share
+                ninjas and bring our ideas to life! From fun toys to awesome
+                custom designs, we&rsquo;re always thinking of new things to
+                make and share
               </p>
               <p>
                 Every morning before school, we rush to check what we printed
@@ -100,6 +101,22 @@ export default function AboutPage() {
                 brothers create and is already part of the team in her own way.
               </p>
             </div>
+          </div>
+          <div className="hidden md:flex flex-col items-center gap-6 pt-6">
+            <Image
+              src="/icons/ninja/emoji/hello.png"
+              alt=""
+              width={140}
+              height={140}
+              className="h-[140px] w-[140px] object-contain"
+            />
+            <Image
+              src="/icons/ninja/emoji/thank-you.png"
+              alt=""
+              width={120}
+              height={120}
+              className="h-[120px] w-[120px] object-contain"
+            />
           </div>
         </div>
       </section>
@@ -154,6 +171,18 @@ export default function AboutPage() {
                   style={{ backgroundColor: s.color }}
                 />
                 <div className="p-6 sm:p-7 text-center">
+                  <div
+                    className="mx-auto flex h-28 w-28 items-center justify-center rounded-full mb-4"
+                    style={{ backgroundColor: `${s.color}18` }}
+                  >
+                    <Image
+                      src={s.icon}
+                      alt=""
+                      width={96}
+                      height={96}
+                      className="h-24 w-24 object-contain"
+                    />
+                  </div>
                   <h3 className="font-heading text-2xl text-zinc-900">
                     {s.name}
                     <span
