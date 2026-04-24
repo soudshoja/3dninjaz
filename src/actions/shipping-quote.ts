@@ -3,7 +3,7 @@
 import "server-only";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { products, shippingServiceCatalog } from "@/lib/db/schema";
+import { products, productVariants, shippingServiceCatalog } from "@/lib/db/schema";
 import { delyvaApi, DelyvaError, parseQuoteServices } from "@/lib/delyva";
 import { loadShippingConfig } from "@/lib/shipping-config";
 
@@ -36,6 +36,11 @@ import { loadShippingConfig } from "@/lib/shipping-config";
 
 export type CartItemForQuote = {
   productId: string;
+  /** AD-08 — variantId is now mandatory. quoteForCart batch-fetches weight_g
+   * server-side by variantId; never trusts client-supplied weight values
+   * (T-17-09-weight-spoofing). Phase 16-05 cart v2 stores variantId for every
+   * line, so every existing caller already has it. */
+  variantId: string;
   quantity: number;
   unitPrice: number; // MYR
 };
@@ -89,8 +94,12 @@ export async function quoteForCart(
 
   const cfg = await loadShippingConfig();
 
-  // --- weight + subtotal
-  const fallbackWeight = Number(cfg.defaultWeightKg);
+  // --- weight + subtotal (AD-08: per-variant weight resolution)
+  // Weight ladder: variant.weight_g ?? product.shippingWeightKg*1000 ?? defaultWeightKg
+  // Server always re-fetches weight_g by variantId — never trusts client values (T-17-09).
+  const fallbackWeight = Number(cfg.defaultWeightKg); // kg
+
+  // Batch-fetch product-level weights
   const productIds = Array.from(new Set(items.map((i) => i.productId)));
   const prodRows = productIds.length
     ? await db
@@ -98,14 +107,43 @@ export async function quoteForCart(
         .from(products)
         .where(inArray(products.id, productIds))
     : [];
-  const weights = new Map<string, number>();
+  const productWeights = new Map<string, number>();
   for (const p of prodRows) {
-    if (p.weight) weights.set(p.id, Number(p.weight));
+    if (p.weight) productWeights.set(p.id, Number(p.weight));
   }
+
+  // Batch-fetch per-variant weights (AD-08)
+  const variantIds = Array.from(new Set(items.map((i) => i.variantId)));
+  const variantRows = variantIds.length
+    ? await db
+        .select({ id: productVariants.id, weightG: productVariants.weightG })
+        .from(productVariants)
+        .where(inArray(productVariants.id, variantIds))
+    : [];
+  const variantWeights = new Map<string, number | null>();
+  for (const v of variantRows) {
+    variantWeights.set(v.id, v.weightG ?? null);
+  }
+
   let totalWeight = 0;
   let subtotal = 0;
   for (const it of items) {
-    const w = weights.get(it.productId) ?? fallbackWeight;
+    const variantWeightG = variantWeights.get(it.variantId) ?? null;
+    let w: number;
+    if (variantWeightG !== null) {
+      // Tier 1: per-variant weight_g (grams → kg)
+      w = variantWeightG / 1000;
+    } else {
+      const productWeightKg = productWeights.get(it.productId) ?? null;
+      if (productWeightKg !== null) {
+        // Tier 2: product-level shippingWeightKg
+        w = productWeightKg;
+      } else {
+        // Tier 3: final fallback — emit warn so admin knows weight data is missing
+        console.warn("[shipping] no weight data for variantId=%s productId=%s — using defaultWeightKg=%s", it.variantId, it.productId, fallbackWeight);
+        w = fallbackWeight;
+      }
+    }
     totalWeight += w * it.quantity;
     subtotal += it.unitPrice * it.quantity;
   }

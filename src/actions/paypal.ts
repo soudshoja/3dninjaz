@@ -226,6 +226,7 @@ export async function createPayPalOrder(
           const row = variantRows.find((v) => v.id === i.variantId);
           return {
             productId: row?.productId ?? "",
+            variantId: i.variantId,
             quantity: qtyByVariant.get(i.variantId) ?? i.quantity,
             unitPrice: row ? Number(row.price) : 0,
           };

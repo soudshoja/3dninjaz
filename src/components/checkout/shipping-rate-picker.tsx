@@ -87,6 +87,7 @@ export function ShippingRatePicker({ address, items, onChange }: Props) {
         const res = await quoteForCart(
           items.map((i) => ({
             productId: i.productId,
+            variantId: i.variantId,
             quantity: i.quantity,
             unitPrice: Number(i.unitPrice),
           })),

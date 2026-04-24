@@ -1,11 +1,11 @@
 "use server";
 
 /**
- * Phase 16 — Admin variant management server actions.
+ * Phase 16/17 — Admin variant management server actions.
  *
  * All actions gated by requireAdmin() as FIRST await (CVE-2025-29927).
  *
- * Actions:
+ * Actions (Phase 16):
  *   addProductOption        — insert option at next position (max 3)
  *   renameProductOption     — update option name
  *   deleteProductOption     — cascade: delete values + variants using this slot
@@ -16,6 +16,12 @@
  *   updateVariant           — Zod-validated partial update
  *   deleteVariant           — hard delete
  *   reorderOptionValues     — update positions for a list of value IDs
+ *
+ * Actions (Phase 17):
+ *   uploadVariantImage      — upload image for a variant row (AD-02, Pattern A)
+ *   removeVariantImage      — clear imageUrl + best-effort delete (Pattern A)
+ *   setDefaultVariant       — transaction: unset all, set one (AD-05, Pattern B)
+ *   bulkUpdateVariants      — set/multiply/add price, sale price, active, delete (AD-03, Pattern B)
  */
 
 import { randomUUID } from "node:crypto";
@@ -28,6 +34,7 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-helpers";
+import { writeUpload, deleteUpload } from "@/lib/storage";
 import { composeVariantLabel, hydrateProductVariants } from "@/lib/variants";
 import { variantUpdateSchema } from "@/lib/validators";
 
@@ -493,6 +500,28 @@ export async function updateVariant(
   if (data.filamentRateOverride !== undefined) update.filamentRateOverride = data.filamentRateOverride || null;
   if (data.laborRateOverride !== undefined) update.laborRateOverride = data.laborRateOverride || null;
   if (data.costPriceManual !== undefined) update.costPriceManual = data.costPriceManual;
+  // Phase 17 — sale pricing + default + weight
+  if (data.salePrice !== undefined) update.salePrice = data.salePrice || null;
+  if (data.saleFrom !== undefined) update.saleFrom = data.saleFrom ? new Date(data.saleFrom) : null;
+  if (data.saleTo !== undefined) update.saleTo = data.saleTo ? new Date(data.saleTo) : null;
+  if (data.isDefault !== undefined) update.isDefault = data.isDefault;
+  if (data.weightG !== undefined) update.weightG = data.weightG === null || data.weightG === undefined ? null : Number(data.weightG);
+
+  // Validate sale price < regular price (T-17-01-price-tampering)
+  if (data.salePrice && data.salePrice !== "") {
+    const [currentVariant] = await db
+      .select({ price: productVariants.price })
+      .from(productVariants)
+      .where(eq(productVariants.id, variantId))
+      .limit(1);
+    if (currentVariant) {
+      const saleNum = parseFloat(data.salePrice);
+      const priceNum = parseFloat(String(currentVariant.price));
+      if (saleNum >= priceNum) {
+        return { error: "Sale price must be less than the regular price" };
+      }
+    }
+  }
 
   if (Object.keys(update).length === 0) return { success: true };
 
@@ -556,4 +585,223 @@ export async function countVariantsAffectedByValueDelete(
   ]);
 
   return { success: true, data: { count: a1.length + a2.length + a3.length } };
+}
+
+// ---------------------------------------------------------------------------
+// Phase 17 — Image upload / remove per variant row (AD-02, AD-06 Pattern A)
+// ---------------------------------------------------------------------------
+
+/**
+ * Upload an image for a specific variant row.
+ * Reuses the Phase 7 writeUpload pipeline (bucket = productId).
+ * On DB failure, best-effort deletes the newly written file (T-17-02b-upload-orphan).
+ */
+export async function uploadVariantImage(
+  variantId: string,
+  formData: FormData,
+): Promise<ActionResult<{ imageUrl: string }>> {
+  await requireAdmin();
+
+  const [v] = await db
+    .select({ productId: productVariants.productId, oldUrl: productVariants.imageUrl })
+    .from(productVariants)
+    .where(eq(productVariants.id, variantId))
+    .limit(1);
+  if (!v) return { error: "Variant not found" };
+
+  const file = formData.get("file");
+  if (!(file instanceof File)) return { error: "No file provided" };
+
+  let newUrl: string;
+  try {
+    newUrl = await writeUpload(v.productId, file);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Upload failed" };
+  }
+
+  try {
+    await db
+      .update(productVariants)
+      .set({ imageUrl: newUrl })
+      .where(eq(productVariants.id, variantId));
+  } catch {
+    // Rollback filesystem on DB failure (T-17-02b-upload-orphan)
+    await deleteUpload(newUrl).catch(() => {});
+    return { error: "Failed to persist image URL" };
+  }
+
+  // Best-effort delete of prior image
+  if (v.oldUrl) {
+    await deleteUpload(v.oldUrl).catch(() => {});
+  }
+
+  revalidatePath(`/admin/products/${v.productId}/variants`);
+  return { success: true, data: { imageUrl: newUrl } };
+}
+
+/**
+ * Remove the image from a variant row. Clears imageUrl to NULL and
+ * best-effort deletes the file from disk.
+ */
+export async function removeVariantImage(variantId: string): Promise<ActionResult> {
+  await requireAdmin();
+
+  const [v] = await db
+    .select({ productId: productVariants.productId, oldUrl: productVariants.imageUrl })
+    .from(productVariants)
+    .where(eq(productVariants.id, variantId))
+    .limit(1);
+  if (!v) return { error: "Variant not found" };
+
+  await db
+    .update(productVariants)
+    .set({ imageUrl: null })
+    .where(eq(productVariants.id, variantId));
+
+  if (v.oldUrl) {
+    await deleteUpload(v.oldUrl).catch(() => {});
+  }
+
+  revalidatePath(`/admin/products/${v.productId}/variants`);
+  return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// Phase 17 — Set default variant (AD-05, AD-06 Pattern B)
+// ---------------------------------------------------------------------------
+
+/**
+ * Mark one variant as the default for its product.
+ * Executes inside a transaction: unset all other is_default on the product,
+ * then set this one. App-layer single-default invariant (MariaDB has no
+ * partial unique index). Race: last write wins — acceptable for single-admin store.
+ */
+export async function setDefaultVariant(variantId: string): Promise<ActionResult> {
+  await requireAdmin();
+
+  const [v] = await db
+    .select({ productId: productVariants.productId })
+    .from(productVariants)
+    .where(eq(productVariants.id, variantId))
+    .limit(1);
+  if (!v) return { error: "Variant not found" };
+
+  await db.transaction(async (tx) => {
+    // 1. Unset all defaults for this product
+    await tx
+      .update(productVariants)
+      .set({ isDefault: false })
+      .where(eq(productVariants.productId, v.productId));
+    // 2. Set this one
+    await tx
+      .update(productVariants)
+      .set({ isDefault: true })
+      .where(eq(productVariants.id, variantId));
+  });
+
+  revalidatePath(`/admin/products/${v.productId}/variants`);
+  return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// Phase 17 — Bulk update variants (AD-03, AD-06 Pattern B)
+// ---------------------------------------------------------------------------
+
+export type BulkOp =
+  | { kind: "set-price"; value: string }
+  | { kind: "multiply-price"; percent: number }
+  | { kind: "add-price"; delta: string }
+  | { kind: "set-sale-price"; value: string | null }
+  | { kind: "set-active"; inStock: boolean }
+  | { kind: "delete" };
+
+/**
+ * Apply a bulk operation to a subset of variants belonging to a product.
+ * Validates that all variantIds belong to productId (T-17-06-bulk-scope-leak).
+ * Validates post-op prices >= 0.01 (T-17-01b-negative-price).
+ * Validates multiplier > 0 (T-17-01c-percentage-overflow).
+ * Validates sale price < current price (T-17-01-price-tampering).
+ * Wraps all row mutations in db.transaction for atomic rollback.
+ */
+export async function bulkUpdateVariants(
+  productId: string,
+  variantIds: string[],
+  op: BulkOp,
+): Promise<ActionResult<{ affected: number }>> {
+  await requireAdmin();
+
+  if (!variantIds.length) return { error: "No variants selected" };
+
+  // Validate all variantIds belong to productId (T-17-06)
+  const owned = await db
+    .select({ id: productVariants.id, price: productVariants.price })
+    .from(productVariants)
+    .where(and(
+      inArray(productVariants.id, variantIds),
+      eq(productVariants.productId, productId),
+    ));
+
+  if (owned.length !== variantIds.length) {
+    return { error: "One or more variants do not belong to this product" };
+  }
+
+  // Validate op-specific constraints
+  if (op.kind === "multiply-price") {
+    if (!isFinite(op.percent) || op.percent <= 0) {
+      return { error: "Multiply percent must be greater than 0" };
+    }
+    // Check post-op prices >= 0.01 (T-17-01b)
+    for (const v of owned) {
+      const newPrice = Math.round(parseFloat(String(v.price)) * (op.percent / 100) * 100) / 100;
+      if (newPrice < 0.01) {
+        return { error: `Bulk op would set a variant price below RM 0.01` };
+      }
+    }
+  }
+  if (op.kind === "add-price") {
+    const delta = parseFloat(op.delta);
+    if (!isFinite(delta)) return { error: "Invalid price delta" };
+    for (const v of owned) {
+      const newPrice = Math.round((parseFloat(String(v.price)) + delta) * 100) / 100;
+      if (newPrice < 0.01) {
+        return { error: `Bulk op would set a variant price below RM 0.01` };
+      }
+    }
+  }
+  if (op.kind === "set-sale-price" && op.value !== null && op.value !== "") {
+    const saleNum = parseFloat(op.value);
+    for (const v of owned) {
+      const priceNum = parseFloat(String(v.price));
+      if (saleNum >= priceNum) {
+        return { error: "Sale price must be less than the regular price for all selected variants" };
+      }
+    }
+  }
+
+  // Execute in transaction
+  let affected = 0;
+  await db.transaction(async (tx) => {
+    for (const v of owned) {
+      if (op.kind === "set-price") {
+        await tx.update(productVariants).set({ price: op.value }).where(eq(productVariants.id, v.id));
+      } else if (op.kind === "multiply-price") {
+        const newPrice = (Math.round(parseFloat(String(v.price)) * (op.percent / 100) * 100) / 100).toFixed(2);
+        await tx.update(productVariants).set({ price: newPrice }).where(eq(productVariants.id, v.id));
+      } else if (op.kind === "add-price") {
+        const delta = parseFloat(op.delta);
+        const newPrice = (Math.round((parseFloat(String(v.price)) + delta) * 100) / 100).toFixed(2);
+        await tx.update(productVariants).set({ price: newPrice }).where(eq(productVariants.id, v.id));
+      } else if (op.kind === "set-sale-price") {
+        await tx.update(productVariants).set({ salePrice: op.value || null }).where(eq(productVariants.id, v.id));
+      } else if (op.kind === "set-active") {
+        await tx.update(productVariants).set({ inStock: op.inStock }).where(eq(productVariants.id, v.id));
+      } else if (op.kind === "delete") {
+        await tx.delete(productVariants).where(eq(productVariants.id, v.id));
+      }
+      affected++;
+    }
+  });
+
+  revalidatePath(`/admin/products/${productId}/variants`);
+  return { success: true, data: { affected } };
 }
