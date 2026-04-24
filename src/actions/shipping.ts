@@ -466,7 +466,10 @@ export async function bookShipmentForOrder(
 
   const cfg = await loadShippingConfig();
 
-  const prodRows = items.length ? await db.select().from(products) : [];
+  const productIds = [...new Set(items.map((i) => i.productId))];
+  const prodRows = productIds.length
+    ? await db.select().from(products).where(inArray(products.id, productIds))
+    : [];
   const prodById = new Map<string, typeof products.$inferSelect>(
     prodRows.map((p) => [p.id, p]),
   );
