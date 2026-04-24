@@ -159,7 +159,7 @@ export default async function ContactPage() {
           <dd className="mt-2">
             <a
               href={`mailto:${settings.contactEmail || BUSINESS.contactEmail}`}
-              className="inline-flex min-h-12 items-center font-semibold text-[#123456] underline underline-offset-2 hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#123456] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F7FAF4] rounded-sm"
+              className="inline-flex min-h-12 items-center font-semibold text-[#1151bf] underline underline-offset-2 hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1151bf] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F7FAF4] rounded-sm"
             >
               {settings.contactEmail || BUSINESS.contactEmail}
             </a>

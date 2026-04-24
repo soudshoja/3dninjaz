@@ -87,6 +87,40 @@ export function composeVariantLabel(values: (string | null | undefined)[]): stri
 }
 
 // ---------------------------------------------------------------------------
+// generateVariantSku
+// ---------------------------------------------------------------------------
+
+/**
+ * Auto-generate a SKU for a variant using the brand pattern:
+ *   3DN-{SLUG8}-{OPT1}-{OPT2}-{OPT3}
+ *
+ * - SLUG8: first 8 alphanumeric chars of productSlug, uppercased
+ *   ("ninja-robot-model-kit" → "NINJAROB")
+ * - Each option value: first 3 alphanumeric chars, uppercased
+ *   ("Small" → "SMA", "blue" → "BLU", "S" → "S")
+ * - Empty/null value labels are omitted
+ *
+ * Examples:
+ *   generateVariantSku("ninja-robot-model-kit", ["blue", "S"]) → "3DN-NINJAROB-BLU-S"
+ *   generateVariantSku("keyboard-name-clicker", ["Red", "Medium"]) → "3DN-KEYBOARD-RED-MED"
+ *   generateVariantSku("t-shirt", ["Small"]) → "3DN-TSHIRT-SMA"
+ */
+export function generateVariantSku(
+  productSlug: string,
+  optionValueLabels: (string | null | undefined)[],
+): string {
+  const slugPart = productSlug
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 8);
+  const optPart = optionValueLabels
+    .filter((v): v is string => typeof v === "string" && v.trim() !== "")
+    .map((v) => v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3))
+    .join("-");
+  return `3DN-${slugPart}${optPart ? "-" + optPart : ""}`;
+}
+
+// ---------------------------------------------------------------------------
 // hydrateProductVariants
 // ---------------------------------------------------------------------------
 

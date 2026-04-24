@@ -58,9 +58,9 @@
   /* Unified 3D Ninjaz palette — D-01 (Phase 2 DECISIONS.md).
      Single source of truth across storefront AND admin surfaces.
      Keep these in lockstep with src/lib/brand.ts. */
-  --brand-blue: #123456;
-  --brand-green: #2E8857;
-  --brand-purple: #875692;
+  --brand-blue: #1151bf;
+  --brand-green: #50c878;
+  --brand-purple: #7021b0;
   --brand-ink: #0B1020;
   --brand-cream: #F7FAF4;
 
