@@ -54,10 +54,10 @@ export default async function ShopPage({
     <div className="pb-24 bg-white">
       <section className="pt-10 md:pt-16 pb-6 border-b border-zinc-100 bg-white">
         <div className="max-w-6xl mx-auto px-6">
-          <div className="flex items-center gap-3 mb-4">
-            <Shuriken className="w-7 h-7" fill={BRAND.purple} />
+          <div className="flex items-center gap-3 mb-4 min-w-0">
+            <Shuriken className="w-6 h-6 md:w-7 md:h-7 shrink-0" fill={BRAND.purple} />
             <h1
-              className="font-[var(--font-heading)] text-4xl md:text-6xl tracking-tight text-zinc-900"
+              className="font-[var(--font-heading)] text-2xl sm:text-4xl md:text-6xl tracking-tight text-zinc-900 min-w-0"
             >
               {headline.toUpperCase()}
             </h1>
@@ -89,8 +89,50 @@ export default async function ShopPage({
         </div>
       </section>
 
+      {/* Mobile-only horizontal category chip strip */}
+      {tree.length > 0 ? (
+        <nav
+          aria-label="Filter by category"
+          className="md:hidden max-w-6xl mx-auto px-6 mt-4"
+        >
+          <ul className="flex gap-2 overflow-x-auto pb-2 -mx-6 px-6">
+            <li className="shrink-0">
+              <Link
+                href="/shop"
+                className="inline-flex items-center min-h-[44px] px-4 rounded-full border-2 text-sm font-bold whitespace-nowrap"
+                style={{
+                  backgroundColor: !category && !subcategory ? BRAND.ink : "transparent",
+                  color: !category && !subcategory ? "#ffffff" : BRAND.ink,
+                  borderColor: BRAND.ink,
+                }}
+              >
+                All drops
+              </Link>
+            </li>
+            {tree.map((c) => {
+              const isActive = category === c.slug;
+              return (
+                <li key={c.id} className="shrink-0">
+                  <Link
+                    href={`/shop?category=${encodeURIComponent(c.slug)}`}
+                    className="inline-flex items-center min-h-[44px] px-4 rounded-full border-2 text-sm font-bold whitespace-nowrap"
+                    style={{
+                      backgroundColor: isActive ? BRAND.ink : "transparent",
+                      color: isActive ? "#ffffff" : BRAND.ink,
+                      borderColor: BRAND.ink,
+                    }}
+                  >
+                    {c.name}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+      ) : null}
+
       <section className="max-w-6xl mx-auto px-6 mt-6 grid gap-8 md:grid-cols-[240px_1fr]">
-        <aside className="md:block">
+        <aside className="hidden md:block">
           <ShopSidebar
             tree={tree}
             activeCategory={category ?? null}
@@ -116,7 +158,7 @@ export default async function ShopPage({
               <p className="text-slate-600">The ninjas are still printing.</p>
             </div>
           ) : (
-            <ul className="grid grid-cols-1 min-[360px]:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
+            <ul className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
               {products.map((p, i) => (
                 <li key={p.id}>
                   <ProductCard

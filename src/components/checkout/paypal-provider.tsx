@@ -117,7 +117,7 @@ export function CheckoutIsland({
       <div className="grid gap-8 lg:grid-cols-[1fr_420px] pb-24 md:pb-0">
         <section
           aria-labelledby="ship-heading"
-          className="order-2 lg:order-1"
+          className="order-1"
         >
           <h2
             id="ship-heading"
@@ -155,7 +155,7 @@ export function CheckoutIsland({
 
         <aside
           aria-labelledby="summary-heading"
-          className="order-1 lg:order-2 hidden md:block"
+          className="order-2 hidden md:block"
         >
           <div
             className="sticky top-6 rounded-2xl p-5"

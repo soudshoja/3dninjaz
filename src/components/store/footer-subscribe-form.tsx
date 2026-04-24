@@ -128,7 +128,7 @@ export function FooterSubscribeForm() {
       </button>
       {state.kind === "error" ? (
         <p
-          className="sm:absolute sm:translate-y-[52px] text-xs font-semibold"
+          className="text-xs font-semibold w-full"
           style={{ color: "#b91c1c" }}
           role="alert"
         >

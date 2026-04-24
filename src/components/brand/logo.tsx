@@ -8,9 +8,12 @@ import Image from "next/image";
 export function Logo({
   size = 44,
   priority = false,
+  className,
 }: {
   size?: number;
   priority?: boolean;
+  /** Optional Tailwind classes to override width/height for responsive sizing */
+  className?: string;
 }) {
   return (
     <Image
@@ -19,8 +22,12 @@ export function Logo({
       width={size}
       height={size}
       priority={priority}
-      className="rounded-xl"
-      style={{ width: size, height: size, objectFit: "contain" }}
+      className={className ?? "rounded-xl"}
+      style={
+        className
+          ? { objectFit: "contain" }
+          : { width: size, height: size, objectFit: "contain" }
+      }
     />
   );
 }

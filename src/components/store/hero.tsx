@@ -42,7 +42,8 @@ export function Hero() {
           MADE IN MALAYSIA · 3D PRINTED
         </p>
         <div className="flex justify-center mb-6">
-          <Logo size={320} priority />
+          {/* Responsive logo: 200px on phones, 280px on sm+, 320px on md+ */}
+          <Logo size={320} priority className="w-[200px] sm:w-[280px] md:w-[320px] h-auto rounded-xl" />
         </div>
         <h1
           className="font-[var(--font-heading)] tracking-tight text-4xl sm:text-5xl md:text-6xl leading-tight text-zinc-900"
