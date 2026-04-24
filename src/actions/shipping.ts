@@ -28,6 +28,7 @@ import {
   resolveItemType,
 } from "@/lib/shipping-config";
 import type { ShippingConfigRow as ShippingConfigRowType } from "@/lib/shipping-config";
+import { filterByEnabledCatalog } from "@/lib/delyva-filter";
 import { sendOrderShippedEmail } from "@/actions/send-emails";
 import { formatOrderNumber } from "@/lib/orders";
 
@@ -369,18 +370,12 @@ export async function quoteRatesForOrder(orderId: string): Promise<
       itemType: resolveItemType(cfg.defaultItemType),
     });
     const all = parseQuoteServices(q);
-    // Allowlist matches either the bookable serviceCode (e.g. "SPXDMY-PN-BD1")
-    // or the courier brand companyCode (e.g. "SPXDMY") — admin may have saved
-    // either shape across the bug's lifetime, and matching both is harmless.
-    const allow = new Set(cfg.enabledServices);
-    const filtered =
-      allow.size === 0
-        ? all
-        : all.filter(
-            (s) =>
-              allow.has(s.serviceCode) ||
-              (s.companyCode !== null && allow.has(s.companyCode)),
-          );
+    // Phase 15 — filter by shipping_service_catalog.is_enabled, falling back
+    // to legacy cfg.enabledServices only when the catalog is empty. Shared
+    // with customer-side quoteForCart so both paths honour the same admin
+    // toggles (BLOCKER 4 fix — admin booking previously only checked the
+    // legacy JSON column).
+    const filtered = await filterByEnabledCatalog(all, cfg);
     return { ok: true, services: filtered };
   } catch (e) {
     if (e instanceof DelyvaError)

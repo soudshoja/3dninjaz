@@ -1,11 +1,12 @@
 "use server";
 
 import "server-only";
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { products, productVariants, shippingServiceCatalog } from "@/lib/db/schema";
+import { products, productVariants } from "@/lib/db/schema";
 import { delyvaApi, DelyvaError, parseQuoteServices } from "@/lib/delyva";
 import { loadShippingConfig, resolveItemType } from "@/lib/shipping-config";
+import { filterByEnabledCatalog } from "@/lib/delyva-filter";
 
 // ============================================================================
 // Phase 9 (09-01) — checkout shipping-quote helper (NOT YET WIRED TO UI).
@@ -188,60 +189,13 @@ export async function quoteForCart(
     });
 
     // Defensive parser — see src/lib/delyva.ts parseQuoteServices for the
-    // full shape discussion. Accepts either the nested current response
-    // (services[].service.code / service.serviceCompany) or the legacy flat
-    // shape (services[].serviceCompany.companyCode).
+    // full shape discussion.
     const all = parseQuoteServices(q);
 
-    // Phase 15: filter by shipping_service_catalog.is_enabled.
-    // If the catalog table is empty (never refreshed), fall back to returning
-    // all services (backward-compat with pre-Phase-15 installs).
-    //
-    // Match logic: a live rate passes if EITHER its exact serviceCode OR its
-    // companyCode appears in the enabled catalog set. This mirrors the logic in
-    // quoteRatesForOrder (admin booking path) and handles the case where the
-    // admin enabled a service tier that Delyva returns under a compound
-    // serviceCode (e.g. catalog has "NJVMY-PN-BD1" enabled; live returns the
-    // same code — exact match). The companyCode fallback lets the admin
-    // effectively allowlist an entire courier brand by enabling any one of its
-    // tier rows — but in practice the catalog stores per-tier entries so exact
-    // serviceCode matching is the primary path.
-    const catalogEnabledRows = await db
-      .select({
-        serviceCode: shippingServiceCatalog.serviceCode,
-        companyCode: shippingServiceCatalog.companyCode,
-      })
-      .from(shippingServiceCatalog)
-      .where(eq(shippingServiceCatalog.isEnabled, true));
-
-    let filtered: typeof all;
-    if (catalogEnabledRows.length === 0) {
-      // Catalog not populated yet — show everything (same as old behaviour).
-      // Legacy fallback: also respect the old shipping_config.enabledServices
-      // JSON column if it has entries, so stores that never run the Phase 15
-      // migration still work.
-      const legacyAllow = new Set(cfg.enabledServices);
-      filtered =
-        legacyAllow.size === 0
-          ? all
-          : all.filter(
-              (s) =>
-                legacyAllow.has(s.serviceCode) ||
-                (s.companyCode !== null && legacyAllow.has(s.companyCode)),
-            );
-    } else {
-      // Build two sets: one for exact service-tier codes, one for company
-      // codes. A live rate passes if it matches either set.
-      const enabledServiceCodes = new Set(catalogEnabledRows.map((r) => r.serviceCode));
-      const enabledCompanyCodes = new Set(
-        catalogEnabledRows.map((r) => r.companyCode).filter(Boolean),
-      );
-      filtered = all.filter(
-        (s) =>
-          enabledServiceCodes.has(s.serviceCode) ||
-          (s.companyCode !== null && enabledCompanyCodes.has(s.companyCode)),
-      );
-    }
+    // Phase 15 — filter by shipping_service_catalog.is_enabled. Shared
+    // helper so the admin booking path (quoteRatesForOrder) matches byte-
+    // for-byte (BLOCKER 4 fix).
+    const filtered = await filterByEnabledCatalog(all, cfg);
 
     // --- markup + free-shipping
     const markupPct = Number(cfg.markupPercent ?? 0);
