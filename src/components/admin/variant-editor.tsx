@@ -46,6 +46,7 @@ import { Pencil, Trash2, Plus, RefreshCw, Star, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { toDatetimeLocal, fromDatetimeLocal } from "@/lib/format";
 import {
   Dialog,
   DialogContent,
@@ -265,6 +266,11 @@ export function VariantEditor({ productId, initialOptions, initialVariants }: Va
         showToast(result.error, "error");
       } else {
         showToast("Variant deleted");
+        // Phase 18 (Issue 3 fix) — defensive refetch so the editor never
+        // diverges from server state after a delete. Without this, if a
+        // prior optimistic update had failed without surfacing, the "zombie"
+        // row could reappear after the next Pattern B refresh.
+        await refresh();
       }
     });
   };
@@ -585,6 +591,7 @@ export function VariantEditor({ productId, initialOptions, initialVariants }: Va
                   <th className="text-left px-4 py-3 font-medium">Sale price</th>
                   <th className="text-left px-4 py-3 font-medium">Stock</th>
                   <th className="text-left px-4 py-3 font-medium">Track</th>
+                  <th className="text-left px-4 py-3 font-medium" title="When tracked AND stock=0, allow pre-order keeps the variant visible. Default off — hides OOS variants from PDP.">Pre-order</th>
                   <th className="text-left px-4 py-3 font-medium">Active</th>
                   <th className="text-left px-4 py-3 font-medium">Default</th>
                   <th className="text-left px-4 py-3 font-medium">SKU</th>
@@ -761,24 +768,24 @@ function VariantRow({
           </button>
           {showSchedule && (
             <div className="flex flex-col gap-1 mt-1">
-              <label className="text-xs text-[var(--color-brand-text-muted)]">From (MYT)</label>
+              {/* Phase 18 — inputs now use browser local timezone. The server
+                  still stores UTC; toDatetimeLocal/fromDatetimeLocal convert. */}
+              <label className="text-xs text-[var(--color-brand-text-muted)]">From (your timezone)</label>
               <input
                 type="datetime-local"
-                defaultValue={variant.saleFrom ? new Date(variant.saleFrom.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 16) : ""}
+                defaultValue={toDatetimeLocal(variant.saleFrom)}
                 onBlur={(e) => {
-                  const val = e.target.value;
-                  const isoUtc = val ? new Date(val + ":00+08:00").toISOString() : null;
+                  const isoUtc = fromDatetimeLocal(e.target.value);
                   onUpdate(variant.id, "saleFrom", isoUtc);
                 }}
                 className="h-7 text-xs border rounded px-1"
               />
-              <label className="text-xs text-[var(--color-brand-text-muted)]">To (MYT)</label>
+              <label className="text-xs text-[var(--color-brand-text-muted)]">To (your timezone)</label>
               <input
                 type="datetime-local"
-                defaultValue={variant.saleTo ? new Date(variant.saleTo.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 16) : ""}
+                defaultValue={toDatetimeLocal(variant.saleTo)}
                 onBlur={(e) => {
-                  const val = e.target.value;
-                  const isoUtc = val ? new Date(val + ":00+08:00").toISOString() : null;
+                  const isoUtc = fromDatetimeLocal(e.target.value);
                   onUpdate(variant.id, "saleTo", isoUtc);
                 }}
                 className="h-7 text-xs border rounded px-1"
@@ -804,6 +811,15 @@ function VariantRow({
         <Switch
           checked={variant.trackStock}
           onCheckedChange={(checked) => onUpdate(variant.id, "trackStock", checked)}
+          disabled={isPending}
+        />
+      </td>
+
+      {/* Phase 18 — Pre-order toggle */}
+      <td className="px-4 py-3">
+        <Switch
+          checked={variant.allowPreorder}
+          onCheckedChange={(checked) => onUpdate(variant.id, "allowPreorder", checked)}
           disabled={isPending}
         />
       </td>

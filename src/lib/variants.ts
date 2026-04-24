@@ -64,6 +64,9 @@ export type HydratedVariant = {
   isOnSale: boolean;
   /** AD-08 — per-variant shipping weight in grams. NULL = inherit product weight. */
   weightG: number | null;
+  /** Phase 18 — admin-toggled: when TRUE and variant is OOS (tracked+stock=0),
+   * variant is shown on PDP as "Pre-order" instead of hidden. */
+  allowPreorder: boolean;
 };
 
 export type HydratedProductVariants = {
@@ -144,6 +147,7 @@ export async function hydrateProductVariants(
           effectivePrice,
           isOnSale,
           weightG: v.weightG ?? null,
+          allowPreorder: v.allowPreorder ?? false,
         };
       }),
     };
@@ -239,6 +243,7 @@ export async function hydrateProductVariants(
       effectivePrice,
       isOnSale,
       weightG: v.weightG ?? null,
+      allowPreorder: v.allowPreorder ?? false,
     };
   });
 

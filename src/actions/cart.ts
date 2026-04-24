@@ -109,10 +109,12 @@ export async function hydrateCartItems(
         ? composeVariantLabel(labelParts)
         : (v.labelCache ?? "");
 
-    // Determine availability
+    // Determine availability. Phase 18: allow_preorder=TRUE keeps OOS tracked
+    // variants available in the bag with a Pre-order label.
     const trackedOOS = v.trackStock === true && (v.stock ?? 0) <= 0;
+    const allowPreorder = v.allowPreorder === true;
     const legacyOOS = v.trackStock !== true && v.inStock === false;
-    const available = !trackedOOS && !legacyOOS;
+    const available = (!trackedOOS || allowPreorder) && !legacyOOS;
 
     const images = ensureImagesArray(product.images);
     const productImage =

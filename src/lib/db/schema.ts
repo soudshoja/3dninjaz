@@ -288,6 +288,10 @@ export const productVariants = mysqlTable("product_variants", {
   saleTo: timestamp("sale_to"),
   isDefault: boolean("is_default").notNull().default(false),
   weightG: int("weight_g"),
+  // Phase 18 — when variant is tracked AND stock=0, allowPreorder=TRUE keeps
+  // it visible on PDP with a "Pre-order" badge + button label. Default FALSE
+  // means OOS tracked variants are hidden entirely.
+  allowPreorder: boolean("allow_preorder").notNull().default(false),
 });
 
 // ============================================================================

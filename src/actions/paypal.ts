@@ -110,12 +110,12 @@ export async function createPayPalOrder(
       return { ok: false, error: "One or more items are no longer available." };
     }
     // Phase 13 (T-05-04-tampering): server-side OOS check.
-    // Only block checkout when trackStock=true AND stock is depleted.
-    // On-demand variants (trackStock=false, the default) always pass through.
-    // Legacy inStock=false boolean is also honoured for backwards-compat.
+    // Phase 18: allow pre-order through — only reject OOS variants when
+    // allow_preorder=FALSE. Reject hard when the variant is hidden.
     const trackedAndOOS = v.trackStock === true && (v.stock ?? 0) <= 0;
+    const allowPreorder = v.allowPreorder === true;
     const legacyOOS = v.trackStock !== true && v.inStock === false;
-    if (trackedAndOOS || legacyOOS) {
+    if ((trackedAndOOS && !allowPreorder) || legacyOOS) {
       return {
         ok: false,
         error: `${v.product?.name ?? "An item"} is sold out. Please remove it from your bag.`,

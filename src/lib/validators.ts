@@ -682,6 +682,9 @@ export const variantUpdateSchema = z.object({
   isDefault: z.boolean().optional(),
   // AD-08 — optional per-variant shipping weight (grams). NULL/omitted = inherit product weight.
   weightG: z.number().int().min(0).max(50000).nullable().optional(),
+  // Phase 18 — allow pre-order when variant is OOS (tracked, stock=0). When
+  // FALSE (default) the PDP hides OOS tracked variants entirely.
+  allowPreorder: z.boolean().optional(),
 });
 export type VariantUpdateInput = z.infer<typeof variantUpdateSchema>;
 

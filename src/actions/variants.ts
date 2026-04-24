@@ -30,9 +30,27 @@ import {
   productOptions,
   productOptionValues,
   productVariants,
+  products,
 } from "@/lib/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+
+// Phase 18 — revalidate both admin editor AND public PDP after every variant
+// mutation. Issue 4: inventory/price edits weren't reflected on /products/[slug]
+// because only the admin path was revalidated.
+async function revalidateProductSurfaces(productId: string): Promise<void> {
+  revalidatePath(`/admin/products/${productId}/variants`);
+  const [p] = await db
+    .select({ slug: products.slug })
+    .from(products)
+    .where(eq(products.id, productId))
+    .limit(1);
+  if (p) {
+    revalidatePath(`/products/${p.slug}`);
+    revalidatePath("/");
+    revalidatePath("/shop");
+  }
+}
 import { requireAdmin } from "@/lib/auth-helpers";
 import { writeUpload, deleteUpload } from "@/lib/storage";
 import { composeVariantLabel, hydrateProductVariants } from "@/lib/variants";
@@ -94,7 +112,7 @@ export async function addProductOption(
     position: nextPosition,
   });
 
-  revalidatePath(`/admin/products/${productId}/variants`);
+  await revalidateProductSurfaces(productId);
   return { success: true, data: { id } };
 }
 
@@ -119,7 +137,7 @@ export async function renameProductOption(
     .set({ name: trimmed })
     .where(eq(productOptions.id, optionId));
 
-  revalidatePath(`/admin/products/${option.productId}/variants`);
+  await revalidateProductSurfaces(option.productId);
   return { success: true };
 }
 
@@ -171,7 +189,7 @@ export async function deleteProductOption(
   // Delete option (cascades to option_values via FK)
   await db.delete(productOptions).where(eq(productOptions.id, optionId));
 
-  revalidatePath(`/admin/products/${option.productId}/variants`);
+  await revalidateProductSurfaces(option.productId);
   return { success: true, data: { variantsDeleted } };
 }
 
@@ -229,7 +247,7 @@ export async function addOptionValue(
     .from(productOptions)
     .where(eq(productOptions.id, optionId))
     .limit(1);
-  if (option) revalidatePath(`/admin/products/${option.productId}/variants`);
+  if (option) await revalidateProductSurfaces(option.productId);
 
   return { success: true, data: { id } };
 }
@@ -289,7 +307,7 @@ export async function renameOptionValue(
     .from(productOptions)
     .where(eq(productOptions.id, val.optionId))
     .limit(1);
-  if (option) revalidatePath(`/admin/products/${option.productId}/variants`);
+  if (option) await revalidateProductSurfaces(option.productId);
 
   return { success: true };
 }
@@ -334,7 +352,7 @@ export async function deleteOptionValue(
     .from(productOptions)
     .where(eq(productOptions.id, val.optionId))
     .limit(1);
-  if (option) revalidatePath(`/admin/products/${option.productId}/variants`);
+  if (option) await revalidateProductSurfaces(option.productId);
 
   return { success: true, data: { variantsDeleted: allAffected.length } };
 }
@@ -456,7 +474,7 @@ export async function generateVariantMatrix(
     inserted++;
   }
 
-  revalidatePath(`/admin/products/${productId}/variants`);
+  await revalidateProductSurfaces(productId);
   return { success: true, data: { inserted } };
 }
 
@@ -503,6 +521,8 @@ export async function updateVariant(
   if (data.saleTo !== undefined) update.saleTo = data.saleTo ? new Date(data.saleTo) : null;
   if (data.isDefault !== undefined) update.isDefault = data.isDefault;
   if (data.weightG !== undefined) update.weightG = data.weightG === null || data.weightG === undefined ? null : Number(data.weightG);
+  // Phase 18 — allow pre-order toggle
+  if (data.allowPreorder !== undefined) update.allowPreorder = data.allowPreorder;
 
   // Validate sale price < regular price (T-17-01-price-tampering)
   if (data.salePrice && data.salePrice !== "") {
@@ -534,7 +554,7 @@ export async function updateVariant(
     .from(productVariants)
     .where(eq(productVariants.id, variantId))
     .limit(1);
-  if (v) revalidatePath(`/admin/products/${v.productId}/variants`);
+  if (v) await revalidateProductSurfaces(v.productId);
 
   return { success: true };
 }
@@ -550,7 +570,7 @@ export async function deleteVariant(variantId: string): Promise<ActionResult> {
 
   await db.delete(productVariants).where(eq(productVariants.id, variantId));
 
-  if (v) revalidatePath(`/admin/products/${v.productId}/variants`);
+  if (v) await revalidateProductSurfaces(v.productId);
   return { success: true };
 }
 
@@ -632,7 +652,7 @@ export async function uploadVariantImage(
     await deleteUpload(v.oldUrl).catch(() => {});
   }
 
-  revalidatePath(`/admin/products/${v.productId}/variants`);
+  await revalidateProductSurfaces(v.productId);
   return { success: true, data: { imageUrl: newUrl } };
 }
 
@@ -659,7 +679,7 @@ export async function removeVariantImage(variantId: string): Promise<ActionResul
     await deleteUpload(v.oldUrl).catch(() => {});
   }
 
-  revalidatePath(`/admin/products/${v.productId}/variants`);
+  await revalidateProductSurfaces(v.productId);
   return { success: true };
 }
 
@@ -696,7 +716,7 @@ export async function setDefaultVariant(variantId: string): Promise<ActionResult
       .where(eq(productVariants.id, variantId));
   });
 
-  revalidatePath(`/admin/products/${v.productId}/variants`);
+  await revalidateProductSurfaces(v.productId);
   return { success: true };
 }
 
@@ -799,6 +819,6 @@ export async function bulkUpdateVariants(
     }
   });
 
-  revalidatePath(`/admin/products/${productId}/variants`);
+  await revalidateProductSurfaces(productId);
   return { success: true, data: { affected } };
 }

@@ -12,6 +12,34 @@ export function formatMYR(price: string | number): string {
 }
 
 /**
+ * Phase 18 — convert a UTC timestamp to an ISO datetime-local string in the
+ * caller's browser timezone, suitable for `<input type="datetime-local">`.
+ * Returns "" for null/invalid input. Format: "YYYY-MM-DDTHH:mm".
+ */
+export function toDatetimeLocal(utc: string | Date | null | undefined): string {
+  if (!utc) return "";
+  const d = utc instanceof Date ? utc : new Date(utc);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  );
+}
+
+/**
+ * Phase 18 — interpret a browser-local datetime-local string as the local
+ * timezone wall-clock time and convert to UTC ISO string. Returns null for
+ * empty/invalid. Relies on `new Date(local)` constructor which parses as local.
+ */
+export function fromDatetimeLocal(local: string | null | undefined): string | null {
+  if (!local) return null;
+  const d = new Date(local);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
+/**
  * Render the price of a product's variants as either a single price
  * (all variants equal) or a range "RM 18.00 - RM 45.00" (sorted ascending).
  *

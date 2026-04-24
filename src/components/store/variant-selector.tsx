@@ -15,6 +15,13 @@
 import { useMemo, useState, useEffect } from "react";
 import type { HydratedOption, HydratedVariant } from "@/lib/variants";
 
+/** Phase 18 — a variant is hidden entirely when track_stock=TRUE AND stock=0
+ * AND allow_preorder=FALSE. On-demand variants (track_stock=FALSE) are never
+ * hidden via this path. */
+function isVariantHidden(v: HydratedVariant): boolean {
+  return v.trackStock === true && (v.stock ?? 0) <= 0 && v.allowPreorder !== true;
+}
+
 interface VariantSelectorProps {
   options: HydratedOption[];
   variants: HydratedVariant[];
@@ -23,9 +30,15 @@ interface VariantSelectorProps {
 
 type SelectedValues = [string | null, string | null, string | null];
 
+/** True when the variant is in stock OR (Phase 18) preorderable. */
 function isVariantAvailable(v: HydratedVariant): boolean {
-  if (v.trackStock) return v.stock > 0;
+  if (v.trackStock) return v.stock > 0 || v.allowPreorder === true;
   return v.inStock;
+}
+
+/** Phase 18 — true when variant is OOS (tracked+stock=0) AND allow_preorder. */
+function isPreorderVariant(v: HydratedVariant): boolean {
+  return v.trackStock === true && (v.stock ?? 0) <= 0 && v.allowPreorder === true;
 }
 
 function findMatchingVariant(
@@ -44,13 +57,31 @@ function findMatchingVariant(
 
 export function VariantSelector({
   options,
-  variants,
+  variants: rawVariants,
   onVariantChange,
 }: VariantSelectorProps) {
+  // Phase 18 — filter out hidden variants (OOS tracked without preorder).
+  const variants = useMemo(
+    () => rawVariants.filter((v) => !isVariantHidden(v)),
+    [rawVariants],
+  );
+
+  // Derive which option values still have at least one visible variant.
+  // An option value is hidden when every variant using it is hidden.
+  const visibleValueIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const v of variants) {
+      for (const vid of v.optionValueIds) {
+        if (vid) set.add(vid);
+      }
+    }
+    return set;
+  }, [variants]);
+
   // Initial selection: Phase 17 — prefer admin-marked default, then first
   // available, then first variant (AD-05).
   const defaultSelected = useMemo<SelectedValues>(() => {
-    // 1. Explicit default
+    // 1. Explicit default — only if not hidden
     const def = variants.find((v) => v.isDefault);
     if (def) return [...def.optionValueIds] as SelectedValues;
     // 2. First available
@@ -87,7 +118,10 @@ export function VariantSelector({
     <div className="space-y-4 mb-6">
       {options.map((option, slotIdx) => {
         const currentValueId = selected[slotIdx];
-        const isColorOption = option.values.some((v) => v.swatchHex);
+        // Phase 18 — strip values that have no visible variant.
+        const visibleValues = option.values.filter((v) => visibleValueIds.has(v.id));
+        if (visibleValues.length === 0) return null;
+        const isColorOption = visibleValues.some((v) => v.swatchHex);
 
         return (
           <div key={option.id}>
@@ -95,7 +129,7 @@ export function VariantSelector({
               {option.name.toUpperCase()}
               {currentValueId && (
                 <span className="ml-2 normal-case tracking-normal font-medium text-[var(--color-brand-text-muted)]">
-                  : {option.values.find((v) => v.id === currentValueId)?.value}
+                  : {visibleValues.find((v) => v.id === currentValueId)?.value}
                 </span>
               )}
             </p>
@@ -103,7 +137,7 @@ export function VariantSelector({
             {isColorOption ? (
               // Swatch buttons for color options
               <div className="flex flex-wrap gap-2">
-                {option.values.map((val) => {
+                {visibleValues.map((val) => {
                   // Build test selection to check availability
                   const testSelected: SelectedValues = [...selected] as SelectedValues;
                   testSelected[slotIdx] = val.id;
@@ -164,7 +198,7 @@ export function VariantSelector({
             ) : (
               // Pill buttons for text options
               <ul className="flex flex-wrap gap-2" role="radiogroup" aria-label={option.name}>
-                {option.values.map((val) => {
+                {visibleValues.map((val) => {
                   const testSelected: SelectedValues = [...selected] as SelectedValues;
                   testSelected[slotIdx] = val.id;
                   const matchingVariant = findMatchingVariant(variants, testSelected);

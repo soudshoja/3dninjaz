@@ -7,10 +7,12 @@ import { formatMYR } from "@/lib/format";
 import { useCartStore } from "@/stores/cart-store";
 
 // Phase 17: selectedVariant uses effectivePrice when available (sale price support).
+// Phase 18: adds isPreorder flag so the button label becomes "Pre-order · RM ..."
 type SelectedVariant = {
   id: string;
   price: string;
   effectivePrice?: string;
+  isPreorder?: boolean;
 } | null;
 
 /**
@@ -46,9 +48,14 @@ export function AddToBagButton({
     return () => clearTimeout(t);
   }, [flash]);
 
+  const priceLabel = disabled
+    ? ""
+    : formatMYR(selectedVariant!.effectivePrice ?? selectedVariant!.price);
   const label = disabled
     ? "Pick a variant"
-    : `Add to bag · ${formatMYR(selectedVariant!.effectivePrice ?? selectedVariant!.price)}`;
+    : selectedVariant!.isPreorder
+      ? `Pre-order · ${priceLabel}`
+      : `Add to bag · ${priceLabel}`;
 
   const onClick = () => {
     if (!selectedVariant) return;

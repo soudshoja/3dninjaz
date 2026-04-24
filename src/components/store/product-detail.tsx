@@ -81,6 +81,13 @@ export function ProductDetail({
     ? formatMYR(selectedHydrated.effectivePrice)
     : priceRangeMYR(product.hydratedVariants);
 
+  // Phase 18 — true when selected variant is OOS (tracked+stock=0) AND allowed preorder.
+  const isPreorder =
+    !!selectedHydrated &&
+    selectedHydrated.trackStock === true &&
+    (selectedHydrated.stock ?? 0) <= 0 &&
+    selectedHydrated.allowPreorder === true;
+
   return (
     <div className="max-w-6xl mx-auto px-6 py-10 md:py-16 grid lg:grid-cols-2 gap-10 md:gap-14">
       <div>
@@ -111,6 +118,18 @@ export function ProductDetail({
             <RatingBadge avg={ratingAvg} count={ratingCount} size="md" />
           </div>
         ) : null}
+
+        {/* Phase 18 — pre-order badge (AD-09) — visible when variant is OOS+preorder */}
+        {isPreorder && (
+          <div className="mb-3">
+            <span
+              className="inline-flex rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider"
+              style={{ backgroundColor: BRAND.purple, color: "white" }}
+            >
+              Pre-order
+            </span>
+          </div>
+        )}
 
         {/* Phase 17 — sale price rendering (AD-01) */}
         {selectedHydrated?.isOnSale ? (
@@ -154,7 +173,11 @@ export function ProductDetail({
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex-1 min-w-0">
             <AddToBagButton
-              selectedVariant={selectedHydrated}
+              selectedVariant={
+                selectedHydrated
+                  ? { ...selectedHydrated, isPreorder }
+                  : null
+              }
               productId={product.id}
               productSlug={product.slug}
               productName={product.name}
