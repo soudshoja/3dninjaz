@@ -973,6 +973,13 @@ export async function refreshServiceCatalog(): Promise<RefreshCatalogResult> {
     .from(shippingServiceCatalog);
   const existingCodes = new Set(existingRows.map((r) => r.serviceCode));
 
+  // If the catalog already has rows the admin has configured, new services
+  // discovered during refresh default to is_enabled=false (opt-in). This
+  // prevents a catalog refresh from silently re-enabling couriers the admin
+  // intentionally disabled. On a fresh install (empty catalog) we default to
+  // true so the first refresh gives a usable starting state.
+  const catalogWasEmpty = existingCodes.size === 0;
+
   const now = new Date();
   let newlyAdded = 0;
 
@@ -997,7 +1004,12 @@ export async function refreshServiceCatalog(): Promise<RefreshCatalogResult> {
             .where(eq(shippingServiceCatalog.serviceCode, serviceCode));
           console.log(`[refreshServiceCatalog] updated service ${serviceCode}`);
         } else {
-          // INSERT — new service, default is_enabled = true.
+          // INSERT — new service.
+          // Default is_enabled to true only on a completely fresh catalog so
+          // the first refresh produces a usable state. If the admin has already
+          // configured the catalog, new services start disabled so they don't
+          // silently appear at checkout — admin must explicitly enable them.
+          const defaultEnabled = catalogWasEmpty;
           await tx.insert(shippingServiceCatalog).values({
             id: randomUUID(),
             serviceCode,
@@ -1008,10 +1020,10 @@ export async function refreshServiceCatalog(): Promise<RefreshCatalogResult> {
             samplePrice: svc.price.amount.toFixed(2),
             etaMinMinutes: svc.etaMin ?? null,
             etaMaxMinutes: svc.etaMax ?? null,
-            isEnabled: true,
+            isEnabled: defaultEnabled,
             lastSeenAt: now,
           });
-          console.log(`[refreshServiceCatalog] inserted service ${serviceCode}`);
+          console.log(`[refreshServiceCatalog] inserted service ${serviceCode} (is_enabled=${defaultEnabled})`);
           newlyAdded++;
         }
       } catch (e) {

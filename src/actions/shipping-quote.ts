@@ -192,8 +192,21 @@ export async function quoteForCart(
     // Phase 15: filter by shipping_service_catalog.is_enabled.
     // If the catalog table is empty (never refreshed), fall back to returning
     // all services (backward-compat with pre-Phase-15 installs).
+    //
+    // Match logic: a live rate passes if EITHER its exact serviceCode OR its
+    // companyCode appears in the enabled catalog set. This mirrors the logic in
+    // quoteRatesForOrder (admin booking path) and handles the case where the
+    // admin enabled a service tier that Delyva returns under a compound
+    // serviceCode (e.g. catalog has "NJVMY-PN-BD1" enabled; live returns the
+    // same code — exact match). The companyCode fallback lets the admin
+    // effectively allowlist an entire courier brand by enabling any one of its
+    // tier rows — but in practice the catalog stores per-tier entries so exact
+    // serviceCode matching is the primary path.
     const catalogEnabledRows = await db
-      .select({ serviceCode: shippingServiceCatalog.serviceCode })
+      .select({
+        serviceCode: shippingServiceCatalog.serviceCode,
+        companyCode: shippingServiceCatalog.companyCode,
+      })
       .from(shippingServiceCatalog)
       .where(eq(shippingServiceCatalog.isEnabled, true));
 
@@ -213,8 +226,17 @@ export async function quoteForCart(
                 (s.companyCode !== null && legacyAllow.has(s.companyCode)),
             );
     } else {
-      const enabledSet = new Set(catalogEnabledRows.map((r) => r.serviceCode));
-      filtered = all.filter((s) => enabledSet.has(s.serviceCode));
+      // Build two sets: one for exact service-tier codes, one for company
+      // codes. A live rate passes if it matches either set.
+      const enabledServiceCodes = new Set(catalogEnabledRows.map((r) => r.serviceCode));
+      const enabledCompanyCodes = new Set(
+        catalogEnabledRows.map((r) => r.companyCode).filter(Boolean),
+      );
+      filtered = all.filter(
+        (s) =>
+          enabledServiceCodes.has(s.serviceCode) ||
+          (s.companyCode !== null && enabledCompanyCodes.has(s.companyCode)),
+      );
     }
 
     // --- markup + free-shipping
