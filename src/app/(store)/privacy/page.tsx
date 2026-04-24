@@ -242,7 +242,7 @@ export default function PrivacyPage() {
             Email our data-protection contact at{" "}
             <Link
               href={`mailto:${BUSINESS.dpoEmail}`}
-              className="text-[#066BD2] underline underline-offset-2 hover:opacity-80"
+              className="text-[#1E8BFF] underline underline-offset-2 hover:opacity-80"
             >
               {BUSINESS.dpoEmail}
             </Link>{" "}
@@ -328,7 +328,7 @@ export default function PrivacyPage() {
             withdraw your consent at any time by emailing{" "}
             <Link
               href={`mailto:${BUSINESS.dpoEmail}`}
-              className="text-[#066BD2] underline underline-offset-2 hover:opacity-80"
+              className="text-[#1E8BFF] underline underline-offset-2 hover:opacity-80"
             >
               {BUSINESS.dpoEmail}
             </Link>

@@ -586,9 +586,9 @@ The store's colour palette was updated for consistency across all pages:
 
 | Colour | Hex |
 |--------|-----|
-| Blue | \`#066BD2\` |
-| Green | \`#398E07\` |
-| Purple | \`#5C27A7\` |
+| Blue | \`#1E8BFF\` |
+| Green | \`#39E600\` |
+| Purple | \`#A855F7\` |
 | Ink (dark) | \`#0B1020\` |
 | Cream (background) | \`#F7FAF4\` |
 

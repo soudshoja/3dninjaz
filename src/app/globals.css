@@ -14,6 +14,9 @@
   --color-brand-blue: var(--brand-blue);
   --color-brand-green: var(--brand-green);
   --color-brand-purple: var(--brand-purple);
+  --color-brand-blue-dark: var(--brand-blue-dark);
+  --color-brand-green-dark: var(--brand-green-dark);
+  --color-brand-purple-dark: var(--brand-purple-dark);
   --color-brand-ink: var(--brand-ink);
   --color-brand-cream: var(--brand-cream);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -58,9 +61,12 @@
   /* Unified 3D Ninjaz palette — D-01 (Phase 2 DECISIONS.md).
      Single source of truth across storefront AND admin surfaces.
      Keep these in lockstep with src/lib/brand.ts. */
-  --brand-blue: #066BD2;
-  --brand-green: #398E07;
-  --brand-purple: #5C27A7;
+  --brand-blue: #1E8BFF;
+  --brand-green: #39E600;
+  --brand-purple: #A855F7;
+  --brand-blue-dark: #0A4FB3;
+  --brand-green-dark: #1FA300;
+  --brand-purple-dark: #6B21A8;
   --brand-ink: #0B1020;
   --brand-cream: #F7FAF4;
 

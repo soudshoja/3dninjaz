@@ -5,9 +5,9 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
 const BRAND = {
-  blue: '#066BD2',
-  green: '#398E07',
-  purple: '#5C27A7',
+  blue: '#1E8BFF',
+  green: '#39E600',
+  purple: '#A855F7',
   ink: '#0B1020',
   cream: '#F7FAF4',
 };
