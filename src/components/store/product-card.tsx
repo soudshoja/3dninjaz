@@ -8,6 +8,7 @@ import { SoldOutBadge } from "@/components/store/sold-out-badge";
 // the per-image manifest and emits avif/webp/jpeg srcset for ~70% size
 // reduction on average.
 import { ResponsiveProductImage } from "@/components/storefront/responsive-product-image";
+import { isVariantAvailable } from "@/lib/variant-availability";
 
 /**
  * Single product card. Used by the homepage featured rail, /shop grid,
@@ -36,16 +37,6 @@ const PASTEL_TINTS = [
 ] as const;
 
 const ACCENTS = [BRAND.blue, BRAND.green, BRAND.purple] as const;
-
-/** A variant is available if the admin marked it in-stock AND
- *  either: stock tracking is off (on-demand print), stock > 0, or pre-order is on. */
-function isVariantAvailable(v: { inStock: boolean; trackStock: boolean; stock: number; allowPreorder: boolean }): boolean {
-  if (!v.inStock) return false;
-  if (!v.trackStock) return true; // on-demand, always available
-  if (v.stock > 0) return true;
-  if (v.allowPreorder) return true;
-  return false;
-}
 
 export async function ProductCard({
   product,

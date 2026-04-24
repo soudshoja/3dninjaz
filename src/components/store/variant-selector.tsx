@@ -14,6 +14,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import type { HydratedOption, HydratedVariant } from "@/lib/variants";
+import { isVariantAvailable as isVariantAvailableShared } from "@/lib/variant-availability";
 
 /** A variant is OOS when admin disabled it (inStock=false) OR it tracks stock
  * and is depleted (trackStock=true AND stock<=0). */
@@ -42,11 +43,15 @@ interface VariantSelectorProps {
 
 type SelectedValues = [string | null, string | null, string | null, string | null, string | null, string | null];
 
-/** True when the variant is in stock OR (Phase 18) preorderable. */
+/** True when the variant is in stock OR (Phase 18) preorderable. Delegates
+ *  to the shared pure helper so product-card and selector can't diverge. */
 function isVariantAvailable(v: HydratedVariant): boolean {
-  // An OOS variant is only "available" (clickable) if preorder is allowed.
-  if (isVariantOOS(v)) return v.allowPreorder === true;
-  return true;
+  return isVariantAvailableShared({
+    inStock: v.inStock,
+    trackStock: v.trackStock === true,
+    stock: v.stock ?? 0,
+    allowPreorder: v.allowPreorder === true,
+  });
 }
 
 function findMatchingVariant(

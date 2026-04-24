@@ -157,15 +157,15 @@ export default function AboutPage() {
               {
                 name: "Ishaq",
                 age: "10",
-                role: "The maker & packer. Green-banded ninja.",
-                color: BRAND.green,
+                role: "The maker & packer. Purple-banded ninja.",
+                color: BRAND.purple,
                 icon: "/icons/ninja/nav/services.png",
               },
               {
                 name: "Alaina",
                 age: "3",
-                role: "The tiny ninja cheerleader. Purple-banded ninja with a big heart.",
-                color: BRAND.purple,
+                role: "The tiny ninja cheerleader. Green-banded ninja with a big heart.",
+                color: BRAND.green,
                 icon: "/icons/ninja/emoji/great.png",
               },
             ].map((s) => (
