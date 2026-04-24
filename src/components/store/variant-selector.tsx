@@ -15,11 +15,15 @@
 import { useMemo, useState, useEffect } from "react";
 import type { HydratedOption, HydratedVariant } from "@/lib/variants";
 
-/** Phase 18 — a variant is hidden entirely when track_stock=TRUE AND stock=0
- * AND allow_preorder=FALSE. On-demand variants (track_stock=FALSE) are never
- * hidden via this path. */
+/** A variant is OOS when admin disabled it (inStock=false) OR it tracks stock
+ * and is depleted (trackStock=true AND stock<=0). */
+function isVariantOOS(v: HydratedVariant): boolean {
+  return !v.inStock || (v.trackStock === true && (v.stock ?? 0) <= 0);
+}
+
+/** A variant is hidden from the selector when it is OOS AND allow_preorder=FALSE. */
 function isVariantHidden(v: HydratedVariant): boolean {
-  return v.trackStock === true && (v.stock ?? 0) <= 0 && v.allowPreorder !== true;
+  return isVariantOOS(v) && v.allowPreorder !== true;
 }
 
 interface VariantSelectorProps {
@@ -32,13 +36,9 @@ type SelectedValues = [string | null, string | null, string | null];
 
 /** True when the variant is in stock OR (Phase 18) preorderable. */
 function isVariantAvailable(v: HydratedVariant): boolean {
-  if (v.trackStock) return v.stock > 0 || v.allowPreorder === true;
-  return v.inStock;
-}
-
-/** Phase 18 — true when variant is OOS (tracked+stock=0) AND allow_preorder. */
-function isPreorderVariant(v: HydratedVariant): boolean {
-  return v.trackStock === true && (v.stock ?? 0) <= 0 && v.allowPreorder === true;
+  // An OOS variant is only "available" (clickable) if preorder is allowed.
+  if (isVariantOOS(v)) return v.allowPreorder === true;
+  return true;
 }
 
 function findMatchingVariant(

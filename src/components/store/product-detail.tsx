@@ -76,16 +76,29 @@ export function ProductDetail({
   const material = product.materialType ?? "PLA";
   const leadDays = product.estimatedProductionDays ?? 7;
 
+  // Fix 2 — compute visible variants so PDP can show "sold out" when all
+  // variants are hidden (either admin-disabled or tracked+stock=0, without preorder).
+  const visibleVariants = useMemo(
+    () =>
+      product.hydratedVariants.filter((v) => {
+        const oos = !v.inStock || (v.trackStock === true && (v.stock ?? 0) <= 0);
+        return !(oos && v.allowPreorder !== true);
+      }),
+    [product.hydratedVariants],
+  );
+  const soldOut = product.hydratedVariants.length > 0 && visibleVariants.length === 0;
+
   // Effective price display
   const effectivePriceDisplay = selectedHydrated
     ? formatMYR(selectedHydrated.effectivePrice)
     : priceRangeMYR(product.hydratedVariants);
 
-  // Phase 18 — true when selected variant is OOS (tracked+stock=0) AND allowed preorder.
+  // Pre-order badge — true when selected variant is OOS (by either dimension:
+  // inStock=false OR tracked+stock=0) AND allow_preorder=true.
   const isPreorder =
     !!selectedHydrated &&
-    selectedHydrated.trackStock === true &&
-    (selectedHydrated.stock ?? 0) <= 0 &&
+    (!selectedHydrated.inStock ||
+      (selectedHydrated.trackStock === true && (selectedHydrated.stock ?? 0) <= 0)) &&
     selectedHydrated.allowPreorder === true;
 
   return (
@@ -163,18 +176,29 @@ export function ProductDetail({
           {product.description}
         </p>
 
-        {/* Generic variant selector */}
-        <VariantSelector
-          options={product.options}
-          variants={product.hydratedVariants}
-          onVariantChange={handleVariantChange}
-        />
+        {/* Fix 2 — when every variant is hidden (sold out + no preorder),
+            replace the selector with a clear sold-out message. */}
+        {soldOut ? (
+          <div
+            className="rounded-2xl border-2 px-4 py-3 text-sm font-semibold mb-6"
+            style={{ borderColor: "#cbd5e1", backgroundColor: "#f1f5f9", color: BRAND.ink }}
+            role="status"
+          >
+            Currently sold out. Check back soon!
+          </div>
+        ) : (
+          <VariantSelector
+            options={product.options}
+            variants={product.hydratedVariants}
+            onVariantChange={handleVariantChange}
+          />
+        )}
 
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex-1 min-w-0">
             <AddToBagButton
               selectedVariant={
-                selectedHydrated
+                !soldOut && selectedHydrated
                   ? { ...selectedHydrated, isPreorder }
                   : null
               }
