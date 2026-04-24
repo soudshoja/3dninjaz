@@ -437,6 +437,7 @@ export async function generateVariantMatrix(
   const existingVariants = await db
     .select({
       id: productVariants.id,
+      position: productVariants.position,
       option1ValueId: productVariants.option1ValueId,
       option2ValueId: productVariants.option2ValueId,
       option3ValueId: productVariants.option3ValueId,
@@ -460,7 +461,7 @@ export async function generateVariantMatrix(
   // Use the max existing position as the base so new rows are appended after
   // any pre-existing variants and don't collide with old position values.
   const basePosition = existingVariants.length > 0
-    ? Math.max(...existingVariants.map((_, i) => i)) + 1
+    ? Math.max(...existingVariants.map((v) => v.position ?? 0)) + 1
     : 0;
 
   for (const combo of combos) {
