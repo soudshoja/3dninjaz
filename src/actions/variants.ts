@@ -439,8 +439,6 @@ export async function generateVariantMatrix(
     if (combo.v3) labelParts.push(combo.v3.value);
     const label = composeVariantLabel(labelParts);
 
-    // Use "S" as the legacy size for new variants (size column is NOT NULL — dual-read window)
-    // This will be dropped in 16-07
     await db.insert(productVariants).values({
       id: randomUUID(),
       productId,
