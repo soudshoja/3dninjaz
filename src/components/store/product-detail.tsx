@@ -5,30 +5,12 @@ import { useMemo, useState, useCallback } from "react";
 import { BRAND } from "@/lib/brand";
 import { formatMYR, priceRangeMYR } from "@/lib/format";
 import { ProductGallery } from "@/components/store/product-gallery";
-import { SizeSelector } from "@/components/store/size-selector";
 import { VariantSelector } from "@/components/store/variant-selector";
-import { SizeGuide } from "@/components/store/size-guide";
 import { AddToBagButton } from "@/components/store/add-to-bag-button";
 import { WishlistButton } from "@/components/store/wishlist-button";
 import { RatingBadge } from "@/components/store/rating-badge";
 import type { HydratedOption, HydratedVariant } from "@/lib/variants";
-
-type Size = "S" | "M" | "L";
-
-type Variant = {
-  id: string;
-  size?: Size | null; // optional post phase-16-07 (size column dropped)
-  price: string;
-  inStock?: boolean;
-  trackStock?: boolean;
-  stock?: number;
-};
-
-type PictureSource = {
-  type: "image/avif" | "image/webp" | "image/jpeg";
-  srcSet: string;
-};
-type PictureData = { sources: PictureSource[]; fallbackSrc: string };
+import type { PictureData } from "@/lib/image-manifest";
 
 type ProductDetailProps = {
   product: {
@@ -40,25 +22,24 @@ type ProductDetailProps = {
     materialType: string | null;
     estimatedProductionDays: number | null;
     category: { name: string; slug: string } | null;
-    variants: Variant[];
-    // Phase 16 — generic variant system (additive)
-    options?: HydratedOption[];
-    hydratedVariants?: HydratedVariant[];
+    options: HydratedOption[];
+    hydratedVariants: HydratedVariant[];
   };
   isWishlistedInitial?: boolean;
   ratingAvg?: number;
   ratingCount?: number;
+  /** Pre-resolved PictureData for each product image (indexed parallel to images[]) */
   pictures?: PictureData[];
+  /** Pre-resolved PictureData keyed by variantId for variants that have imageUrl set */
+  variantPictures?: Record<string, PictureData | null>;
 };
-
-const SIZE_ORDER: Record<Size, number> = { S: 0, M: 1, L: 2 };
 
 /**
  * Stateful PDP container.
  *
- * Phase 16: when `options` + `hydratedVariants` are provided, renders the
- * generic <VariantSelector> instead of the legacy <SizeSelector>. Falls back
- * to legacy path when options are missing (defensive).
+ * Phase 17: renders sale price + ON SALE badge, pre-selects the admin-marked
+ * default variant, swaps the gallery to the variant's image when selected.
+ * Legacy SizeSelector / SizeGuide / AddToBagButtonV2 paths removed (17-04).
  */
 export function ProductDetail({
   product,
@@ -66,57 +47,46 @@ export function ProductDetail({
   ratingAvg = 0,
   ratingCount = 0,
   pictures,
+  variantPictures = {},
 }: ProductDetailProps) {
-  // ----- Legacy path (size-only, pre-phase-16 fallback) -----
-  const sortedVariants = useMemo(
-    () =>
-      [...product.variants].sort(
-        (a, b) => (SIZE_ORDER[a.size ?? "S"] ?? 0) - (SIZE_ORDER[b.size ?? "S"] ?? 0),
-      ),
-    [product.variants],
-  );
-  const [selectedSize, setSelectedSize] = useState<Size | null>(null);
-  const legacySelectedVariant =
-    sortedVariants.find((v) => v.size === selectedSize) ?? null;
-
-  // ----- Phase 16 generic path -----
-  const hasGenericOptions =
-    (product.options?.length ?? 0) > 0 &&
-    (product.hydratedVariants?.length ?? 0) > 0;
-
   const [selectedHydrated, setSelectedHydrated] = useState<HydratedVariant | null>(null);
 
   const handleVariantChange = useCallback((v: HydratedVariant | null) => {
     setSelectedHydrated(v);
   }, []);
 
-  // Determine effective selected variant + image
-  const effectiveVariant = hasGenericOptions ? selectedHydrated : legacySelectedVariant;
-  const effectivePrice = effectiveVariant
-    ? formatMYR(effectiveVariant.price)
-    : hasGenericOptions
-      ? priceRangeMYR(product.hydratedVariants ?? [])
-      : priceRangeMYR(sortedVariants);
+  // Gallery: when the selected variant has a pre-resolved PictureData, prepend it.
+  const galleryImages = useMemo(() => {
+    const variantPic = selectedHydrated ? variantPictures[selectedHydrated.id] ?? null : null;
+    if (variantPic) {
+      // Prepend variant picture using its fallbackSrc as the image URL key
+      return [variantPic.fallbackSrc, ...product.images.filter((i) => i !== variantPic.fallbackSrc)];
+    }
+    return product.images;
+  }, [selectedHydrated, variantPictures, product.images]);
 
-  // If selected variant has its own image, prepend to gallery
-  const variantImageUrl =
-    hasGenericOptions && selectedHydrated?.imageUrl ? selectedHydrated.imageUrl : null;
-  const galleryImages = variantImageUrl
-    ? [variantImageUrl, ...product.images.filter((i) => i !== variantImageUrl)]
-    : product.images;
+  const galleryPictures = useMemo<PictureData[] | undefined>(() => {
+    const variantPic = selectedHydrated ? variantPictures[selectedHydrated.id] ?? null : null;
+    if (variantPic && pictures) {
+      return [variantPic, ...pictures];
+    }
+    return pictures;
+  }, [selectedHydrated, variantPictures, pictures]);
 
   const material = product.materialType ?? "PLA";
   const leadDays = product.estimatedProductionDays ?? 7;
-  const hasSizeOption = product.options?.some(
-    (o) => o.name.toLowerCase() === "size",
-  );
+
+  // Effective price display
+  const effectivePriceDisplay = selectedHydrated
+    ? formatMYR(selectedHydrated.effectivePrice)
+    : priceRangeMYR(product.hydratedVariants);
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-10 md:py-16 grid lg:grid-cols-2 gap-10 md:gap-14">
       <div>
         <ProductGallery
           images={galleryImages}
-          pictures={variantImageUrl ? undefined : pictures}
+          pictures={galleryPictures}
           alt={product.name}
         />
       </div>
@@ -142,52 +112,54 @@ export function ProductDetail({
           </div>
         ) : null}
 
-        <p
-          className="inline-flex self-start rounded-full px-5 py-2 text-lg font-bold mb-6"
-          style={{ backgroundColor: BRAND.green, color: BRAND.ink }}
-        >
-          {effectivePrice}
-        </p>
+        {/* Phase 17 — sale price rendering (AD-01) */}
+        {selectedHydrated?.isOnSale ? (
+          <div className="flex items-center gap-3 mb-6 flex-wrap">
+            <span
+              className="inline-flex rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider"
+              style={{ backgroundColor: BRAND.purple, color: "white" }}
+            >
+              On Sale
+            </span>
+            <span className="text-base font-semibold text-zinc-400 line-through">
+              {formatMYR(selectedHydrated.price)}
+            </span>
+            <span
+              className="inline-flex self-start rounded-full px-5 py-2 text-lg font-bold"
+              style={{ backgroundColor: BRAND.green, color: BRAND.ink }}
+            >
+              {formatMYR(selectedHydrated.effectivePrice)}
+            </span>
+          </div>
+        ) : (
+          <p
+            className="inline-flex self-start rounded-full px-5 py-2 text-lg font-bold mb-6"
+            style={{ backgroundColor: BRAND.green, color: BRAND.ink }}
+          >
+            {effectivePriceDisplay}
+          </p>
+        )}
 
         <p className="text-base leading-relaxed mb-6 text-zinc-700">
           {product.description}
         </p>
 
-        {/* Phase 16: generic variant selector when options available */}
-        {hasGenericOptions ? (
-          <VariantSelector
-            options={product.options!}
-            variants={product.hydratedVariants!}
-            onVariantChange={handleVariantChange}
-          />
-        ) : (
-          /* Legacy size selector (fallback for pre-backfill or old data) */
-          <SizeSelector
-            variants={sortedVariants as Parameters<typeof SizeSelector>[0]["variants"]}
-            selectedSize={selectedSize}
-            onSelect={setSelectedSize}
-          />
-        )}
+        {/* Generic variant selector */}
+        <VariantSelector
+          options={product.options}
+          variants={product.hydratedVariants}
+          onVariantChange={handleVariantChange}
+        />
 
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex-1 min-w-0">
-            {hasGenericOptions ? (
-              <AddToBagButtonV2
-                selectedVariant={selectedHydrated}
-                productId={product.id}
-                productSlug={product.slug}
-                productName={product.name}
-                productImage={product.images[0] ?? null}
-              />
-            ) : (
-              <AddToBagButton
-                selectedVariant={legacySelectedVariant as Parameters<typeof AddToBagButton>[0]["selectedVariant"]}
-                productId={product.id}
-                productSlug={product.slug}
-                productName={product.name}
-                productImage={product.images[0] ?? null}
-              />
-            )}
+            <AddToBagButton
+              selectedVariant={selectedHydrated}
+              productId={product.id}
+              productSlug={product.slug}
+              productName={product.name}
+              productImage={product.images[0] ?? null}
+            />
           </div>
           <WishlistButton
             productId={product.id}
@@ -227,55 +199,7 @@ export function ProductDetail({
             your door.
           </p>
         </section>
-
-        {/* Size guide only for products with a Size option (or legacy) */}
-        {(hasSizeOption || !hasGenericOptions) && (
-          <SizeGuide variants={sortedVariants as Parameters<typeof SizeGuide>[0]["variants"]} />
-        )}
       </div>
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Phase 16 — AddToBagButton variant for variantId-based cart
-// ---------------------------------------------------------------------------
-// Thin wrapper that maps HydratedVariant → the cart store's addItem shape.
-// The cart store is updated in Plan 16-05 to accept variantId directly.
-// During this transition window we pass the legacy shape so the existing
-// cart-store.ts still works without modification.
-
-function AddToBagButtonV2({
-  selectedVariant,
-  productId,
-  productSlug,
-  productName,
-  productImage,
-}: {
-  selectedVariant: HydratedVariant | null;
-  productId: string;
-  productSlug: string;
-  productName: string;
-  productImage: string | null;
-}) {
-  // Bridge: map HydratedVariant to the legacy AddToBagButton shape.
-  // size is still required by cart-store v1; we use "S" as a placeholder
-  // until the cart is upgraded in Plan 16-05.
-  const legacyShape = selectedVariant
-    ? {
-        id: selectedVariant.id,
-        size: "S" as const, // placeholder — overridden in 16-05 cart upgrade
-        price: selectedVariant.price,
-      }
-    : null;
-
-  return (
-    <AddToBagButton
-      selectedVariant={legacyShape}
-      productId={productId}
-      productSlug={productSlug}
-      productName={productName}
-      productImage={productImage}
-    />
   );
 }

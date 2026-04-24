@@ -6,11 +6,11 @@ import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
 import { useCartStore } from "@/stores/cart-store";
 
-// Phase 16: selectedVariant only needs id + price (size kept for display only)
+// Phase 17: selectedVariant uses effectivePrice when available (sale price support).
 type SelectedVariant = {
   id: string;
-  size?: "S" | "M" | "L"; // optional post phase-16
   price: string;
+  effectivePrice?: string;
 } | null;
 
 /**
@@ -47,8 +47,8 @@ export function AddToBagButton({
   }, [flash]);
 
   const label = disabled
-    ? "Pick a size"
-    : `Add to bag · ${formatMYR(selectedVariant!.price)}`;
+    ? "Pick a variant"
+    : `Add to bag · ${formatMYR(selectedVariant!.effectivePrice ?? selectedVariant!.price)}`;
 
   const onClick = () => {
     if (!selectedVariant) return;

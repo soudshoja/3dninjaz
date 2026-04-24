@@ -47,9 +47,17 @@ export function VariantSelector({
   variants,
   onVariantChange,
 }: VariantSelectorProps) {
-  // Initial selection: pick first available variant's value combo
+  // Initial selection: Phase 17 — prefer admin-marked default, then first
+  // available, then first variant (AD-05).
   const defaultSelected = useMemo<SelectedValues>(() => {
-    const first = variants.find(isVariantAvailable) ?? variants[0] ?? null;
+    // 1. Explicit default
+    const def = variants.find((v) => v.isDefault);
+    if (def) return [...def.optionValueIds] as SelectedValues;
+    // 2. First available
+    const available = variants.find(isVariantAvailable);
+    if (available) return [...available.optionValueIds] as SelectedValues;
+    // 3. First variant
+    const first = variants[0] ?? null;
     if (!first) return [null, null, null];
     return [...first.optionValueIds] as SelectedValues;
   }, [variants]);
@@ -107,10 +115,12 @@ export function VariantSelector({
                     <button
                       key={val.id}
                       type="button"
-                      onClick={() => available && handleSelect(slotIdx, val.id)}
+                      onClick={() => { if (available) handleSelect(slotIdx, val.id); }}
                       disabled={!available}
-                      title={val.value}
-                      aria-label={`${val.value}${!available ? " (sold out)" : ""}`}
+                      aria-disabled={!available}
+                      tabIndex={!available ? -1 : 0}
+                      title={!available ? "Out of stock" : val.value}
+                      aria-label={`${val.value}${!available ? " (out of stock)" : ""}`}
                       aria-pressed={isSelected}
                       className="relative rounded-full transition-all"
                       style={{
@@ -121,6 +131,7 @@ export function VariantSelector({
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
+                        cursor: available ? "pointer" : "not-allowed",
                       }}
                     >
                       <span
@@ -132,7 +143,7 @@ export function VariantSelector({
                           border: isSelected
                             ? "2px solid var(--color-brand-ink)"
                             : "1px solid #d1d5db",
-                          opacity: available ? 1 : 0.4,
+                          opacity: available ? 1 : 0.35,
                           position: "relative",
                         }}
                       >
@@ -141,7 +152,7 @@ export function VariantSelector({
                             className="absolute inset-0 rounded-full"
                             style={{
                               background:
-                                "linear-gradient(135deg, transparent 45%, #6b7280 45%, #6b7280 55%, transparent 55%)",
+                                "linear-gradient(135deg, transparent 43%, #6b7280 43%, #6b7280 57%, transparent 57%)",
                             }}
                           />
                         )}
@@ -168,7 +179,9 @@ export function VariantSelector({
                         aria-checked={isSelected}
                         aria-disabled={!available}
                         disabled={!available}
-                        onClick={() => available && handleSelect(slotIdx, val.id)}
+                        tabIndex={!available ? -1 : 0}
+                        title={!available ? "Out of stock" : val.value}
+                        onClick={() => { if (available) handleSelect(slotIdx, val.id); }}
                         className="rounded-full border-2 px-4 py-2 text-sm font-semibold transition min-h-[48px]"
                         style={{
                           borderColor: !available
@@ -188,7 +201,7 @@ export function VariantSelector({
                               : "var(--color-brand-ink)",
                           cursor: available ? "pointer" : "not-allowed",
                           textDecoration: !available ? "line-through" : "none",
-                          opacity: !available ? 0.6 : 1,
+                          opacity: !available ? 0.5 : 1,
                         }}
                       >
                         {val.value}

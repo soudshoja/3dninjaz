@@ -36,7 +36,12 @@ export async function ProductCard({
   // Honour the admin's thumbnail selection; falls back to images[0] when the
   // configured slot is missing (image deleted after the picker saved).
   const firstImage = pickThumbnail(product);
-  const priceLabel = priceRangeMYR(product.variants);
+  // Phase 17: use hydratedVariants so effectivePrice (sale) is reflected in range.
+  const priceLabel = priceRangeMYR(
+    product.hydratedVariants.length > 0 ? product.hydratedVariants : product.variants,
+  );
+  // Phase 17: show SALE chip when any variant has an active sale.
+  const hasSale = product.hydratedVariants.some((v) => v.isOnSale);
   // Phase 13: show Sold Out overlay only when EVERY variant that has
   // trackStock=true is also out of stock (stock=0). On-demand variants
   // (trackStock=false, the default) are always available and never trigger OOS.
@@ -76,6 +81,14 @@ export async function ProductCard({
             style={{ backgroundColor: accent }}
           >
             FEATURED
+          </span>
+        ) : null}
+        {hasSale && !product.isFeatured ? (
+          <span
+            className="absolute top-3 left-3 rounded-full px-3 py-1 text-xs font-bold text-white"
+            style={{ backgroundColor: BRAND.purple }}
+          >
+            SALE
           </span>
         ) : null}
         {allSoldOut ? <SoldOutBadge /> : null}

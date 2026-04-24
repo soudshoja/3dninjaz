@@ -14,11 +14,19 @@ export function formatMYR(price: string | number): string {
 /**
  * Render the price of a product's variants as either a single price
  * (all variants equal) or a range "RM 18.00 - RM 45.00" (sorted ascending).
+ *
+ * Phase 17: accepts optional `effectivePrice` per variant so the storefront
+ * grid reflects active sale prices. Falls back to `price` when not present.
  */
-export function priceRangeMYR(variants: Array<{ price: string | number }>): string {
+export function priceRangeMYR(
+  variants: Array<{ price: string | number; effectivePrice?: string | number }>,
+): string {
   if (!variants.length) return "RM 0.00";
   const prices = variants
-    .map((v) => (typeof v.price === "string" ? parseFloat(v.price) : v.price))
+    .map((v) => {
+      const ep = v.effectivePrice ?? v.price;
+      return typeof ep === "string" ? parseFloat(ep) : ep;
+    })
     .filter((n) => Number.isFinite(n))
     .sort((a, b) => a - b);
   if (prices.length === 0) return "RM 0.00";

@@ -118,6 +118,15 @@ export async function hydrateCartItems(
     const productImage =
       v.imageUrl ?? (images.length > 0 ? images[product.thumbnailIndex ?? 0] ?? images[0] ?? null : null);
 
+    // Phase 17 — resolve effective price via sale window check (AD-01).
+    // The customer is charged whatever price is active at render/capture time.
+    const now = new Date();
+    const isOnSale =
+      v.salePrice !== null &&
+      (v.saleFrom === null || new Date(v.saleFrom) <= now) &&
+      (v.saleTo === null || new Date(v.saleTo) >= now);
+    const unitPrice = isOnSale && v.salePrice ? String(v.salePrice) : v.price;
+
     return [
       {
         variantId,
@@ -127,7 +136,7 @@ export async function hydrateCartItems(
         productName: product.name,
         productImage,
         variantLabel,
-        unitPrice: v.price,
+        unitPrice,
         inStock: v.inStock ?? true,
         available,
       },

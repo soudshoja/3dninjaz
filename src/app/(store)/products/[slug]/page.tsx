@@ -44,6 +44,15 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
     hydrateProductVariants(product.id),
   ]);
 
+  // Phase 17 — resolve per-variant PictureData server-side so the client gallery
+  // can swap to the variant image using the full srcset pipeline (AD-02).
+  const variantPictureEntries = await Promise.all(
+    hydratedVariants
+      .filter((v) => v.imageUrl)
+      .map(async (v) => [v.id, await pickImage(v.imageUrl!)] as const),
+  );
+  const variantPictures = Object.fromEntries(variantPictureEntries);
+
   // Marshal to a client-safe plain object. Only pass what ProductDetail needs
   // — keeps the client bundle tight and avoids shipping server-only fields.
   return (
@@ -60,13 +69,6 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
           category: product.category
             ? { name: product.category.name, slug: product.category.slug }
             : null,
-          variants: product.variants.map((v) => ({
-            id: v.id,
-            price: v.price,
-            // Phase 13 — stock tracking fields for OOS chip logic in SizeSelector.
-            trackStock: v.trackStock ?? false,
-            stock: v.stock ?? 0,
-          })),
           // Phase 16 — generic options + hydrated variants for VariantSelector
           options,
           hydratedVariants,
@@ -75,6 +77,7 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
         ratingAvg={reviewsSummary.avgRating}
         ratingCount={reviewsSummary.totalApproved}
         pictures={pictures}
+        variantPictures={variantPictures}
       />
       <div className="max-w-6xl mx-auto px-6 pb-16 -mt-6">
         <ProductReviews productId={product.id} />
