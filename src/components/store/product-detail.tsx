@@ -50,6 +50,8 @@ export function ProductDetail({
   variantPictures = {},
 }: ProductDetailProps) {
   const [selectedHydrated, setSelectedHydrated] = useState<HydratedVariant | null>(null);
+  // Bug fix: track first missing option name for the Add-to-bag button label.
+  const [firstMissingOptionName, setFirstMissingOptionName] = useState<string | null>(null);
   // Fix 3 — hovered variant (hover preview). Takes priority over selectedHydrated
   // for IMAGE/PRICE/BADGE display. Cleared on mouseleave.
   const [hoveredHydrated, setHoveredHydrated] = useState<HydratedVariant | null>(null);
@@ -59,6 +61,9 @@ export function ProductDetail({
   }, []);
   const handlePreviewChange = useCallback((v: HydratedVariant | null) => {
     setHoveredHydrated(v);
+  }, []);
+  const handleFirstMissingOptionChange = useCallback((name: string | null) => {
+    setFirstMissingOptionName(name);
   }, []);
 
   // What the user sees: hover wins over click for display.
@@ -210,6 +215,7 @@ export function ProductDetail({
             variants={product.hydratedVariants}
             onVariantChange={handleVariantChange}
             onPreviewChange={handlePreviewChange}
+            onFirstMissingOptionChange={handleFirstMissingOptionChange}
           />
         )}
 
@@ -225,6 +231,7 @@ export function ProductDetail({
               productSlug={product.slug}
               productName={product.name}
               productImage={product.images[0] ?? null}
+              firstMissingOptionName={firstMissingOptionName}
             />
           </div>
           <WishlistButton

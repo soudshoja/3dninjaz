@@ -16,6 +16,12 @@ type SelectedVariant = {
 } | null;
 
 /**
+ * Bug fix: when no variant is selected, show "Pick a {optionName}" naming the
+ * first option the user still needs to choose. Falls back to "Pick a variant"
+ * when no options info is available.
+ */
+
+/**
  * Wired Add-to-bag button. Writes the selected variant into the Zustand
  * cart store and opens the CartDrawer so the user gets immediate feedback.
  *
@@ -28,12 +34,17 @@ export function AddToBagButton({
   productSlug,
   productName,
   productImage,
+  firstMissingOptionName,
 }: {
   selectedVariant: SelectedVariant;
   productId: string;
   productSlug: string;
   productName: string;
   productImage: string | null;
+  /** Name of the first option the user still needs to pick (e.g. "Letters").
+   * When provided, the disabled-state label becomes "Pick a Letters" instead
+   * of the generic "Pick a variant". */
+  firstMissingOptionName?: string | null;
 }) {
   const addItem = useCartStore((s) => s.addItem);
   const setOpen = useCartStore((s) => s.setDrawerOpen);
@@ -52,7 +63,7 @@ export function AddToBagButton({
     ? ""
     : formatMYR(selectedVariant!.effectivePrice ?? selectedVariant!.price);
   const label = disabled
-    ? "Pick a variant"
+    ? firstMissingOptionName ? `Pick a ${firstMissingOptionName}` : "Pick a variant"
     : selectedVariant!.isPreorder
       ? `Pre-order · ${priceLabel}`
       : `Add to bag · ${priceLabel}`;

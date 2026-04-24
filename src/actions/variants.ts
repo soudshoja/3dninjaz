@@ -457,6 +457,12 @@ export async function generateVariantMatrix(
 
   // Insert missing combos
   let inserted = 0;
+  // Use the max existing position as the base so new rows are appended after
+  // any pre-existing variants and don't collide with old position values.
+  const basePosition = existingVariants.length > 0
+    ? Math.max(...existingVariants.map((_, i) => i)) + 1
+    : 0;
+
   for (const combo of combos) {
     const v1id = combo.v1?.id ?? null;
     const v2id = combo.v2?.id ?? null;
@@ -485,24 +491,29 @@ export async function generateVariantMatrix(
     }
     existingSet.add(`sku:${sku}`);
 
-    await db.insert(productVariants).values({
-      id: randomUUID(),
-      productId,
-      price: "0.00",
-      inStock: false,
-      stock: 0,
-      trackStock: false,
-      option1ValueId: v1id,
-      option2ValueId: v2id,
-      option3ValueId: v3id,
-      option4ValueId: v4id,
-      option5ValueId: v5id,
-      option6ValueId: v6id,
-      labelCache: label,
-      sku,
-      position: inserted,
-      costPriceManual: false,
-    });
+    try {
+      await db.insert(productVariants).values({
+        id: randomUUID(),
+        productId,
+        price: "0.00",
+        inStock: false,
+        stock: 0,
+        trackStock: false,
+        option1ValueId: v1id,
+        option2ValueId: v2id,
+        option3ValueId: v3id,
+        option4ValueId: v4id,
+        option5ValueId: v5id,
+        option6ValueId: v6id,
+        labelCache: label,
+        sku,
+        position: basePosition + inserted,
+        costPriceManual: false,
+      });
+    } catch (err) {
+      console.error("[generateVariantMatrix] insert failed for combo", { v1id, v2id, v3id, v4id, v5id, v6id, label, sku }, err);
+      return { error: `Failed to insert variant "${label}": ${err instanceof Error ? err.message : String(err)}` };
+    }
     existingSet.add(key);
     inserted++;
   }

@@ -229,12 +229,17 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
 
   const handleGenerateMatrix = () => {
     startTransition(async () => {
-      const result = await generateVariantMatrix(productId);
-      if ("error" in result) {
-        showToast(result.error, "error");
-      } else {
-        showToast(`Matrix generated — ${result.data?.inserted ?? 0} new variants added`);
-        await refresh();
+      try {
+        const result = await generateVariantMatrix(productId);
+        if ("error" in result) {
+          showToast(result.error, "error");
+        } else {
+          const n = result.data?.inserted ?? 0;
+          showToast(n > 0 ? `Matrix generated — ${n} new variants added` : "Matrix up to date — no new variants needed");
+          await refresh();
+        }
+      } catch (err) {
+        showToast(`Generate failed: ${err instanceof Error ? err.message : "Unknown error"}`, "error");
       }
     });
   };

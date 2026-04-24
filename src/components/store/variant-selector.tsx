@@ -34,6 +34,10 @@ interface VariantSelectorProps {
    * and on mouseleave with null. Only fires on hover-capable pointers so
    * touch devices don't accidentally trigger preview on tap. */
   onPreviewChange?: (variant: HydratedVariant | null) => void;
+  /** Bug fix — called whenever the first unselected option changes.
+   * Receives the option name (e.g. "Letters") or null when all slots filled.
+   * Used by AddToBagButton to say "Pick a Letters" instead of "Pick a variant". */
+  onFirstMissingOptionChange?: (name: string | null) => void;
 }
 
 type SelectedValues = [string | null, string | null, string | null, string | null, string | null, string | null];
@@ -67,6 +71,7 @@ export function VariantSelector({
   variants: rawVariants,
   onVariantChange,
   onPreviewChange,
+  onFirstMissingOptionChange,
 }: VariantSelectorProps) {
   // Phase 18 — filter out hidden variants (OOS without preorder).
   const variants = useMemo(
@@ -122,6 +127,12 @@ export function VariantSelector({
   useEffect(() => {
     const variant = findMatchingVariant(variants, selected);
     onVariantChange(variant);
+    // Bug fix: emit the first option slot that is still null so the
+    // Add-to-bag button can say "Pick a Letters" instead of "Pick a variant".
+    if (onFirstMissingOptionChange) {
+      const firstMissing = options.find((opt, idx) => selected[idx] === null);
+      onFirstMissingOptionChange(firstMissing?.name ?? null);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected[0], selected[1], selected[2], selected[3], selected[4], selected[5]]);
 
