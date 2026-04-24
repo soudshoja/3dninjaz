@@ -55,14 +55,13 @@ export async function addProductOption(
   const trimmed = name.trim().slice(0, 64);
   if (!trimmed) return { error: "Option name is required" };
 
-  // Count existing options for this product (max 3)
   const existing = await db
     .select({ id: productOptions.id, position: productOptions.position })
     .from(productOptions)
     .where(eq(productOptions.productId, productId));
 
   if (existing.length >= 3) {
-    return { error: "Maximum 3 options per product" };
+    return { error: "Product supports up to 3 attribute types (e.g., Size, Color, Part). Each option can have unlimited values — add values to existing options to create more variants." };
   }
 
   // Check for duplicate name
@@ -85,7 +84,7 @@ export async function addProductOption(
     ? Math.max(...existing.map((o) => o.position)) + 1
     : 1;
 
-  if (nextPosition > 3) return { error: "Maximum 3 options per product" };
+  if (nextPosition > 3) return { error: "Product supports up to 3 attribute types. Add more values to existing options to create more variants." };
 
   const id = randomUUID();
   await db.insert(productOptions).values({

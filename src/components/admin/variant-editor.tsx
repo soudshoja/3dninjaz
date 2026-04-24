@@ -367,7 +367,7 @@ export function VariantEditor({ productId, initialOptions, initialVariants }: Va
       <div className="bg-white border border-[var(--color-brand-border)] rounded-xl p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-[var(--color-brand-text-primary)]">
-            Options ({options.length}/3)
+            Options ({options.length})
           </h2>
         </div>
 
@@ -476,9 +476,6 @@ export function VariantEditor({ productId, initialOptions, initialVariants }: Va
               <Plus className="h-4 w-4 mr-1" /> Add Option
             </Button>
           </div>
-        )}
-        {options.length >= 3 && (
-          <p className="text-xs text-[var(--color-brand-text-muted)]">Maximum 3 options per product reached.</p>
         )}
       </div>
 
