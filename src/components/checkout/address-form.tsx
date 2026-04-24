@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -33,6 +33,26 @@ function adaptSaved(a: SavedAddress): AddressFormValues {
   };
 }
 
+// Human-readable field names for the summary banner
+const FIELD_LABELS: Record<string, string> = {
+  recipientName: "Recipient name",
+  phone: "Phone number",
+  addressLine1: "Address line 1",
+  city: "City",
+  state: "State",
+  postcode: "Postcode",
+};
+
+// Required field keys (addressLine2 and country are not required from user)
+const REQUIRED_FIELDS = [
+  "recipientName",
+  "phone",
+  "addressLine1",
+  "city",
+  "state",
+  "postcode",
+] as const;
+
 /**
  * Shipping address form (D3-05) — react-hook-form + zodResolver bound to
  * orderAddressSchema. Emits the validated values up to the parent via
@@ -47,6 +67,9 @@ function adaptSaved(a: SavedAddress): AddressFormValues {
  *
  * Tap targets: all inputs meet the ≥48px minimum (D3-20) via min-h-[48px]
  * + py-3 + px-4.
+ *
+ * UX fix: per-field red border + error message on touch/submit-attempt,
+ * required asterisks on all required fields, summary banner when errors exist.
  */
 export function AddressForm({
   defaultName,
@@ -62,7 +85,13 @@ export function AddressForm({
   const [pickedAddress, setPickedAddress] = useState<AddressFormValues | null>(
     hasSaved ? adaptSaved(savedAddresses[0]) : null,
   );
-  const { register, formState, watch } = useForm<
+
+  // Track whether the user has attempted to submit / has touched any field so
+  // we know when to surface the summary banner.
+  const [formAttempted, setFormAttempted] = useState(false);
+  const bannerRef = useRef<HTMLDivElement>(null);
+
+  const { register, formState, watch, trigger } = useForm<
     AddressFormInput,
     unknown,
     AddressFormValues
@@ -83,15 +112,24 @@ export function AddressForm({
 
   const values = watch();
   const valid = formState.isValid;
+  const errors = formState.errors;
+  const touchedFields = formState.touchedFields;
+
+  // Determine whether any required field has been touched — used to gate banner
+  const anyTouched = REQUIRED_FIELDS.some((f) => touchedFields[f]);
+  const showBanner = (formAttempted || anyTouched) && Object.keys(errors).length > 0;
+
+  // Fields with active errors that user has touched OR form was attempted
+  const erroredFields = REQUIRED_FIELDS.filter(
+    (f) => errors[f] && (formAttempted || touchedFields[f]),
+  );
 
   useEffect(() => {
     if (mode === "saved") {
-      // Picker drives the validated address — bypass the form's own state.
       onValidChange(pickedAddress);
       return;
     }
     onValidChange(valid ? (values as AddressFormValues) : null);
-    // Intentionally watch all field values via `watch()`; re-run on any change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     mode,
@@ -107,13 +145,90 @@ export function AddressForm({
     values.country,
   ]);
 
+  // When the form is not valid and the user clicks anywhere outside a field
+  // (blur on the form element), mark as attempted so all errors surface.
+  function handleFormBlur() {
+    if (!valid && anyTouched) {
+      setFormAttempted(true);
+    }
+  }
+
+  // Trigger full validation on demand (called when user tries to proceed while
+  // form is still shown — parent can call this via ref if needed, but we also
+  // trigger internally on any submit attempt).
+  function handleFormClick() {
+    if (!valid) {
+      setFormAttempted(true);
+      void trigger();
+    }
+  }
+
   // Shared input classes — 48px min target (D3-20)
   const inputBase =
-    "w-full rounded-xl border-2 px-4 py-3 min-h-[48px] focus:outline-none focus:ring-2 bg-white";
-  const borderStyle = { borderColor: `${BRAND.ink}22` };
+    "w-full rounded-xl border-2 px-4 py-3 min-h-[48px] focus:outline-none focus:ring-2 bg-white transition-colors";
+
+  // Return correct border + ring classes based on error state.
+  // NOTE: we use inline style only for the normal (no-error) state because
+  // BRAND.ink is a runtime value. For error state we use Tailwind classes so
+  // they take precedence (inline styles would override Tailwind).
+  function fieldClasses(fieldName: keyof typeof errors, isSelect = false) {
+    const hasError =
+      !!errors[fieldName] && (formAttempted || !!touchedFields[fieldName]);
+    if (hasError) {
+      return `${inputBase} border-red-500 focus:ring-red-300 bg-red-50${isSelect ? " text-gray-900" : ""}`;
+    }
+    return inputBase;
+  }
+
+  function fieldStyle(fieldName: keyof typeof errors) {
+    const hasError =
+      !!errors[fieldName] && (formAttempted || !!touchedFields[fieldName]);
+    // Only apply the subtle ink border when there is no error; let Tailwind
+    // handle the red border so it isn't overridden.
+    return hasError ? {} : { borderColor: `${BRAND.ink}22` };
+  }
+
+  // Required asterisk helper
+  const Req = () => (
+    <span className="text-red-600 ml-0.5" aria-hidden="true">*</span>
+  );
 
   return (
-    <form className="grid gap-4" noValidate>
+    <form
+      className="grid gap-4"
+      noValidate
+      onBlur={handleFormBlur}
+      onClick={handleFormClick}
+    >
+      {/* Summary banner — renders when errors exist after touch/attempt */}
+      {showBanner && erroredFields.length > 0 && (
+        <div
+          ref={bannerRef}
+          role="alert"
+          className="rounded-xl border-2 border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800"
+        >
+          <p className="font-semibold mb-1">Almost there — please fix:</p>
+          <ul className="list-disc list-inside space-y-0.5">
+            {erroredFields.map((f) => (
+              <li key={f}>
+                <button
+                  type="button"
+                  className="underline underline-offset-2 hover:text-red-900 focus:outline-none focus:ring-1 focus:ring-red-400 rounded"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const el = document.getElementById(`field-${f}`);
+                    el?.focus();
+                    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  }}
+                >
+                  {FIELD_LABELS[f]}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {hasSaved && savedAddresses ? (
         <AddressPicker
           addresses={savedAddresses}
@@ -129,145 +244,167 @@ export function AddressForm({
       ) : null}
 
       <div className={mode === "saved" ? "hidden" : "contents"}>
-      <div>
-        <label className="block text-sm font-semibold mb-1">
-          Recipient name
-        </label>
-        <input
-          aria-invalid={!!formState.errors.recipientName}
-          className={inputBase}
-          style={borderStyle}
-          autoComplete="name"
-          {...register("recipientName")}
-        />
-        {formState.errors.recipientName ? (
-          <p className="text-xs text-red-600 mt-1">
-            {formState.errors.recipientName.message}
-          </p>
-        ) : null}
-      </div>
-
-      <div>
-        <label className="block text-sm font-semibold mb-1">
-          Phone (Malaysia)
-        </label>
-        <input
-          inputMode="tel"
-          autoComplete="tel"
-          aria-invalid={!!formState.errors.phone}
-          className={inputBase}
-          style={borderStyle}
-          placeholder="+60 12 345 6789"
-          {...register("phone")}
-        />
-        {formState.errors.phone ? (
-          <p className="text-xs text-red-600 mt-1">
-            {formState.errors.phone.message}
-          </p>
-        ) : null}
-      </div>
-
-      <div>
-        <label className="block text-sm font-semibold mb-1">
-          Address line 1
-        </label>
-        <input
-          aria-invalid={!!formState.errors.addressLine1}
-          className={inputBase}
-          style={borderStyle}
-          autoComplete="address-line1"
-          {...register("addressLine1")}
-        />
-        {formState.errors.addressLine1 ? (
-          <p className="text-xs text-red-600 mt-1">
-            {formState.errors.addressLine1.message}
-          </p>
-        ) : null}
-      </div>
-
-      <div>
-        <label className="block text-sm font-semibold mb-1">
-          Address line 2{" "}
-          <span className="font-normal text-slate-500">(optional)</span>
-        </label>
-        <input
-          className={inputBase}
-          style={borderStyle}
-          autoComplete="address-line2"
-          {...register("addressLine2")}
-        />
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label className="block text-sm font-semibold mb-1">City</label>
+          <label htmlFor="field-recipientName" className="block text-sm font-semibold mb-1">
+            Recipient name<Req />
+          </label>
           <input
-            aria-invalid={!!formState.errors.city}
-            className={inputBase}
-            style={borderStyle}
-            autoComplete="address-level2"
-            {...register("city")}
+            id="field-recipientName"
+            aria-invalid={!!errors.recipientName}
+            aria-describedby={errors.recipientName && (formAttempted || touchedFields.recipientName) ? "err-recipientName" : undefined}
+            className={fieldClasses("recipientName")}
+            style={fieldStyle("recipientName")}
+            autoComplete="name"
+            {...register("recipientName")}
           />
-          {formState.errors.city ? (
-            <p className="text-xs text-red-600 mt-1">
-              {formState.errors.city.message}
+          {errors.recipientName && (formAttempted || touchedFields.recipientName) ? (
+            <p id="err-recipientName" className="text-xs text-red-600 mt-1" role="alert">
+              {errors.recipientName.message}
             </p>
           ) : null}
         </div>
+
         <div>
-          <label className="block text-sm font-semibold mb-1">Postcode</label>
+          <label htmlFor="field-phone" className="block text-sm font-semibold mb-1">
+            Phone (Malaysia)<Req />
+          </label>
           <input
-            inputMode="numeric"
-            maxLength={5}
-            aria-invalid={!!formState.errors.postcode}
-            className={inputBase}
-            style={borderStyle}
-            autoComplete="postal-code"
-            placeholder="50450"
-            {...register("postcode")}
+            id="field-phone"
+            inputMode="tel"
+            autoComplete="tel"
+            aria-invalid={!!errors.phone}
+            aria-describedby={errors.phone && (formAttempted || touchedFields.phone) ? "err-phone" : undefined}
+            className={fieldClasses("phone")}
+            style={fieldStyle("phone")}
+            placeholder="+60 12 345 6789"
+            {...register("phone")}
           />
-          {formState.errors.postcode ? (
-            <p className="text-xs text-red-600 mt-1">
-              {formState.errors.postcode.message}
+          {errors.phone && (formAttempted || touchedFields.phone) ? (
+            <p id="err-phone" className="text-xs text-red-600 mt-1" role="alert">
+              {errors.phone.message}
             </p>
           ) : null}
         </div>
-      </div>
 
-      <div>
-        <label className="block text-sm font-semibold mb-1">State</label>
-        <select
-          aria-invalid={!!formState.errors.state}
-          className={inputBase}
-          style={borderStyle}
-          defaultValue=""
-          {...register("state")}
-        >
-          <option value="" disabled>
-            Select a state…
-          </option>
-          {MALAYSIAN_STATES.map((s) => (
-            <option key={s} value={s}>
-              {s}
+        <div>
+          <label htmlFor="field-addressLine1" className="block text-sm font-semibold mb-1">
+            Address line 1<Req />
+          </label>
+          <input
+            id="field-addressLine1"
+            aria-invalid={!!errors.addressLine1}
+            aria-describedby={errors.addressLine1 && (formAttempted || touchedFields.addressLine1) ? "err-addressLine1" : undefined}
+            className={fieldClasses("addressLine1")}
+            style={fieldStyle("addressLine1")}
+            autoComplete="address-line1"
+            {...register("addressLine1")}
+          />
+          {errors.addressLine1 && (formAttempted || touchedFields.addressLine1) ? (
+            <p id="err-addressLine1" className="text-xs text-red-600 mt-1" role="alert">
+              {errors.addressLine1.message}
+            </p>
+          ) : null}
+        </div>
+
+        <div>
+          <label htmlFor="field-addressLine2" className="block text-sm font-semibold mb-1">
+            Address line 2{" "}
+            <span className="font-normal text-slate-500">(optional)</span>
+          </label>
+          <input
+            id="field-addressLine2"
+            className={inputBase}
+            style={{ borderColor: `${BRAND.ink}22` }}
+            autoComplete="address-line2"
+            {...register("addressLine2")}
+          />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="field-city" className="block text-sm font-semibold mb-1">
+              City<Req />
+            </label>
+            <input
+              id="field-city"
+              aria-invalid={!!errors.city}
+              aria-describedby={errors.city && (formAttempted || touchedFields.city) ? "err-city" : undefined}
+              className={fieldClasses("city")}
+              style={fieldStyle("city")}
+              autoComplete="address-level2"
+              {...register("city")}
+            />
+            {errors.city && (formAttempted || touchedFields.city) ? (
+              <p id="err-city" className="text-xs text-red-600 mt-1" role="alert">
+                {errors.city.message}
+              </p>
+            ) : null}
+          </div>
+          <div>
+            <label htmlFor="field-postcode" className="block text-sm font-semibold mb-1">
+              Postcode<Req />
+            </label>
+            <input
+              id="field-postcode"
+              inputMode="numeric"
+              maxLength={5}
+              aria-invalid={!!errors.postcode}
+              aria-describedby={errors.postcode && (formAttempted || touchedFields.postcode) ? "err-postcode" : undefined}
+              className={fieldClasses("postcode")}
+              style={fieldStyle("postcode")}
+              autoComplete="postal-code"
+              placeholder="50450"
+              {...register("postcode")}
+            />
+            {errors.postcode && (formAttempted || touchedFields.postcode) ? (
+              <p id="err-postcode" className="text-xs text-red-600 mt-1" role="alert">
+                {errors.postcode.message}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="field-state" className="block text-sm font-semibold mb-1">
+            State<Req />
+          </label>
+          <select
+            id="field-state"
+            aria-invalid={!!errors.state}
+            aria-describedby={errors.state && (formAttempted || touchedFields.state) ? "err-state" : undefined}
+            className={fieldClasses("state", true)}
+            style={fieldStyle("state")}
+            defaultValue=""
+            {...register("state")}
+          >
+            <option value="" disabled className="text-slate-400">
+              Required — please select your state
             </option>
-          ))}
-        </select>
-        {formState.errors.state ? (
-          <p className="text-xs text-red-600 mt-1">
-            {formState.errors.state.message}
-          </p>
-        ) : null}
-      </div>
+            {MALAYSIAN_STATES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+          {errors.state && (formAttempted || touchedFields.state) ? (
+            <p id="err-state" className="text-xs text-red-600 mt-1" role="alert">
+              {errors.state.message}
+            </p>
+          ) : null}
+        </div>
 
-      <div>
-        <label className="block text-sm font-semibold mb-1">Country</label>
-        <input
-          className={inputBase + " bg-slate-100 cursor-not-allowed"}
-          style={borderStyle}
-          readOnly
-          {...register("country")}
-        />
-      </div>
+        <div>
+          <label htmlFor="field-country" className="block text-sm font-semibold mb-1">
+            Country
+          </label>
+          <input
+            id="field-country"
+            className={inputBase + " bg-slate-100 cursor-not-allowed"}
+            style={{ borderColor: `${BRAND.ink}22` }}
+            readOnly
+            {...register("country")}
+          />
+        </div>
       </div>
     </form>
   );
