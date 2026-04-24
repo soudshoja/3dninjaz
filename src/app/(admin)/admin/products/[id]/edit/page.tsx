@@ -71,13 +71,22 @@ export default async function EditProductPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-heading text-3xl text-[var(--color-brand-text-primary)]">
-          Edit Product
-        </h1>
-        <p className="text-sm text-[var(--color-brand-text-muted)]">
-          {product.name}
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="font-heading text-3xl text-[var(--color-brand-text-primary)]">
+            Edit Product
+          </h1>
+          <p className="text-sm text-[var(--color-brand-text-muted)]">
+            {product.name}
+          </p>
+        </div>
+        {/* Phase 16 — Manage Variants link (only shown after product exists) */}
+        <a
+          href={`/admin/products/${id}/variants`}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
+        >
+          Manage Variants →
+        </a>
       </div>
       <ProductForm
         initialData={initialData}
