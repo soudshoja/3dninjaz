@@ -231,6 +231,7 @@ async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
         effectivePrice,
         isOnSale,
         weightG: v.weightG ?? null,
+        allowPreorder: v.allowPreorder ?? false,
       };
     });
 
