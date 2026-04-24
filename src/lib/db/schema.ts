@@ -1213,7 +1213,7 @@ function brandedEmailTemplate(
   heading: string,
   body: string,
   cta?: { text: string; url: string },
-  ctaColor: string = "#1151bf"
+  ctaColor: string = "#066BD2"
 ): string {
   const ctaHtml = cta
     ? `<tr><td align="center" style="padding:16px 32px 32px">
@@ -1349,7 +1349,7 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         `<p>Hi {{customer_name}},</p>
         <p>We've refunded <strong>{{refund_amount}}</strong> for order <strong>#{{order_number}}</strong>.</p>
         <p style="margin-top:16px">The refund should appear in your account within 3-5 business days.</p>
-        <p>If you have questions, contact us at <a href="mailto:{{support_email}}" style="color:#1151bf">{{support_email}}</a></p>`,
+        <p>If you have questions, contact us at <a href="mailto:{{support_email}}" style="color:#066BD2">{{support_email}}</a></p>`,
         { text: "View Order", url: "order_link" }
       ),
       variables: [
@@ -1372,7 +1372,7 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         `<p>Hi {{customer_name}},</p>
         <p>Your order <strong>#{{order_number}}</strong> has been cancelled.</p>
         <p><strong>Reason:</strong> {{cancellation_reason}}</p>
-        <p style="margin-top:16px">If this was unexpected, please contact us at <a href="mailto:{{support_email}}" style="color:#1151bf">{{support_email}}</a></p>`,
+        <p style="margin-top:16px">If this was unexpected, please contact us at <a href="mailto:{{support_email}}" style="color:#066BD2">{{support_email}}</a></p>`,
         { text: "Contact Support", url: "support_email" }
       ),
       variables: [
@@ -1413,7 +1413,7 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         "Password updated",
         `<p>Hi {{customer_name}},</p>
         <p>Your password has been successfully changed.</p>
-        <p style="margin-top:16px">If you didn't make this change, please contact us immediately at <a href="mailto:{{support_email}}" style="color:#1151bf">{{support_email}}</a></p>`,
+        <p style="margin-top:16px">If you didn't make this change, please contact us immediately at <a href="mailto:{{support_email}}" style="color:#066BD2">{{support_email}}</a></p>`,
         undefined
       ),
       variables: [
@@ -1490,7 +1490,7 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         `<p>Hi {{customer_name}},</p>
         <p>A dispute has been opened on your order <strong>#{{order_number}}</strong>.</p>
         <p><strong>Reason:</strong> {{dispute_reason}}</p>
-        <p style="margin-top:16px">We're investigating and will keep you updated. Contact us at <a href="mailto:{{support_email}}" style="color:#1151bf">{{support_email}}</a> if you have additional details.</p>`,
+        <p style="margin-top:16px">We're investigating and will keep you updated. Contact us at <a href="mailto:{{support_email}}" style="color:#066BD2">{{support_email}}</a> if you have additional details.</p>`,
         { text: "View Order", url: "order_link" }
       ),
       variables: [
@@ -1517,7 +1517,7 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         <strong>Amount:</strong> {{dispute_amount}}</p>
         <p style="margin-top:16px">Click below to view details and respond.</p>`,
         { text: "Review Dispute", url: "admin_link" },
-        "#743089"
+        "#5C27A7"
       ),
       variables: [
         "customer_name",

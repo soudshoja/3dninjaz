@@ -80,7 +80,7 @@ export default function GlobalError({
             style={{
               minHeight: "48px",
               padding: "0.75rem 1.25rem",
-              backgroundColor: "#1151bf",
+              backgroundColor: "#066BD2",
               color: "#ffffff",
               fontWeight: 600,
               border: "none",

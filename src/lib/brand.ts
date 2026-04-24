@@ -8,9 +8,9 @@
  * and exposed to Tailwind v4 utilities via @theme inline.
  */
 export const BRAND = {
-  blue: "#1151bf",
-  green: "#50c878",
-  purple: "#743089",
+  blue: "#066BD2",
+  green: "#398E07",
+  purple: "#5C27A7",
   ink: "#0B1020",
   cream: "#F7FAF4",
 } as const;

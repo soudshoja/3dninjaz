@@ -51,7 +51,7 @@ function variantClasses(variant: WhatsAppCtaVariant): string {
       return [
         "inline-flex items-center justify-center gap-2",
         "h-12 min-h-12 px-6 rounded-full",
-        "bg-[#50c878] text-[#0B1020]",
+        "bg-[#398E07] text-[#0B1020]",
         "font-heading text-sm sm:text-base tracking-wide uppercase",
         "shadow-[0_4px_0_rgba(0,0,0,0.25)]",
         "hover:translate-y-0.5 hover:shadow-[0_2px_0_rgba(0,0,0,0.25)]",
@@ -71,9 +71,9 @@ function variantClasses(variant: WhatsAppCtaVariant): string {
       ].join(" ");
     case "inline":
       return [
-        "inline text-[#1151bf] underline underline-offset-2",
+        "inline text-[#066BD2] underline underline-offset-2",
         "hover:opacity-80",
-        "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1151bf] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F7FAF4] rounded-sm",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-[#066BD2] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F7FAF4] rounded-sm",
       ].join(" ");
   }
 }
