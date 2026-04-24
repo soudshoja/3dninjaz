@@ -25,6 +25,7 @@ import {
   SHIPPING_CONFIG_ID,
   loadShippingConfig,
   rowToShippingConfig,
+  resolveItemType,
 } from "@/lib/shipping-config";
 import type { ShippingConfigRow as ShippingConfigRowType } from "@/lib/shipping-config";
 import { sendOrderShippedEmail } from "@/actions/send-emails";
@@ -257,7 +258,7 @@ export async function listDelyvaServices(): Promise<
         country: "MY",
       },
       weight: { unit: "kg", value: 1 },
-      itemType: cfg.defaultItemType,
+      itemType: resolveItemType(cfg.defaultItemType),
     });
     const services = parseQuoteServices(q);
     return { ok: true, services };
@@ -365,7 +366,7 @@ export async function quoteRatesForOrder(orderId: string): Promise<
         country: "MY",
       },
       weight: { unit: "kg", value: Math.max(weight, Number(cfg.defaultWeightKg)) },
-      itemType: cfg.defaultItemType,
+      itemType: resolveItemType(cfg.defaultItemType),
     });
     const all = parseQuoteServices(q);
     // Allowlist matches either the bookable serviceCode (e.g. "SPXDMY-PN-BD1")
@@ -491,7 +492,7 @@ export async function bookShipmentForOrder(
         : { length: 20, width: 20, height: 20 };
     return {
       name: i.productName,
-      type: cfg.defaultItemType,
+      type: resolveItemType(cfg.defaultItemType),
       price: { currency: "MYR", amount: Number(i.unitPrice) },
       weight: { unit: "kg", value: weight },
       dimension: dim,

@@ -13,6 +13,21 @@ import { shippingConfig } from "@/lib/db/schema";
 
 export const SHIPPING_CONFIG_ID = "default";
 
+/**
+ * Delyva itemType coercion. PACKAGE routes to Grab-only (returns 0 standard
+ * couriers) so we force PARCEL whenever the stored config value is PACKAGE.
+ * BULKY / DOCUMENT / PARCEL pass through unchanged. Centralised so every
+ * Delyva call-site uses the same rule (CLAUDE.md "Delyva itemType shipping
+ * type distinction").
+ */
+export function resolveItemType(
+  configValue: string,
+): "PARCEL" | "PACKAGE" | "BULKY" {
+  if (configValue === "PACKAGE") return "PARCEL";
+  if (configValue === "BULKY") return "BULKY";
+  return "PARCEL";
+}
+
 export type ShippingConfigRow = {
   id: string;
   originAddress1: string;

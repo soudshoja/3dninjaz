@@ -5,7 +5,7 @@ import { eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { products, productVariants, shippingServiceCatalog } from "@/lib/db/schema";
 import { delyvaApi, DelyvaError, parseQuoteServices } from "@/lib/delyva";
-import { loadShippingConfig } from "@/lib/shipping-config";
+import { loadShippingConfig, resolveItemType } from "@/lib/shipping-config";
 
 // ============================================================================
 // Phase 9 (09-01) — checkout shipping-quote helper (NOT YET WIRED TO UI).
@@ -180,10 +180,11 @@ export async function quoteForCart(
         country: (destination.country ?? "MY").toUpperCase(),
       },
       weight: { unit: "kg", value: round2(totalWeight) },
-      // PACKAGE routes to Grab-only (returns 0 standard couriers). Coerce to
-      // PARCEL here so a misconfigured DB value can never silently kill checkout.
-      // See CLAUDE.md "Delyva `itemType` shipping type distinction".
-      itemType: cfg.defaultItemType === "PACKAGE" ? "PARCEL" : cfg.defaultItemType,
+      // PACKAGE routes to Grab-only (returns 0 standard couriers). Coercion
+      // to PARCEL is centralised in resolveItemType() so every Delyva call-
+      // site uses the same rule. See CLAUDE.md "Delyva itemType shipping
+      // type distinction".
+      itemType: resolveItemType(cfg.defaultItemType),
     });
 
     // Defensive parser — see src/lib/delyva.ts parseQuoteServices for the
