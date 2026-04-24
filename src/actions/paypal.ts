@@ -1,8 +1,9 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { orders, orderItems, productVariants } from "@/lib/db/schema";
+import { orders, orderItems, productVariants, productOptionValues } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
+import { composeVariantLabel } from "@/lib/variants";
 import { randomUUID } from "node:crypto";
 import { getSessionUser } from "@/lib/auth-helpers";
 import { orderAddressSchema, type OrderAddressInput } from "@/lib/validators";
@@ -117,12 +118,32 @@ export async function createPayPalOrder(
     if (trackedAndOOS || legacyOOS) {
       return {
         ok: false,
-        error: `${v.product?.name ?? "An item"} (Size ${v.size}) is sold out. Please remove it from your bag.`,
+        error: `${v.product?.name ?? "An item"} is sold out. Please remove it from your bag.`,
       };
     }
   }
 
   // Build snapshot lines with server-derived prices (NEVER client prices).
+  // Phase 16-05 — compose variant labels for each variant in one extra query.
+  // Fetch option values referenced by all variants in the bag.
+  const optionValueIds = [
+    ...new Set(
+      variantRows.flatMap((v) =>
+        [v.option1ValueId, v.option2ValueId, v.option3ValueId].filter(
+          (id): id is string => typeof id === "string",
+        ),
+      ),
+    ),
+  ];
+  const optionValueRows =
+    optionValueIds.length > 0
+      ? await db
+          .select()
+          .from(productOptionValues)
+          .where(inArray(productOptionValues.id, optionValueIds))
+      : [];
+  const valueById = new Map(optionValueRows.map((v) => [v.id, v]));
+
   type Snap = {
     variantId: string;
     productId: string;
@@ -130,6 +151,7 @@ export async function createPayPalOrder(
     productSlug: string;
     productImage: string | null;
     size: "S" | "M" | "L";
+    variantLabel: string;
     unitPrice: string; // Drizzle decimal string, kept verbatim
     // Phase 10 (10-01) — snapshot of productVariants.costPrice at checkout
     // time. NULL if the variant has no cost set yet; admin can backfill via
@@ -159,6 +181,20 @@ export async function createPayPalOrder(
         // leave null
       }
     }
+    // Phase 16-05 — compose variantLabel from option values; fall back to
+    // legacy size column for pre-backfill rows (dual-read window).
+    const labelParts: string[] = [];
+    for (const vid of [v.option1ValueId, v.option2ValueId, v.option3ValueId]) {
+      if (vid) {
+        const val = valueById.get(vid);
+        if (val) labelParts.push(val.value);
+      }
+    }
+    const variantLabel =
+      labelParts.length > 0
+        ? composeVariantLabel(labelParts)
+        : (v.labelCache ?? v.size ?? "");
+
     return {
       variantId: v.id,
       productId: v.productId,
@@ -166,6 +202,7 @@ export async function createPayPalOrder(
       productSlug: v.product.slug,
       productImage: firstImage,
       size: v.size,
+      variantLabel,
       unitPrice: v.price,
       // Drizzle returns decimal as string | null; pass through as-is.
       unitCost: v.costPrice ?? null,
@@ -297,7 +334,10 @@ export async function createPayPalOrder(
               },
             },
             items: snapshots.map((s) => ({
-              name: `${s.productName} (Size ${s.size})`.slice(0, 127),
+              name: (s.variantLabel
+                ? `${s.productName} — ${s.variantLabel}`
+                : s.productName
+              ).slice(0, 127),
               quantity: String(s.quantity),
               unitAmount: {
                 currencyCode: PAYPAL_CURRENCY,
@@ -385,6 +425,9 @@ export async function createPayPalOrder(
         productSlug: s.productSlug,
         productImage: s.productImage,
         size: s.size,
+        // Phase 16-05 — snapshot variant label at order creation time so
+        // order history is stable even after option renames.
+        variantLabel: s.variantLabel || null,
         unitPrice: s.unitPrice,
         // Phase 10 (10-01) — cost snapshot at order creation. NULL when the
         // variant has no costPrice set yet.

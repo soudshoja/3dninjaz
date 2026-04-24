@@ -5,7 +5,7 @@ import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
 import { quoteForCart, type QuoteOption } from "@/actions/shipping-quote";
 import type { AddressFormValues } from "./address-form";
-import type { CartItem } from "@/stores/cart-store";
+import type { HydratedCartItem } from "@/actions/cart";
 
 /**
  * Phase 9b — checkout shipping-rate picker.
@@ -35,7 +35,7 @@ export type SelectedShipping = {
 
 type Props = {
   address: AddressFormValues | null;
-  items: CartItem[];
+  items: HydratedCartItem[];
   onChange: (sel: SelectedShipping | null) => void;
 };
 
@@ -59,7 +59,7 @@ export function ShippingRatePicker({ address, items, onChange }: Props) {
           productId: i.productId,
           quantity: i.quantity,
           unitPrice: Number(i.unitPrice),
-        })),
+        })), // HydratedCartItem has productId + unitPrice
       })
     : "";
 

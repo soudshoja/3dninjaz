@@ -177,7 +177,9 @@ export type AdminOrderDetail = {
     productName: string;
     productSlug: string;
     productImage: string | null;
-    size: "S" | "M" | "L";
+    size: string | null;
+    // Phase 16-05 — composed label snapshot (e.g. "Medium / Red")
+    variantLabel: string | null;
     unitPrice: string;
     // Phase 10 — snapshotted per-unit cost. NULL = variant had no costPrice
     // when the order was created. Admin can backfill via inline edit.
@@ -273,6 +275,7 @@ export async function getAdminOrder(orderId: string): Promise<AdminOrderDetail |
       productSlug: it.productSlug,
       productImage: it.productImage ?? null,
       size: it.size,
+      variantLabel: it.variantLabel ?? null,
       unitPrice: it.unitPrice,
       unitCost: it.unitCost ?? null,
       quantity: it.quantity,

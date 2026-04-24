@@ -1,7 +1,7 @@
 "use client";
 
 import { CartLineRow } from "@/components/store/cart-line-row";
-import type { CartItem } from "@/stores/cart-store";
+import type { HydratedCartItem } from "@/actions/cart";
 import { formatMYR } from "@/lib/format";
 import { BRAND } from "@/lib/brand";
 import { CouponApply, type AppliedCoupon } from "@/components/store/coupon-apply";
@@ -26,7 +26,7 @@ export function CheckoutSummary({
   onCouponChange,
   shipping,
 }: {
-  items: CartItem[];
+  items: HydratedCartItem[];
   subtotal: number;
   appliedCoupon: AppliedCoupon | null;
   onCouponChange: (next: AppliedCoupon | null) => void;
@@ -39,7 +39,7 @@ export function CheckoutSummary({
     <div>
       <div className="divide-y divide-black/10 max-h-[40vh] overflow-y-auto">
         {items.map((i) => (
-          <CartLineRow key={i.key} item={i} variant="compact" />
+          <CartLineRow key={i.variantId} item={i} variant="compact" />
         ))}
       </div>
 

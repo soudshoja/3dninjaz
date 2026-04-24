@@ -5,12 +5,16 @@ import Link from "next/link";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
-import { useCartStore, type CartItem } from "@/stores/cart-store";
+import { useCartStore } from "@/stores/cart-store";
+import type { HydratedCartItem } from "@/actions/cart";
 
 /**
  * Single cart line — shared by the drawer (variant="compact") and the
- * /bag full page (variant="full"). Shows thumbnail + name + size + unit
- * price + qty controls + remove + line subtotal.
+ * /bag full page (variant="full"). Shows thumbnail + name + variantLabel
+ * (e.g. "Medium / Red") + unit price + qty controls + remove + line subtotal.
+ *
+ * Phase 16-05: accepts HydratedCartItem (server-hydrated shape). The legacy
+ * CartItem shape (with size/unitPrice) is no longer used here.
  *
  * All tap targets are 48px min (D2-04). aria-live="polite" on the
  * quantity value announces live changes to screen readers.
@@ -19,12 +23,15 @@ export function CartLineRow({
   item,
   variant = "compact",
 }: {
-  item: CartItem;
+  item: HydratedCartItem;
   variant?: "compact" | "full";
 }) {
   const increment = useCartStore((s) => s.incrementItem);
   const decrement = useCartStore((s) => s.decrementItem);
   const remove = useCartStore((s) => s.removeItem);
+
+  // key in the store is variantId (same as variantId field in v2)
+  const key = item.variantId;
 
   const unit = parseFloat(item.unitPrice);
   const line = Number.isFinite(unit) ? unit * item.quantity : 0;
@@ -40,7 +47,7 @@ export function CartLineRow({
       <Link
         href={`/products/${item.productSlug}`}
         className="shrink-0"
-        aria-label={`View ${item.name}`}
+        aria-label={`View ${item.productName}`}
       >
         <div
           className="relative rounded-xl overflow-hidden"
@@ -50,10 +57,10 @@ export function CartLineRow({
             backgroundColor: `${BRAND.blue}15`,
           }}
         >
-          {item.image ? (
+          {item.productImage ? (
             <Image
-              src={item.image}
-              alt={item.name}
+              src={item.productImage}
+              alt={item.productName}
               fill
               sizes={`${thumbSize}px`}
               className="object-cover"
@@ -66,11 +73,17 @@ export function CartLineRow({
           href={`/products/${item.productSlug}`}
           className="block truncate font-bold"
         >
-          {item.name}
+          {item.productName}
         </Link>
         <p className="text-sm text-slate-600 mt-0.5">
-          Size {item.size} · {formatMYR(item.unitPrice)} each
+          {item.variantLabel ? `${item.variantLabel} · ` : ""}
+          {formatMYR(item.unitPrice)} each
         </p>
+        {!item.available ? (
+          <p className="text-xs font-semibold mt-0.5" style={{ color: "#dc2626" }}>
+            Out of stock
+          </p>
+        ) : null}
         <div className="mt-3 flex items-center gap-3">
           <div
             className="inline-flex items-center rounded-full border-2 overflow-hidden bg-white"
@@ -78,8 +91,8 @@ export function CartLineRow({
           >
             <button
               type="button"
-              onClick={() => decrement(item.key)}
-              aria-label={`Decrease quantity of ${item.name} size ${item.size}`}
+              onClick={() => decrement(key)}
+              aria-label={`Decrease quantity of ${item.productName}`}
               className="min-h-[48px] min-w-[48px] inline-flex items-center justify-center text-zinc-900 hover:bg-zinc-100"
             >
               <Minus className="h-4 w-4" aria-hidden />
@@ -92,8 +105,8 @@ export function CartLineRow({
             </span>
             <button
               type="button"
-              onClick={() => increment(item.key)}
-              aria-label={`Increase quantity of ${item.name} size ${item.size}`}
+              onClick={() => increment(key)}
+              aria-label={`Increase quantity of ${item.productName}`}
               disabled={item.quantity >= 10}
               className="min-h-[48px] min-w-[48px] inline-flex items-center justify-center text-zinc-900 hover:bg-zinc-100 disabled:opacity-40"
             >
@@ -102,8 +115,8 @@ export function CartLineRow({
           </div>
           <button
             type="button"
-            onClick={() => remove(item.key)}
-            aria-label={`Remove ${item.name} size ${item.size} from bag`}
+            onClick={() => remove(key)}
+            aria-label={`Remove ${item.productName} from bag`}
             className="min-h-[48px] px-3 inline-flex items-center gap-1 text-sm font-semibold hover:underline text-zinc-900"
           >
             <Trash2 className="h-4 w-4" aria-hidden />

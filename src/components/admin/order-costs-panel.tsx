@@ -32,7 +32,7 @@ import { Pencil, Save, X } from "lucide-react";
 export type OrderCostsPanelItem = {
   id: string;
   productName: string;
-  size: "S" | "M" | "L";
+  size: string | null;
   unitPrice: string;
   unitCost: string | null;
   quantity: number;

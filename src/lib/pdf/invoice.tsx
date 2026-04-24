@@ -109,7 +109,8 @@ export type InvoiceOrder = {
   items: Array<{
     id: string;
     productName: string;
-    size: string;
+    size: string | null;
+    variantLabel?: string | null;
     quantity: number;
     unitPrice: string;
     lineTotal: string;
@@ -174,14 +175,14 @@ export function InvoiceDocument({
         <Text style={styles.sectionTitle}>Items</Text>
         <View style={styles.tableHead}>
           <Text style={styles.col1}>Product</Text>
-          <Text style={styles.col2}>Size</Text>
+          <Text style={styles.col2}>Variant</Text>
           <Text style={styles.col3}>Qty</Text>
           <Text style={styles.col4}>Line total</Text>
         </View>
         {order.items.map((i) => (
           <View key={i.id} style={styles.tableRow}>
             <Text style={styles.col1}>{i.productName}</Text>
-            <Text style={styles.col2}>{i.size}</Text>
+            <Text style={styles.col2}>{i.variantLabel ?? (i.size ? `Size ${i.size}` : "—")}</Text>
             <Text style={styles.col3}>{String(i.quantity)}</Text>
             <Text style={styles.col4}>{formatMYR(i.lineTotal)}</Text>
           </View>

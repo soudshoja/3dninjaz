@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { PayPalButtons } from "@paypal/react-paypal-js";
 import { createPayPalOrder, capturePayPalOrder } from "@/actions/paypal";
-import type { CartItem } from "@/stores/cart-store";
+import type { HydratedCartItem } from "@/actions/cart";
 import type { AddressFormValues } from "./address-form";
 import type { SelectedShipping } from "./shipping-rate-picker";
 import { BRAND } from "@/lib/brand";
@@ -29,7 +29,7 @@ export function PayPalButton({
   onPaid,
 }: {
   address: AddressFormValues | null;
-  items: CartItem[];
+  items: HydratedCartItem[];
   appliedCouponCode?: string | null;
   shipping: SelectedShipping | null;
   onPaid: (redirectTo: string) => void;

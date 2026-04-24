@@ -7,7 +7,8 @@ type ReviewableItem = {
   productId: string;
   productSlug: string;
   productName: string;
-  size: "S" | "M" | "L";
+  size: string | null;
+  variantLabel?: string | null;
 };
 
 const QUALIFYING_STATUSES = new Set([
@@ -56,7 +57,11 @@ export async function ReviewsSection({
             <p className="font-semibold">
               {i.productName}{" "}
               <span className="text-sm text-slate-600 font-normal">
-                · Size {i.size}
+                {i.variantLabel
+                  ? `· ${i.variantLabel}`
+                  : i.size
+                    ? `· Size ${i.size}`
+                    : null}
               </span>
             </p>
             <ReviewCTA

@@ -252,7 +252,7 @@ export default async function AdminOrderDetailPage({
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold truncate">{i.productName}</p>
                       <p className="text-sm text-slate-600">
-                        Size {i.size} · Qty {i.quantity} · {formatMYR(i.unitPrice)} each
+                        {i.variantLabel ?? (i.size ? `Size ${i.size}` : null)} · Qty {i.quantity} · {formatMYR(i.unitPrice)} each
                       </p>
                     </div>
                     <p className="font-[var(--font-heading)] text-lg whitespace-nowrap">

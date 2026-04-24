@@ -203,7 +203,7 @@ export default async function OrderDetailPage({
                     {i.productName}
                   </Link>
                   <p className="text-sm text-slate-600 mt-0.5">
-                    Size {i.size} · Qty {i.quantity} · {formatMYR(i.unitPrice)}{" "}
+                    {i.variantLabel ?? (i.size ? `Size ${i.size}` : null)} · Qty {i.quantity} · {formatMYR(i.unitPrice)}{" "}
                     each
                   </p>
                 </div>
@@ -243,6 +243,7 @@ export default async function OrderDetailPage({
             productSlug: i.productSlug,
             productName: i.productName,
             size: i.size,
+            variantLabel: i.variantLabel ?? null,
           }))}
         />
 

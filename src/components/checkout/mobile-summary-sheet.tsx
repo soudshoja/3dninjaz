@@ -14,7 +14,7 @@ import { CheckoutSummary } from "./checkout-summary";
 import { PayPalButton } from "./paypal-button";
 import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
-import type { CartItem } from "@/stores/cart-store";
+import type { HydratedCartItem } from "@/actions/cart";
 import type { AddressFormValues } from "./address-form";
 import type { AppliedCoupon } from "@/components/store/coupon-apply";
 import type { SelectedShipping } from "./shipping-rate-picker";
@@ -38,7 +38,7 @@ export function MobileSummarySheet({
   shipping,
   onPaid,
 }: {
-  items: CartItem[];
+  items: HydratedCartItem[];
   subtotalMyr: number;
   address: AddressFormValues | null;
   appliedCoupon: AppliedCoupon | null;

@@ -147,6 +147,7 @@ export async function GET(
           id: i.id,
           productName: i.productName,
           size: i.size,
+          variantLabel: i.variantLabel ?? null,
           quantity: i.quantity,
           unitPrice: i.unitPrice,
           lineTotal: i.lineTotal,

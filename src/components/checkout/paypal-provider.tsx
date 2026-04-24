@@ -7,6 +7,7 @@ import {
   type ReactPayPalScriptOptions,
 } from "@paypal/react-paypal-js";
 import { useCartStore } from "@/stores/cart-store";
+import { hydrateCartItems, type HydratedCartItem } from "@/actions/cart";
 import { AddressForm, type AddressFormValues } from "./address-form";
 import { CheckoutSummary } from "./checkout-summary";
 import { PayPalButton } from "./paypal-button";
@@ -44,19 +45,39 @@ export function CheckoutIsland({
   savedAddresses?: SavedAddress[];
 }) {
   const router = useRouter();
-  const items = useCartStore((s) => s.items);
-  const subtotal = useCartStore((s) => s.getSubtotal());
+  const storeItems = useCartStore((s) => s.items);
 
   // Defer redirect decisions until after persist hydration to avoid
   // bouncing signed-in users with a still-loading localStorage bag.
   const [hydrated, setHydrated] = useState(false);
+  const [hydratedItems, setHydratedItems] = useState<HydratedCartItem[]>([]);
+
   useEffect(() => setHydrated(true), []);
 
+  // Hydrate display data from server once store is rehydrated.
   useEffect(() => {
-    if (hydrated && items.length === 0) {
+    if (!hydrated || storeItems.length === 0) {
+      setHydratedItems([]);
+      return;
+    }
+    hydrateCartItems(
+      storeItems.map((i) => ({ variantId: i.variantId, quantity: i.quantity })),
+    )
+      .then(setHydratedItems)
+      .catch(() => {});
+  }, [hydrated, storeItems.length]);
+
+  const subtotal = hydratedItems.reduce(
+    (sum, i) => sum + parseFloat(i.unitPrice) * i.quantity,
+    0,
+  );
+  const items = hydratedItems;
+
+  useEffect(() => {
+    if (hydrated && storeItems.length === 0) {
       router.replace("/bag");
     }
-  }, [hydrated, items.length, router]);
+  }, [hydrated, storeItems.length, router]);
 
   // Collected + validated address — only non-null when the form reports valid.
   const [address, setAddress] = useState<AddressFormValues | null>(null);
@@ -79,7 +100,7 @@ export function CheckoutIsland({
     [],
   );
 
-  if (!hydrated || items.length === 0) {
+  if (!hydrated || storeItems.length === 0) {
     return <p className="text-sm text-slate-600">Redirecting to your bag…</p>;
   }
 

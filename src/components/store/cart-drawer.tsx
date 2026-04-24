@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { X } from "lucide-react";
+import { useEffect, useState } from "react";
 import {
   Drawer,
   DrawerContent,
@@ -13,21 +14,58 @@ import {
   DrawerClose,
 } from "@/components/ui/drawer";
 import { useCartStore } from "@/stores/cart-store";
+import { hydrateCartItems, type HydratedCartItem } from "@/actions/cart";
 import { formatMYR } from "@/lib/format";
 import { BRAND } from "@/lib/brand";
 import { CartLineRow } from "@/components/store/cart-line-row";
 
 /**
- * The single mounted-in-layout drawer surface. Opens whenever any code
- * calls `useCartStore.getState().setDrawerOpen(true)`. Empty state uses
- * the D-02 "Your bag is empty." vocabulary.
+ * Phase 16-05: cart drawer hydrates display data (label, price, image) from
+ * the server on open. The Zustand store holds only { variantId, quantity }.
+ *
+ * Hydration is triggered whenever the drawer opens or the item list changes.
+ * While loading we show the existing skeleton (item count still readable from
+ * the lean store). Items that no longer exist in the DB are silently dropped
+ * and removed from the store.
  */
 export function CartDrawer() {
   const isOpen = useCartStore((s) => s.isDrawerOpen);
   const setOpen = useCartStore((s) => s.setDrawerOpen);
-  const items = useCartStore((s) => s.items);
-  const subtotal = useCartStore((s) => s.getSubtotal());
+  const storeItems = useCartStore((s) => s.items);
+  const removeItem = useCartStore((s) => s.removeItem);
   const count = useCartStore((s) => s.getItemCount());
+
+  const [hydrated, setHydrated] = useState<HydratedCartItem[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Re-hydrate whenever the drawer is open and store items change.
+  useEffect(() => {
+    if (!isOpen || storeItems.length === 0) {
+      setHydrated([]);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    hydrateCartItems(storeItems.map((i) => ({ variantId: i.variantId, quantity: i.quantity })))
+      .then((items) => {
+        if (cancelled) return;
+        setHydrated(items);
+        // Drop store items whose variants were deleted/inactive
+        const liveIds = new Set(items.map((i) => i.variantId));
+        for (const si of storeItems) {
+          if (!liveIds.has(si.variantId)) removeItem(si.key);
+        }
+      })
+      .catch(() => { /* silent — stale display is acceptable */ })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, storeItems.length]);
+
+  const subtotal = hydrated.reduce(
+    (sum, i) => sum + parseFloat(i.unitPrice) * i.quantity,
+    0,
+  );
 
   return (
     <Drawer open={isOpen} onOpenChange={setOpen}>
@@ -51,7 +89,7 @@ export function CartDrawer() {
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-5 divide-y divide-black/10">
-          {items.length === 0 ? (
+          {storeItems.length === 0 ? (
             <div className="py-16 text-center">
               <Image
                 src="/icons/ninja/emoji/thank-you@128.png"
@@ -71,17 +109,21 @@ export function CartDrawer() {
                 Browse drops
               </Link>
             </div>
+          ) : loading ? (
+            <div className="py-10 text-center text-sm text-zinc-500">Loading…</div>
           ) : (
-            items.map((i) => <CartLineRow key={i.key} item={i} variant="compact" />)
+            hydrated.map((i) => (
+              <CartLineRow key={i.variantId} item={i} variant="compact" />
+            ))
           )}
         </div>
 
-        {items.length > 0 ? (
+        {storeItems.length > 0 ? (
           <DrawerFooter>
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm text-zinc-600">Subtotal</span>
               <span className="font-[var(--font-heading)] text-2xl text-zinc-900">
-                {formatMYR(subtotal)}
+                {loading ? "—" : formatMYR(subtotal)}
               </span>
             </div>
             <div className="flex gap-3">
