@@ -50,15 +50,7 @@ export default function AboutPage() {
             id="about-hero"
             className="mt-5 font-heading text-5xl sm:text-6xl md:text-7xl leading-tight text-zinc-900"
           >
-            About{" "}
-            <span
-              className="bg-clip-text text-transparent"
-              style={{
-                backgroundImage: `linear-gradient(90deg, ${BRAND.blue}, ${BRAND.green}, ${BRAND.purple})`,
-              }}
-            >
-              Us
-            </span>
+            About Us
           </h1>
           <p className="mt-6 mx-auto max-w-2xl text-lg sm:text-xl leading-relaxed text-zinc-700">
             We are three siblings Idrees (11), Ishaq (10), and Alaina (3) based

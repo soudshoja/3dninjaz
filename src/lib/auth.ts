@@ -33,7 +33,8 @@ export const auth = betterAuth({
   },
   trustedOrigins: [
     process.env.BETTER_AUTH_URL || "http://localhost:3000",
-    "https://app.3dninjaz.com", // Production domain
+    "https://app.3dninjaz.com", // Production subdomain (current live)
+    "https://3dninjaz.com", // Apex domain (defensive — in case forms post or we swap)
     "http://localhost:3000", // Local development
     "http://127.0.0.1:3000", // Local development (IP)
   ],
