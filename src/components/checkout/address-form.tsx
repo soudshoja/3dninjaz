@@ -171,7 +171,8 @@ export function AddressForm({
   // NOTE: we use inline style only for the normal (no-error) state because
   // BRAND.ink is a runtime value. For error state we use Tailwind classes so
   // they take precedence (inline styles would override Tailwind).
-  function fieldClasses(fieldName: keyof typeof errors, isSelect = false) {
+  type FormFieldName = keyof Pick<AddressFormInput, "recipientName" | "phone" | "addressLine1" | "addressLine2" | "city" | "state" | "postcode" | "country">;
+  function fieldClasses(fieldName: FormFieldName, isSelect = false) {
     const hasError =
       !!errors[fieldName] && (formAttempted || !!touchedFields[fieldName]);
     if (hasError) {
@@ -180,7 +181,7 @@ export function AddressForm({
     return inputBase;
   }
 
-  function fieldStyle(fieldName: keyof typeof errors) {
+  function fieldStyle(fieldName: FormFieldName) {
     const hasError =
       !!errors[fieldName] && (formAttempted || !!touchedFields[fieldName]);
     // Only apply the subtle ink border when there is no error; let Tailwind
