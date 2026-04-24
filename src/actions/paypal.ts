@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { orders, orderItems, productVariants, productOptionValues } from "@/lib/db/schema";
+import { orders, orderItems, productVariants, productOptionValues, products } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { composeVariantLabel, resolveEffectivePrice } from "@/lib/variants";
 import { randomUUID } from "node:crypto";
@@ -97,11 +97,28 @@ export async function createPayPalOrder(
     return { ok: false, error: "Your bag is empty." };
   }
 
-  // Fetch variants + their products in one relational query.
-  const variantRows = await db.query.productVariants.findMany({
-    where: inArray(productVariants.id, variantIds),
-    with: { product: true },
-  });
+  // Fetch variants + their products — manual two-query hydration instead of
+  // db.query.*.findMany({ with: { product: true } }) which emits LATERAL joins
+  // that MariaDB 10.11 rejects (ER_PARSE_ERROR). Shape returned matches the
+  // old relational API: each row has a `product` field attached.
+  const rawVariants = await db
+    .select()
+    .from(productVariants)
+    .where(inArray(productVariants.id, variantIds));
+  const productIdsForVariants = [
+    ...new Set(rawVariants.map((v) => v.productId)),
+  ];
+  const productRows = productIdsForVariants.length
+    ? await db
+        .select()
+        .from(products)
+        .where(inArray(products.id, productIdsForVariants))
+    : [];
+  const productByIdForVariants = new Map(productRows.map((p) => [p.id, p]));
+  const variantRows = rawVariants.map((v) => ({
+    ...v,
+    product: productByIdForVariants.get(v.productId)!,
+  }));
   if (variantRows.length !== variantIds.length) {
     return { ok: false, error: "One or more items are no longer available." };
   }
@@ -641,12 +658,20 @@ export async function capturePayPalOrder({
 export async function getOrderForCurrentUser(orderId: string) {
   const user = await getSessionUser();
   if (!user) return null;
-  const row = await db.query.orders.findFirst({
-    where: eq(orders.id, orderId),
-    with: { items: true },
-  });
-  if (!row) return null;
+  // Manual two-query hydration — MariaDB 10.11 does not support the LATERAL
+  // joins Drizzle emits for db.query.*.findFirst({ with: { items: true } }).
+  const orderRow = await db
+    .select()
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+  if (orderRow.length === 0) return null;
+  const row = orderRow[0];
   const userWithRole = user as unknown as { id: string; role: string };
   if (row.userId !== userWithRole.id && userWithRole.role !== "admin") return null;
-  return row;
+  const items = await db
+    .select()
+    .from(orderItems)
+    .where(eq(orderItems.orderId, row.id));
+  return { ...row, items };
 }

@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
-import { orders } from "@/lib/db/schema";
+import { orders, orderItems } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { sendMail } from "@/lib/mailer";
 import { formatOrderNumber } from "@/lib/orders";
@@ -227,14 +227,22 @@ function renderItemsTableFragment(order: OrderWithItems): string {
 export async function sendOrderConfirmationEmail(
   orderId: string,
 ): Promise<void> {
-  const row = await db.query.orders.findFirst({
-    where: eq(orders.id, orderId),
-    with: { items: true },
-  });
-  if (!row) {
+  // Manual two-query hydration — MariaDB 10.11 does not support the LATERAL
+  // joins Drizzle emits for db.query.*.findFirst({ with: { items: true } }).
+  const orderHead = await db
+    .select()
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+  if (orderHead.length === 0) {
     console.error("[order-email] order not found:", orderId);
     return;
   }
+  const items = await db
+    .select()
+    .from(orderItems)
+    .where(eq(orderItems.orderId, orderHead[0].id));
+  const row = { ...orderHead[0], items };
   if (row.status !== "paid") {
     console.warn(`[order-email] skipping send for non-paid order ${orderId}`);
     return;

@@ -1,8 +1,8 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { orders } from "@/lib/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { orders, orderItems } from "@/lib/db/schema";
+import { eq, desc, inArray } from "drizzle-orm";
 import { getSessionUser } from "@/lib/auth-helpers";
 import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
 
@@ -37,12 +37,26 @@ const resendLog = new Map<string, number>();
 export async function listMyOrders() {
   const user = await getSessionUser();
   if (!user) return null;
-  const rows = await db.query.orders.findMany({
-    where: eq(orders.userId, user.id),
-    orderBy: [desc(orders.createdAt)],
-    with: { items: true },
-  });
-  return rows;
+  // Manual two-query hydration — MariaDB 10.11 does not support the LATERAL
+  // joins Drizzle emits for db.query.*.findMany({ with: { items: true } }).
+  const rows = await db
+    .select()
+    .from(orders)
+    .where(eq(orders.userId, user.id))
+    .orderBy(desc(orders.createdAt));
+  if (rows.length === 0) return [];
+  const orderIds = rows.map((r) => r.id);
+  const itemRows = await db
+    .select()
+    .from(orderItems)
+    .where(inArray(orderItems.orderId, orderIds));
+  const itemsByOrder = new Map<string, typeof itemRows>();
+  for (const it of itemRows) {
+    const bucket = itemsByOrder.get(it.orderId) ?? [];
+    bucket.push(it);
+    itemsByOrder.set(it.orderId, bucket);
+  }
+  return rows.map((r) => ({ ...r, items: itemsByOrder.get(r.id) ?? [] }));
 }
 
 export async function getMyOrder(orderId: string) {
@@ -50,16 +64,22 @@ export async function getMyOrder(orderId: string) {
   if (!user) return null;
   if (typeof orderId !== "string" || orderId.length === 0) return null;
 
-  const row = await db.query.orders.findFirst({
-    where: eq(orders.id, orderId),
-    with: { items: true },
-  });
-  if (!row) return null;
+  const rows = await db
+    .select()
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+  if (rows.length === 0) return null;
+  const row = rows[0];
   // T-03-21 (D3-22): only owner OR admin may read. Same null return for both
   // "not found" and "not yours" — blocks email enumeration.
   const userWithRole = user as unknown as { id: string; role: string };
   if (row.userId !== userWithRole.id && userWithRole.role !== "admin") return null;
-  return row;
+  const items = await db
+    .select()
+    .from(orderItems)
+    .where(eq(orderItems.orderId, row.id));
+  return { ...row, items };
 }
 
 export async function resendOrderConfirmationEmail(
