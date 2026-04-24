@@ -7,26 +7,26 @@ order: 1
 
 # Products, variants, and how they work
 
-Every item in your store is a **product**. Each product can have up to three **options** (e.g., Size, Color, Part), each with its own set of **values**. The system auto-generates a **variant** for every combination of values — each with its own price, stock, SKU, and image.
+Every item in your store is a **product**. Each product can have up to 6 **options** (e.g., Size, Color, Part), each with its own set of **values**. The system auto-generates a **variant** for every combination of values — each with its own price, stock, SKU, image, and shipping weight.
 
 ## The structure
 
 ```
 Product
- ├── Basic info: name, description, category, photos
+ ├── Basic info: name, description, category, photos, shipping weight
  └── Options (e.g. Size, Color)
       ├── Option values (e.g. Small, Medium, Large)
       └── Variants — auto-generated for each combination
-           ├── Small / Red — price, cost data, stock, SKU, image
-           ├── Small / Blue — price, cost data, stock, SKU, image
-           └── Medium / Red — price, cost data, stock, SKU, image
+           ├── Small / Red — price, sale price, cost, stock, SKU, image, weight
+           ├── Small / Blue — ...
+           └── Medium / Red — ...
 ```
 
-Each variant is independent. You can set different prices, stock levels, and images per variant.
+Each variant is independent. You can set different prices, stock levels, images, and shipping weights per variant.
 
-## Key fields explained
+## Key product fields
 
-**Name and description** — What customers see on the product page and in Google search results. Write clearly and describe the material (e.g., "PLA plastic"), dimensions, and what makes it unique.
+**Name and description** — What customers see on the product page and in search results. Write clearly and describe the material (e.g., "PLA plastic"), dimensions, and what makes it unique.
 
 **Category / Subcategory** — Groups products in the shop filter. You must create categories first (see the [Categories guide](/admin/guide/products/categories)).
 
@@ -38,14 +38,23 @@ Each variant is independent. You can set different prices, stock levels, and ima
 
 **Estimated production days** — How many working days it takes to print and dispatch. Shown to customers at checkout.
 
+**Shipping weight (kg)** — Default weight used when calculating Delyva courier quotes. Individual variants can override this with their own weight.
+
 ## Variants in detail
 
 Each variant has:
 - **Selling price** — what the customer pays
+- **Sale price + schedule** — optional discounted price with optional start/end date
 - **Cost fields** (optional) — filament grams, print time, labor minutes, used to calculate your profit margin
-- **SKU** — optional internal reference code
-- **Image** — optional per-variant image shown in the gallery when selected
-- **Inventory tracking** — optional; see the [Inventory guide](/admin/guide/products/inventory)
+- **SKU** — auto-generated reference code; you can override it
+- **Image** — optional per-variant photo shown in the gallery when that variant is selected
+- **Weight (g)** — overrides the product-level shipping weight for Delyva quotes
+- **Track Stock / Stock count** — optional; see the [Inventory guide](/admin/guide/products/inventory)
+- **In Stock toggle** — quickly mark a variant available or unavailable
+- **Pre-order** — keeps an out-of-stock variant purchasable; shows "Pre-order" label on the product page
+- **Default flag** — exactly one variant per product is the default shown when the page loads
+
+For full instructions on setting up options and generating variants, see [Options, values, and variants](/admin/guide/products/variants-sizes).
 
 ## Photos
 
@@ -55,4 +64,4 @@ You can upload multiple photos per product. The first photo (index 0) is the thu
 
 ## Where to manage products
 
-Go to **Products** in the sidebar to see all products. Click any product name to edit it. Use **+ New product** to add a new one.
+Go to **Products** in the sidebar to see all products. Click any product name to edit it. Use **+ New product** to add a new one. From the product edit page, click **Manage Variants** to set up options, values, and per-variant pricing.

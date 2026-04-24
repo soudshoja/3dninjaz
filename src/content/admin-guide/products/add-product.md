@@ -14,25 +14,7 @@ order: 2
 5. Choose a **Category** (and subcategory if you have them set up).
 6. Set the **Material type** if relevant (e.g., PLA, PETG, Resin).
 7. Enter **Estimated production days** — how many working days from order to dispatch.
-
-## Adding sizes and prices
-
-Scroll to the **Sizes & Pricing** section:
-
-1. Toggle on each size you offer (Small, Medium, Large).
-2. Enter a **selling price** for each enabled size.
-3. Optionally enter the **dimensions** (width × height × depth in cm) — shown to customers.
-
-## Adding cost data (optional but recommended)
-
-Each size has a **Cost** section. Fill it in to track your profit margin:
-
-- **Filament grams** — how much filament does this size use?
-- **Print time (hours)** — total hours in the printer
-- **Labor minutes** — packing, post-processing, QC time
-- **Other cost** — any extra materials (supports, supports removal, etc.)
-
-Leave any field blank to fall back to your store-wide defaults (set in Settings → Cost Defaults).
+8. Enter a **Shipping weight (kg)** — used as the default weight for courier quotes. You can override per-variant later.
 
 ## Uploading photos
 
@@ -45,10 +27,34 @@ Leave any field blank to fall back to your store-wide defaults (set in Settings 
 - **Active** — must be on for the product to appear in the storefront. Off by default on new products — don't forget to enable it.
 - **Featured** — shows the product in the homepage "Featured" section.
 
-## Saving
+## Saving the product
 
-Click **Save product** at the bottom. You'll be redirected to the edit page where you can continue making changes.
+Click **Save product** at the bottom. You'll be taken to the product edit page.
 
-**Verify:** Open `/shop` in the storefront. Your product should appear if it's active. Click it to check the sizes, prices, and photos look correct.
+## Adding variants (sizes, colors, etc.)
 
-**Tip:** Empty cost fields are fine — they default to store-level defaults from Settings. Only override per-size if that size uses significantly more or less filament.
+After saving the product, click **Manage Variants** to set up your options and prices.
+
+1. Add your option types (e.g., Size, Color, Part).
+2. Add values for each option (e.g., S / M / L for Size).
+3. Click **Generate Variant Matrix** — the store creates a row for each combination.
+4. Set the **price**, **stock**, **SKU**, and optionally an **image** and **weight** for each variant.
+5. Mark one variant as the **Default** — it's shown pre-selected on the product page.
+6. Save variants.
+
+See the full [Options, values, and variants guide](/admin/guide/products/variants-sizes) for details on pre-order, sale pricing, and weight per variant.
+
+## Adding cost data (optional but recommended)
+
+Each variant has a **Cost** section. Fill it in to track your profit margin:
+
+- **Filament grams** — how much filament does this variant use?
+- **Print time (hours)** — total hours in the printer
+- **Labor minutes** — packing, post-processing, QC time
+- **Other cost** — any extra materials (supports, supports removal, etc.)
+
+Leave any field blank to fall back to your store-wide defaults (set in Settings → Cost Defaults).
+
+**Verify:** Open `/shop` in the storefront. Your product should appear if it's active. Click it to check the variant selector, prices, and photos look correct.
+
+**Tip:** Empty cost fields are fine — they default to store-level defaults from Settings. Only override per-variant if that variant uses significantly more or less filament.

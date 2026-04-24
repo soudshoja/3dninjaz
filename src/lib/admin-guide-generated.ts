@@ -511,6 +511,100 @@ Check the spam folder first. If it's not there, ask your server administrator to
 Go to Settings, enter text in the Banner field, and check the "Show banner" checkbox. Don't forget to Save.`,
   },
   {
+    slug: "guide/whats-new-april-2026",
+    title: "What's new — April 2026",
+    category: "Guide",
+    tags: ["changelog","new","updates","april-2026"],
+    order: 2,
+    href: "/admin/guide/guide/whats-new-april-2026",
+    content: `# What's new — April 2026
+
+A summary of everything added or improved in April 2026. No action is required unless noted.
+
+---
+
+## Products & Variants — complete redesign
+
+The old fixed Small / Medium / Large size fields have been replaced by a fully flexible **options and variants** system.
+
+**What this means for you:**
+- Each product can now have up to 6 option types: Size, Color, Part, Material, Finish, Style
+- Each option has its own ordered list of values (e.g. S / M / L, Red / Blue, Head / Arm)
+- Click **Generate Variant Matrix** to auto-create all combinations
+- Every variant has its own price, sale price (with schedule), stock, SKU, image, and shipping weight
+- Existing products were migrated — your old sizes are now variants
+
+**New variant features:**
+- **Sale price scheduling** — set a start and end date for a discount; it activates and expires automatically
+- **Pre-order toggle** — keeps an out-of-stock variant purchasable with a "Pre-order" badge on the product page
+- **Per-variant weight** — overrides the product-level weight for Delyva courier quotes
+- **Hover preview** — hovering a variant pill on the product page previews that variant's image
+- **Single default variant** — one variant per product is marked as default and shown pre-selected
+
+Manage variants at: \`/admin/products/<id>/variants\`
+
+See: [Options, values, and variants](/admin/guide/products/variants-sizes)
+
+---
+
+## Shipping — courier whitelist and PARCEL fix
+
+- **Courier whitelist** — only 12 approved couriers (Ninja Van, J&T, SPX, City-Link, Pos Laju, SF International, and variants) appear at checkout. Unknown couriers are filtered out automatically.
+- **PARCEL type enforced** — previous "PACKAGE" type routed to Grab-only and returned zero standard couriers. The store now always uses PARCEL; any legacy PACKAGE setting is corrected automatically.
+- **30 kg cap** — orders exceeding 30 kg show a clear error at checkout rather than a silent failure.
+- **Duplicate webhook handling** — Delyva occasionally resends status webhooks; duplicates are silently ignored.
+
+See: [How shipping works — Delyva auto-rates](/admin/guide/shipping/delyva-overview)
+
+---
+
+## Checkout — address validation improvements
+
+Customers must now fill in all required address fields (name, phone, street, city, state, 5-digit postcode) before the courier list loads. Each missing field is highlighted individually. The **Pay Now** button is disabled with a clear reason message until both address and courier are selected.
+
+This reduces failed orders caused by incomplete addresses.
+
+---
+
+## Email subscribers
+
+- Footer newsletter signup form live on the storefront
+- Public unsubscribe link in every newsletter email (\`/unsubscribed\` confirmation page)
+- Admin subscriber list with filter tabs (Active / Unsubscribed / Bounced / All)
+- CSV export from any filter view
+- Manual unsubscribe override from the admin panel
+
+Manage at: \`/admin/subscribers\`
+
+See: [Email subscribers — exporting and managing](/admin/guide/customers/subscribers)
+
+---
+
+## Brand colours updated
+
+The store's colour palette was updated for consistency across all pages:
+
+| Colour | Hex |
+|--------|-----|
+| Blue | \`#1151bf\` |
+| Green | \`#50c878\` |
+| Purple | \`#743089\` |
+| Ink (dark) | \`#0B1020\` |
+| Cream (background) | \`#F7FAF4\` |
+
+These colours are applied automatically — no action needed.
+
+---
+
+## Security
+
+- All admin actions are protected by a server-side \`requireAdmin()\` check as the very first step. This means even if someone bypasses the login page, they cannot perform admin actions.
+- Cross-origin form submissions are blocked unless the origin is on the approved list. If you ever move the store to a new domain, let your developer know so the domain is added before switching over.
+- To rotate the admin password: ask your developer to run the password reset script (\`ADMIN_RESET_PASSWORD=1 npx tsx scripts/seed-admin.ts\`).
+
+See: [Security and access](/admin/guide/operations/security)`,
+  },
+  {
     slug: "operations/email-templates",
     title: "Customising automated emails",
     category: "Operations",
@@ -731,6 +825,51 @@ Contact your server administrator for help with restoration — it's a technical
 Create a shared folder in Google Drive or Dropbox for store backups. Once a month, export the database and upload the new export to that folder. Label the files by date (e.g., \`db-backup-2026-04-01.sql\`).
 
 This takes 5 minutes and protects months of work.`,
+  },
+  {
+    slug: "operations/security",
+    title: "Security and access",
+    category: "Operations",
+    tags: ["security","admin","password","access"],
+    order: 5,
+    href: "/admin/guide/operations/security",
+    content: `# Security and access
+
+## Admin login
+
+The admin panel is at \`/admin\`. Only accounts with the **admin** role can access it. If you try to open any admin page while logged out, you'll be redirected to the login page.
+
+There is one admin account. Do not share the password.
+
+## Rotating the admin password
+
+If you need to change the admin password (recommended after any security concern):
+
+1. Contact your developer.
+2. Ask them to run the admin password reset script.
+3. You'll receive the new password via a secure channel.
+
+The reset does not affect any customer sessions or orders.
+
+## What "admin protected" means
+
+Every admin action — saving a product, approving an order, exporting subscribers — is verified on the server before anything happens. This means that even if someone somehow loads an admin page, they cannot make changes without a valid admin session. This protection is separate from the login page redirect and acts as a second line of defence.
+
+## Approved origins (cross-origin security)
+
+The store only accepts admin form submissions from its own domain (\`app.3dninjaz.com\`). If the store is ever moved to a new domain, the developer must update the approved origins list before switching. Failing to do this will cause all admin forms to silently reject submissions after the domain change.
+
+## Sessions
+
+Admin sessions are stored securely server-side. Sessions expire after a period of inactivity. If you're unexpectedly logged out, just log back in — this is normal behaviour.
+
+## What to do if the admin account is compromised
+
+1. Contact your developer immediately.
+2. They will rotate the password and invalidate all active sessions.
+3. Review recent orders and product changes for anything unexpected.
+
+**Admin page:** \`/admin/settings\``,
   },
   {
     slug: "orders/overview",
@@ -1087,26 +1226,26 @@ The cron runs automatically. If you need to run it manually (for example, after 
     href: "/admin/guide/products/overview",
     content: `# Products, variants, and how they work
 
-Every item in your store is a **product**. Each product can have up to three **options** (e.g., Size, Color, Part), each with its own set of **values**. The system auto-generates a **variant** for every combination of values — each with its own price, stock, SKU, and image.
+Every item in your store is a **product**. Each product can have up to 6 **options** (e.g., Size, Color, Part), each with its own set of **values**. The system auto-generates a **variant** for every combination of values — each with its own price, stock, SKU, image, and shipping weight.
 
 ## The structure
 
 \`\`\`
 Product
- ├── Basic info: name, description, category, photos
+ ├── Basic info: name, description, category, photos, shipping weight
  └── Options (e.g. Size, Color)
       ├── Option values (e.g. Small, Medium, Large)
       └── Variants — auto-generated for each combination
-           ├── Small / Red — price, cost data, stock, SKU, image
-           ├── Small / Blue — price, cost data, stock, SKU, image
-           └── Medium / Red — price, cost data, stock, SKU, image
+           ├── Small / Red — price, sale price, cost, stock, SKU, image, weight
+           ├── Small / Blue — ...
+           └── Medium / Red — ...
 \`\`\`
 
-Each variant is independent. You can set different prices, stock levels, and images per variant.
+Each variant is independent. You can set different prices, stock levels, images, and shipping weights per variant.
 
-## Key fields explained
+## Key product fields
 
-**Name and description** — What customers see on the product page and in Google search results. Write clearly and describe the material (e.g., "PLA plastic"), dimensions, and what makes it unique.
+**Name and description** — What customers see on the product page and in search results. Write clearly and describe the material (e.g., "PLA plastic"), dimensions, and what makes it unique.
 
 **Category / Subcategory** — Groups products in the shop filter. You must create categories first (see the [Categories guide](/admin/guide/products/categories)).
 
@@ -1118,14 +1257,23 @@ Each variant is independent. You can set different prices, stock levels, and ima
 
 **Estimated production days** — How many working days it takes to print and dispatch. Shown to customers at checkout.
 
+**Shipping weight (kg)** — Default weight used when calculating Delyva courier quotes. Individual variants can override this with their own weight.
+
 ## Variants in detail
 
 Each variant has:
 - **Selling price** — what the customer pays
+- **Sale price + schedule** — optional discounted price with optional start/end date
 - **Cost fields** (optional) — filament grams, print time, labor minutes, used to calculate your profit margin
-- **SKU** — optional internal reference code
-- **Image** — optional per-variant image shown in the gallery when selected
-- **Inventory tracking** — optional; see the [Inventory guide](/admin/guide/products/inventory)
+- **SKU** — auto-generated reference code; you can override it
+- **Image** — optional per-variant photo shown in the gallery when that variant is selected
+- **Weight (g)** — overrides the product-level shipping weight for Delyva quotes
+- **Track Stock / Stock count** — optional; see the [Inventory guide](/admin/guide/products/inventory)
+- **In Stock toggle** — quickly mark a variant available or unavailable
+- **Pre-order** — keeps an out-of-stock variant purchasable; shows "Pre-order" label on the product page
+- **Default flag** — exactly one variant per product is the default shown when the page loads
+
+For full instructions on setting up options and generating variants, see [Options, values, and variants](/admin/guide/products/variants-sizes).
 
 ## Photos
 
@@ -1135,7 +1283,7 @@ You can upload multiple photos per product. The first photo (index 0) is the thu
 
 ## Where to manage products
 
-Go to **Products** in the sidebar to see all products. Click any product name to edit it. Use **+ New product** to add a new one.`,
+Go to **Products** in the sidebar to see all products. Click any product name to edit it. Use **+ New product** to add a new one. From the product edit page, click **Manage Variants** to set up options, values, and per-variant pricing.`,
   },
   {
     slug: "products/add-product",
@@ -1153,25 +1301,7 @@ Go to **Products** in the sidebar to see all products. Click any product name to
 5. Choose a **Category** (and subcategory if you have them set up).
 6. Set the **Material type** if relevant (e.g., PLA, PETG, Resin).
 7. Enter **Estimated production days** — how many working days from order to dispatch.
-
-## Adding sizes and prices
-
-Scroll to the **Sizes & Pricing** section:
-
-1. Toggle on each size you offer (Small, Medium, Large).
-2. Enter a **selling price** for each enabled size.
-3. Optionally enter the **dimensions** (width × height × depth in cm) — shown to customers.
-
-## Adding cost data (optional but recommended)
-
-Each size has a **Cost** section. Fill it in to track your profit margin:
-
-- **Filament grams** — how much filament does this size use?
-- **Print time (hours)** — total hours in the printer
-- **Labor minutes** — packing, post-processing, QC time
-- **Other cost** — any extra materials (supports, supports removal, etc.)
-
-Leave any field blank to fall back to your store-wide defaults (set in Settings → Cost Defaults).
+8. Enter a **Shipping weight (kg)** — used as the default weight for courier quotes. You can override per-variant later.
 
 ## Uploading photos
 
@@ -1184,13 +1314,37 @@ Leave any field blank to fall back to your store-wide defaults (set in Settings 
 - **Active** — must be on for the product to appear in the storefront. Off by default on new products — don't forget to enable it.
 - **Featured** — shows the product in the homepage "Featured" section.
 
-## Saving
+## Saving the product
 
-Click **Save product** at the bottom. You'll be redirected to the edit page where you can continue making changes.
+Click **Save product** at the bottom. You'll be taken to the product edit page.
 
-**Verify:** Open \`/shop\` in the storefront. Your product should appear if it's active. Click it to check the sizes, prices, and photos look correct.
+## Adding variants (sizes, colors, etc.)
 
-**Tip:** Empty cost fields are fine — they default to store-level defaults from Settings. Only override per-size if that size uses significantly more or less filament.`,
+After saving the product, click **Manage Variants** to set up your options and prices.
+
+1. Add your option types (e.g., Size, Color, Part).
+2. Add values for each option (e.g., S / M / L for Size).
+3. Click **Generate Variant Matrix** — the store creates a row for each combination.
+4. Set the **price**, **stock**, **SKU**, and optionally an **image** and **weight** for each variant.
+5. Mark one variant as the **Default** — it's shown pre-selected on the product page.
+6. Save variants.
+
+See the full [Options, values, and variants guide](/admin/guide/products/variants-sizes) for details on pre-order, sale pricing, and weight per variant.
+
+## Adding cost data (optional but recommended)
+
+Each variant has a **Cost** section. Fill it in to track your profit margin:
+
+- **Filament grams** — how much filament does this variant use?
+- **Print time (hours)** — total hours in the printer
+- **Labor minutes** — packing, post-processing, QC time
+- **Other cost** — any extra materials (supports, supports removal, etc.)
+
+Leave any field blank to fall back to your store-wide defaults (set in Settings → Cost Defaults).
+
+**Verify:** Open \`/shop\` in the storefront. Your product should appear if it's active. Click it to check the variant selector, prices, and photos look correct.
+
+**Tip:** Empty cost fields are fine — they default to store-level defaults from Settings. Only override per-variant if that variant uses significantly more or less filament.`,
   },
   {
     slug: "products/photos",
@@ -1244,56 +1398,94 @@ Click the **X** button on any photo to remove it. Changes take effect when you c
   },
   {
     slug: "products/variants-sizes",
-    title: "Sizes, prices, and per-size cost",
+    title: "Options, values, and variants",
     category: "Products",
-    tags: ["variants","sizes","pricing","cost"],
+    tags: ["variants","options","sizes","pricing","sku","pre-order","stock"],
     order: 4,
     href: "/admin/guide/products/variants-sizes",
-    content: `# Sizes, prices, and per-size cost
+    content: `# Options, values, and variants
 
-Each product can have up to three sizes: **Small**, **Medium**, and **Large**. You choose which sizes to enable — you don't need to offer all three.
+Every product can have up to **6 options** — attribute types like Size, Color, Part, Material, Finish, or Style. Each option has a list of **values** (for example, Size has values S, M, L). The store then generates a **variant** for every combination of values.
 
-## Enabling a size
+> **What changed in April 2026:** The old fixed Small/Medium/Large size fields have been replaced by this generic system. Existing products were migrated automatically.
 
-When creating or editing a product, scroll to the **Sizes & Pricing** section. Toggle each size on or off. Only enabled sizes appear in the storefront size selector.
+## Understanding the structure
 
-## Setting the selling price
+- **Option** = the attribute type (e.g., "Size", "Color", "Part")
+- **Value** = a choice within that option (e.g., "S", "M", "L" for Size; "Red", "Blue" for Color)
+- **Variant** = one specific combination (e.g., Size: M / Color: Red)
 
-Each enabled size gets its own **selling price** in MYR. This is what the customer pays — before any applicable SST (which is added at checkout if enabled in Settings).
+A product with two options — Size (S, M, L) and Color (Red, Blue) — will generate 6 variants: S/Red, S/Blue, M/Red, M/Blue, L/Red, L/Blue.
 
-There's no rule about how much to charge per size. A common approach:
-- Small = base price
-- Medium = Small × 1.5
-- Large = Small × 2.5
+## Managing variants
 
-Adjust based on how much more filament and print time each size requires.
+Go to the product edit page and click **Manage Variants** (or go directly to \`/admin/products/<product-id>/variants\`).
 
-## Dimensions (optional)
+### Step 1 — Define your options
 
-Each size has optional width, height, and depth fields in centimetres. These are shown on the product page so customers know what they're getting. Fill them in when you have a consistent mould for each size.
+1. Click **Add option**.
+2. Choose the option type from the dropdown (Size, Color, Part, Material, Finish, Style).
+3. Add values for that option — type each value and press Enter. You can drag values to reorder them.
+4. Repeat for up to 6 options.
 
-## Per-size cost breakdown (optional)
+### Step 2 — Generate the variant matrix
 
-Each size has a **Cost** section with these fields:
+Once your options and values are set, click **Generate Variant Matrix**. The store expands all option/value combinations into individual variant rows. Existing variants that already have sales history are kept as-is and merged in.
 
-| Field | What to enter | Example |
-|-------|--------------|---------|
-| Filament grams | How much filament for this size | \`45\` (45g for a small figurine) |
-| Print time (hours) | Total hours in the printer | \`2.5\` |
-| Labor minutes | Packing + QC time in minutes | \`15\` |
-| Other cost (MYR) | Any extra materials | \`0.50\` |
-| Filament rate override (MYR/kg) | Leave blank to use store default | _(blank)_ |
-| Labor rate override (MYR/hr) | Leave blank to use store default | _(blank)_ |
+### Step 3 — Fill in each variant row
 
-When you fill in these fields, the admin panel shows a **live cost total** and the resulting margin at the current selling price.
+Each variant row has these editable fields:
 
-Leave all cost fields blank if you don't want to track profit — the product will still sell normally.
+| Field | What it does |
+|-------|-------------|
+| **Price (MYR)** | The selling price customers see |
+| **Sale price** | Optional discounted price. Set a start and end date to schedule a sale |
+| **Stock** | Number of units on hand (only used when Track Stock is on) |
+| **Track Stock** | Toggle on to deduct stock when orders are placed |
+| **In Stock** | Quick toggle to mark a variant available or unavailable (overrides stock count) |
+| **SKU** | Internal reference code. Auto-generated as \`3DN-{SLUG4}-{INITIALS}\` but you can override it |
+| **Image** | A photo specific to this variant. Shown in the product gallery when the customer selects this variant |
+| **Weight (g)** | Shipping weight in grams. Overrides the product-level weight for Delyva courier quotes |
+| **Pre-order** | See below |
+| **Default** | The variant shown first when a customer opens the product page |
 
-## Inventory tracking per size
+### Setting a default variant
 
-Each size can optionally have inventory tracking. See the [Inventory guide](/admin/guide/products/inventory) for details.
+Exactly one variant per product is the default. Mark it with the **Default** toggle. Marking a new variant as default automatically unmarks the previous one. The default variant is shown pre-selected on the product page.
 
-**Tip:** Most 3D printing shops work on-demand (print-to-order) so inventory tracking isn't necessary. Only turn it on if you pre-print batches and need to track how many you have in stock.`,
+### Pre-order
+
+Turn on **Pre-order** for a variant to keep it purchasable even when it is out of stock (tracked stock = 0 or "In Stock" is off). The variant shows a "Pre-order" label on the product page instead of "Out of stock", and customers can still add it to their bag.
+
+Use this for popular variants that you know you will restock soon.
+
+### How out-of-stock works
+
+A variant is hidden from the storefront selector when:
+- **In Stock** is toggled off, **and** Pre-order is off
+- **or** Track Stock is on, stock has reached 0, **and** Pre-order is off
+
+If Pre-order is on, the variant stays available regardless of stock.
+
+### Variant image hover preview
+
+On the product page, hovering over a variant pill or swatch shows a preview of that variant's image (if one was uploaded). This helps customers see color or style differences before clicking.
+
+## Shipping weight per variant
+
+The weight used for Delyva courier quotes follows this priority:
+
+1. Variant's own **Weight (g)** field (if filled in)
+2. Product-level **Shipping weight** (if the variant weight is blank)
+3. Default fallback: 1 kg
+
+Fill in per-variant weights when your variants differ significantly in weight (e.g., a Large figurine vs. a Small one).
+
+## SKU format
+
+SKUs are auto-generated when you create a variant: \`3DN-{first 4 chars of slug}-{option initials}\`. Example: a Size M / Color Red variant of the "Mini Dragon" product might get \`3DN-MINI-MR\`. You can override the SKU at any time — just type in the field.
+
+**Admin page:** \`/admin/products/<id>/variants\``,
   },
   {
     slug: "products/cost-breakdown",
@@ -1353,12 +1545,12 @@ The **Dashboard** shows "Profit this month" — a calendar-month summary calcula
   },
   {
     slug: "products/inventory",
-    title: "Tracking stock (optional)",
+    title: "Tracking stock and pre-order",
     category: "Products",
-    tags: ["inventory","stock","tracking"],
+    tags: ["inventory","stock","tracking","pre-order"],
     order: 6,
     href: "/admin/guide/products/inventory",
-    content: `# Tracking stock (optional)
+    content: `# Tracking stock and pre-order
 
 Stock tracking is **off by default**. This is intentional — most 3D printing shops print to order, so there's no pre-made stock to track.
 
@@ -1367,20 +1559,21 @@ Only turn on stock tracking if you print products in advance and store them phys
 ## Turning on stock tracking
 
 1. Open a product for editing.
-2. In the **Variants** section, expand a variant row.
-3. Toggle **Track stock** on.
+2. Click **Manage Variants**.
+3. In the variant row, toggle **Track Stock** on.
 4. Enter the current **stock quantity**.
-5. Click **Save product**.
+5. Click **Save**.
 
-Once tracking is on for a variant, customers can only add it to their bag if stock > 0. When stock reaches zero, that variant shows as "Out of stock" on the product page.
+Once tracking is on for a variant, customers can only add it to their bag if stock > 0. When stock reaches zero, that variant is hidden from the storefront variant selector and shows as "Out of stock".
 
 ## Updating stock
 
 When you receive a new batch of printed items:
 
 1. Open the product for editing.
-2. Update the stock number for each variant.
-3. Save.
+2. Click **Manage Variants**.
+3. Update the stock number for each variant.
+4. Save.
 
 There's no automated deduction history — the stock number is a simple count you manage manually.
 
@@ -1388,19 +1581,43 @@ There's no automated deduction history — the stock number is a simple count yo
 
 If you no longer want to track stock on a variant:
 
-1. Toggle **Track stock** off for that variant.
+1. Toggle **Track Stock** off for that variant.
 2. Save.
 
-The variant will become available regardless of any stock number, allowing customers to order freely again.
+The variant becomes available regardless of any stock number, allowing customers to order freely again.
 
-## When stock reaches zero
+## The "In Stock" toggle
 
-If tracking is on and stock = 0:
-- The variant shows "Out of stock" on the product page
-- Customers cannot add it to their bag
-- The variant is greyed out in the variant selector
+Each variant also has an **In Stock** toggle independent of stock counting. If you toggle In Stock off, the variant is hidden from the storefront selector even if track stock is off. Use this to quickly disable a specific variant without deleting it.
 
-**Common mistake:** If a product is unexpectedly showing as out of stock, check whether tracking was accidentally left on with stock = 0. Toggle tracking off or top up the stock count.`,
+## When a variant is hidden from the storefront
+
+A variant is hidden from the product page selector when **any** of these apply:
+- **In Stock** is off — and Pre-order is also off
+- **Track Stock** is on, stock = 0 — and Pre-order is also off
+
+If Pre-order is on, the variant stays visible regardless of stock or the In Stock toggle.
+
+## Pre-order
+
+Turn on **Pre-order** for a variant to keep it available for purchase even when it is out of stock. The variant shows a **"Pre-order"** badge on the product page instead of "Out of stock". Customers can still add it to their bag and complete checkout.
+
+Use pre-order when:
+- You know a popular variant will be restocked soon
+- You want to take orders before finishing a print batch
+- You're gauging demand before printing
+
+To enable pre-order on a variant:
+1. Go to **Manage Variants** for the product.
+2. Toggle **Pre-order** on for the relevant variant row.
+3. Save.
+
+To end pre-order (when stock is back):
+1. Add the new stock quantity.
+2. Toggle **Pre-order** off.
+3. Save.
+
+**Common mistake:** If a product is unexpectedly showing as out of stock, check whether Track Stock was accidentally left on with stock = 0. Either toggle Track Stock off, top up the stock count, or enable Pre-order to keep it purchasable.`,
   },
   {
     slug: "products/categories",
@@ -1464,7 +1681,7 @@ You can delete categories and subcategories from the category tree on the Catego
     slug: "shipping/delyva-overview",
     title: "How shipping works — Delyva auto-rates",
     category: "Shipping",
-    tags: ["shipping","delyva","couriers"],
+    tags: ["shipping","delyva","couriers","parcel","whitelist"],
     order: 1,
     href: "/admin/guide/shipping/delyva-overview",
     content: `# How shipping works — Delyva auto-rates
@@ -1472,7 +1689,7 @@ You can delete categories and subcategories from the category tree on the Catego
 3D Ninjaz supports two shipping methods:
 
 1. **Flat rates** — simple per-state prices you set manually (e.g., "Selangor: MYR 8")
-2. **Delyva live rates** — real-time quotes from couriers like J&T, GrabExpress, Lalamove, and MyPos
+2. **Delyva live rates** — real-time quotes from couriers like J&T, Ninja Van, Pos Laju, and SPX
 
 Most store owners start with flat rates because they're simpler. Delyva is the recommended upgrade once you're shipping regularly.
 
@@ -1480,11 +1697,11 @@ Most store owners start with flat rates because they're simpler. Delyva is the r
 
 When a customer reaches checkout:
 
-1. They enter their postcode.
-2. The store sends their postcode and the order's weight/dimensions to Delyva's API.
+1. They fill in their full shipping address (name, phone, street, city, state, postcode).
+2. The store sends their postcode and the order's weight to Delyva's API.
 3. Delyva returns a list of available couriers with live prices and estimated delivery times.
-4. The customer chooses a courier.
-5. When you're ready to ship, you **book the courier from the order detail page** — Delyva confirms the booking and provides a label.
+4. The customer picks a courier and completes payment.
+5. When you're ready to ship, **book the courier from the order detail page** — Delyva confirms the booking and provides a waybill label.
 
 ## What you need
 
@@ -1496,11 +1713,48 @@ When a customer reaches checkout:
 
 See the [Delyva origin address](/admin/guide/shipping/origin-address) and [Rates and markup](/admin/guide/shipping/rates) guides.
 
+## Approved couriers
+
+The store only shows quotes from a curated whitelist of 12 couriers. This prevents unknown or low-quality couriers from appearing at checkout.
+
+| Courier | Status |
+|---------|--------|
+| Ninja Van MY | Active |
+| J&T Express MY | Active |
+| SPX MY | Active |
+| City-Link MY | Active |
+| Pos Laju MY | Active |
+| SF International | Active |
+| Ninja Van MY (drop-off) | Active |
+| Pos Malaysia (POSMY) | Needs merchant provisioning |
+| Ninja Van MY Roadside | Needs merchant provisioning |
+| Ninja Van MY (international) | Needs merchant provisioning |
+| Ninja Van Doorstep MY (international) | Needs merchant provisioning |
+| SF International (GE) | Needs merchant provisioning |
+
+Couriers marked "Needs merchant provisioning" will appear once your Delyva account has those services enabled. Contact Delyva support to activate them.
+
+## Refreshing the courier catalog
+
+After your Delyva account is updated with new services, go to **Shipping → Delyva** in the sidebar and click **Refresh courier catalog**. This fetches the latest list from Delyva and updates the whitelist matching.
+
+**Admin page:** \`/admin/shipping/delyva\`
+
+## Parcel type — important
+
+All shipments are sent as **PARCEL** type. An older setting called "PACKAGE" routes orders to Grab-only fulfillment and returns zero standard couriers. The store automatically corrects any PACKAGE setting to PARCEL — no action needed on your part.
+
+## 30 kg parcel cap
+
+Delyva does not accept single shipments over 30 kg. If an order's total weight exceeds 30 kg, the store shows a friendly error at checkout and the customer cannot select a courier. In this case, contact the customer to arrange a manual shipping quote (WhatsApp or email) and mark the order as shipped manually from the order detail page.
+
 ## Flat rates as a fallback
 
-If Delyva is not configured, or if Delyva returns no available couriers for a destination, the system falls back to your flat-rate table. It's good practice to keep your flat rates up to date as a safety net.
+If Delyva is not configured, or if Delyva returns no available couriers for a destination, the system falls back to your flat-rate table. Keep your flat rates up to date as a safety net.
 
-**Admin page:** \`/admin/shipping/delyva\``,
+## Duplicate webhook deliveries
+
+Delyva occasionally re-sends shipping status webhooks. The store handles this automatically — duplicate updates are silently ignored, so order status won't be updated twice.`,
   },
   {
     slug: "shipping/origin-address",
