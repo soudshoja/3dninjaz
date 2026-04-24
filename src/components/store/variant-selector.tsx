@@ -183,11 +183,12 @@ export function VariantSelector({
               // Swatch buttons for color options
               <div className="flex flex-wrap gap-2">
                 {visibleValues.map((val) => {
-                  // Build test selection to check availability
-                  const testSelected: SelectedValues = [...selected] as SelectedValues;
-                  testSelected[slotIdx] = val.id;
-                  const matchingVariant = findMatchingVariant(variants, testSelected);
-                  const available = matchingVariant ? isVariantAvailable(matchingVariant) : false;
+                  // A value is available if ANY non-hidden variant uses it in this slot.
+                  // Using an exact-selection match would disable values in multi-option products
+                  // when other slots have no matching combo yet selected (Bug 2 fix).
+                  const available = variants.some(
+                    (v) => v.optionValueIds[slotIdx] === val.id && isVariantAvailable(v),
+                  );
                   const isSelected = currentValueId === val.id;
                   const isHovered = hoveredKey === `${slotIdx}:${val.id}`;
 
@@ -249,10 +250,12 @@ export function VariantSelector({
               // Pill buttons for text options
               <ul className="flex flex-wrap gap-2" role="radiogroup" aria-label={option.name}>
                 {visibleValues.map((val) => {
-                  const testSelected: SelectedValues = [...selected] as SelectedValues;
-                  testSelected[slotIdx] = val.id;
-                  const matchingVariant = findMatchingVariant(variants, testSelected);
-                  const available = matchingVariant ? isVariantAvailable(matchingVariant) : false;
+                  // A value is available if ANY non-hidden variant uses it in this slot.
+                  // Using an exact-selection match would disable values in multi-option products
+                  // when other slots have no matching combo yet selected (Bug 2 fix).
+                  const available = variants.some(
+                    (v) => v.optionValueIds[slotIdx] === val.id && isVariantAvailable(v),
+                  );
                   const isSelected = currentValueId === val.id;
                   const isHovered = hoveredKey === `${slotIdx}:${val.id}`;
 
