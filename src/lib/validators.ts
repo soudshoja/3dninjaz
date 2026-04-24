@@ -692,9 +692,9 @@ export const variantUpdateSchema = z.object({
 export type VariantUpdateInput = z.infer<typeof variantUpdateSchema>;
 
 /**
- * Phase 16-06 — CSV import schema (replaces price_s/m/l with generic options).
+ * Phase 16-06 — CSV import schema using generic option columns.
  *
- * New columns:
+ * Columns:
  *   option1_name        e.g. "Size"
  *   option1_values      pipe-separated e.g. "S|M|L"
  *   option1_prices      pipe-separated, aligned to option1_values e.g. "19.90|24.90|29.90"
@@ -705,9 +705,8 @@ export type VariantUpdateInput = z.infer<typeof variantUpdateSchema>;
  *   option3_values      pipe-separated
  *   option3_prices      (optional)
  *
- * Back-compat: if price_s/price_m/price_l are present (old format) the importer
- * automatically maps them to option1_name="Size", option1_values="S|M|L",
- * option1_prices="{price_s}|{price_m}|{price_l}".
+ * Note: legacy price_s/price_m/price_l columns removed in Phase 17-04.
+ * Use option1_name="Size", option1_values="S|M|L", option1_prices="x|y|z".
  */
 export const bulkImportRowSchema = z.object({
   name: z.string().min(1).max(100),
@@ -725,10 +724,6 @@ export const bulkImportRowSchema = z.object({
     .positive()
     .optional()
     .nullable(),
-  // Legacy size-price columns (back-compat with old CSVs)
-  price_s: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().nullable(),
-  price_m: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().nullable(),
-  price_l: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().nullable(),
   // Generic option columns (phase 16)
   option1_name: z.string().max(50).optional().nullable(),
   option1_values: z.string().optional().nullable(),  // pipe-separated

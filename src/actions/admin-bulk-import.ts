@@ -31,8 +31,6 @@ import {
 //   option3_name*, option3_values*, option3_prices*,
 //   image_url_1*, image_url_2*, ...
 //
-// Back-compat: price_s/price_m/price_l still accepted and automatically mapped
-// to option1_name="Size", option1_values="S|M|L", option1_prices="{s}|{m}|{l}".
 //
 // On import: product → options → values → cartesian variant matrix.
 // Single transaction; any failure rolls back the entire import.
@@ -66,27 +64,10 @@ function parsePipe(s: string | null | undefined): string[] {
 
 /**
  * Derive the option list from a parsed CSV row.
- * Supports both the legacy price_s/m/l format and the new option1_name/values format.
+ * Uses option1_name/values/prices (generic columns introduced in Phase 16-06).
  */
 function deriveOptions(z: ReturnType<typeof bulkImportRowSchema.parse>): ParsedOption[] {
   const options: ParsedOption[] = [];
-
-  // ---- Legacy back-compat path ----
-  const legacyPrices: Array<{ label: string; price: string }> = [];
-  if (z.price_s) legacyPrices.push({ label: "S", price: z.price_s });
-  if (z.price_m) legacyPrices.push({ label: "M", price: z.price_m });
-  if (z.price_l) legacyPrices.push({ label: "L", price: z.price_l });
-
-  if (legacyPrices.length > 0 && !z.option1_name) {
-    // Map legacy S/M/L to a "Size" option
-    return [
-      {
-        name: "Size",
-        values: legacyPrices.map((p) => p.label),
-        prices: legacyPrices.map((p) => p.price),
-      },
-    ];
-  }
 
   // ---- Generic option path ----
   for (const slot of [
