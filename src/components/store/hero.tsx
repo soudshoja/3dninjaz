@@ -36,10 +36,10 @@ export function Hero() {
 
       <div className="max-w-6xl mx-auto px-6 text-center">
         <p
-          className="inline-block rounded-full px-4 py-1 text-xs md:text-sm font-bold tracking-[0.2em] mb-8"
+          className="inline-block rounded-full px-4 py-1 text-xs md:text-sm font-bold mb-8"
           style={{ backgroundColor: BRAND.green, color: BRAND.ink }}
         >
-          MADE IN MALAYSIA · 3D PRINTED
+          Kids by Day. 3D Printing Ninjas by Night.
         </p>
         <div className="flex justify-center mb-6">
           {/* Responsive logo: 200px on phones, 280px on sm+, 320px on md+ */}
@@ -48,7 +48,7 @@ export function Hero() {
         <h1
           className="font-[var(--font-heading)] tracking-tight text-4xl sm:text-5xl md:text-6xl leading-tight text-zinc-900"
         >
-          Stealthy 3D prints.
+          Cool Designs Made by Kids For Kids.
           <br />
           <span style={{ color: BRAND.green }}>Shipped across Malaysia.</span>
         </h1>
