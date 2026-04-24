@@ -5,7 +5,7 @@
   <!-- Stars -->
   <circle cx="35" cy="40" r="2" fill="#50c878"/>
   <circle cx="170" cy="55" r="1.5" fill="#1151bf"/>
-  <circle cx="160" cy="160" r="2" fill="#7021b0"/>
+  <circle cx="160" cy="160" r="2" fill="#743089"/>
   <circle cx="50" cy="170" r="1.5" fill="#50c878"/>
   <!-- Ninja body -->
   <ellipse cx="100" cy="125" rx="35" ry="40" fill="#F7FAF4"/>
@@ -22,7 +22,7 @@
   <!-- Question marks floating -->
   <text x="135" y="55" font-family="sans-serif" font-size="22" font-weight="bold" fill="#50c878">?</text>
   <text x="50" y="55" font-family="sans-serif" font-size="16" font-weight="bold" fill="#1151bf">?</text>
-  <text x="155" y="100" font-family="sans-serif" font-size="14" font-weight="bold" fill="#7021b0">?</text>
+  <text x="155" y="100" font-family="sans-serif" font-size="14" font-weight="bold" fill="#743089">?</text>
   <!-- Arms hanging -->
   <path d="M 70 130 Q 55 145 60 165" stroke="#0B1020" stroke-width="3" fill="none" stroke-linecap="round"/>
   <path d="M 130 130 Q 145 145 140 165" stroke="#0B1020" stroke-width="3" fill="none" stroke-linecap="round"/>

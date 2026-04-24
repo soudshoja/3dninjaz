@@ -1517,7 +1517,7 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         <strong>Amount:</strong> {{dispute_amount}}</p>
         <p style="margin-top:16px">Click below to view details and respond.</p>`,
         { text: "Review Dispute", url: "admin_link" },
-        "#7021b0"
+        "#743089"
       ),
       variables: [
         "customer_name",
