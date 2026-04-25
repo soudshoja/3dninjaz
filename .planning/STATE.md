@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: pre-launch
-stopped_at: "Phase 17 complete. Variant system upgraded with sale/image/bulk/default + reactivity contract; legacy size/dimensions code purged. Run scripts/phase17-migrate.cjs on live DB. Next: admin go-live checklist (GO-LIVE-READINESS.md)."
-last_updated: "2026-04-22T00:00:00.000Z"
-last_activity: 2026-04-22 -- Phase 17 (Variant Enhancements + Legacy Cleanup) complete. 5/5 plans shipped. TypeScript clean. COMPLETION.md written.
+stopped_at: "2026-04-25 — Audit + 4 BLOCKERs fixed + 19/20 RISKs fixed + storefront/admin mobile-friendly + variant cap 3→6 + final brand palette + Delyva cross-check + skill refresh. App live at app.3dninjaz.com. Pre-launch admin tasks remain (CLAUDE.md launch-day blockers)."
+last_updated: "2026-04-25T00:00:00.000Z"
+last_activity: 2026-04-25 -- Comprehensive audit pass: 4 BLOCKERs (PayPal sale price, Delyva webhook middleware, PACKAGE→PARCEL coercion at all 4 sites, admin booking catalog filter), 19 RISKs fixed (R16 deferred), mobile-friendly, brand rotation #1E8BFF/#39E600/#A855F7, Delyva docs cross-check + skill, variant-product skill refresh, CLAUDE.md launch-day cleanup.
 progress:
   total_phases: 17
   completed_phases: 17
