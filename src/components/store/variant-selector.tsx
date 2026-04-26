@@ -199,8 +199,11 @@ export function VariantSelector({
             </p>
 
             {isColorOption ? (
-              // Swatch buttons for color options
-              <div className="flex flex-wrap gap-2">
+              // Phase 18 (REQ-7) — swatch buttons with always-visible name caption.
+              // Vertical layout: 32px hex circle on top, 12px caption below.
+              // gap-3 (12px) instead of gap-2 (8px) per UI-SPEC §Surface 4 grid spacing
+              // (compensates for the extra vertical caption height).
+              <div className="flex flex-wrap gap-3">
                 {visibleValues.map((val) => {
                   // A value is available if ANY non-hidden variant uses it in this slot.
                   // Using an exact-selection match would disable values in multi-option products
@@ -212,56 +215,85 @@ export function VariantSelector({
                   const isHovered = hoveredKey === `${slotIdx}:${val.id}`;
 
                   return (
-                    <button
+                    <div
                       key={val.id}
-                      type="button"
-                      onClick={() => { if (available) handleSelect(slotIdx, val.id); }}
-                      onMouseEnter={() => { if (available) handleHoverEnter(slotIdx, val.id); }}
-                      onMouseLeave={handleHoverLeave}
-                      disabled={!available}
-                      aria-disabled={!available}
-                      tabIndex={!available ? -1 : 0}
-                      title={!available ? "Out of stock" : val.value}
-                      aria-label={`${val.value}${!available ? " (out of stock)" : ""}`}
-                      aria-pressed={isSelected}
-                      className="relative rounded-full transition-all"
-                      style={{
-                        width: 40,
-                        height: 40,
-                        minWidth: 48,
-                        minHeight: 48,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        cursor: available ? "pointer" : "not-allowed",
-                      }}
+                      className="flex flex-col items-center gap-1"
+                      style={{ width: 80 }}
                     >
-                      <span
-                        className="rounded-full block"
+                      <button
+                        type="button"
+                        onClick={() => { if (available) handleSelect(slotIdx, val.id); }}
+                        onMouseEnter={() => { if (available) handleHoverEnter(slotIdx, val.id); }}
+                        onMouseLeave={handleHoverLeave}
+                        disabled={!available}
+                        aria-disabled={!available}
+                        tabIndex={!available ? -1 : 0}
+                        title={!available ? "Out of stock" : val.value}
+                        aria-label={`${val.value}${!available ? " (out of stock)" : ""}`}
+                        aria-pressed={isSelected}
+                        className="relative rounded-full transition-all"
                         style={{
-                          width: 32,
-                          height: 32,
-                          backgroundColor: val.swatchHex ?? "#ccc",
-                          border: isSelected
-                            ? "2px solid var(--color-brand-ink)"
-                            : isHovered
-                              ? "2px dashed var(--color-brand-ink)"
-                              : "1px solid #d1d5db",
-                          opacity: available ? 1 : 0.35,
-                          position: "relative",
+                          width: 40,
+                          height: 40,
+                          minWidth: 48,
+                          minHeight: 48,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: available ? "pointer" : "not-allowed",
                         }}
                       >
-                        {!available && (
-                          <span
-                            className="absolute inset-0 rounded-full"
-                            style={{
-                              background:
-                                "linear-gradient(135deg, transparent 43%, #6b7280 43%, #6b7280 57%, transparent 57%)",
-                            }}
-                          />
-                        )}
+                        <span
+                          className="rounded-full block"
+                          style={{
+                            width: 32,
+                            height: 32,
+                            backgroundColor: val.swatchHex ?? "#ccc",
+                            border: isSelected
+                              ? "2px solid var(--color-brand-ink)"
+                              : isHovered
+                                ? "2px dashed var(--color-brand-ink)"
+                                : "1px solid #d1d5db",
+                            opacity: available ? 1 : 0.35,
+                            position: "relative",
+                          }}
+                        >
+                          {!available && (
+                            <span
+                              className="absolute inset-0 rounded-full"
+                              style={{
+                                background:
+                                  "linear-gradient(135deg, transparent 43%, #6b7280 43%, #6b7280 57%, transparent 57%)",
+                              }}
+                            />
+                          )}
+                        </span>
+                      </button>
+                      {/* Phase 18 (REQ-7) — always-visible name caption. UI-SPEC §Surface 4:
+                          12px Chakra_Petch (var(--font-body)), weight 500 default / 700 selected,
+                          line-through + zinc-400 when OOS, max-width 80px with ellipsis. */}
+                      <span
+                        aria-hidden
+                        className="text-center max-w-[80px] truncate"
+                        style={{
+                          fontFamily: "var(--font-body)",
+                          fontSize: 12,
+                          lineHeight: 1.2,
+                          fontWeight: isSelected ? 700 : 500,
+                          color: !available
+                            ? "#A1A1AA"
+                            : isSelected
+                              ? "var(--color-brand-ink)"
+                              : "#3F3F46",
+                          textDecoration: !available ? "line-through" : "none",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {val.value}
                       </span>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
