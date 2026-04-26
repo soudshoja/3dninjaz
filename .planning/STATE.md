@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: pre-launch
-stopped_at: "2026-04-25 — Audit + 4 BLOCKERs fixed + 19/20 RISKs fixed + storefront/admin mobile-friendly + variant cap 3→6 + final brand palette + Delyva cross-check + skill refresh. App live at app.3dninjaz.com. Pre-launch admin tasks remain (CLAUDE.md launch-day blockers)."
-last_updated: "2026-04-25T00:00:00.000Z"
-last_activity: 2026-04-25 -- Comprehensive audit pass: 4 BLOCKERs (PayPal sale price, Delyva webhook middleware, PACKAGE→PARCEL coercion at all 4 sites, admin booking catalog filter), 19 RISKs fixed (R16 deferred), mobile-friendly, brand rotation #1E8BFF/#39E600/#A855F7, Delyva docs cross-check + skill, variant-product skill refresh, CLAUDE.md launch-day cleanup.
+status: completed
+stopped_at: Phase 18 context gathered (CONTEXT.md committed)
+last_updated: "2026-04-26T02:27:22.999Z"
+last_activity: 2026-04-22 -- Phase 17 complete; 5/5 plans shipped; legacy code purged
 progress:
-  total_phases: 17
-  completed_phases: 17
-  total_plans: 51
-  completed_plans: 51
-  percent: 100
+  total_phases: 18
+  completed_phases: 7
+  total_plans: 53
+  completed_plans: 39
+  percent: 74
 ---
 
 # Project State
@@ -24,6 +24,7 @@ See: .planning/PROJECT.md (updated 2026-04-12)
 **Current focus:** All 15 phases complete. Session 2026-04-20/21 shipped: Delyva courier integration (phases 08), theme lightening + UX polish (09), cost/profit tracking (10), site settings + social fields (11), 12 email templates + newsletter subscribers (12), per-variant inventory track_stock (13), cost breakdown with store defaults (14), customer + admin shipment tracking (15). PayPal live. Better Auth trustedOrigins fixed. 52 commits total this session. App live at https://app.3dninjaz.com/ (subdomain root, no basePath).
 
 **Session 2026-04-21 closeout:**
+
 - All 52 session commits deployed + verified live
 - Master + dev branches synced
 - Delyva service catalog fix deployed (admin clicks Refresh → populates ~100 services from Grab/Pos Laju/GDEx/J&T/City-Link)
@@ -177,6 +178,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-21T00:00:00.000Z (session ran 2026-04-20 → 2026-04-21)
-Stopped at: Phases 08-15 complete. 55 commits. Delyva shipping, theme polish, cost/profit, social settings, 12 email templates + newsletter, inventory track_stock, cost breakdown with store defaults, customer + admin tracking all live. PayPal live. Better Auth trustedOrigins fixed. GO-LIVE-READINESS.md written.
-Resume file: `.planning/GO-LIVE-READINESS.md` — admin must complete checklist before flipping the domain. Contact PayPal support for Reporting API (Q-07-08).
+Last session: 2026-04-26T02:27:22.984Z
+Stopped at: Phase 18 context gathered (CONTEXT.md committed)
+Resume file: .planning/phases/18-colour-management/18-CONTEXT.md
