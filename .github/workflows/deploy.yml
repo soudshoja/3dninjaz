@@ -37,14 +37,12 @@
 name: Deploy
 
 on:
-  # Push-triggered deploys are DISABLED until env secrets are populated per environment.
-  # Re-enable by restoring the `push:` block below once SSH_HOST/SSH_USER/SSH_PRIVATE_KEY/
-  # DEPLOY_PATH/APP_RESTART_CMD + all runtime env secrets are set via
-  # `gh secret set --env <env>`. Until then, use the Actions tab → "Run workflow" button.
-  # push:
-  #   branches:
-  #     - master
-  #     - dev
+  # Auto-deploy on push to dev (testing → app.3dninjaz.com). Master/prod
+  # added once prod env secrets (SSH_HOST/USER/KEY/DEPLOY_PATH/APP_RESTART_CMD
+  # + NEXT_PUBLIC_*) are populated via `gh secret set --env prod`.
+  push:
+    branches:
+      - dev
   workflow_dispatch:
     inputs:
       target:
