@@ -235,6 +235,17 @@ jobs:
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/deploy.tar.gz"
           # CloudLinux nodevenv activate puts npm/node on PATH for the
           # cPanel user. Without it, npm is not in the default ninjaz $PATH.
+          #
+          # CloudLinux NodeJS Selector contract: node_modules MUST be a symlink
+          # to the nodevenv virtual-environment lib folder. If tar extraction or
+          # a previous failed deploy left a real directory there, CloudLinux
+          # blocks further npm operations. We restore the symlink before running
+          # npm ci so the install always lands in the virtualenv, not app root.
+          #
+          # Full `npm ci` (no --omit=dev) is required because next.config.ts is
+          # loaded at server runtime (server.js → next() → loads config), which
+          # means the `typescript` package must be present at runtime. Dropping
+          # devDependencies would cause "Cannot find module 'typescript'" on boot.
           ssh -p "${{ secrets.SSH_PORT }}" \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
             "set -e && \
@@ -242,7 +253,11 @@ jobs:
              cd '${{ secrets.DEPLOY_PATH }}' && \
              tar -xzf deploy.tar.gz && \
              rm deploy.tar.gz && \
-             npm ci --omit=dev"
+             if [ ! -L node_modules ]; then \
+               rm -rf node_modules; \
+               ln -s /home/ninjaz/nodevenv/apps/3dninjaz_v1/20/lib/node_modules node_modules; \
+             fi && \
+             npm ci"
 
       - name: Restart app
         run: |
