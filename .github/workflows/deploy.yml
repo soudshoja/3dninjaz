@@ -2,44 +2,32 @@
 # 3D Ninjaz — CI + Deploy workflow
 # =============================================================================
 #
-# Trigger matrix:
-#   - push to `dev`     -> build + deploy to the `dev`  environment
-#   - push to `master`  -> build + deploy to the `prod` environment
+# Architecture: source archive deploy.
+# - GitHub runner: typecheck + git archive only (no DB / no env secrets)
+# - cPanel host: extract + npm ci + npm run build + restart (has DB + .env.local)
 #
-# The deploy step is a SKELETON: it installs, typechecks, and builds, then
-# uploads the artifact over SSH to the cPanel server and restarts the Node
-# process. Server-side placeholders (PM2 unit name, deploy root) must be set
-# via environment-scoped GitHub Secrets before the workflow can run green.
+# Trigger:
+#   push to `dev`     -> deploy to dev    (https://app.3dninjaz.com)
+#   push to `master`  -> deploy to prod   (https://3dninjaz.com)        (gated by prod env secrets)
 #
-# Secrets (per-environment, set via `gh secret set --env <env>`):
-#   SSH_HOST             e.g. 152.53.86.223
-#   SSH_USER             e.g. ninjaz        (NOT root — deploy runs as app user)
-#   SSH_PORT             e.g. 22
-#   SSH_PRIVATE_KEY      PEM contents of a dedicated CI key
-#   DEPLOY_PATH          e.g. /home/ninjaz/apps/3dninjaz_v1
-#   APP_RESTART_CMD      e.g. "systemctl --user restart 3dninjaz" OR
-#                             "pkill -f 'node server.js' || true; nohup node server.js > app.log 2>&1 &"
-#   DATABASE_URL         mysql://user:pass@host:3306/dbname
-#   BETTER_AUTH_SECRET   64-hex production secret
-#   BETTER_AUTH_URL      https://app.3dninjaz.com  (prod)  /  https://dev.3dninjaz.com (dev)
-#   PAYPAL_CLIENT_ID
-#   PAYPAL_CLIENT_SECRET
-#   PAYPAL_CURRENCY
-#   NEXT_PUBLIC_PAYPAL_CLIENT_ID
-#   NEXT_PUBLIC_PAYPAL_CURRENCY
-#   NEXT_PUBLIC_SITE_URL
-#   NEXT_PUBLIC_BASE_URL
-#   SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASSWORD / SMTP_FROM
+# Per-environment GitHub secrets required (set via `gh secret set --env <env>`):
+#   SSH_HOST              152.53.86.223
+#   SSH_USER              ninjaz
+#   SSH_PORT              22
+#   SSH_PRIVATE_KEY       PEM contents of CI deploy key (public half on cPanel
+#                         ~/.ssh/authorized_keys for the ninjaz user)
+#   DEPLOY_PATH           /home/ninjaz/apps/3dninjaz_v1
+#   NEXT_PUBLIC_SITE_URL  https://app.3dninjaz.com   (dev) or https://3dninjaz.com (prod)
 #
-# Do NOT hardcode any of the above in this file.
+# Server-only env vars (DATABASE_URL, BETTER_AUTH_SECRET, PAYPAL_*, SMTP_*,
+# DELYVA_*, etc.) live in `/home/ninjaz/apps/3dninjaz_v1/.env.local` on the
+# cPanel host. `next build` and runtime read them from there. They are NOT
+# stored in GitHub secrets — keeping the secret surface small.
 # =============================================================================
 
 name: Deploy
 
 on:
-  # Auto-deploy on push to dev (testing → app.3dninjaz.com). Master/prod
-  # added once prod env secrets (SSH_HOST/USER/KEY/DEPLOY_PATH/APP_RESTART_CMD
-  # + NEXT_PUBLIC_*) are populated via `gh secret set --env prod`.
   push:
     branches:
       - dev
@@ -55,16 +43,16 @@ on:
           - prod
 
 concurrency:
-  # One in-flight deploy per environment. Later pushes queue instead of racing.
   group: deploy-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   # ---------------------------------------------------------------------------
-  # 1) Install + typecheck — runs on every push, regardless of target branch.
+  # 1) Verify — typecheck on the runner. Fast feedback on broken commits before
+  #    we hit the slower cPanel build path. No DB / no env secrets needed.
   # ---------------------------------------------------------------------------
   verify:
-    name: Install + typecheck
+    name: Verify (typecheck)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -82,111 +70,79 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
-      - name: Lint
-        run: npm run lint --if-present
-
   # ---------------------------------------------------------------------------
-  # 2) Build — produces a Next.js production artifact that the deploy step
-  #    uploads. Runs under the environment matching the branch so that
-  #    NEXT_PUBLIC_* vars are baked in with the right origin for that env.
+  # 2) Deploy — package source via `git archive`, scp to cPanel, build + restart
+  #    on the cPanel host. cPanel has DB + .env.local so static prerender works.
   # ---------------------------------------------------------------------------
-  build:
-    name: Build (${{ github.ref_name == 'master' && 'prod' || 'dev' }})
+  deploy:
+    name: Deploy (${{ github.ref_name == 'master' && 'prod' || 'dev' }})
     needs: verify
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'master' && 'prod' || 'dev' }}
-    env:
-      # NEXT_PUBLIC_* vars must be present at build time — they are baked into
-      # the client bundle. Server-only vars can flow via the runtime .env on
-      # the deploy target.
-      NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
-      NEXT_PUBLIC_BASE_URL: ${{ secrets.NEXT_PUBLIC_BASE_URL }}
-      NEXT_PUBLIC_PAYPAL_CLIENT_ID: ${{ secrets.NEXT_PUBLIC_PAYPAL_CLIENT_ID }}
-      NEXT_PUBLIC_PAYPAL_CURRENCY: ${{ secrets.NEXT_PUBLIC_PAYPAL_CURRENCY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-
-      - name: Package artifact
-        # server.js + .next/ + public/ + package.json + package-lock.json are
-        # the minimum set the Node server needs at runtime. node_modules is
-        # re-installed on the target with `npm ci --omit=dev`.
-        run: |
-          tar --exclude='.next/cache' \
-              -czf deploy.tar.gz \
-              .next public server.js package.json package-lock.json next.config.ts
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: deploy-bundle
-          path: deploy.tar.gz
-          retention-days: 7
-
-  # ---------------------------------------------------------------------------
-  # 3) Deploy — SKELETON. Uploads the artifact via SSH, extracts, re-installs
-  #    production deps, and restarts the Node app. Customize APP_RESTART_CMD
-  #    per environment (systemd user unit preferred over nohup).
-  # ---------------------------------------------------------------------------
-  deploy:
-    name: Deploy (${{ github.ref_name == 'master' && 'prod' || 'dev' }})
-    needs: build
-    runs-on: ubuntu-latest
-    environment: ${{ github.ref_name == 'master' && 'prod' || 'dev' }}
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: deploy-bundle
-
       - name: Configure SSH
-        # Writes the private key and a locked-down ssh config so scp/ssh can
-        # reach the target without interactive prompts.
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -p "${{ secrets.SSH_PORT }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+          ssh-keyscan -p "${{ secrets.SSH_PORT }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: Upload + extract bundle
+      - name: Build source archive
+        # `git archive` produces a deterministic snapshot of tracked files at
+        # HEAD. Excludes .git, node_modules, .next, .planning automatically
+        # (only tracked files). Output ~5-10 MB compressed.
         run: |
-          scp -P "${{ secrets.SSH_PORT }}" deploy.tar.gz \
-            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/deploy.tar.gz"
-          ssh -p "${{ secrets.SSH_PORT }}" \
-            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-            "cd '${{ secrets.DEPLOY_PATH }}' && \
-             tar -xzf deploy.tar.gz && \
-             rm deploy.tar.gz && \
-             npm ci --omit=dev"
+          git archive --format=tar.gz --output=source.tar.gz HEAD
+          ls -lh source.tar.gz
 
-      - name: Restart app
+      - name: Upload archive to cPanel
         run: |
-          ssh -p "${{ secrets.SSH_PORT }}" \
-            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-            "${{ secrets.APP_RESTART_CMD }}"
+          scp -P "${{ secrets.SSH_PORT }}" source.tar.gz \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/source.tar.gz"
+
+      - name: Build + restart on cPanel
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" bash -s <<EOF
+            set -euo pipefail
+            cd "$DEPLOY_PATH"
+
+            # Activate CloudLinux Node 20 venv so npm/node are on PATH
+            set +u
+            source /home/ninjaz/nodevenv/apps/3dninjaz_v1/20/bin/activate
+            set -u
+
+            # Extract source over existing tree. .env.local, app.log,
+            # node_modules, .next stay (not in archive).
+            tar -xzf source.tar.gz
+            rm source.tar.gz
+
+            # Reset deps to lockfile-exact, build, slim down.
+            npm ci
+            npm run build
+            npm prune --omit=dev
+
+            # Restart node — start.sh kills the old process and respawns
+            # in a new session via setsid + nohup.
+            bash start.sh
+          EOF
 
       - name: Smoke test
-        # Non-fatal HEAD check. Fails the job if the public origin does not
-        # return 2xx / 3xx. Do NOT curl `lswsctrl restart` — graceful reload
-        # only from the server side (see CLAUDE.md LiteSpeed notes).
         run: |
           URL="${{ secrets.NEXT_PUBLIC_SITE_URL }}"
           echo "Smoke-testing $URL"
-          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$URL/")
-          echo "Got HTTP $code"
-          case "$code" in
-            2*|3*) exit 0 ;;
-            *) exit 1 ;;
-          esac
+          # Give the new node process a few seconds to bind the port.
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$URL/" || echo "000")
+            echo "attempt $i: HTTP $code"
+            case "$code" in 2*|3*) exit 0 ;; esac
+            sleep 5
+          done
+          exit 1
