@@ -22,6 +22,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 16: Product Variant System (Generic Options)** - Replace fixed size/color with admin-defined option/value/variant model (cartesian combos, per-variant price/stock/image/SKU). Supports size+color products AND parts-based products in one system.
 - [x] **Phase 17: Variant Enhancements + Legacy Cleanup** - Sale price, variant image upload + PDP swap, bulk edit, OOS hardening, default pre-selection, reactivity contract, pre-variant-era code purged
 - [ ] **Phase 18: Colour Management** - Admin colour library (seeded from Bambu/Polymaker HTML files, reusable across products), per-product enable/disable toggle, colour joins variant system as additional axis when enabled, PDP swatch grid (name + hex)
+- [ ] **Phase 19: User & Role Management** - Admin can create users and define roles; each system feature is enable/disable per role (RBAC matrix). Replaces the current single-admin model.
 
 ## Phase Details
 
@@ -296,3 +297,4 @@ Phases execute in numeric order: 1 → 2 → ... → 15
 | 16. Product Variant System (Generic Options) | 7/7 | Complete | 2026-04-22 |
 | 17. Variant Enhancements + Legacy Cleanup | 5/5 | Complete | 2026-04-22 |
 | 18. Colour Management | 0/0 | Spec | — |
+| 19. User & Role Management | 0/0 | Backlog | — |
