@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 18 Plan 06 complete — variant-editor.tsx now mounts ColourPickerDialog behind a Pick from library button on Colour-named options; confirm runs through refresh() (Pattern B). Plan 18-07 (PDP swatch grid + always-visible name caption) is next.
-last_updated: "2026-04-26T07:12:14Z"
+stopped_at: Phase 18 Plan 07 complete — PDP swatch grid in variant-selector.tsx now renders an always-visible 12px Chakra_Petch name caption directly under each 32px hex circle; weight 500 default / 700 selected / line-through zinc-400 OOS; max-w-[80px] truncate; outer 48x48 tap target preserved. Customer-side audit grep confirms zero references to admin-only colour fields (code, previous_hex, family_type, family_subtype) anywhere in src/app/(store)/ or src/components/store/. Phase 17 hover-image-preview + OOS hardening contracts preserved verbatim. Plan 18-08 (/shop sidebar colour chip filter) is next.
+last_updated: "2026-04-26T07:21:00Z"
 last_activity: 2026-04-26
 progress:
   total_phases: 18
   completed_phases: 7
   total_plans: 62
-  completed_plans: 46
-  percent: 74
+  completed_plans: 47
+  percent: 76
 ---
 
 # Project State
@@ -42,7 +42,7 @@ See: .planning/PROJECT.md (updated 2026-04-12)
 ## Current Position
 
 Phase: 18 (Colour Management) — EXECUTING
-Plan: 7 of 9 (6 complete: 18-01 schema foundation + 18-02 seed parser + 18-03 admin CRUD + 18-04 delete/cascade-rename + 18-05 picker modal + 18-06 variant-editor integration)
+Plan: 8 of 9 (7 complete: 18-01 schema foundation + 18-02 seed parser + 18-03 admin CRUD + 18-04 delete/cascade-rename + 18-05 picker modal + 18-06 variant-editor integration + 18-07 PDP swatch always-visible caption)
 Next Phase: GO-LIVE — admin must complete checklist items in GO-LIVE-READINESS.md
 Status: Ready to execute
 Last activity: 2026-04-26
@@ -84,6 +84,7 @@ Progress: [██████████] 100% (code) | Pre-launch admin action
 | Phase 18 P03 | 50 | 6 tasks | 9 files |
 | Phase 18 P04 | 10 | 4 tasks | 3 files |
 | Phase 18 P06 | 5 | 4 tasks | 4 files |
+| Phase 18 P07 | 2 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -153,6 +154,7 @@ Recent decisions affecting current work:
 - 2026-04-26 (Phase 18 Plan 03): /admin/colours CRUD module shipped. 6 server actions in src/actions/admin-colours.ts (list/get/create/update/archive/reactivate), each starting with `await requireAdmin()` first await per CVE-2025-29927. 3 RSC route files (list/new/[id]/edit). ColourForm client component with 8 fields + native `<input type="color">` swatch picker bidirectionally synced with hex text input + live URL slug preview via slugifyColourBase. ColourRowActions Base UI dropdown — DropdownMenuLabel wrapped in DropdownMenuGroup per CLAUDE.md commit 51a90c9 (Base UI 1.3 quirk). + New colour CTA uses BRAND.ink (UI-SPEC override; coupons uses BRAND.green). Sidebar nav entry below Coupons. Hard-delete + cascade-rename deferred to Plan 18-04. Rule 1 deviation: extracted pure slug helpers into src/lib/colour-slug.ts so client-side colour-form.tsx imports don't pull mysql2/Drizzle/node:* APIs into the browser bundle through @/lib/colours; back-compat re-export keeps Plan 18-01 server-side callers working unchanged.
 - [Phase ?]: 2026-04-26 (Phase 18 Plan 04): deleteColour + renameColour + IN_USE guard shipped. MutateResult discriminated union extends with IN_USE branch. getProductsUsingColour uses 3-query manual hydration (pov→option→product) per MariaDB no-LATERAL rule. renameColour wraps cascade in db.transaction with diff-aware WHERE (D-11 manual-wins): UPDATE pov SET value=:new, swatch_hex=:new WHERE color_id=:id AND value=:pre.name. 1000-row D-12 guardrail returns error before transaction starts. labelCache nulled across all 6 positional option slots in parallel inside transaction (mirror renameOptionValue at variants.ts:288-294). FK violation race-condition catch re-runs guard and re-surfaces IN_USE. colour-row-actions.tsx Delete dropdown opens two-step modal that swaps to IN_USE error mode showing affected products with /admin/products/:id/edit Open links + Archive-instead recovery CTA. colour-form.tsx edit submit calls renameColour FIRST when name/hex changed (cascade-safe), then updateColour for non-cascade metadata.
 - 2026-04-26 (Phase 18 Plan 06): variant-editor.tsx integration shipped. Module-scoped isColourOption helper (case-insensitive `name === "color" || === "colour"`) gates 4 sites: input placeholder relabel ("Add custom (not in library)..."), section header caption ("Custom (not in library)"), Pick from library button (with lucide:Palette icon), helper-text paragraph below the row. ColourPickerDialog mounts as a sibling to the existing delete-option/delete-value dialogs at the JSX bottom; pickerOptionId state (string | null) supports multiple Colour-named options on the same product without ambiguity. alreadyAttachedColourIds computed inline at mount via options.find().values.map(v => v.colorId).filter(Boolean) into Set<string>. onConfirmed wired to `await refresh()` — Phase 17 AD-06 Pattern B refetch contract preserved (no router.refresh() anywhere). HydratedOptionValue.colorId field added (was missing from public type even though Plan 18-01 schema had the column); both hydration mappers (variants.ts, catalog.ts) updated to surface it. REQ-6 6-axis cap verified by inspection: addProductOption guard at existing.length >= 6 is name-agnostic; picker dialog has zero references to addProductOption. Stale Plan 18-04 reference on /admin/colours/[id]/edit page intro updated to current cascade-rename behaviour.
+- 2026-04-26 (Phase 18 Plan 07): PDP swatch grid refactor shipped. variant-selector.tsx `{isColorOption ? (...)}` branch (formerly lines 201-267) now uses a vertical-flex wrapper (`flex flex-col items-center gap-1`, fixed `width: 80px`) holding the existing 48x48 button (with the 32x32 hex circle child) on top and a sibling `<span>` below as the always-visible 12px Chakra_Petch name caption. Caption typography per UI-SPEC §Surface 4: `var(--font-body)` 12px, weight 500 default / 700 + `var(--color-brand-ink)` selected, line-through + `#A1A1AA` OOS, `max-w-[80px] truncate` so long names ellipsis-truncate without breaking layout. Outer container gap tightened from `gap-2` (8px) to `gap-3` (12px) to compensate for the extra caption row height. Caption is `aria-hidden` because the button's `aria-label` already names the colour for AT (avoids double-announcement). Phase 17 contracts preserved verbatim: hover-image-preview (`onMouseEnter`/`Leave` + `findPreviewVariant` + `hoverCapable` matchMedia gate), OOS hardening (disabled + aria-disabled + tabIndex=-1 + title="Out of stock" + diagonal-line gradient overlay), Phase 17 AD-06 reactivity contract (zero mutations on PDP, so contract preserved by inaction). Pill render branch for non-Colour options (Size, Material, Part, etc.) untouched. Customer-side audit grep on `src/app/(store)/` + `src/components/store/` returns zero matches for `previous_hex`, `previousHex`, `family_type`, `familyType`, `family_subtype`, `familySubtype`, `colors.code`, `color.code`, `colour.code` — REQ-7 admin-only field hygiene verified. Plan 18-01 public/admin query split (`getColourPublic` vs `getColourAdmin`) holds end-to-end. `npx tsc --noEmit` clean. Plan-level constraint applied: skipped `npm run build` due to pre-existing CSS issue.
 
 ### Pending Todos
 
@@ -189,6 +191,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-26T07:12:14Z
-Stopped at: Phase 18 Plan 06 complete — variant-editor.tsx integrates ColourPickerDialog behind a Pick from library button on Colour-named options. isColourOption helper, pickerOptionId state, alreadyAttachedColourIds derivation, Custom (not in library) caption + helper copy, Pattern B refetch via await refresh(). HydratedOptionValue.colorId surfaced in public type + both hydration mappers. REQ-6 6-axis cap verified untouched. Plan 18-07 (PDP swatch grid + always-visible name caption) is next.
+Last session: 2026-04-26T07:21:00Z
+Stopped at: Phase 18 Plan 07 complete — PDP variant-selector.tsx now renders an always-visible 12px Chakra_Petch name caption directly under each 32px swatch chip. Vertical-flex wrapper (80px wide) holds the existing 48x48 tap-target button on top and the new caption span below. Caption uses var(--font-body), weight 500 default / 700 + BRAND.ink selected / line-through zinc-400 OOS, max-w-[80px] truncate. Phase 17 hover-image-preview + OOS hardening contracts preserved verbatim. Customer-side admin-field audit grep clean (zero references to colors.code / previous_hex / family_type / family_subtype anywhere in src/app/(store)/ or src/components/store/). Plan 18-08 (/shop sidebar Colour chip filter) is next.
 Resume file: None
