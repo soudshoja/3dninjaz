@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { BRAND } from "@/lib/brand";
 import { createColour, updateColour } from "@/actions/admin-colours";
-import { slugifyColourBase } from "@/lib/colours";
+import { slugifyColourBase } from "@/lib/colour-slug";
 import type { ColourAdmin } from "@/lib/colours";
 
 type Props =
