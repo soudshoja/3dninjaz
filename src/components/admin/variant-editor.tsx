@@ -470,7 +470,14 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
               ))}
             </div>
 
-            {/* Add value */}
+            {/* Add value — for Colour-named options the freeform path is
+                fallback only; the picker (right-most button below) is the
+                preferred entry point. */}
+            {isColourOption(opt) ? (
+              <div className="text-xs uppercase tracking-wider font-semibold text-slate-500 mt-2">
+                Custom (not in library)
+              </div>
+            ) : null}
             <div className="flex gap-2">
               <Input
                 placeholder={isColourOption(opt) ? "Add custom (not in library)..." : `Add ${opt.name} value...`}
@@ -500,6 +507,11 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
                 </Button>
               ) : null}
             </div>
+            {isColourOption(opt) ? (
+              <p className="text-xs text-slate-500">
+                Use the picker for stocked colours. Custom values won&apos;t appear on /shop or in cross-product reuse.
+              </p>
+            ) : null}
           </div>
         ))}
 
