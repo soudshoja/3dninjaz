@@ -736,3 +736,40 @@ export const bulkImportRowSchema = z.object({
   option3_prices: z.string().optional().nullable(),
 });
 export type BulkImportRowInput = z.infer<typeof bulkImportRowSchema>;
+
+// ============================================================================
+// Phase 18 — colours library
+// ----------------------------------------------------------------------------
+// Re-uses the hex regex from productOptionValueSchema (line 622). Optional
+// fields use `.optional().or(z.literal("")).nullable()` so empty form inputs
+// from FormData round-trip cleanly to null in the server action.
+// ============================================================================
+
+export const colourSchema = z.object({
+  name: z.string().min(1, "Name is required").max(64, "Name too long (max 64 chars)"),
+  hex: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Hex must be in the form #RRGGBB"),
+  previousHex: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Previous hex must be in the form #RRGGBB")
+    .optional()
+    .or(z.literal(""))
+    .nullable(),
+  brand: z.enum(["Bambu", "Polymaker", "Other"]),
+  familyType: z.enum(["PLA", "PETG", "TPU", "CF", "Other"]),
+  familySubtype: z
+    .string()
+    .max(48, "Family subtype too long (max 48 chars)")
+    .optional()
+    .or(z.literal(""))
+    .nullable(),
+  code: z
+    .string()
+    .max(32, "Code too long (max 32 chars)")
+    .optional()
+    .or(z.literal(""))
+    .nullable(),
+  isActive: z.boolean().default(true),
+});
+export type ColourInput = z.infer<typeof colourSchema>;
