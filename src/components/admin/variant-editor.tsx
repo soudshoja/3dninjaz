@@ -473,7 +473,7 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
             {/* Add value */}
             <div className="flex gap-2">
               <Input
-                placeholder={`Add ${opt.name} value...`}
+                placeholder={isColourOption(opt) ? "Add custom (not in library)..." : `Add ${opt.name} value...`}
                 value={newValueInputs[opt.id] ?? ""}
                 onChange={(e) =>
                   setNewValueInputs((prev) => ({ ...prev, [opt.id]: e.target.value }))
@@ -487,6 +487,18 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
               <Button size="sm" variant="outline" onClick={() => handleAddValue(opt.id)} disabled={isPending}>
                 <Plus className="h-3 w-3 mr-1" /> Add
               </Button>
+              {isColourOption(opt) ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setPickerOptionId(opt.id)}
+                  className="gap-1"
+                  disabled={isPending}
+                >
+                  <Palette className="h-3 w-3" /> Pick from library
+                </Button>
+              ) : null}
             </div>
           </div>
         ))}
@@ -686,6 +698,28 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Phase 18 Plan 06 — Colour library picker. Mounts only when an option
+          named "Color"/"Colour" has been opened via "Pick from library". On
+          confirm, we await refresh() (Pattern B refetch — Phase 17 AD-06). */}
+      {pickerOptionId ? (
+        <ColourPickerDialog
+          open={pickerOptionId !== null}
+          onOpenChange={(v) => { if (!v) setPickerOptionId(null); }}
+          optionId={pickerOptionId}
+          productId={productId}
+          alreadyAttachedColourIds={
+            new Set(
+              (options.find((o) => o.id === pickerOptionId)?.values ?? [])
+                .map((v) => v.colorId)
+                .filter((id): id is string => Boolean(id)),
+            )
+          }
+          onConfirmed={async () => {
+            await refresh();
+          }}
+        />
+      ) : null}
     </div>
   );
 }
