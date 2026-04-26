@@ -279,7 +279,7 @@ Plans:
 - [x] 18-02-PLAN.md — HTML parser + idempotent seed script (Bambu + Polymaker → ~145 rows; em-dash codes → NULL; dual/gradient skipped) (Wave 1)
 - [x] 18-03-PLAN.md — Admin /admin/colours CRUD module — list page + new/edit forms + 6 server actions (list/get/create/update/archive/reactivate) + sidebar nav (Wave 2)
 - [x] 18-04-PLAN.md — In-use deletion guard (IN_USE error UI with product links + Archive instead CTA) + diff-aware cascade rename in db.transaction with 1000-row guard (Wave 2)
-- [ ] 18-05-PLAN.md — ColourPickerDialog component (shadcn Dialog, 720px, client-side filter, multi-select stage, batch confirm) + getActiveColoursForPicker + attachLibraryColours server actions (Wave 3)
+- [x] 18-05-PLAN.md — ColourPickerDialog component (shadcn Dialog, 720px, client-side filter, multi-select stage, batch confirm) + getActiveColoursForPicker + attachLibraryColours server actions (Wave 3)
 - [ ] 18-06-PLAN.md — variant-editor.tsx integration: mount picker on Colour-named options, custom-fallback relabel "Custom (not in library)", Pattern B refetch on confirm (Wave 3)
 - [ ] 18-07-PLAN.md — PDP variant-selector refactor: always-visible name caption (32px circle + 12px caption, weight 500/700, OOS line-through); pill rendering for non-Colour options untouched (Wave 4)
 - [ ] 18-08-PLAN.md — /shop sidebar Colour chip filter (accordion + hex-tinted active state) + getActiveProductColourChips + getProductIdsByColourSlugs (manual hydration, no LATERAL); URL grammar ?colour=slug,slug (Wave 4)
@@ -309,5 +309,5 @@ Phases execute in numeric order: 1 → 2 → ... → 15
 | 15. Customer + Admin Shipment Tracking | — | Complete | 2026-04-20 |
 | 16. Product Variant System (Generic Options) | 7/7 | Complete | 2026-04-22 |
 | 17. Variant Enhancements + Legacy Cleanup | 5/5 | Complete | 2026-04-22 |
-| 18. Colour Management | 4/9 | In Progress|  |
+| 18. Colour Management | 5/9 | In Progress|  |
 | 19. User & Role Management | 0/0 | Backlog | — |
