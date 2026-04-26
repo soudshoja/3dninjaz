@@ -260,17 +260,30 @@ Plans:
 - [x] 17-05-PLAN.md — E2E PayPal sandbox smoke test + COMPLETION.md + ROADMAP + STATE update (Wave 3)
 
 ### Phase 18: Colour Management
-**Goal**: Admin can manage a central colour library (seeded from `Colours/bambu-lab-colors.html` + `Colours/polymaker-colors.html`) and toggle a "Colour" option per product. When enabled, Colour joins the existing variant system as an additional axis. PDP renders selected colours as a swatch grid showing both name and hex.
+**Goal**: Admin manages a central, reusable colour library (seeded once from Bambu + Polymaker HTML files) and picks per-product subsets via a picker modal in the variant editor. Colour joins the variant system as a normal axis (1 of 6). PDP renders swatches with name always visible (no hover); /shop offers a multi-select sidebar chip filter URL-synced to ?colour= and intersecting the existing category filter. Codes/family/previous_hex stay admin-only.
 **Depends on**: Phase 16, Phase 17
-**Requirements**: To be locked in SPEC.md
+**Requirements**: REQ-1 (colors table schema), REQ-2 (HTML seed script), REQ-3 (admin /admin/colours CRUD), REQ-4 (in-use deletion guard + soft-archive), REQ-5 (per-product picker integration with custom one-off fallback), REQ-6 (Colour counts as 1 of 6 axes), REQ-7 (PDP swatch grid with always-visible name + codes hidden), REQ-8 (/shop sidebar chip filter — multi-select, URL-synced, intersects category filter)
 **Success Criteria** (what must be TRUE):
-  1. Admin manages a central colour library at `/admin/colours` — create/edit/delete colours with `name` + `hex` + optional `brand` / `family`
-  2. Library is seeded once from `Colours/bambu-lab-colors.html` + `Colours/polymaker-colors.html`
-  3. On the product edit page, admin can enable "Colour" as an option (separate toggle from Size/Material) and pick which colours from the library are offered for that product
-  4. When enabled, Colour participates in the variant cartesian generator on equal footing with other axes (still bound by 6-slot cap)
-  5. PDP renders Colour as a swatch grid (hex circle + name visible/on-hover); selecting a swatch updates the variant exactly like Size/Material does
-  6. Disabling the Colour option on a product cleanly removes it from variant generation without orphaning data
-**Plans**: TBD
+  1. `colors` table migrated on MariaDB 10.11; Drizzle schema matches `SHOW CREATE TABLE` byte-for-byte
+  2. `tsx scripts/seed-colours.ts` parses both HTML files idempotently (~145 rows; second run = 0 inserts / 0 updates)
+  3. Admin manages the library at /admin/colours (list, create, edit, soft-archive, hard-delete with IN_USE guard)
+  4. In-use deletion returns `{ok:false, code:"IN_USE", products:[...]}`; soft-archive always allowed
+  5. Variant editor shows "Pick from library" button on Colour-named options; picker confirms snapshot name+hex+colorId into pov rows; freeform "Custom (not in library)" path preserved
+  6. PDP swatch grid renders 32px hex circle + 12px always-visible name caption (no hover, no codes leaked); selection still updates price/stock/image per Phase 17 reactivity
+  7. /shop sidebar shows Colour accordion (default open, first 12 chips, Show all expands) with hex-tinted active state; URL syncs ?colour=galaxy-black,jade-white; intersects category filter
+  8. Cascade rename is diff-aware (manual product-level edits preserved) and runs in a single db.transaction
+**Plans**: 9 plans
+
+Plans:
+- [ ] 18-01-PLAN.md — Schema (colors table + product_option_values.color_id FK) + helpers (colours.ts + colour-contrast.ts) + Zod + [BLOCKING] raw-SQL DDL applicator (Wave 1)
+- [ ] 18-02-PLAN.md — HTML parser + idempotent seed script (Bambu + Polymaker → ~145 rows; em-dash codes → NULL; dual/gradient skipped) (Wave 1)
+- [ ] 18-03-PLAN.md — Admin /admin/colours CRUD module — list page + new/edit forms + 6 server actions (list/get/create/update/archive/reactivate) + sidebar nav (Wave 2)
+- [ ] 18-04-PLAN.md — In-use deletion guard (IN_USE error UI with product links + Archive instead CTA) + diff-aware cascade rename in db.transaction with 1000-row guard (Wave 2)
+- [ ] 18-05-PLAN.md — ColourPickerDialog component (shadcn Dialog, 720px, client-side filter, multi-select stage, batch confirm) + getActiveColoursForPicker + attachLibraryColours server actions (Wave 3)
+- [ ] 18-06-PLAN.md — variant-editor.tsx integration: mount picker on Colour-named options, custom-fallback relabel "Custom (not in library)", Pattern B refetch on confirm (Wave 3)
+- [ ] 18-07-PLAN.md — PDP variant-selector refactor: always-visible name caption (32px circle + 12px caption, weight 500/700, OOS line-through); pill rendering for non-Colour options untouched (Wave 4)
+- [ ] 18-08-PLAN.md — /shop sidebar Colour chip filter (accordion + hex-tinted active state) + getActiveProductColourChips + getProductIdsByColourSlugs (manual hydration, no LATERAL); URL grammar ?colour=slug,slug (Wave 4)
+- [ ] 18-09-PLAN.md — Admin guide article (src/content/admin-guide/products/colours.md) + full CI battery (tsc + lint + build) + 24-step manual smoke checklist for verifier (Wave 4)
 
 ## Progress
 
@@ -296,5 +309,5 @@ Phases execute in numeric order: 1 → 2 → ... → 15
 | 15. Customer + Admin Shipment Tracking | — | Complete | 2026-04-20 |
 | 16. Product Variant System (Generic Options) | 7/7 | Complete | 2026-04-22 |
 | 17. Variant Enhancements + Legacy Cleanup | 5/5 | Complete | 2026-04-22 |
-| 18. Colour Management | 0/0 | Spec | — |
+| 18. Colour Management | 0/9 | Plan | — |
 | 19. User & Role Management | 0/0 | Backlog | — |

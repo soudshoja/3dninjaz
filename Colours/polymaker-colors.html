@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Polymaker — PLA Color Reference</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f0f10; color: #e8e8e8; line-height: 1.45; padding: 16px; padding-bottom: 48px; }
+header { max-width: 1100px; margin: 0 auto 18px; padding: 14px 4px; border-bottom: 1px solid #2a2a2d; }
+h1 { font-size: 1.3rem; font-weight: 700; margin-bottom: 4px; letter-spacing: -0.01em; }
+header p { font-size: 0.82rem; color: #9a9a9f; }
+main { max-width: 1100px; margin: 0 auto; }
+.tabs { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 16px; position: sticky; top: 0; background: #0f0f10; padding: 8px 0; z-index: 10; border-bottom: 1px solid #1f1f22; }
+.tab { padding: 6px 12px; border-radius: 999px; background: #1c1c20; color: #c8c8cc; border: 1px solid #2a2a2e; cursor: pointer; font-size: 0.8rem; font-weight: 500; transition: all 0.15s; white-space: nowrap; }
+.tab:hover { background: #25252a; }
+.tab.active { background: #f0f0f3; color: #0f0f10; border-color: #f0f0f3; }
+.section { display: none; margin-bottom: 24px; }
+.section.active { display: block; }
+.section-header { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; padding: 11px 14px; background: linear-gradient(180deg, #18181c, #131316); border-radius: 10px; border: 1px solid #25252a; }
+.section-header h2 { font-size: 1rem; font-weight: 600; }
+.section-header .count { font-size: 0.76rem; color: #8a8a90; }
+.section-note { font-size: 0.78rem; color: #a0a0a6; margin-top: 5px; width: 100%; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 9px; }
+.swatch { background: #16161a; border: 1px solid #25252a; border-radius: 10px; overflow: hidden; cursor: pointer; transition: transform 0.12s, border-color 0.12s; }
+.swatch:hover { transform: translateY(-2px); border-color: #404048; }
+.color-block { height: 68px; width: 100%; border-bottom: 1px solid #25252a; position: relative; }
+.translucent .color-block { background-image: linear-gradient(45deg, #2a2a2e 25%, transparent 25%), linear-gradient(-45deg, #2a2a2e 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #2a2a2e 75%), linear-gradient(-45deg, transparent 75%, #2a2a2e 75%); background-size: 12px 12px; background-position: 0 0, 0 6px, 6px -6px, -6px 0; }
+.translucent .color-overlay { position: absolute; inset: 0; opacity: 0.7; }
+.dual { display: flex; height: 68px; border-bottom: 1px solid #25252a; }
+.dual > div { flex: 1; }
+.gradient-block { background: linear-gradient(90deg, #ff0080, #ff8c00, #ffd700, #00ff7f, #00bfff, #8a2be2); height: 68px; border-bottom: 1px solid #25252a; }
+.info { padding: 8px 10px; }
+.name { font-size: 0.83rem; font-weight: 500; color: #f0f0f3; margin-bottom: 3px; line-height: 1.25; }
+.code-row { display: flex; justify-content: space-between; align-items: center; gap: 6px; flex-wrap: wrap; }
+.code { font-size: 0.7rem; font-weight: 600; font-family: "SF Mono", Menlo, Consolas, monospace; padding: 1px 6px; border-radius: 4px; color: #c890e8; background: rgba(200, 144, 232, 0.12); }
+.hex { font-size: 0.7rem; color: #8a8a90; font-family: "SF Mono", Menlo, Consolas, monospace; }
+.banner { border-radius: 10px; padding: 11px 14px; margin-bottom: 12px; font-size: 0.83rem; }
+.banner.focus { background: linear-gradient(135deg, rgba(80,120,200,0.18), rgba(80,120,200,0.05)); border: 1px solid rgba(120,160,220,0.3); color: #c8d6f0; }
+.banner.focus strong { color: #e8eef8; }
+.packaging-note { background: #1a1a1e; border-left: 3px solid #c890e8; padding: 9px 12px; margin-bottom: 12px; font-size: 0.78rem; color: #b0b0b8; border-radius: 4px; }
+footer { margin-top: 28px; padding-top: 14px; border-top: 1px solid #25252a; font-size: 0.73rem; color: #6a6a70; max-width: 1100px; margin-left: auto; margin-right: auto; }
+.toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); background: #2a1f3a; color: #c890e8; padding: 9px 17px; border-radius: 999px; border: 1px solid #4a3060; font-size: 0.83rem; font-weight: 500; opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 100; }
+.toast.show { opacity: 1; }
+@media (max-width: 480px) { .grid { grid-template-columns: repeat(2, 1fr); gap: 7px; } .color-block, .dual, .gradient-block { height: 58px; } .name { font-size: 0.77rem; } .hex, .code { font-size: 0.66rem; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Polymaker — PLA Color Reference (1.75mm)</h1>
+  <p>All PLA lines • Tap any swatch to copy. Format: <span style="color:#c890e8;font-family:monospace;font-weight:600;font-size:0.75rem">SKU</span> · <span style="color:#8a8a90;font-family:monospace;font-size:0.75rem">#HEX</span></p>
+</header>
+<main>
+  <div class="packaging-note">
+    <strong>📦 Packaging:</strong> All current PLA colors come in <strong>New Packaging</strong> AND <strong>Old Packaging</strong> at 1.75mm 1kg with the SAME SKU code. Polymaker re-measured hex values with improved instruments — so the SAME physical color sometimes has a different hex on old vs new packaging (color didn't change, only the measurement). Where this happens (e.g. Matte line), both hex values are shown. <strong>Wiki/New hex</strong> = current/most accurate · <strong>Old hex</strong> = printed on legacy spools.
+  </div>
+  <div class="tabs" id="tabs"></div>
+  <div id="sections"></div>
+  <footer>Source: Official Polymaker Wiki (wiki.polymaker.com) HEX Codes & Transmission Distances table + Polymaker Wholesale (us-wholesale.polymaker.com). All SKUs verified from manufacturer documentation. Colors with TD (Transmission Distance) values are best for HueForge/lithophane multi-color prints.</footer>
+</main>
+<div class="toast" id="toast">Copied</div>
+<script>
+const data = {
+  "translucent": {
+    label: "Translucent ⭐ CLEAR",
+    title: "Panchroma Translucent (PLA — Clear/See-Through)",
+    note: "5 colors. PLA-based translucent finish. Ideal for HueForge multi-color lithophanes thanks to high TD values.",
+    translucent: true,
+    banner: "<strong>Polymaker's clearest PLA option.</strong> Translucent Natural (CA02037) has the highest TD value (21mm) — light passes through up to 21mm of plastic. For comparison, opaque PLA TDs are usually under 1mm.",
+    bannerType: "focus",
+    colors: [
+      { name: "Translucent Natural", code: "CA02037", hex: "#E8E6D0", td: "21" },
+      { name: "Translucent Yellow", code: "CA02003", hex: "#F9ED3D", td: "14" },
+      { name: "Translucent Grey", code: "CA02004", hex: "#9199A4", td: "11.5" },
+      { name: "Translucent Cyan", code: "CA02001", hex: "#08ABFB", td: "8" },
+      { name: "Translucent Magenta", code: "CA02002", hex: "#D93B90", td: "7.8" }
+    ]
+  },
+  "matte": {
+    label: "Panchroma Matte",
+    title: "Panchroma Matte PLA (formerly PolyTerra)",
+    note: "38 colors. Polymaker's flagship matte PLA. Code series: CA04xxx. Same as old PolyTerra PLA.",
+    colors: [
+      { name: "Matte Cotton White", code: "CA04016", hex: "#F4EFEB" },
+      { name: "Matte Muted White", code: "CA04028", hex: "#BBADA4", oldHex: "#AFA198" },
+      { name: "Matte Charcoal Black", code: "CA04015", hex: "#2F2E30" },
+      { name: "Matte Ash Grey", code: "CA04014", hex: "#485155" },
+      { name: "Matte Fossil Grey", code: "CA04020", hex: "#8A8C94" },
+      { name: "Matte Lava Red", code: "CA04021", hex: "#ED2F2E" },
+      { name: "Matte Army Red", code: "CA04013", hex: "#BF312E" },
+      { name: "Matte Muted Red", code: "CA04027", hex: "#D84B2E" },
+      { name: "Matte Pastel Watermelon", code: "CA04035", hex: "#EE474B", oldHex: "#E93A3F" },
+      { name: "Matte Lotus Pink", code: "CA04002", hex: "#DD76C0" },
+      { name: "Matte Sakura Pink", code: "CA04037", hex: "#EAADBD" },
+      { name: "Matte Rose (legacy)", code: "—", hex: "#E0A8BB", note: "Discontinued — Old Packaging only" },
+      { name: "Matte Pastel Candy", code: "CA04030", hex: "#F0D6D9" },
+      { name: "Matte Sunrise Orange", code: "CA04040", hex: "#F88B17", oldHex: "#F78E0E" },
+      { name: "Matte Pastel Peach", code: "CA04033", hex: "#F6BF8B", oldHex: "#F2B67A" },
+      { name: "Matte Savannah Yellow", code: "CA04039", hex: "#F3C432", oldHex: "#F0BE02" },
+      { name: "Matte Pastel Banana", code: "CA04029", hex: "#F7D475", oldHex: "#F5CF6F" },
+      { name: "Matte Lime Green", code: "CA04023", hex: "#D7D602", oldHex: "#D0E740" },
+      { name: "Matte Army Light Green", code: "CA04011", hex: "#AB8C02", oldHex: "#A78403" },
+      { name: "Matte Forest Green", code: "CA04019", hex: "#60AD70" },
+      { name: "Matte Pastel Mint", code: "CA04032", hex: "#D2DEBB", oldHex: "#BEC9A5" },
+      { name: "Matte Muted Green", code: "CA04025", hex: "#777E71", oldHex: "#656D60" },
+      { name: "Matte Army Dark Green", code: "CA04010", hex: "#5F6244" },
+      { name: "Matte Arctic Teal", code: "CA04006", hex: "#61BCC3" },
+      { name: "Matte Sky Blue", code: "CA04001", hex: "#1AC5FC" },
+      { name: "Matte Pastel Ice", code: "CA04031", hex: "#A4D0DF", oldHex: "#95C5D3" },
+      { name: "Matte Sapphire Blue", code: "CA04038", hex: "#0163A6" },
+      { name: "Matte Army Blue", code: "CA04008", hex: "#2E4462", oldHex: "#062B4D" },
+      { name: "Matte Muted Blue", code: "CA04024", hex: "#5F778E", oldHex: "#4E6A84" },
+      { name: "Matte Lavender Purple", code: "CA04022", hex: "#9572BF" },
+      { name: "Matte Electric Indigo", code: "CA04018", hex: "#6858A9" },
+      { name: "Matte Muted Purple", code: "CA04026", hex: "#7C5C78", oldHex: "#7C5577" },
+      { name: "Matte Army Purple", code: "CA04012", hex: "#36364A" },
+      { name: "Matte Pastel Periwinkle", code: "CA04036", hex: "#ADB4E6" },
+      { name: "Matte Earth Brown", code: "CA04017", hex: "#7C594A" },
+      { name: "Matte Wood Brown", code: "CA04041", hex: "#AB7449", oldHex: "#AD7441" },
+      { name: "Matte Army Brown", code: "CA04009", hex: "#795A4D", oldHex: "#724E3D" },
+      { name: "Matte Army Beige", code: "CA04007", hex: "#DBBAA5", oldHex: "#CCA897" },
+      { name: "Matte Pastel Peanut", code: "CA04034", hex: "#BF9573" }
+    ]
+  },
+  "basic": {
+    label: "PLA Basic",
+    title: "Panchroma PLA Basic Colors",
+    note: "Glossy PLA basics. Code series: CA19xxx. Standard everyday PLA.",
+    colors: [
+      { name: "White", code: "CA19001", hex: "#EBF7FF" },
+      { name: "Cold White", code: "CA19027", hex: "#D9DFE5" },
+      { name: "Black", code: "CA19006", hex: "#080A0D" },
+      { name: "Dark Grey", code: "CA19028", hex: "#485259" },
+      { name: "Steel Grey", code: "CA19003", hex: "#616469" },
+      { name: "Grey", code: "CA19002", hex: "#8C9099" },
+      { name: "Red", code: "CA19004", hex: "#E72F1D" },
+      { name: "Wine Red", code: "CA19012", hex: "#D60212" },
+      { name: "Magenta", code: "CA19023", hex: "#F24574" },
+      { name: "Pink", code: "CA19009", hex: "#F1A1AF" },
+      { name: "Orange", code: "CA19008", hex: "#F67405" },
+      { name: "Yellow", code: "CA19011", hex: "#FFE800" },
+      { name: "Lemon Yellow", code: "CA19019", hex: "#EED230" },
+      { name: "Cream", code: "CA19021", hex: "#EED1A8" },
+      { name: "Beige", code: "CA19015", hex: "#C2AB72" },
+      { name: "Tan", code: "CA19025", hex: "#A79E82" },
+      { name: "Brown", code: "CA19018", hex: "#55331A" },
+      { name: "Lime Green", code: "CA19022", hex: "#D5D701" },
+      { name: "Green", code: "CA19007", hex: "#06924D" },
+      { name: "Jungle Green", code: "CA19013", hex: "#4E742D" },
+      { name: "Olive Green", code: "CA19014", hex: "#948902" },
+      { name: "Dark Olive Drab", code: "CA19026", hex: "#575B54" },
+      { name: "Polymaker Teal", code: "CA19020", hex: "#4CC0C7" },
+      { name: "Aqua Blue", code: "CA19016", hex: "#5EBDDB" },
+      { name: "Azure Blue", code: "CA19024", hex: "#0066D9" },
+      { name: "Stone Blue", code: "CA19017", hex: "#487BA2" },
+      { name: "Blue", code: "CA19005", hex: "#003776" },
+      { name: "Purple", code: "CA19010", hex: "#6C47B2" }
+    ]
+  },
+  "polylite-pla": {
+    label: "PolyLite PLA",
+    title: "PolyLite PLA",
+    note: "Polymaker's standard glossy PLA. Code series: PA02xxx.",
+    colors: [
+      { name: "White", code: "PA02002", hex: "#DDD7D3" },
+      { name: "Cold White", code: "PA02096", hex: "#EAECF5" },
+      { name: "Natural", code: "PA02011", hex: "#DFD3C3" },
+      { name: "Cream", code: "PA02056", hex: "#EED1A8" },
+      { name: "Beige", code: "PA02055", hex: "#C2AB72" },
+      { name: "Black", code: "PA02001", hex: "#030305" },
+      { name: "Dark Grey", code: "PA02098", hex: "#6E8393" },
+      { name: "Steel Grey", code: "PA02065", hex: "#5D5E63" },
+      { name: "Grey", code: "PA02003", hex: "#8B8E96" },
+      { name: "Red", code: "PA02004", hex: "#D90102" },
+      { name: "Wine Red", code: "PA02057", hex: "#D60212" },
+      { name: "Magenta", code: "PA02054", hex: "#F24574" },
+      { name: "Orange", code: "PA02008", hex: "#F36201" },
+      { name: "Yellow", code: "PA02007", hex: "#F3AA01" },
+      { name: "Lemon Yellow", code: "PA02061", hex: "#EED230" },
+      { name: "Lime Green", code: "PA02060", hex: "#D5D701" },
+      { name: "Green", code: "PA02006", hex: "#30A45F" },
+      { name: "Jungle Green", code: "PA02059", hex: "#4E742D" },
+      { name: "Olive Green", code: "PA02058", hex: "#948902" },
+      { name: "Olive Brown", code: "PA02094", hex: "#A79565" },
+      { name: "Dark Gray Green", code: "PA02095", hex: "#4C5F46" },
+      { name: "Polymaker Teal", code: "PA02010", hex: "#48B9C2" },
+      { name: "Aqua Blue", code: "PA02063", hex: "#5EBDDB" },
+      { name: "Azure Blue", code: "PA02064", hex: "#0061D5" },
+      { name: "Stone Blue", code: "PA02062", hex: "#487BA2" },
+      { name: "Blue", code: "PA02005", hex: "#013178" },
+      { name: "Dark Blue", code: "PA02075", hex: "#041B3D" },
+      { name: "Purple", code: "PA02009", hex: "#6447A5" }
+    ]
+  },
+  "polymax-pla": {
+    label: "PolyMax PLA",
+    title: "PolyMax PLA (Tough)",
+    note: "High-impact PLA — tougher than ABS. Code series: PA06xxx.",
+    colors: [
+      { name: "White", code: "PA06002", hex: "#EBECED", oldHex: "#FFFFFF" },
+      { name: "Black", code: "PA06001", hex: "#161619", oldHex: "#101820" },
+      { name: "Grey", code: "PA06003", hex: "#8D8E93", oldHex: "#91999F" },
+      { name: "Red", code: "PA06004", hex: "#ED2F20", oldHex: "#DE4343" },
+      { name: "Pink", code: "PA06029", hex: "#F02F63", oldHex: "#FD4BAB" },
+      { name: "Orange", code: "PA06008", hex: "#FE8E1B", oldHex: "#FF9940" },
+      { name: "Yellow", code: "PA06007", hex: "#F0AB01", oldHex: "#FFE800" },
+      { name: "Green", code: "PA06006", hex: "#31A45F", oldHex: "#00A95C" },
+      { name: "Polymaker Teal", code: "PA06010", hex: "#4ABAC2", oldHex: "#00B4BC" },
+      { name: "Blue", code: "PA06005", hex: "#013178", oldHex: "#006EB6" },
+      { name: "Purple", code: "PA06009", hex: "#6647A3", oldHex: "#7758B3" },
+      { name: "FDE Beige", code: "PA06030", hex: "#90755D" }
+    ]
+  },
+  "polylite-pla-pro": {
+    label: "PolyLite PLA Pro",
+    title: "PolyLite PLA Pro",
+    note: "Pro-grade PLA — improved layer adhesion & durability. Code series: PA07xxx.",
+    colors: [
+      { name: "White", code: "PA07002", hex: "#EBECED" },
+      { name: "Cold White", code: "PA07053", hex: "#D6D5DC" },
+      { name: "Black", code: "PA07001", hex: "#161619" },
+      { name: "Metallic Black", code: "PA07058", hex: "#0C0E0C" },
+      { name: "Silver", code: "PA07007", hex: "#8A8D95" },
+      { name: "Metallic Chrome", code: "PA07057", hex: "#505A5D" },
+      { name: "Dark Grey", code: "PA07056", hex: "#545859" },
+      { name: "Grey", code: "PA07003", hex: "#8D8E93" },
+      { name: "Red", code: "PA07004", hex: "#ED2F20" },
+      { name: "Light Red", code: "PA07035", hex: "#DC605A" },
+      { name: "Metallic Red", code: "PA07047", hex: "#8D352C" },
+      { name: "Pink", code: "PA07026", hex: "#EE92AA" },
+      { name: "Magenta", code: "PA07034", hex: "#EF2F64" },
+      { name: "Metallic Magenta", code: "PA07052", hex: "#743063" },
+      { name: "Orange", code: "PA07010", hex: "#FE8E1B" },
+      { name: "Gold", code: "PA07037", hex: "#A66301" },
+      { name: "Yellow", code: "PA07009", hex: "#F0AB01" },
+      { name: "Light Yellow", code: "PA07030", hex: "#F4DA78" },
+      { name: "Light Green", code: "PA07029", hex: "#C0DDA3" },
+      { name: "Green", code: "PA07008", hex: "#31A45F" },
+      { name: "Army Green", code: "PA07006", hex: "#665A30" },
+      { name: "Blue-Green", code: "PA07042", hex: "#022B33" },
+      { name: "Polymaker Teal", code: "PA07012", hex: "#5FC7CF" },
+      { name: "Light Blue", code: "PA07028", hex: "#A8D4E8" },
+      { name: "Blue", code: "PA07005", hex: "#013276" },
+      { name: "Bronze / Metallic Blue", code: "PA07038", hex: "#2D3449" },
+      { name: "Purple", code: "PA07011", hex: "#6547A5" },
+      { name: "Dark Purple", code: "PA07031", hex: "#2C1C30" },
+      { name: "Brown", code: "PA07033", hex: "#634232" },
+      { name: "Army Beige", code: "PA07027", hex: "#C28D5E" }
+    ]
+  },
+  "polysonic": {
+    label: "PolySonic PLA",
+    title: "PolySonic PLA + Pro (High Speed)",
+    note: "High-speed PLA designed for fast printing. PolySonic = PA12xxx, PolySonic Pro = PA13xxx.",
+    colors: [
+      { name: "White (Sonic)", code: "PA12001", hex: "#E2DEDB" },
+      { name: "White (Sonic Pro)", code: "PA13001", hex: "#E2DEDB" },
+      { name: "Black (Sonic)", code: "PA12002", hex: "#0C0E0C" },
+      { name: "Black (Sonic Pro)", code: "PA13002", hex: "#0C0E0C" },
+      { name: "Grey (Sonic)", code: "PA12003", hex: "#73767D" },
+      { name: "Grey (Sonic Pro)", code: "PA13003", hex: "#959FA1" },
+      { name: "Red (Sonic)", code: "PA12005", hex: "#E62216" },
+      { name: "Red (Sonic Pro)", code: "PA13005", hex: "#E20010" },
+      { name: "Orange (Sonic)", code: "PA12007", hex: "#F97429" },
+      { name: "Orange (Sonic Pro)", code: "PA13007", hex: "#F97429" },
+      { name: "Yellow (Sonic)", code: "PA12006", hex: "#F4C032" },
+      { name: "Yellow (Sonic Pro)", code: "PA13006", hex: "#F4C032" },
+      { name: "Green (Sonic)", code: "PA12010", hex: "#2D9E59" },
+      { name: "Green (Sonic Pro)", code: "PA13010", hex: "#2D9E59" },
+      { name: "Polymaker Teal (Sonic)", code: "PA12009", hex: "#50DAE4" },
+      { name: "Polymaker Teal (Sonic Pro)", code: "PA13009", hex: "#50DAE4" },
+      { name: "Blue (Sonic)", code: "PA12004", hex: "#00307E" },
+      { name: "Blue (Sonic Pro)", code: "PA13004", hex: "#003287" },
+      { name: "Purple (Sonic)", code: "PA12008", hex: "#6C5BB1" },
+      { name: "Purple (Sonic Pro)", code: "PA13008", hex: "#6C5BB1" }
+    ]
+  },
+  "silk": {
+    label: "Silk",
+    title: "Panchroma Silk PLA (Glossy/Pearlescent)",
+    note: "Silk PLA — high-gloss pearlescent finish. Code series: CA03xxx. Single-color silks.",
+    colors: [
+      { name: "Silk White", code: "CA03020", hex: "#DFE4E4" },
+      { name: "Silk Black", code: "CA03001", hex: "#363538" },
+      { name: "Silk Silver", code: "CA03018", hex: "#BCC2C8" },
+      { name: "Silk Chrome", code: "CA03005", hex: "#85898B" },
+      { name: "Silk Gunmetal Grey", code: "CA03032", hex: "#676B6A" },
+      { name: "Silk Gold", code: "CA03006", hex: "#C49449" },
+      { name: "Silk Brass", code: "CA03003", hex: "#968162" },
+      { name: "Silk Bronze", code: "CA03004", hex: "#AF6B4C" },
+      { name: "Silk Rose Gold", code: "CA03017", hex: "#CBB0B1" },
+      { name: "Silk Quartz Pink", code: "CA03013", hex: "#DBBBBB" },
+      { name: "Silk Rose", code: "CA03016", hex: "#CF6076" },
+      { name: "Silk Red", code: "CA03015", hex: "#C1443F" },
+      { name: "Silk Magenta", code: "CA03010", hex: "#AA538E" },
+      { name: "Silk Orange", code: "CA03011", hex: "#EB6232" },
+      { name: "Silk Yellow", code: "CA03021", hex: "#EEC810" },
+      { name: "Silk Lime", code: "CA03009", hex: "#C4CF4C" },
+      { name: "Silk Peridot Green", code: "CA03012", hex: "#7F865B" },
+      { name: "Silk Green", code: "CA03007", hex: "#55B687" },
+      { name: "Silk Teal", code: "CA03019", hex: "#66C2B6" },
+      { name: "Silk Light Blue", code: "CA03008", hex: "#4CC1CB" },
+      { name: "Silk Blue", code: "CA03002", hex: "#4999C9" },
+      { name: "Silk Dark Blue", code: "CA03031", hex: "#23599A" },
+      { name: "Silk Periwinkle", code: "CA03033", hex: "#768EC7" },
+      { name: "Silk Purple", code: "CA03014", hex: "#786BB0" }
+    ]
+  },
+  "satin": {
+    label: "Satin",
+    title: "Panchroma Satin PLA (formerly PolyTerra PLA+)",
+    note: "Satin finish — subtle sheen, between matte and silk. Code series: CA05xxx.",
+    colors: [
+      { name: "Satin White", code: "CA05009", hex: "#F5F0EC" },
+      { name: "Satin Black", code: "CA05011", hex: "#302E30" },
+      { name: "Satin Grey", code: "CA05004", hex: "#797E89" },
+      { name: "Satin Red", code: "CA05008", hex: "#DA1521" },
+      { name: "Satin Orange", code: "CA05005", hex: "#FE9217" },
+      { name: "Satin Yellow", code: "CA05010", hex: "#F4C131" },
+      { name: "Satin Green", code: "CA05003", hex: "#5EAB71" },
+      { name: "Satin Polymaker Teal", code: "CA05006", hex: "#61BBC1" },
+      { name: "Satin Blue", code: "CA05002", hex: "#0162A6" },
+      { name: "Satin Purple", code: "CA05007", hex: "#9272C1" }
+    ]
+  },
+  "marble": {
+    label: "Marble",
+    title: "Panchroma Marble PLA",
+    note: "Marble effect — natural stone-like appearance. Code series: CA04003-005, CA04060-061.",
+    colors: [
+      { name: "Marble White", code: "CA04005", hex: "#D7D4DA" },
+      { name: "Marble Sandstone", code: "CA04003", hex: "#C1BE97" },
+      { name: "Marble Slate Grey", code: "CA04004", hex: "#94B9C2" },
+      { name: "Marble Limestone", code: "CA04060", hex: "#BCBEBE" },
+      { name: "Marble Brick", code: "CA04061", hex: "#CD7456" }
+    ]
+  },
+  "effects": {
+    label: "Special Effects",
+    title: "Panchroma Special Effects PLA",
+    note: "Galaxy (sparkle), Metallic, Celestial, Starlight, Neon, Glow, Luminous, UV Shift. Code series: CA02xxx.",
+    colors: [
+      { name: "Galaxy Black", code: "CA02024", hex: "#161617", group: "Galaxy" },
+      { name: "Galaxy Dark Blue", code: "CA02025", hex: "#18192D", group: "Galaxy" },
+      { name: "Galaxy Dark Green", code: "CA02026", hex: "#13484D", group: "Galaxy" },
+      { name: "Galaxy Dark Red", code: "CA02027", hex: "#451E14", group: "Galaxy" },
+      { name: "Galaxy Dark Grey", code: "CA02028", hex: "#4E5658", group: "Galaxy" },
+      { name: "Metallic Gold", code: "CA02011", hex: "#DA9F1D", group: "Metallic" },
+      { name: "Metallic Silver", code: "CA02012", hex: "#7A838E", group: "Metallic" },
+      { name: "Metallic Bronze", code: "CA02013", hex: "#926043", group: "Metallic" },
+      { name: "Metallic Blue", code: "CA02036", hex: "#2C3449", group: "Metallic" },
+      { name: "Celestial Blue", code: "CA02014", hex: "#6ADCF7", group: "Celestial" },
+      { name: "Celestial Green", code: "CA02015", hex: "#6FE2D2", group: "Celestial" },
+      { name: "Celestial Purple", code: "CA02016", hex: "#9678C8", group: "Celestial" },
+      { name: "Celestial White", code: "CA02044", hex: "#DCDAD0", group: "Celestial" },
+      { name: "Celestial Light Yellow", code: "CA02045", hex: "#D7CE89", group: "Celestial" },
+      { name: "Celestial Light Pink", code: "CA02046", hex: "#C3ADB8", group: "Celestial" },
+      { name: "Celestial Yellow", code: "CA02047", hex: "#F4C76A", group: "Celestial" },
+      { name: "Starlight Mars", code: "CA02017", hex: "#962E31", group: "Starlight" },
+      { name: "Starlight Mercury", code: "CA02018", hex: "#33322D", group: "Starlight" },
+      { name: "Starlight Meteor", code: "CA02019", hex: "#2F3117", group: "Starlight" },
+      { name: "Starlight Nebula", code: "CA02020", hex: "#462F32", group: "Starlight" },
+      { name: "Starlight Neptune", code: "CA02021", hex: "#113148", group: "Starlight" },
+      { name: "Starlight Twilight", code: "CA02022", hex: "#1E3445", group: "Starlight" },
+      { name: "Starlight Aurora", code: "CA02038", hex: "#314530", group: "Starlight" },
+      { name: "Starlight Comet", code: "CA02039", hex: "#1F312A", group: "Starlight" },
+      { name: "Starlight Jupiter", code: "CA02040", hex: "#774718", group: "Starlight" },
+      { name: "Neon Pink", code: "CA02005", hex: "#FF3670", group: "Neon" },
+      { name: "Neon Magenta", code: "CA02009", hex: "#F21185", group: "Neon" },
+      { name: "Neon Red", code: "CA02010", hex: "#FE2D42", group: "Neon" },
+      { name: "Neon Orange", code: "CA02008", hex: "#FF7800", group: "Neon" },
+      { name: "Neon Yellow", code: "CA02007", hex: "#E5DB2E", group: "Neon" },
+      { name: "Neon Green", code: "CA02006", hex: "#00F263", group: "Neon" },
+      { name: "Glow Blue", code: "CA02029", hex: "#F3EADB", group: "Glow" },
+      { name: "Glow Green", code: "CA02030", hex: "#F2EADB", group: "Glow" },
+      { name: "Luminous Blue", code: "CA02031", hex: "#5FA8C2", group: "Luminous" },
+      { name: "Luminous Green", code: "CA02032", hex: "#BFEB8C", group: "Luminous" },
+      { name: "Luminous Yellow", code: "CA02035", hex: "#EEDC48", group: "Luminous" },
+      { name: "Luminous Orange", code: "CA02033", hex: "#FEBE5F", group: "Luminous" },
+      { name: "Luminous Pink", code: "CA02034", hex: "#FE9176", group: "Luminous" },
+      { name: "UV Shift Natural/Orange", code: "CA02023", hex: "#F1DBBF", group: "UV Shift" }
+    ]
+  },
+  "dual": {
+    label: "Dual Colors",
+    title: "Panchroma Dual Silk + Dual Matte (Two-Tone)",
+    note: "Two colors per spool — color-shift effect. Each card shows both hex codes split.",
+    isDual: true,
+    colors: [
+      { name: "Silk Aubergine", code: "CA03022", hex1: "#C4CF4C", hex2: "#AA538E", group: "Dual Silk", desc: "Lime + Magenta" },
+      { name: "Silk Banquet", code: "CA03023", hex1: "#C49449", hex2: "#AA538E", group: "Dual Silk", desc: "Gold + Magenta" },
+      { name: "Silk Beluga", code: "CA03024", hex1: "#BCC2C8", hex2: "#4999C9", group: "Dual Silk", desc: "Silver + Blue" },
+      { name: "Silk Caribbean Sea", code: "CA03025", hex1: "#4999C9", hex2: "#55B687", group: "Dual Silk", desc: "Blue + Green" },
+      { name: "Silk Chameleon", code: "CA03026", hex1: "#EEC810", hex2: "#4999C9", group: "Dual Silk", desc: "Yellow + Blue" },
+      { name: "Silk Crown", code: "CA03027", hex1: "#C49449", hex2: "#BCC2C8", group: "Dual Silk", desc: "Gold + Silver" },
+      { name: "Silk Jadeite", code: "CA03028", hex1: "#55B687", hex2: "#85898B", group: "Dual Silk", desc: "Green + Chrome" },
+      { name: "Silk Sovereign", code: "CA03029", hex1: "#C49449", hex2: "#786BB0", group: "Dual Silk", desc: "Gold + Purple" },
+      { name: "Silk Sunset", code: "CA03030", hex1: "#C49449", hex2: "#CF6076", group: "Dual Silk", desc: "Gold + Red" },
+      { name: "Matte Camouflage", code: "CA04042", hex1: "#5F6244", hex2: "#795A4D", group: "Dual Matte", desc: "Dark Green + Brown" },
+      { name: "Matte Chameleon", code: "CA04043", hex1: "#61BCC3", hex2: "#F3C432", group: "Dual Matte", desc: "Teal + Yellow" },
+      { name: "Matte Flamingo", code: "CA04044", hex1: "#EAADBD", hex2: "#ED2F2E", group: "Dual Matte", desc: "Pink + Red" },
+      { name: "Matte Foggy Orange", code: "CA04045", hex1: "#8A8C94", hex2: "#F88B17", group: "Dual Matte", desc: "Grey + Orange" },
+      { name: "Matte Foggy Purple", code: "CA04046", hex1: "#8A8C94", hex2: "#9572BF", group: "Dual Matte", desc: "Grey + Purple" },
+      { name: "Matte Glacier Blue", code: "CA04047", hex1: "#A4D0DF", hex2: "#0163A6", group: "Dual Matte", desc: "Ice + Blue" },
+      { name: "Matte Mixed Berries", code: "CA04048", hex1: "#BF312E", hex2: "#2E4462", group: "Dual Matte", desc: "Red + Dark Blue" },
+      { name: "Matte Shadow Black", code: "CA04049", hex1: "#F4EFEB", hex2: "#2F2E30", group: "Dual Matte", desc: "White + Black" },
+      { name: "Matte Shadow Orange", code: "CA04050", hex1: "#F88B17", hex2: "#2F2E30", group: "Dual Matte", desc: "Orange + Black" },
+      { name: "Matte Shadow Red", code: "CA04051", hex1: "#2F2E30", hex2: "#ED2F2E", group: "Dual Matte", desc: "Black + Red" },
+      { name: "Matte Sunrise", code: "CA04052", hex1: "#ED2F2E", hex2: "#F3C432", group: "Dual Matte", desc: "Red + Yellow" },
+      { name: "Yin-Yang", code: "CA09002", hex1: "#020203", hex2: "#CFCCD6", group: "Special", desc: "Black + White" }
+    ]
+  },
+  "gradient": {
+    label: "Gradients",
+    title: "Panchroma Gradient PLA",
+    note: "Color-shifting along the spool. Each color transitions through multiple hues.",
+    isGradient: true,
+    colors: [
+      { name: "Matte Pastel Rainbow", code: "CA04055", group: "Gradient Matte" },
+      { name: "Matte Cappuccino", code: "CA04059", group: "Gradient Matte" },
+      { name: "Matte Spring", code: "CA04056", group: "Gradient Matte" },
+      { name: "Matte Summer", code: "CA04057", group: "Gradient Matte" },
+      { name: "Matte Fall", code: "CA04054", group: "Gradient Matte" },
+      { name: "Matte Winter", code: "CA04058", group: "Gradient Matte" },
+      { name: "Matte Wood", code: "CA04053", group: "Dual Matte (gradient-style)" },
+      { name: "Satin Rainbow", code: "CA05001", group: "Gradient Satin" },
+      { name: "Translucent Rainbow", code: "CA09001", group: "Gradient Translucent" },
+      { name: "Luminous Rainbow", code: "CA09003", group: "Gradient Luminous" }
+    ]
+  },
+  "specialty": {
+    label: "Specialty PLA",
+    title: "Specialty PLA Lines",
+    note: "LW-PLA (lightweight foaming), PolyWood (wood-fill), PLA-CF (carbon fiber), CosPLA (cosplay), Production Matte.",
+    colors: [
+      { name: "LW-PLA Black", code: "PA08001", hex: "#2F2E30", group: "PolyLite LW-PLA" },
+      { name: "LW-PLA White", code: "PA08002", hex: "#EDD7BF", group: "PolyLite LW-PLA" },
+      { name: "LW-PLA Grey", code: "PA08003", hex: "#94918D", group: "PolyLite LW-PLA" },
+      { name: "LW-PLA Wood", code: "PA08004", hex: "#A8754B", group: "PolyLite LW-PLA" },
+      { name: "LW-PLA Bright Red", code: "PA08010", hex: "#D6001C", group: "PolyLite LW-PLA" },
+      { name: "LW-PLA Bright Orange", code: "PA08007", hex: "#F07806", group: "PolyLite LW-PLA" },
+      { name: "LW-PLA Bright Yellow", code: "PA08009", hex: "#F6BD01", group: "PolyLite LW-PLA" },
+      { name: "LW-PLA Bright Green", code: "PA08008", hex: "#BDD901", group: "PolyLite LW-PLA" },
+      { name: "PolyWood (PLA wood-fill)", code: "PA08005", hex: "#A8754B", group: "PolyWood" },
+      { name: "PLA-CF Black", code: "PA10001", hex: "#302F31", group: "PolyLite PLA-CF" },
+      { name: "CosPLA Version A", code: "PA05006", hex: "#A7A4A8", group: "PolyLite CosPLA" },
+      { name: "CosPLA Version B", code: "PA07045", hex: "#BCBABB", group: "PolyLite CosPLA" },
+      { name: "Matte for Production Black", code: "PA04046", hex: "#1C1C1C", group: "Production Matte" },
+      { name: "Hedgehog Galaxy Red", code: "PA02106", hex: "#760007", group: "Hedgehog Makes" },
+      { name: "PLA Pro Sparkle Green (LM)", code: "PA07044", hex: "#434D43", group: "PolyLite PLA Pro Special" },
+      { name: "PLA Pro Flat Dark Earth", code: "PA07043", hex: "#90785E", group: "PolyLite PLA Pro Special" }
+    ]
+  }
+};
+const order = ["translucent","matte","basic","polylite-pla","polymax-pla","polylite-pla-pro","polysonic","silk","satin","marble","effects","dual","gradient","specialty"];
+const tabs = document.getElementById("tabs");
+const sections = document.getElementById("sections");
+const toast = document.getElementById("toast");
+function showToast(m) { toast.textContent = m; toast.classList.add("show"); clearTimeout(toast._t); toast._t = setTimeout(() => toast.classList.remove("show"), 1400); }
+
+order.forEach((key, i) => {
+  const d = data[key];
+  const tab = document.createElement("button");
+  tab.className = "tab" + (i === 0 ? " active" : "");
+  tab.textContent = d.label;
+  tab.onclick = () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
+    tab.classList.add("active");
+    document.getElementById("s-" + key).classList.add("active");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  tabs.appendChild(tab);
+
+  const s = document.createElement("section");
+  s.className = "section" + (i === 0 ? " active" : "");
+  s.id = "s-" + key;
+  s.innerHTML = `<div class="section-header"><h2>${d.title}</h2><span class="count">${d.colors.length} colors</span><div class="section-note">${d.note}</div></div>`;
+  if (d.banner) {
+    const b = document.createElement("div");
+    b.className = "banner " + (d.bannerType || "focus");
+    b.innerHTML = d.banner;
+    s.appendChild(b);
+  }
+  const grid = document.createElement("div");
+  grid.className = "grid" + (d.translucent ? " translucent" : "");
+  
+  // Group by .group property if present
+  let lastGroup = null;
+  d.colors.forEach(c => {
+    if (c.group && c.group !== lastGroup) {
+      const h = document.createElement("h3");
+      h.style.cssText = "grid-column: 1/-1; margin: 8px 0 2px; font-size: 0.85rem; color: #d0d0d4; font-weight: 600;";
+      h.textContent = c.group;
+      grid.appendChild(h);
+      lastGroup = c.group;
+    }
+    const sw = document.createElement("div");
+    sw.className = "swatch";
+    
+    let block, copyText;
+    if (d.isDual && c.hex1 && c.hex2) {
+      block = `<div class="dual"><div style="background:${c.hex1}"></div><div style="background:${c.hex2}"></div></div>`;
+      copyText = `${c.name} (${c.code}) - ${c.hex1} / ${c.hex2}`;
+      sw.innerHTML = `${block}<div class="info"><div class="name">${c.name}</div><div style="font-size:0.7rem;color:#9a9a9f;margin-bottom:4px">${c.desc}</div><div class="code-row"><span class="code">${c.code}</span><span class="hex">${c.hex1}</span></div><div class="code-row" style="margin-top:2px"><span></span><span class="hex">${c.hex2}</span></div></div>`;
+    } else if (d.isGradient || !c.hex) {
+      block = `<div class="gradient-block"></div>`;
+      copyText = `${c.name} (${c.code}) - Gradient`;
+      sw.innerHTML = `${block}<div class="info"><div class="name">${c.name}</div><div class="code-row"><span class="code">${c.code}</span><span class="hex">Gradient</span></div></div>`;
+    } else {
+      block = d.translucent
+        ? `<div class="color-block"><div class="color-overlay" style="background:${c.hex}"></div></div>`
+        : `<div class="color-block" style="background:${c.hex}"></div>`;
+      copyText = c.oldHex 
+        ? `${c.name} (${c.code}) - New: ${c.hex} | Old: ${c.oldHex}`
+        : `${c.name} (${c.code}) - ${c.hex}`;
+      const tdHTML = c.td ? `<div style="font-size:0.68rem;color:#7da3c8;margin-top:2px">TD: ${c.td}mm</div>` : "";
+      const oldHexHTML = c.oldHex ? `<div style="font-size:0.66rem;color:#7a7a82;margin-top:2px;display:flex;align-items:center;gap:4px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${c.oldHex};border:1px solid #2a2a2e"></span>Old pkg: <span style="font-family:monospace">${c.oldHex}</span></div>` : "";
+      const noteHTML = c.note ? `<div style="font-size:0.66rem;color:#d8a060;margin-top:2px;font-style:italic">${c.note}</div>` : "";
+      sw.innerHTML = `${block}<div class="info"><div class="name">${c.name}</div><div class="code-row"><span class="code">${c.code}</span><span class="hex">${c.hex}</span></div>${tdHTML}${oldHexHTML}${noteHTML}</div>`;
+    }
+    sw.onclick = () => { navigator.clipboard.writeText(copyText).then(() => showToast(`${c.code} copied`)); };
+    grid.appendChild(sw);
+  });
+  s.appendChild(grid);
+  sections.appendChild(s);
+});
+</script>
+</body>
+</html>

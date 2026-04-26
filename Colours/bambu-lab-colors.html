@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bambu Lab — PLA & PETG Color Reference</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f0f10; color: #e8e8e8; line-height: 1.45; padding: 16px; padding-bottom: 48px; }
+header { max-width: 1100px; margin: 0 auto 18px; padding: 14px 4px; border-bottom: 1px solid #2a2a2d; }
+h1 { font-size: 1.3rem; font-weight: 700; margin-bottom: 4px; letter-spacing: -0.01em; }
+header p { font-size: 0.82rem; color: #9a9a9f; }
+main { max-width: 1100px; margin: 0 auto; }
+.tabs { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 16px; position: sticky; top: 0; background: #0f0f10; padding: 8px 0; z-index: 10; border-bottom: 1px solid #1f1f22; }
+.tab { padding: 6px 12px; border-radius: 999px; background: #1c1c20; color: #c8c8cc; border: 1px solid #2a2a2e; cursor: pointer; font-size: 0.8rem; font-weight: 500; transition: all 0.15s; }
+.tab:hover { background: #25252a; }
+.tab.active { background: #f0f0f3; color: #0f0f10; border-color: #f0f0f3; }
+.section { display: none; margin-bottom: 24px; }
+.section.active { display: block; }
+.section-header { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; padding: 11px 14px; background: linear-gradient(180deg, #18181c, #131316); border-radius: 10px; border: 1px solid #25252a; }
+.section-header h2 { font-size: 1rem; font-weight: 600; }
+.section-header .count { font-size: 0.76rem; color: #8a8a90; }
+.section-note { font-size: 0.78rem; color: #a0a0a6; margin-top: 5px; width: 100%; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 9px; }
+.swatch { background: #16161a; border: 1px solid #25252a; border-radius: 10px; overflow: hidden; cursor: pointer; transition: transform 0.12s, border-color 0.12s; }
+.swatch:hover { transform: translateY(-2px); border-color: #404048; }
+.color-block { height: 68px; width: 100%; border-bottom: 1px solid #25252a; position: relative; }
+.translucent .color-block { background-image: linear-gradient(45deg, #2a2a2e 25%, transparent 25%), linear-gradient(-45deg, #2a2a2e 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #2a2a2e 75%), linear-gradient(-45deg, transparent 75%, #2a2a2e 75%); background-size: 12px 12px; background-position: 0 0, 0 6px, 6px -6px, -6px 0; }
+.translucent .color-overlay { position: absolute; inset: 0; opacity: 0.7; }
+.info { padding: 8px 10px; }
+.name { font-size: 0.83rem; font-weight: 500; color: #f0f0f3; margin-bottom: 3px; line-height: 1.25; }
+.code-row { display: flex; justify-content: space-between; align-items: center; gap: 6px; flex-wrap: wrap; }
+.code { font-size: 0.7rem; font-weight: 600; font-family: "SF Mono", Menlo, Consolas, monospace; padding: 1px 6px; border-radius: 4px; color: #6db3e8; background: rgba(109, 179, 232, 0.12); }
+.hex { font-size: 0.7rem; color: #8a8a90; font-family: "SF Mono", Menlo, Consolas, monospace; }
+.banner { border-radius: 10px; padding: 11px 14px; margin-bottom: 12px; font-size: 0.83rem; }
+.banner.focus { background: linear-gradient(135deg, rgba(80,120,200,0.18), rgba(80,120,200,0.05)); border: 1px solid rgba(120,160,220,0.3); color: #c8d6f0; }
+.banner.focus strong { color: #e8eef8; }
+.banner.alert { background: linear-gradient(135deg, rgba(220,160,80,0.2), rgba(220,160,80,0.05)); border: 1px solid rgba(240,180,100,0.4); color: #f0d8b8; }
+.banner.alert strong { color: #fff0d8; }
+footer { margin-top: 28px; padding-top: 14px; border-top: 1px solid #25252a; font-size: 0.73rem; color: #6a6a70; max-width: 1100px; margin-left: auto; margin-right: auto; }
+.toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); background: #1f3a26; color: #5dd55d; padding: 9px 17px; border-radius: 999px; border: 1px solid #2f5a36; font-size: 0.83rem; font-weight: 500; opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 100; }
+.toast.show { opacity: 1; }
+@media (max-width: 480px) { .grid { grid-template-columns: repeat(2, 1fr); gap: 7px; } .color-block { height: 58px; } .name { font-size: 0.77rem; } .hex, .code { font-size: 0.66rem; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Bambu Lab — PLA & PETG Color Reference</h1>
+  <p>Tap any swatch to copy. Format: <span style="color:#6db3e8;font-family:monospace;font-weight:600;font-size:0.75rem">CODE</span> · <span style="color:#8a8a90;font-family:monospace;font-size:0.75rem">#HEX</span></p>
+</header>
+<main>
+  <div class="tabs" id="tabs"></div>
+  <div id="sections"></div>
+  <footer>Source: Bambu Lab official Hex Code PDFs and product pages (us.store.bambulab.com, shop3duniverse.com, caz3d.com). 5-digit codes are Bambu's official RFID/SKU identifiers.</footer>
+</main>
+<div class="toast" id="toast">Copied</div>
+<script>
+const data = {
+  "petg-translucent": {
+    label: "PETG Translucent ⭐ CLEAR",
+    title: "PETG Translucent (Crystal Clear)",
+    note: "9 colors. Crystal-clear/see-through finish. Water/UV resistant.",
+    translucent: true,
+    banner: "<strong>Bambu's true CLEAR filament.</strong> Per Bambu's docs: PETG Translucent is more see-through with a crystal-clear finish (vs PLA Translucent which is frosted). For genuine clear/transparent prints use <strong>Translucent Clear (32101)</strong>.",
+    bannerType: "focus",
+    colors: [
+      { name: "Translucent Clear", code: "32101", hex: "#F5F5F5" },
+      { name: "Translucent Gray", code: "32100", hex: "#8E8E8E" },
+      { name: "Translucent Pink", code: "32200", hex: "#F9C1BD" },
+      { name: "Translucent Orange", code: "32300", hex: "#FF911A" },
+      { name: "Translucent Olive", code: "32500", hex: "#748C45" },
+      { name: "Translucent Teal", code: "32501", hex: "#77EDD7" },
+      { name: "Translucent Light Blue", code: "32600", hex: "#61B0FF" },
+      { name: "Translucent Purple", code: "32700", hex: "#D6ABFF" },
+      { name: "Translucent Brown", code: "32800", hex: "#C9A381" }
+    ]
+  },
+  "pla-translucent": {
+    label: "PLA Translucent (Frosted)",
+    title: "PLA Translucent (Frosted Glass)",
+    note: "10 colors. FROSTED finish — diffuses light, not see-through. Great for lampshades.",
+    translucent: true,
+    banner: "<strong>Note:</strong> PLA Translucent has frosted-glass texture. For true transparency use <strong>PETG Translucent Clear</strong>.",
+    bannerType: "alert",
+    colors: [
+      { name: "Blue", code: "13611", hex: "#0047BB" },
+      { name: "Ice Blue", code: "13610", hex: "#B8CDE9" },
+      { name: "Teal", code: "13612", hex: "#009FA1" },
+      { name: "Light Jade", code: "13510", hex: "#96D8AF" },
+      { name: "Purple", code: "13710", hex: "#8344B0" },
+      { name: "Lavender", code: "13711", hex: "#B8ACD6" },
+      { name: "Cherry Pink", code: "13211", hex: "#F5B6CD" },
+      { name: "Red", code: "13210", hex: "#B50011" },
+      { name: "Orange", code: "13301", hex: "#F74E02" },
+      { name: "Mellow Yellow", code: "13410", hex: "#F5DBAB" }
+    ]
+  },
+  "pla-basic": {
+    label: "PLA Basic",
+    title: "PLA Basic (Glossy)",
+    note: "Code series: 10xxx. The everyday workhorse — easy to print, glossy finish.",
+    colors: [
+      { name: "Jade White", code: "10100", hex: "#FFFFFF" },
+      { name: "Black", code: "10101", hex: "#000000" },
+      { name: "Silver", code: "10102", hex: "#A6A9AA" },
+      { name: "Gray", code: "10103", hex: "#8E9089" },
+      { name: "Red", code: "10200", hex: "#C12E1F" },
+      { name: "Beige", code: "10201", hex: "#F7E6DE" },
+      { name: "Magenta", code: "10202", hex: "#EC008C" },
+      { name: "Pink", code: "10203", hex: "#F55A74" },
+      { name: "Hot Pink", code: "10204", hex: "#F5547C" },
+      { name: "Orange", code: "10300", hex: "#FF6A13" },
+      { name: "Pumpkin Orange", code: "10301", hex: "#FF9016" },
+      { name: "Yellow", code: "10400", hex: "#F4EE2A" },
+      { name: "Gold", code: "10401", hex: "#E4BD68" },
+      { name: "Sunflower Yellow", code: "10402", hex: "#FEC600" },
+      { name: "Bambu Green", code: "10501", hex: "#00AE42" },
+      { name: "Mistletoe Green", code: "10502", hex: "#3F8E43" },
+      { name: "Blue", code: "10601", hex: "#0A2989" },
+      { name: "Blue Grey", code: "10602", hex: "#5B6579" },
+      { name: "Cyan", code: "10603", hex: "#0086D6" },
+      { name: "Purple", code: "10700", hex: "#5E43B7" },
+      { name: "Indigo Purple", code: "10701", hex: "#482960" },
+      { name: "Brown", code: "10800", hex: "#9D432C" },
+      { name: "Bronze", code: "10801", hex: "#847D48" },
+      { name: "Cocoa Brown", code: "10802", hex: "#6F5034" }
+    ]
+  },
+  "pla-matte": {
+    label: "PLA Matte",
+    title: "PLA Matte",
+    note: "Code series: 11xxx. Flat matte finish — hides layer lines, premium look.",
+    colors: [
+      { name: "Ivory White", code: "11100", hex: "#FFFFFF" },
+      { name: "Charcoal", code: "11101", hex: "#000000" },
+      { name: "Ash Gray", code: "11102", hex: "#9B9EA0" },
+      { name: "Bone White", code: "11103", hex: "#CBC6B8" },
+      { name: "Nardo Gray", code: "11104", hex: "#757575" },
+      { name: "Scarlet Red", code: "11200", hex: "#DE4343" },
+      { name: "Sakura Pink", code: "11201", hex: "#E8AFCF" },
+      { name: "Dark Red", code: "11202", hex: "#BB3D43" },
+      { name: "Terracotta", code: "11203", hex: "#B15533" },
+      { name: "Plum", code: "11204", hex: "#950051" },
+      { name: "Mandarin Orange", code: "11300", hex: "#F99963" },
+      { name: "Lemon Yellow", code: "11400", hex: "#F7D959" },
+      { name: "Desert Tan", code: "11401", hex: "#E8DBB7" },
+      { name: "Grass Green", code: "11500", hex: "#61C680" },
+      { name: "Dark Green", code: "11501", hex: "#68724D" },
+      { name: "Apple Green", code: "11502", hex: "#C2E189" },
+      { name: "Marine Blue", code: "11600", hex: "#0078BF" },
+      { name: "Ice Blue", code: "11601", hex: "#A3D8E1" },
+      { name: "Dark Blue", code: "11602", hex: "#042F56" },
+      { name: "Sky Blue", code: "11603", hex: "#56B7E6" },
+      { name: "Lilac Purple", code: "11700", hex: "#AE96D4" },
+      { name: "Latte Brown", code: "11800", hex: "#D3B7A7" },
+      { name: "Dark Brown", code: "11801", hex: "#7D6556" },
+      { name: "Dark Chocolate", code: "11802", hex: "#4D3324" },
+      { name: "Caramel", code: "11803", hex: "#AE835B" }
+    ]
+  },
+  "petg-hf": {
+    label: "PETG HF",
+    title: "PETG HF (High Flow)",
+    note: "Code series: 33xxx. PETG flagship — fast, water/UV resistant.",
+    colors: [
+      { name: "White", code: "33100", hex: "#FFFFFF" },
+      { name: "Gray", code: "33101", hex: "#7F7E83" },
+      { name: "Black", code: "33102", hex: "#000000" },
+      { name: "Dark Grey", code: "33103", hex: "#4D4D4F" },
+      { name: "Red", code: "33200", hex: "#D6001C" },
+      { name: "Orange", code: "33300", hex: "#FF6A13" },
+      { name: "Yellow", code: "33400", hex: "#FCE300" },
+      { name: "Cream", code: "33401", hex: "#F5E8C7" },
+      { name: "Green", code: "33500", hex: "#00AE42" },
+      { name: "Lime Green", code: "33501", hex: "#BECF00" },
+      { name: "Forest Green", code: "33502", hex: "#234E1F" },
+      { name: "Blue", code: "33600", hex: "#002E96" },
+      { name: "Lake Blue", code: "33601", hex: "#3FA9D8" },
+      { name: "Peanut Brown", code: "33800", hex: "#9C7A4B" }
+    ]
+  },
+  "petg-basic": {
+    label: "PETG Basic",
+    title: "PETG Basic (Older line)",
+    note: "Code series: 30xxx. Largely superseded by PETG HF.",
+    colors: [
+      { name: "White", code: "30100", hex: "#FFFFFF" },
+      { name: "Gray", code: "30101", hex: "#7F7E83" },
+      { name: "Black", code: "30102", hex: "#000000" },
+      { name: "Red", code: "30200", hex: "#D6001C" },
+      { name: "Yellow", code: "30400", hex: "#FCE300" },
+      { name: "Reflex Blue", code: "30600", hex: "#001489" },
+      { name: "Dark Brown", code: "30800", hex: "#4F2C1D" }
+    ]
+  },
+  "petg-cf": {
+    label: "PETG-CF",
+    title: "PETG-CF (Carbon Fiber)",
+    note: "Code series: 31xxx. Carbon-fiber reinforced. Use hardened nozzle.",
+    colors: [
+      { name: "Black", code: "31100", hex: "#000000" },
+      { name: "Titan Gray", code: "31101", hex: "#565656" },
+      { name: "Brick Red", code: "31200", hex: "#9F332A" },
+      { name: "Malachite Green", code: "31500", hex: "#16B08E" },
+      { name: "Indigo Blue", code: "31600", hex: "#324585" },
+      { name: "Violet Purple", code: "31700", hex: "#583061" }
+    ]
+  }
+};
+const order = ["petg-translucent", "pla-translucent", "pla-basic", "pla-matte", "petg-hf", "petg-basic", "petg-cf"];
+const tabs = document.getElementById("tabs");
+const sections = document.getElementById("sections");
+const toast = document.getElementById("toast");
+function showToast(m) { toast.textContent = m; toast.classList.add("show"); clearTimeout(toast._t); toast._t = setTimeout(() => toast.classList.remove("show"), 1400); }
+order.forEach((key, i) => {
+  const d = data[key];
+  const tab = document.createElement("button");
+  tab.className = "tab" + (i === 0 ? " active" : "");
+  tab.textContent = d.label;
+  tab.onclick = () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
+    tab.classList.add("active");
+    document.getElementById("s-" + key).classList.add("active");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  tabs.appendChild(tab);
+  const s = document.createElement("section");
+  s.className = "section" + (i === 0 ? " active" : "");
+  s.id = "s-" + key;
+  s.innerHTML = `<div class="section-header"><h2>${d.title}</h2><span class="count">${d.colors.length} colors</span><div class="section-note">${d.note}</div></div>`;
+  if (d.banner) {
+    const b = document.createElement("div");
+    b.className = "banner " + (d.bannerType || "focus");
+    b.innerHTML = d.banner;
+    s.appendChild(b);
+  }
+  const grid = document.createElement("div");
+  grid.className = "grid" + (d.translucent ? " translucent" : "");
+  d.colors.forEach(c => {
+    const sw = document.createElement("div");
+    sw.className = "swatch";
+    sw.onclick = () => { navigator.clipboard.writeText(`${c.name} (${c.code}) - ${c.hex}`).then(() => showToast(`${c.code} · ${c.hex}`)); };
+    const block = d.translucent
+      ? `<div class="color-block"><div class="color-overlay" style="background:${c.hex}"></div></div>`
+      : `<div class="color-block" style="background:${c.hex}"></div>`;
+    sw.innerHTML = `${block}<div class="info"><div class="name">${c.name}</div><div class="code-row"><span class="code">${c.code}</span><span class="hex">${c.hex}</span></div></div>`;
+    grid.appendChild(sw);
+  });
+  s.appendChild(grid);
+  sections.appendChild(s);
+});
+</script>
+</body>
+</html>
