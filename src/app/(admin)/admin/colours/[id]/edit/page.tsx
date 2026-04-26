@@ -37,8 +37,8 @@ export default async function EditColourPage({ params }: PageProps) {
           Edit {colour.name}
         </h1>
         <p className="mt-1 mb-6 text-slate-600">
-          Editing name or hex here updates the library row only. Cascade rename
-          across linked product variants ships in Plan 18-04.
+          Renaming this colour cascades to every linked product variant
+          (manual edits to a variant&apos;s name are preserved).
         </p>
         <ColourForm mode="edit" initial={colour} />
       </div>
