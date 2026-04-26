@@ -3,7 +3,11 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { BRAND } from "@/lib/brand";
-import { createColour, updateColour } from "@/actions/admin-colours";
+import {
+  createColour,
+  updateColour,
+  renameColour,
+} from "@/actions/admin-colours";
 import { slugifyColourBase } from "@/lib/colour-slug";
 import type { ColourAdmin } from "@/lib/colours";
 
@@ -38,14 +42,44 @@ export function ColourForm({ mode, initial }: Props) {
     const fd = new FormData(e.currentTarget);
 
     startTransition(async () => {
-      const res =
-        mode === "new"
-          ? await createColour(fd)
-          : await updateColour(initial.id, fd);
+      if (mode === "new") {
+        const res = await createColour(fd);
+        if (res.ok) {
+          router.push("/admin/colours");
+          router.refresh();
+        } else if ("error" in res) {
+          setError(res.error);
+        }
+        return;
+      }
+
+      // mode === "edit": route name + hex changes through cascade-aware
+      // renameColour FIRST (single transaction; diff-aware per D-11), THEN
+      // run updateColour for the remaining metadata (brand / family / code /
+      // previous_hex / is_active).
+      const submittedName = String(fd.get("name") ?? "").trim();
+      const submittedHex = String(fd.get("hex") ?? "")
+        .trim()
+        .toUpperCase();
+      const nameChanged = submittedName !== initial.name;
+      const hexChanged = submittedHex !== initial.hex.toUpperCase();
+
+      if (nameChanged || hexChanged) {
+        const cascadeRes = await renameColour(initial.id, {
+          name: nameChanged ? submittedName : undefined,
+          hex: hexChanged ? submittedHex : undefined,
+        });
+        if (!cascadeRes.ok && "error" in cascadeRes) {
+          setError(cascadeRes.error);
+          return;
+        }
+      }
+
+      const res = await updateColour(initial.id, fd);
       if (res.ok) {
         router.push("/admin/colours");
         router.refresh();
-      } else {
+      } else if ("error" in res) {
         setError(res.error);
       }
     });
