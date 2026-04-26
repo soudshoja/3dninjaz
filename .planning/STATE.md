@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: completed
-stopped_at: Phase 18 context gathered (CONTEXT.md committed)
-last_updated: "2026-04-26T02:27:22.999Z"
+stopped_at: Phase 18 UI-SPEC approved
+last_updated: "2026-04-26T04:19:31.209Z"
 last_activity: 2026-04-22 -- Phase 17 complete; 5/5 plans shipped; legacy code purged
 progress:
   total_phases: 18
@@ -178,6 +178,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-26T02:27:22.984Z
-Stopped at: Phase 18 context gathered (CONTEXT.md committed)
-Resume file: .planning/phases/18-colour-management/18-CONTEXT.md
+Last session: 2026-04-26T04:19:31.193Z
+Stopped at: Phase 18 UI-SPEC approved
+Resume file: .planning/phases/18-colour-management/18-UI-SPEC.md
