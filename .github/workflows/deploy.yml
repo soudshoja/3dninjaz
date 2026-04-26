@@ -227,7 +227,11 @@ jobs:
 
       - name: Upload + extract bundle
         run: |
-          scp -P "${{ secrets.SSH_PORT }}" deploy.tar.gz \
+          # -O forces the legacy SCP protocol. Modern OpenSSH 9+ scp defaults
+          # to SFTP, but the cPanel host (OpenSSH 8.7) does not enable the
+          # SFTP subsystem for cPanel users — failing with "No such file or
+          # directory" on the destination. Legacy SCP works fine.
+          scp -O -P "${{ secrets.SSH_PORT }}" deploy.tar.gz \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/deploy.tar.gz"
           ssh -p "${{ secrets.SSH_PORT }}" \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
