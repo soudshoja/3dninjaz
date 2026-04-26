@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 18 code verified (38/38) — awaiting human smoke on dev
-last_updated: "2026-04-26T09:04:14.447Z"
+stopped_at: Phase 19 Wave 1 complete — 19-01 schema + 19-02 helpers shipped; Waves 2-5 unblocked
+last_updated: "2026-04-26T10:30:00.000Z"
 last_activity: 2026-04-26
 progress:
-  total_phases: 18
+  total_phases: 19
   completed_phases: 8
-  total_plans: 62
-  completed_plans: 48
-  percent: 77
+  total_plans: 73
+  completed_plans: 50
+  percent: 68
 ---
 
 # Project State
@@ -41,10 +41,10 @@ See: .planning/PROJECT.md (updated 2026-04-12)
 
 ## Current Position
 
-Phase: 18 (Colour Management) — EXECUTING
-Plan: 9 of 9 (8 complete: 18-01 schema foundation + 18-02 seed parser + 18-03 admin CRUD + 18-04 delete/cascade-rename + 18-05 picker modal + 18-06 variant-editor integration + 18-07 PDP swatch always-visible caption + 18-08 /shop colour chip filter)
-Next Phase: GO-LIVE — admin must complete checklist items in GO-LIVE-READINESS.md
-Status: Ready to execute
+Phase: 19 (Made-to-Order Product Type) — EXECUTING
+Plan: 3 of 11 (2 complete: 19-01 schema foundation + 19-02 helpers library)
+Next Phase: 19 Wave 2 — admin UI (product-type radio, configurator builder, tier editor)
+Status: Wave 1 complete — Waves 2-5 unblocked
 Last activity: 2026-04-26
 
 Progress: [██████████] 100% (code) | Pre-launch admin actions pending
@@ -193,6 +193,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-26T09:04:14.425Z
-Stopped at: Phase 18 code verified (38/38) — awaiting human smoke on dev
-Resume file: .planning/phases/18-colour-management/18-VERIFICATION.md
+Last session: 2026-04-26T10:30:00.000Z
+Stopped at: Phase 19 Wave 1 complete (19-01 + 19-02) — 4 commits; Waves 2-5 unblocked
+Resume file: .planning/phases/19-made-to-order-product-type/19-03-PLAN.md
