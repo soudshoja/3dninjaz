@@ -233,9 +233,13 @@ jobs:
           # directory" on the destination. Legacy SCP works fine.
           scp -O -P "${{ secrets.SSH_PORT }}" deploy.tar.gz \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/deploy.tar.gz"
+          # CloudLinux nodevenv activate puts npm/node on PATH for the
+          # cPanel user. Without it, npm is not in the default ninjaz $PATH.
           ssh -p "${{ secrets.SSH_PORT }}" \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-            "cd '${{ secrets.DEPLOY_PATH }}' && \
+            "set -e && \
+             source /home/ninjaz/nodevenv/apps/3dninjaz_v1/20/bin/activate && \
+             cd '${{ secrets.DEPLOY_PATH }}' && \
              tar -xzf deploy.tar.gz && \
              rm deploy.tar.gz && \
              npm ci --omit=dev"
