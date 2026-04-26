@@ -73,6 +73,7 @@ const GROUPS: NavGroup[] = [
       { href: "/admin/email-templates", label: "Email templates", ninjaIcon: "contact" },
       { href: "/admin/subscribers", label: "Subscribers", ninjaIcon: "contact" },
       { href: "/admin/coupons", label: "Coupons", ninjaIcon: "tip" },
+      { href: "/admin/colours", label: "Colours", ninjaIcon: "portfolio" },
       {
         href: "/admin/reviews",
         label: "Reviews",
