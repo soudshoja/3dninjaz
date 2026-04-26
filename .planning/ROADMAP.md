@@ -21,6 +21,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 7: Manual Orders + Image Pipeline + Custom Errors** - Admin creates one-off custom orders with PayPal payment-link generator, automatic image compression on every upload (WebP/AVIF, size + quality tiers), branded 404/500/maintenance pages
 - [x] **Phase 16: Product Variant System (Generic Options)** - Replace fixed size/color with admin-defined option/value/variant model (cartesian combos, per-variant price/stock/image/SKU). Supports size+color products AND parts-based products in one system.
 - [x] **Phase 17: Variant Enhancements + Legacy Cleanup** - Sale price, variant image upload + PDP swap, bulk edit, OOS hardening, default pre-selection, reactivity contract, pre-variant-era code purged
+- [ ] **Phase 18: Colour Management** - Admin colour library (seeded from Bambu/Polymaker HTML files, reusable across products), per-product enable/disable toggle, colour joins variant system as additional axis when enabled, PDP swatch grid (name + hex)
 
 ## Phase Details
 
@@ -257,6 +258,19 @@ Plans:
 - [x] 17-04-PLAN.md — Legacy cleanup — one atomic commit per finding (SizeSelector/SizeGuide deletion, legacyAddToCart, S|M|L purge, admin-guide rewrite, CSV price_s/m/l removal) (Wave 2)
 - [x] 17-05-PLAN.md — E2E PayPal sandbox smoke test + COMPLETION.md + ROADMAP + STATE update (Wave 3)
 
+### Phase 18: Colour Management
+**Goal**: Admin can manage a central colour library (seeded from `Colours/bambu-lab-colors.html` + `Colours/polymaker-colors.html`) and toggle a "Colour" option per product. When enabled, Colour joins the existing variant system as an additional axis. PDP renders selected colours as a swatch grid showing both name and hex.
+**Depends on**: Phase 16, Phase 17
+**Requirements**: To be locked in SPEC.md
+**Success Criteria** (what must be TRUE):
+  1. Admin manages a central colour library at `/admin/colours` — create/edit/delete colours with `name` + `hex` + optional `brand` / `family`
+  2. Library is seeded once from `Colours/bambu-lab-colors.html` + `Colours/polymaker-colors.html`
+  3. On the product edit page, admin can enable "Colour" as an option (separate toggle from Size/Material) and pick which colours from the library are offered for that product
+  4. When enabled, Colour participates in the variant cartesian generator on equal footing with other axes (still bound by 6-slot cap)
+  5. PDP renders Colour as a swatch grid (hex circle + name visible/on-hover); selecting a swatch updates the variant exactly like Size/Material does
+  6. Disabling the Colour option on a product cleanly removes it from variant generation without orphaning data
+**Plans**: TBD
+
 ## Progress
 
 **Execution Order:**
@@ -281,3 +295,4 @@ Phases execute in numeric order: 1 → 2 → ... → 15
 | 15. Customer + Admin Shipment Tracking | — | Complete | 2026-04-20 |
 | 16. Product Variant System (Generic Options) | 7/7 | Complete | 2026-04-22 |
 | 17. Variant Enhancements + Legacy Cleanup | 5/5 | Complete | 2026-04-22 |
+| 18. Colour Management | 0/0 | Spec | — |
