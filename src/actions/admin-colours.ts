@@ -451,3 +451,137 @@ export async function renameColour(
 
   return { ok: true, id };
 }
+
+// ============================================================================
+// Plan 18-05 — picker support: single fetch on open + single batched confirm.
+//
+// Both new exports gate behind `requireAdmin()` (CVE-2025-29927) and are
+// admin-only (T-18-05-admin-leak — never imported by storefront / customer
+// surfaces). Per D-06 the picker fetches the entire active library in ONE
+// call (~100 rows ≈ 30 KB JSON) and filters client-side. Per D-08 confirm
+// inserts N pov rows in a single transaction, snapshotting name+hex from
+// `colors` (cascades on rename per D-09 / D-10 / D-11).
+// ============================================================================
+
+export type ColourPickerRow = ColourAdmin; // alias — picker shows full admin row
+
+/**
+ * Fetch the entire active library for the picker.
+ * Per D-06 — single call on open. ~100 rows ≈ 30 KB JSON.
+ * Sorted brand → name for predictable picker ordering.
+ */
+export async function getActiveColoursForPicker(): Promise<ColourPickerRow[]> {
+  await requireAdmin();
+  const rows = await db
+    .select()
+    .from(colors)
+    .where(eq(colors.isActive, true))
+    .orderBy(asc(colors.brand), asc(colors.name));
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    hex: r.hex,
+    previousHex: r.previousHex ?? null,
+    brand: r.brand,
+    code: r.code ?? null,
+    familyType: r.familyType,
+    familySubtype: r.familySubtype,
+    isActive: r.isActive,
+  }));
+}
+
+export type AttachResult =
+  | { ok: true; added: number; skipped: number }
+  | { ok: false; error: string };
+
+/**
+ * Batch-attach library colours to an existing option as `product_option_values`
+ * rows. Snapshots colour name into `pov.value` and hex into `pov.swatchHex`.
+ *
+ * Skips colours whose name (case-insensitive) collides with an existing pov
+ * value on this option — DB UNIQUE(option_id, value) is case-insensitive on
+ * latin1_swedish_ci collation, so we pre-check to surface skipped count
+ * cleanly rather than catching ER_DUP_ENTRY mid-loop.
+ *
+ * Re-checks `isActive = true` server-side (T-18-05-stale-attach) — admin may
+ * have archived a colour after the picker opened.
+ */
+export async function attachLibraryColours(
+  optionId: string,
+  colourIds: string[],
+): Promise<AttachResult> {
+  await requireAdmin();
+  if (!Array.isArray(colourIds) || colourIds.length === 0) {
+    return { ok: false, error: "No colours selected." };
+  }
+
+  // 1. Validate option exists (and grab its product_id for revalidation)
+  const [opt] = await db
+    .select({ id: productOptions.id, productId: productOptions.productId })
+    .from(productOptions)
+    .where(eq(productOptions.id, optionId))
+    .limit(1);
+  if (!opt) return { ok: false, error: "Option not found." };
+
+  // 2. Fetch the library rows (active only — T-18-05-stale-attach)
+  const libRows = await db
+    .select()
+    .from(colors)
+    .where(and(inArray(colors.id, colourIds), eq(colors.isActive, true)));
+  if (libRows.length === 0) {
+    return { ok: false, error: "Selected colours are no longer active." };
+  }
+
+  // 3. Existing pov rows on this option (for case-insensitive de-dup +
+  //    next position computation)
+  const existing = await db
+    .select({
+      value: productOptionValues.value,
+      position: productOptionValues.position,
+    })
+    .from(productOptionValues)
+    .where(eq(productOptionValues.optionId, optionId));
+  const existingByLower = new Set(existing.map((p) => p.value.toLowerCase()));
+  const startPosition =
+    existing.length > 0 ? Math.max(...existing.map((p) => p.position)) + 1 : 0;
+
+  // 4. Insert each library colour as a pov row, snapshotting name + hex.
+  //    Single transaction per D-08 (atomic batch confirm).
+  let added = 0;
+  let skipped = 0;
+  await db.transaction(async (tx) => {
+    let i = 0;
+    for (const c of libRows) {
+      if (existingByLower.has(c.name.toLowerCase())) {
+        skipped++;
+        continue;
+      }
+      await tx.insert(productOptionValues).values({
+        id: randomUUID(),
+        optionId,
+        value: c.name, // SNAPSHOT — cascades on rename (D-10)
+        position: startPosition + i,
+        swatchHex: c.hex, // SNAPSHOT — cascades on rename (D-10)
+        colorId: c.id, // FK link to library row
+      });
+      existingByLower.add(c.name.toLowerCase());
+      added++;
+      i++;
+    }
+  });
+
+  // Revalidate the variant editor + storefront product surfaces
+  revalidatePath(`/admin/products/${opt.productId}/variants`);
+  revalidatePath(`/admin/products/${opt.productId}/edit`);
+  const [p] = await db
+    .select({ slug: products.slug })
+    .from(products)
+    .where(eq(products.id, opt.productId))
+    .limit(1);
+  if (p) {
+    revalidatePath(`/products/${p.slug}`);
+    revalidatePath("/shop");
+  }
+
+  return { ok: true, added, skipped };
+}
