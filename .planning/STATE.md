@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 18 UI-SPEC approved
-last_updated: "2026-04-26T05:06:42.838Z"
-last_activity: 2026-04-26 -- Phase 18 planning complete
+stopped_at: Phase 18 Plan 01 complete — schema foundation live
+last_updated: "2026-04-26T09:10:00.000Z"
+last_activity: 2026-04-26 -- Phase 18 Plan 01 complete (colors table + helpers + live DDL)
 progress:
   total_phases: 18
   completed_phases: 7
   total_plans: 62
-  completed_plans: 39
-  percent: 63
+  completed_plans: 40
+  percent: 65
 ---
 
 # Project State
@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-12)
 
 **Core value:** Customers can easily browse and buy unique 3D printed products with a simple, clean shopping experience.
-**Current focus:** All 15 phases complete. Session 2026-04-20/21 shipped: Delyva courier integration (phases 08), theme lightening + UX polish (09), cost/profit tracking (10), site settings + social fields (11), 12 email templates + newsletter subscribers (12), per-variant inventory track_stock (13), cost breakdown with store defaults (14), customer + admin shipment tracking (15). PayPal live. Better Auth trustedOrigins fixed. 52 commits total this session. App live at https://app.3dninjaz.com/ (subdomain root, no basePath).
+**Current focus:** Phase 18 — Colour Management
 
 **Session 2026-04-21 closeout:**
 
@@ -41,10 +41,11 @@ See: .planning/PROJECT.md (updated 2026-04-12)
 
 ## Current Position
 
-Phase: 17 (Variant Enhancements + Legacy Cleanup) — COMPLETE
+Phase: 18 (Colour Management) — EXECUTING
+Plan: 2 of 9 (1 complete: 18-01 schema foundation + live DDL)
 Next Phase: GO-LIVE — admin must complete checklist items in GO-LIVE-READINESS.md
-Status: Ready to execute
-Last activity: 2026-04-26 -- Phase 18 planning complete
+Status: Executing Phase 18 — Wave 1 partial (schema done, seed pending)
+Last activity: 2026-04-26 -- Phase 18 Plan 01 complete (colors table + 4 helpers + idempotent migration applied to live MariaDB)
 
 Progress: [██████████] 100% (code) | Pre-launch admin actions pending
 
@@ -143,6 +144,8 @@ Recent decisions affecting current work:
 - 2026-04-22 (Phase 17 AD-07): Legacy cleanup findings (L-01..L-19) executed as atomic commits. Each finding = one commit. ~11 commits landed in 17-04.
 - 2026-04-22 (Phase 17 AD-08): Per-variant shipping weight — `weight_g INT NULL` on `product_variants`. Delyva quote resolution ladder: `variant.weight_g ?? product.shippingWeightKg × 1000 ?? defaultWeightKg` (0.5 kg). `console.warn` emitted on final fallback citing variantId + productId. `CartItemForQuote.variantId` made mandatory; all callers updated.
 
+- 2026-04-26 (Phase 18 Plan 01): Schema foundation shipped. `colors` table (11 cols, InnoDB latin1 to match `product_option_values` charset) + `product_option_values.color_id VARCHAR(36) NULL` FK with `ON DELETE RESTRICT`. Live DDL applied via SSH-tunneled mysql client (cPanel Remote MySQL whitelist had rotated off the local dev IP); migration script proven idempotent end-to-end on the cPanel host (Node 20 + mysql2). Drizzle schema byte-aligned to `SHOW CREATE TABLE`. Helpers shipped: `slugifyColourBase` + `buildColourSlugMap` (D-14 cross-brand collision suffix), `getColourPublic` / `getColourAdmin` (REQ-7 — codes/family/previous_hex never customer-facing), `getReadableTextOn` (WCAG 2.2 SC 1.4.11 luminance), `colourSchema` Zod validator. Wave 2 (`18-02-PLAN.md` seed script) unblocked.
+
 ### Pending Todos
 
 - **Launch (human-gated)** — see `.planning/GO-LIVE-READINESS.md` for the full checklist. Top blockers:
@@ -178,6 +181,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-26T04:19:31.193Z
-Stopped at: Phase 18 UI-SPEC approved
-Resume file: .planning/phases/18-colour-management/18-UI-SPEC.md
+Last session: 2026-04-26T09:10:00.000Z
+Stopped at: Phase 18 Plan 01 complete — schema foundation live + 4 helpers + idempotent migration applied
+Resume file: .planning/phases/18-colour-management/18-02-PLAN.md
