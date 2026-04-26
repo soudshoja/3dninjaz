@@ -250,6 +250,7 @@ jobs:
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
             "set -e && \
              source /home/ninjaz/nodevenv/apps/3dninjaz_v1/20/bin/activate && \
+             unset NODE_ENV && \
              cd '${{ secrets.DEPLOY_PATH }}' && \
              tar -xzf deploy.tar.gz && \
              rm deploy.tar.gz && \
@@ -257,7 +258,7 @@ jobs:
                rm -rf node_modules; \
                ln -s /home/ninjaz/nodevenv/apps/3dninjaz_v1/20/lib/node_modules node_modules; \
              fi && \
-             npm ci"
+             npm ci --include=dev"
 
       - name: Restart app
         run: |
