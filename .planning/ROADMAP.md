@@ -304,7 +304,20 @@ Plans:
   11. Order detail (admin + customer), invoice PDF, and order email all render the configuration summary
   12. Backwards compat smoke: pick any existing stocked product (e.g., a T-shirt with variants) → variant editor opens unchanged → PDP renders unchanged → cart/checkout flow unchanged
   13. Seed product "Custom Name Keychain" exists with: text field "Your name" (max 8 A-Z), 2 colour fields (Base+chain merged + Letters), 8-tier price table (1=7, 2=9, 3=12, 4=15, 5=18, 6=22, 7=26, 8=30 MYR)
-**Plans**: TBD (assigned in plan-phase)
+**Plans**: 11 plans
+
+Plans:
+- [ ] 19-01-PLAN.md — Schema foundation: productType + product_config_fields + tier pricing cols + order_items.configurationData (Wave 1)
+- [ ] 19-02-PLAN.md — Helper library: ensureConfigJson + ensureTiers + ensureImagesV2 + lookupTierPrice + Zod schemas per fieldType (Wave 1)
+- [ ] 19-03-PLAN.md — Product-type radio + flip-block guard + product-form integration (Wave 2)
+- [ ] 19-04-PLAN.md — Configurator builder page + 4 field-type modal + colour-picker select-multiple mode + 5 server actions (Wave 2)
+- [ ] 19-05-PLAN.md — Pricing tier table editor + saveTierTable + reduce-max confirmation (Wave 2)
+- [ ] 19-06-PLAN.md — PDP configurable branch + ConfiguratorForm + KeychainPreview + ConfigurableImageGallery (Wave 3)
+- [ ] 19-07-PLAN.md — /shop + listing rendering for configurable products (From MYR X) (Wave 3)
+- [ ] 19-08-PLAN.md — Cart configurationData payload + hash-based dedupe + cart drawer/bag rendering (Wave 4)
+- [ ] 19-09-PLAN.md — Order capture snapshot + admin/customer order detail + invoice PDF + order email render summary (Wave 4)
+- [ ] 19-10-PLAN.md — Sharp WebP/AVIF + 6-width srcset + admin caption per image + ConfigurableProductPicture (Wave 5)
+- [ ] 19-11-PLAN.md — Seed Custom Name Keychain + profanity allowlist + admin guide article + 24-step verifier checklist (Wave 5)
 
 ## Progress
 
@@ -331,5 +344,5 @@ Phases execute in numeric order: 1 → 2 → ... → 15
 | 16. Product Variant System (Generic Options) | 7/7 | Complete | 2026-04-22 |
 | 17. Variant Enhancements + Legacy Cleanup | 5/5 | Complete | 2026-04-22 |
 | 18. Colour Management | 9/9 | Verifying | — |
-| 19. Made-to-Order Product Type | 0/0 | Spec | — |
+| 19. Made-to-Order Product Type | 0/11 | Planned | — |
 | 20. User & Role Management | 0/0 | Backlog | — |
