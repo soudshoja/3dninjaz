@@ -96,13 +96,36 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'master' && 'prod' || 'dev' }}
     env:
-      # NEXT_PUBLIC_* vars must be present at build time — they are baked into
-      # the client bundle. Server-only vars can flow via the runtime .env on
-      # the deploy target.
+      # Client-bundle vars (baked into JS at build time)
       NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
       NEXT_PUBLIC_BASE_URL: ${{ secrets.NEXT_PUBLIC_BASE_URL }}
       NEXT_PUBLIC_PAYPAL_CLIENT_ID: ${{ secrets.NEXT_PUBLIC_PAYPAL_CLIENT_ID }}
       NEXT_PUBLIC_PAYPAL_CURRENCY: ${{ secrets.NEXT_PUBLIC_PAYPAL_CURRENCY }}
+      # Server-only vars needed at build time for static prerender
+      # (Better Auth + Drizzle queries on /shop /about /sitemap.xml etc.)
+      DATABASE_URL: ${{ secrets.DATABASE_URL_BUILD }}
+      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+      BETTER_AUTH_URL: ${{ secrets.BETTER_AUTH_URL }}
+      PAYPAL_ENV: ${{ secrets.PAYPAL_ENV }}
+      PAYPAL_CLIENT_ID: ${{ secrets.PAYPAL_CLIENT_ID }}
+      PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET }}
+      PAYPAL_CURRENCY: ${{ secrets.PAYPAL_CURRENCY }}
+      PAYPAL_RETURN_URL: ${{ secrets.PAYPAL_RETURN_URL }}
+      PAYPAL_CANCEL_URL: ${{ secrets.PAYPAL_CANCEL_URL }}
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_USER: ${{ secrets.SMTP_USER }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      SMTP_FROM: ${{ secrets.SMTP_FROM }}
+      DELYVA_BASE_URL: ${{ secrets.DELYVA_BASE_URL }}
+      DELYVA_API_KEY: ${{ secrets.DELYVA_API_KEY }}
+      DELYVA_COMPANY_CODE: ${{ secrets.DELYVA_COMPANY_CODE }}
+      DELYVA_COMPANY_ID: ${{ secrets.DELYVA_COMPANY_ID }}
+      DELYVA_USER_ID: ${{ secrets.DELYVA_USER_ID }}
+      DELYVA_CUSTOMER_ID: ${{ secrets.DELYVA_CUSTOMER_ID }}
+      DELYVA_API_SECRET: ${{ secrets.DELYVA_API_SECRET }}
+      DELYVA_WEBHOOK_SHARED_SECRET: ${{ secrets.DELYVA_WEBHOOK_SHARED_SECRET }}
+      NODE_ENV: production
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -113,11 +136,49 @@ jobs:
           node-version: "20"
           cache: "npm"
 
+      - name: Configure SSH (for DB tunnel)
+        # Same key used by deploy job. We need DB access from the runner during
+        # `next build` because static prerender executes server queries (sitemap
+        # crawls products, layout reads store_settings, /about renders settings).
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "${{ secrets.SSH_PORT }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Open SSH tunnel for MariaDB (3306 → cPanel)
+        # Forwards runner's localhost:3306 → cPanel host's 127.0.0.1:3306 over
+        # the deploy SSH key. DATABASE_URL_BUILD secret uses 127.0.0.1:3306 as
+        # its host so build-time queries land on the production DB without
+        # opening MariaDB to the public internet or whitelisting volatile
+        # GitHub Actions runner IPs.
+        # ServerAliveInterval keeps the tunnel from idle-killing during build.
+        run: |
+          ssh -fN -p "${{ secrets.SSH_PORT }}" \
+            -L 3306:127.0.0.1:3306 \
+            -o ServerAliveInterval=30 \
+            -o ExitOnForwardFailure=yes \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          echo "tunnel-pid=$(pgrep -f 'ssh -fN -p .* -L 3306:' | head -1)" >> "$GITHUB_ENV"
+          # Probe to confirm tunnel works before build wastes 3+ min.
+          for i in 1 2 3 4 5; do
+            if (echo > /dev/tcp/127.0.0.1/3306) 2>/dev/null; then echo "tunnel up"; exit 0; fi
+            sleep 1
+          done
+          echo "tunnel did not come up" >&2
+          exit 1
+
       - name: Install dependencies
         run: npm ci
 
       - name: Build
         run: npm run build
+
+      - name: Close SSH tunnel
+        if: always()
+        run: |
+          if [ -n "${tunnel_pid:-}" ]; then kill "$tunnel_pid" 2>/dev/null || true; fi
+          pkill -f 'ssh -fN -p .* -L 3306:' 2>/dev/null || true
 
       - name: Package artifact
         # server.js + .next/ + public/ + package.json + package-lock.json are
