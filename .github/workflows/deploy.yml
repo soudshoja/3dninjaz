@@ -125,7 +125,11 @@ jobs:
       DELYVA_CUSTOMER_ID: ${{ secrets.DELYVA_CUSTOMER_ID }}
       DELYVA_API_SECRET: ${{ secrets.DELYVA_API_SECRET }}
       DELYVA_WEBHOOK_SHARED_SECRET: ${{ secrets.DELYVA_WEBHOOK_SHARED_SECRET }}
-      NODE_ENV: production
+      # Note: do NOT set NODE_ENV=production at job scope — it makes
+      # `npm ci` skip devDependencies (including typescript), which
+      # next.config.ts loading requires. Next.js sets NODE_ENV=production
+      # internally during `next build` regardless. Runtime env on cPanel
+      # already has NODE_ENV=production via .env.local.
     steps:
       - name: Checkout
         uses: actions/checkout@v4
