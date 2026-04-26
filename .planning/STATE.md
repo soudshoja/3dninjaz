@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 18 Plan 01 complete — schema foundation live
-last_updated: "2026-04-26T09:10:00.000Z"
-last_activity: 2026-04-26 -- Phase 18 Plan 01 complete (colors table + helpers + live DDL)
+stopped_at: Phase 18 Plan 01 complete — schema foundation live + 4 helpers + idempotent migration applied
+last_updated: "2026-04-26T06:16:49.685Z"
+last_activity: 2026-04-26
 progress:
   total_phases: 18
   completed_phases: 7
   total_plans: 62
-  completed_plans: 40
-  percent: 65
+  completed_plans: 41
+  percent: 66
 ---
 
 # Project State
@@ -42,10 +42,10 @@ See: .planning/PROJECT.md (updated 2026-04-12)
 ## Current Position
 
 Phase: 18 (Colour Management) — EXECUTING
-Plan: 2 of 9 (1 complete: 18-01 schema foundation + live DDL)
+Plan: 3 of 9 (1 complete: 18-01 schema foundation + live DDL)
 Next Phase: GO-LIVE — admin must complete checklist items in GO-LIVE-READINESS.md
-Status: Executing Phase 18 — Wave 1 partial (schema done, seed pending)
-Last activity: 2026-04-26 -- Phase 18 Plan 01 complete (colors table + 4 helpers + idempotent migration applied to live MariaDB)
+Status: Ready to execute
+Last activity: 2026-04-26
 
 Progress: [██████████] 100% (code) | Pre-launch admin actions pending
 
@@ -80,6 +80,7 @@ Progress: [██████████] 100% (code) | Pre-launch admin action
 - Trend: Phase 5 Admin Extensions complete in single executor session running in parallel with Phase 6. All ADM-07..ADM-15, PROMO-01/02, INV-01/02, REV-01, SHIP-01, SETTINGS-01, REPORT-01 requirements closed.
 
 *Updated after each plan completion*
+| Phase 18 P02 | 10 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -145,6 +146,7 @@ Recent decisions affecting current work:
 - 2026-04-22 (Phase 17 AD-08): Per-variant shipping weight — `weight_g INT NULL` on `product_variants`. Delyva quote resolution ladder: `variant.weight_g ?? product.shippingWeightKg × 1000 ?? defaultWeightKg` (0.5 kg). `console.warn` emitted on final fallback citing variantId + productId. `CartItemForQuote.variantId` made mandatory; all callers updated.
 
 - 2026-04-26 (Phase 18 Plan 01): Schema foundation shipped. `colors` table (11 cols, InnoDB latin1 to match `product_option_values` charset) + `product_option_values.color_id VARCHAR(36) NULL` FK with `ON DELETE RESTRICT`. Live DDL applied via SSH-tunneled mysql client (cPanel Remote MySQL whitelist had rotated off the local dev IP); migration script proven idempotent end-to-end on the cPanel host (Node 20 + mysql2). Drizzle schema byte-aligned to `SHOW CREATE TABLE`. Helpers shipped: `slugifyColourBase` + `buildColourSlugMap` (D-14 cross-brand collision suffix), `getColourPublic` / `getColourAdmin` (REQ-7 — codes/family/previous_hex never customer-facing), `getReadableTextOn` (WCAG 2.2 SC 1.4.11 luminance), `colourSchema` Zod validator. Wave 2 (`18-02-PLAN.md` seed script) unblocked.
+- [Phase ?]: 2026-04-26 (Phase 18 Plan 02): HTML colour seed parser shipped. scripts/seed-colours.ts uses regex+Function-eval (D-01) anchored on 'const order =' to extract data block; section-key → (familyType, familySubtype) lookup tables for both brands; idempotent natural-key upsert. First run inserted 351 rows (95 Bambu + 256 Polymaker); second run reports 0 inserts / 0 updates. Polymaker dual (21 rows) + gradient (10 rows) skipped at seed time per RESEARCH P-3. Em-dash code normalised to NULL per P-4. Local IP whitelist re-applied via root SSH + uapi --user=ninjaz Mysql add_host (same wall as Plan 18-01).
 
 ### Pending Todos
 
@@ -181,6 +183,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-26T09:10:00.000Z
+Last session: 2026-04-26T06:16:21.506Z
 Stopped at: Phase 18 Plan 01 complete — schema foundation live + 4 helpers + idempotent migration applied
-Resume file: .planning/phases/18-colour-management/18-02-PLAN.md
+Resume file: None
