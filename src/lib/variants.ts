@@ -23,6 +23,13 @@ export type HydratedOptionValue = {
   value: string;
   position: number;
   swatchHex: string | null;
+  /**
+   * Phase 18 — FK link to a row in the `colors` library. NULL when the value
+   * was added freeform (admin typed a name + hex manually) rather than picked
+   * from the library. Used by Plan 18-06 picker to compute
+   * `alreadyAttachedColourIds` and skip already-linked rows in the modal.
+   */
+  colorId: string | null;
 };
 
 export type HydratedOption = {
@@ -222,6 +229,7 @@ export async function hydrateProductVariants(
       value: v.value,
       position: v.position,
       swatchHex: v.swatchHex ?? null,
+      colorId: v.colorId ?? null,
     })),
   }));
 

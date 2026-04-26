@@ -183,6 +183,7 @@ async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
         value: v.value,
         position: v.position,
         swatchHex: v.swatchHex ?? null,
+        colorId: v.colorId ?? null,
       })),
     }));
 

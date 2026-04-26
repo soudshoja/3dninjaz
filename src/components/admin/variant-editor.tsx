@@ -42,7 +42,7 @@
  */
 
 import { useState, useTransition, useCallback, useRef } from "react";
-import { Pencil, Trash2, Plus, RefreshCw, Star, Upload, X } from "lucide-react";
+import { Pencil, Trash2, Plus, RefreshCw, Star, Upload, X, Palette } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -74,6 +74,14 @@ import {
 } from "@/actions/variants";
 import type { HydratedOption, HydratedVariant } from "@/lib/variants";
 import { generateVariantSku } from "@/lib/sku";
+import { ColourPickerDialog } from "@/components/admin/colour-picker-dialog";
+
+// Phase 18 Plan 06 — case-insensitive Color/Colour option detection.
+// Mounting the picker is gated on this helper everywhere it appears.
+function isColourOption(opt: { name: string }): boolean {
+  const n = opt.name.trim().toLowerCase();
+  return n === "color" || n === "colour";
+}
 
 interface VariantEditorProps {
   productId: string;
@@ -93,6 +101,10 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
   const [newValueInputs, setNewValueInputs] = useState<Record<string, string>>({});
   const [deleteOptionDialog, setDeleteOptionDialog] = useState<{ optionId: string; name: string } | null>(null);
   const [deleteValueDialog, setDeleteValueDialog] = useState<{ valueId: string; value: string; count: number } | null>(null);
+  // Phase 18 Plan 06 — picker mount state. Tracks which option the picker is
+  // open for (null = closed). Guards against multiple Colour options on a
+  // single product (rare but defensible).
+  const [pickerOptionId, setPickerOptionId] = useState<string | null>(null);
 
   // Phase 17 — bulk edit state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
