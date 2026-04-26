@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 18 Plan 01 complete — schema foundation live + 4 helpers + idempotent migration applied
-last_updated: "2026-04-26T06:16:49.685Z"
+stopped_at: Phase 18 Plan 03 complete — /admin/colours CRUD module live (6 server actions + 3 RSC pages + form + dropdown + sidebar nav)
+last_updated: "2026-04-26T11:05:00Z"
 last_activity: 2026-04-26
 progress:
   total_phases: 18
   completed_phases: 7
   total_plans: 62
-  completed_plans: 41
-  percent: 66
+  completed_plans: 43
+  percent: 69
 ---
 
 # Project State
@@ -42,7 +42,7 @@ See: .planning/PROJECT.md (updated 2026-04-12)
 ## Current Position
 
 Phase: 18 (Colour Management) — EXECUTING
-Plan: 3 of 9 (1 complete: 18-01 schema foundation + live DDL)
+Plan: 4 of 9 (3 complete: 18-01 schema foundation + 18-02 seed parser + 18-03 admin CRUD)
 Next Phase: GO-LIVE — admin must complete checklist items in GO-LIVE-READINESS.md
 Status: Ready to execute
 Last activity: 2026-04-26
@@ -81,6 +81,7 @@ Progress: [██████████] 100% (code) | Pre-launch admin action
 
 *Updated after each plan completion*
 | Phase 18 P02 | 10 | 1 tasks | 1 files |
+| Phase 18 P03 | 50 | 6 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -147,6 +148,7 @@ Recent decisions affecting current work:
 
 - 2026-04-26 (Phase 18 Plan 01): Schema foundation shipped. `colors` table (11 cols, InnoDB latin1 to match `product_option_values` charset) + `product_option_values.color_id VARCHAR(36) NULL` FK with `ON DELETE RESTRICT`. Live DDL applied via SSH-tunneled mysql client (cPanel Remote MySQL whitelist had rotated off the local dev IP); migration script proven idempotent end-to-end on the cPanel host (Node 20 + mysql2). Drizzle schema byte-aligned to `SHOW CREATE TABLE`. Helpers shipped: `slugifyColourBase` + `buildColourSlugMap` (D-14 cross-brand collision suffix), `getColourPublic` / `getColourAdmin` (REQ-7 — codes/family/previous_hex never customer-facing), `getReadableTextOn` (WCAG 2.2 SC 1.4.11 luminance), `colourSchema` Zod validator. Wave 2 (`18-02-PLAN.md` seed script) unblocked.
 - [Phase ?]: 2026-04-26 (Phase 18 Plan 02): HTML colour seed parser shipped. scripts/seed-colours.ts uses regex+Function-eval (D-01) anchored on 'const order =' to extract data block; section-key → (familyType, familySubtype) lookup tables for both brands; idempotent natural-key upsert. First run inserted 351 rows (95 Bambu + 256 Polymaker); second run reports 0 inserts / 0 updates. Polymaker dual (21 rows) + gradient (10 rows) skipped at seed time per RESEARCH P-3. Em-dash code normalised to NULL per P-4. Local IP whitelist re-applied via root SSH + uapi --user=ninjaz Mysql add_host (same wall as Plan 18-01).
+- 2026-04-26 (Phase 18 Plan 03): /admin/colours CRUD module shipped. 6 server actions in src/actions/admin-colours.ts (list/get/create/update/archive/reactivate), each starting with `await requireAdmin()` first await per CVE-2025-29927. 3 RSC route files (list/new/[id]/edit). ColourForm client component with 8 fields + native `<input type="color">` swatch picker bidirectionally synced with hex text input + live URL slug preview via slugifyColourBase. ColourRowActions Base UI dropdown — DropdownMenuLabel wrapped in DropdownMenuGroup per CLAUDE.md commit 51a90c9 (Base UI 1.3 quirk). + New colour CTA uses BRAND.ink (UI-SPEC override; coupons uses BRAND.green). Sidebar nav entry below Coupons. Hard-delete + cascade-rename deferred to Plan 18-04. Rule 1 deviation: extracted pure slug helpers into src/lib/colour-slug.ts so client-side colour-form.tsx imports don't pull mysql2/Drizzle/node:* APIs into the browser bundle through @/lib/colours; back-compat re-export keeps Plan 18-01 server-side callers working unchanged.
 
 ### Pending Todos
 
@@ -183,6 +185,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-26T06:16:21.506Z
-Stopped at: Phase 18 Plan 01 complete — schema foundation live + 4 helpers + idempotent migration applied
+Last session: 2026-04-26T11:05:00Z
+Stopped at: Phase 18 Plan 03 complete — /admin/colours CRUD module live (6 server actions + 3 RSC pages + form + dropdown + sidebar nav). Plan 18-04 (delete + cascade-rename) is next.
 Resume file: None
