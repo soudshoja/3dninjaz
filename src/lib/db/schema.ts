@@ -214,6 +214,13 @@ export const productOptionValues = mysqlTable(
     position: int("position").notNull().default(0),
     // Optional color swatch for visual picker (Color option type)
     swatchHex: varchar("swatch_hex", { length: 7 }),
+    // Phase 18 — link to library colour (NULL = freeform/custom one-off).
+    // Lazy reference; `colors` table is declared at the bottom of this file.
+    // FK enforced at the live DB via scripts/phase18-colours-migrate.cjs
+    // (ON DELETE RESTRICT) for defense-in-depth alongside app-level guard.
+    colorId: varchar("color_id", { length: 36 }).references(() => colors.id, {
+      onDelete: "restrict",
+    }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => ({
@@ -1531,3 +1538,44 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
     },
   ];
 }
+
+// ============================================================================
+// Phase 18 — colors library + product_option_values.color_id FK
+// Admin-curated central colour catalogue (seeded once from Bambu/Polymaker
+// reference HTML). product_option_values.color_id (declared above) is a lazy
+// reference back to colors.id — Drizzle resolves () => colors.id at runtime.
+// Live DB FK constraint added via scripts/phase18-colours-migrate.cjs.
+// ============================================================================
+
+export const colors = mysqlTable(
+  "colors",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    name: varchar("name", { length: 64 }).notNull(),
+    hex: varchar("hex", { length: 7 }).notNull(),
+    // Polymaker old-packaging hex (D-02). NULL for Bambu / new lines.
+    previousHex: varchar("previous_hex", { length: 7 }),
+    brand: mysqlEnum("brand", ["Bambu", "Polymaker", "Other"]).notNull(),
+    // Bambu RFID code or Polymaker SKU; NULL for one-offs / em-dash sources.
+    code: varchar("code", { length: 32 }),
+    // D-04 family split: coarse type (enum) + fine subtype (free string).
+    familyType: mysqlEnum("family_type", [
+      "PLA",
+      "PETG",
+      "TPU",
+      "CF",
+      "Other",
+    ]).notNull(),
+    familySubtype: varchar("family_subtype", { length: 48 }).notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({
+    // MySQL/MariaDB allow multiple (brand, NULL) rows under UNIQUE since
+    // NULL ≠ NULL — exactly the SPEC §1 semantics ("unique when code non-null").
+    brandCodeUnique: unique("uq_colors_brand_code").on(t.brand, t.code),
+    brandIdx: index("idx_colors_brand").on(t.brand),
+    activeIdx: index("idx_colors_active").on(t.isActive),
+  }),
+);
