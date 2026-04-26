@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 18 Plan 08 complete — /shop sidebar Colour chip filter shipped. Two new manual-hydration helpers in src/lib/catalog.ts (getActiveProductColourChips returns {slug,name,hex} for chips currently used by ≥1 active in-stock variant; getProductIdsByColourSlugs returns Set<productId> intersected with active in-stock variants for the given slugs). New ColourFilterSection client component in src/components/store/colour-filter-section.tsx — accordion default-open, first 12 chips visible with Show all/Show less toggle, multi-select via URLSearchParams toggle (preserves ?category=&?subcategory=), active state hex-tinted bg + getReadableTextOn(hex) text colour, empty-list early return null. /shop page extended with colour?: string SearchParams field; resolveProducts refactored from 3-branch return-each to assign-to-base + intersect-after; ColourFilterSection mounted inside desktop aside AND md:hidden mobile strip. Customer-side admin-field audit grep clean (zero matches for previous_hex/family_type/family_subtype in src/app/(store)/ or src/components/store/). 3 atomic commits (9f3a21f catalog helpers + 0208806 component + ad2c714 page wiring). npx tsc --noEmit clean. npm run build skipped per plan-level constraint (pre-existing CSS issue). Plan 18-09 (admin guide article + full CI battery + 24-step verifier smoke checklist) is next.
-last_updated: "2026-04-26T07:31:13Z"
+stopped_at: Phase 18 code verified (38/38) — awaiting human smoke on dev
+last_updated: "2026-04-26T09:04:14.447Z"
 last_activity: 2026-04-26
 progress:
   total_phases: 18
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 62
   completed_plans: 48
   percent: 77
@@ -193,6 +193,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-26T07:31:13Z
-Stopped at: Phase 18 Plan 08 complete — /shop sidebar Colour chip filter shipped. Two new manual-hydration helpers in src/lib/catalog.ts (getActiveProductColourChips + getProductIdsByColourSlugs — both 4-step DISTINCT JOIN with innerJoin(products) + isActive + inStock guards across 6 slot columns; both project through buildColourSlugMap for D-14 cross-brand suffix; both expose only id/name/hex). New colour-filter-section.tsx client component — accordion default-open, first 12 chips with Show all/Show less toggle, hex-tinted active state with getReadableTextOn(hex), active count badge, hide-when-empty. /shop page extended with colour?: string SearchParams field; resolveProducts refactored to assign-to-base + intersect-after; ColourFilterSection mounted desktop aside AND md:hidden mobile strip. Customer-side admin-field audit grep clean. 3 atomic commits (9f3a21f + 0208806 + ad2c714). npx tsc --noEmit clean. Plan 18-09 (admin guide article + full CI battery + 24-step verifier smoke checklist) is next.
-Resume file: None
+Last session: 2026-04-26T09:04:14.425Z
+Stopped at: Phase 18 code verified (38/38) — awaiting human smoke on dev
+Resume file: .planning/phases/18-colour-management/18-VERIFICATION.md
