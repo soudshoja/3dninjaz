@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 18 Plan 05 complete — colour library picker modal + 2 picker server actions live. Plan 18-06 (variant-editor wiring + Pattern B refetch hook-up) is next.
-last_updated: "2026-04-26T07:01:27Z"
+stopped_at: Phase 18 Plan 06 complete — variant-editor.tsx now mounts ColourPickerDialog behind a Pick from library button on Colour-named options; confirm runs through refresh() (Pattern B). Plan 18-07 (PDP swatch grid + always-visible name caption) is next.
+last_updated: "2026-04-26T07:12:14Z"
 last_activity: 2026-04-26
 progress:
   total_phases: 18
   completed_phases: 7
   total_plans: 62
-  completed_plans: 45
-  percent: 73
+  completed_plans: 46
+  percent: 74
 ---
 
 # Project State
@@ -42,7 +42,7 @@ See: .planning/PROJECT.md (updated 2026-04-12)
 ## Current Position
 
 Phase: 18 (Colour Management) — EXECUTING
-Plan: 6 of 9 (5 complete: 18-01 schema foundation + 18-02 seed parser + 18-03 admin CRUD + 18-04 delete/cascade-rename + 18-05 picker modal)
+Plan: 7 of 9 (6 complete: 18-01 schema foundation + 18-02 seed parser + 18-03 admin CRUD + 18-04 delete/cascade-rename + 18-05 picker modal + 18-06 variant-editor integration)
 Next Phase: GO-LIVE — admin must complete checklist items in GO-LIVE-READINESS.md
 Status: Ready to execute
 Last activity: 2026-04-26
@@ -83,6 +83,7 @@ Progress: [██████████] 100% (code) | Pre-launch admin action
 | Phase 18 P02 | 10 | 1 tasks | 1 files |
 | Phase 18 P03 | 50 | 6 tasks | 9 files |
 | Phase 18 P04 | 10 | 4 tasks | 3 files |
+| Phase 18 P06 | 5 | 4 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -151,6 +152,7 @@ Recent decisions affecting current work:
 - [Phase ?]: 2026-04-26 (Phase 18 Plan 02): HTML colour seed parser shipped. scripts/seed-colours.ts uses regex+Function-eval (D-01) anchored on 'const order =' to extract data block; section-key → (familyType, familySubtype) lookup tables for both brands; idempotent natural-key upsert. First run inserted 351 rows (95 Bambu + 256 Polymaker); second run reports 0 inserts / 0 updates. Polymaker dual (21 rows) + gradient (10 rows) skipped at seed time per RESEARCH P-3. Em-dash code normalised to NULL per P-4. Local IP whitelist re-applied via root SSH + uapi --user=ninjaz Mysql add_host (same wall as Plan 18-01).
 - 2026-04-26 (Phase 18 Plan 03): /admin/colours CRUD module shipped. 6 server actions in src/actions/admin-colours.ts (list/get/create/update/archive/reactivate), each starting with `await requireAdmin()` first await per CVE-2025-29927. 3 RSC route files (list/new/[id]/edit). ColourForm client component with 8 fields + native `<input type="color">` swatch picker bidirectionally synced with hex text input + live URL slug preview via slugifyColourBase. ColourRowActions Base UI dropdown — DropdownMenuLabel wrapped in DropdownMenuGroup per CLAUDE.md commit 51a90c9 (Base UI 1.3 quirk). + New colour CTA uses BRAND.ink (UI-SPEC override; coupons uses BRAND.green). Sidebar nav entry below Coupons. Hard-delete + cascade-rename deferred to Plan 18-04. Rule 1 deviation: extracted pure slug helpers into src/lib/colour-slug.ts so client-side colour-form.tsx imports don't pull mysql2/Drizzle/node:* APIs into the browser bundle through @/lib/colours; back-compat re-export keeps Plan 18-01 server-side callers working unchanged.
 - [Phase ?]: 2026-04-26 (Phase 18 Plan 04): deleteColour + renameColour + IN_USE guard shipped. MutateResult discriminated union extends with IN_USE branch. getProductsUsingColour uses 3-query manual hydration (pov→option→product) per MariaDB no-LATERAL rule. renameColour wraps cascade in db.transaction with diff-aware WHERE (D-11 manual-wins): UPDATE pov SET value=:new, swatch_hex=:new WHERE color_id=:id AND value=:pre.name. 1000-row D-12 guardrail returns error before transaction starts. labelCache nulled across all 6 positional option slots in parallel inside transaction (mirror renameOptionValue at variants.ts:288-294). FK violation race-condition catch re-runs guard and re-surfaces IN_USE. colour-row-actions.tsx Delete dropdown opens two-step modal that swaps to IN_USE error mode showing affected products with /admin/products/:id/edit Open links + Archive-instead recovery CTA. colour-form.tsx edit submit calls renameColour FIRST when name/hex changed (cascade-safe), then updateColour for non-cascade metadata.
+- 2026-04-26 (Phase 18 Plan 06): variant-editor.tsx integration shipped. Module-scoped isColourOption helper (case-insensitive `name === "color" || === "colour"`) gates 4 sites: input placeholder relabel ("Add custom (not in library)..."), section header caption ("Custom (not in library)"), Pick from library button (with lucide:Palette icon), helper-text paragraph below the row. ColourPickerDialog mounts as a sibling to the existing delete-option/delete-value dialogs at the JSX bottom; pickerOptionId state (string | null) supports multiple Colour-named options on the same product without ambiguity. alreadyAttachedColourIds computed inline at mount via options.find().values.map(v => v.colorId).filter(Boolean) into Set<string>. onConfirmed wired to `await refresh()` — Phase 17 AD-06 Pattern B refetch contract preserved (no router.refresh() anywhere). HydratedOptionValue.colorId field added (was missing from public type even though Plan 18-01 schema had the column); both hydration mappers (variants.ts, catalog.ts) updated to surface it. REQ-6 6-axis cap verified by inspection: addProductOption guard at existing.length >= 6 is name-agnostic; picker dialog has zero references to addProductOption. Stale Plan 18-04 reference on /admin/colours/[id]/edit page intro updated to current cascade-rename behaviour.
 
 ### Pending Todos
 
@@ -187,6 +189,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-26T06:53:18.948Z
-Stopped at: Phase 18 Plan 03 complete — /admin/colours CRUD module live (6 server actions + 3 RSC pages + form + dropdown + sidebar nav). Plan 18-04 (delete + cascade-rename) is next.
+Last session: 2026-04-26T07:12:14Z
+Stopped at: Phase 18 Plan 06 complete — variant-editor.tsx integrates ColourPickerDialog behind a Pick from library button on Colour-named options. isColourOption helper, pickerOptionId state, alreadyAttachedColourIds derivation, Custom (not in library) caption + helper copy, Pattern B refetch via await refresh(). HydratedOptionValue.colorId surfaced in public type + both hydration mappers. REQ-6 6-axis cap verified untouched. Plan 18-07 (PDP swatch grid + always-visible name caption) is next.
 Resume file: None
