@@ -174,7 +174,7 @@ export default function TermsPage() {
             Questions about these terms?{" "}
             <Link
               href={`mailto:${BUSINESS.contactEmail}`}
-              className="text-[#1E8BFF] underline underline-offset-2 hover:opacity-80"
+              className="text-[#0080ff] underline underline-offset-2 hover:opacity-80"
             >
               {BUSINESS.contactEmail}
             </Link>{" "}

@@ -156,7 +156,7 @@ export function ColourPickerDialog({
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by name, code, family…"
               aria-label="Search colours"
-              className="w-full rounded-xl border-2 pl-10 pr-3 py-3 text-sm min-h-[48px] outline-none focus:border-[#A855F7]"
+              className="w-full rounded-xl border-2 pl-10 pr-3 py-3 text-sm min-h-[48px] outline-none focus:border-[#8A00C2]"
               style={{ borderColor: `${BRAND.ink}33` }}
             />
           </div>
