@@ -43,6 +43,14 @@ on:
   push:
     branches:
       - dev
+      - master
+  # On PRs targeting dev/master, run `verify` only (typecheck + lint). build +
+  # deploy jobs skip on PRs (gated by `if: github.event_name == 'push'`).
+  # Branch protection requires the verify check to pass before merge.
+  pull_request:
+    branches:
+      - dev
+      - master
   workflow_dispatch:
     inputs:
       target:
@@ -93,6 +101,7 @@ jobs:
   build:
     name: Build (${{ github.ref_name == 'master' && 'prod' || 'dev' }})
     needs: verify
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'master' && 'prod' || 'dev' }}
     env:
@@ -208,6 +217,7 @@ jobs:
   deploy:
     name: Deploy (${{ github.ref_name == 'master' && 'prod' || 'dev' }})
     needs: build
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment: ${{ github.ref_name == 'master' && 'prod' || 'dev' }}
     steps:
