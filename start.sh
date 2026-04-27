@@ -39,6 +39,21 @@ PID_FILE="${APP_DIR}/.node.pid"
 
 cd "${APP_DIR}"
 
+# ─── Auto-heal uploads symlink ────────────────────────────────────────────────
+# Tarball-based deploys can replace the symlink at public/uploads/products with
+# a real (empty) directory containing only .gitkeep. Restore it on every boot
+# so user-uploaded images stay reachable. Idempotent: ln -sfn replaces an
+# existing dir/symlink with the correct symlink target.
+PERSIST_UPLOADS="/home/ninjaz/uploads/3dninjaz_v1/products"
+LINK_PATH="${APP_DIR}/public/uploads/products"
+if [ ! -L "${LINK_PATH}" ] || [ "$(readlink "${LINK_PATH}")" != "${PERSIST_UPLOADS}" ]; then
+  rm -rf "${LINK_PATH}"
+  mkdir -p "$(dirname "${LINK_PATH}")"
+  mkdir -p "${PERSIST_UPLOADS}"
+  ln -sfn "${PERSIST_UPLOADS}" "${LINK_PATH}"
+  echo "start.sh: restored uploads symlink ${LINK_PATH} -> ${PERSIST_UPLOADS}"
+fi
+
 # Activate the CloudLinux Node 20 virtualenv so child processes inherit PATH
 # and shared lib search paths. `activate` defines `node`/`npm` shims but we
 # still invoke node by absolute path below for belt-and-braces.
