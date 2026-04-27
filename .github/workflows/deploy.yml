@@ -252,6 +252,9 @@ jobs:
              source /home/ninjaz/nodevenv/apps/3dninjaz_v1/20/bin/activate && \
              unset NODE_ENV && \
              cd '${{ secrets.DEPLOY_PATH }}' && \
+             pkill -u \$(id -un) -f 'node server.js' 2>/dev/null || true && \
+             sleep 1 && \
+             rm -rf .next && \
              tar -xzf deploy.tar.gz && \
              rm deploy.tar.gz && \
              if [ ! -L node_modules ]; then \
