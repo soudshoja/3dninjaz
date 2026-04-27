@@ -265,13 +265,19 @@ export function ConfigurableProductView({
 
   // ── Preview node (passed to gallery) ─────────────────────────────────────
   const previewNode = (
-    <div ref={previewRef}>
-      <KeychainPreview
-        text={textValue}
-        baseHex={baseHex}
-        letterHex={letterHex}
-        maxLength={maxLength}
-      />
+    <div
+      ref={previewRef}
+      className="flex w-full items-center justify-center px-4 py-6 sm:py-10"
+      style={{ minHeight: 240 }}
+    >
+      <div className="w-full max-w-[640px]">
+        <KeychainPreview
+          text={textValue}
+          baseHex={baseHex}
+          letterHex={letterHex}
+          maxLength={maxLength}
+        />
+      </div>
     </div>
   );
 

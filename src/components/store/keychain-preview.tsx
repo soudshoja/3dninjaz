@@ -55,7 +55,7 @@ export function KeychainPreview({ text, baseHex, letterHex, maxLength }: Props) 
       width="100%"
       aria-label={text ? `Preview shows ${text}` : "Type your name to see preview"}
       role="img"
-      style={{ display: "block", maxWidth: total * (CAP_SIZE + CAP_GAP) + LEFT_PAD }}
+      style={{ display: "block", width: "100%", height: "auto" }}
     >
       {/* Keychain ring — same fill as base */}
       <circle
