@@ -14,6 +14,7 @@ import { productSchema, type ProductInput } from "@/lib/validators";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { computeVariantCost } from "@/lib/cost-breakdown";
 import { getStoreSettingsCached } from "@/lib/store-settings";
+import { ensureImagesV2 } from "@/lib/config-fields";
 
 export type ProductActionResult =
   | { success: true; productId?: string }
@@ -78,19 +79,9 @@ async function resolveParentCategoryId(
 }
 
 function ensureImagesArray(raw: unknown): string[] {
-  if (Array.isArray(raw)) return raw.filter((v): v is string => typeof v === "string");
-  if (typeof raw === "string") {
-    if (raw.trim() === "") return [];
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed.filter((v): v is string => typeof v === "string");
-      }
-    } catch {
-      return [];
-    }
-  }
-  return [];
+  // Delegates to ensureImagesV2 so both the legacy string[] shape AND the
+  // Phase-19 {url, caption, alt} object shape are handled correctly.
+  return ensureImagesV2(raw).map((e) => e.url);
 }
 
 export async function createProduct(
@@ -111,6 +102,14 @@ export async function createProduct(
   const id = randomUUID();
   const baseSlug = slugify(productData.name);
   const slug = `${baseSlug || "product"}-${Date.now().toString(36)}`;
+
+  // Phase 19 (19-10) — if imagesV2 is provided (new shape with captions),
+  // persist it directly. Otherwise fall back to the legacy string[].
+  // Mirrors the same logic in updateProduct so both paths stay in sync.
+  const imagesToPersist =
+    productData.imagesV2 && productData.imagesV2.length > 0
+      ? productData.imagesV2
+      : productData.images;
 
   // Clamp the requested thumbnail index to a valid slot in the images array.
   // The form validator already bounds it to 0-9, but if images.length is
@@ -133,7 +132,7 @@ export async function createProduct(
     name: productData.name,
     slug,
     description: productData.description,
-    images: productData.images,
+    images: imagesToPersist,
     thumbnailIndex: safeThumb,
     materialType: productData.materialType?.trim() || null,
     estimatedProductionDays: productData.estimatedProductionDays ?? null,
@@ -373,6 +372,10 @@ export async function getProduct(id: string) {
   return {
     ...row,
     images: ensureImagesArray(row.images),
+    // Phase 19 (19-10) — expose the V2 shape so the admin edit form can
+    // populate captions without re-uploading. ensureImagesV2 handles both the
+    // legacy string[] and the new {url, caption, alt} object shape.
+    imagesV2: ensureImagesV2(row.images),
     variants,
     category,
     subcategory,

@@ -48,6 +48,10 @@ export default async function EditProductPage({
     name: product.name,
     description: product.description,
     images: product.images ?? [],
+    // Phase 19 (19-10) — pass V2 entries so captions survive a reload and so
+    // the form initialises images[] from imagesV2 when the DB has object-shape
+    // entries (i.e. images stored as [{url,caption,alt}] rather than string[]).
+    imagesV2: product.imagesV2,
     thumbnailIndex: product.thumbnailIndex ?? 0,
     materialType: product.materialType,
     estimatedProductionDays: product.estimatedProductionDays,

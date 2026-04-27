@@ -126,11 +126,14 @@ export const productSchema = z.object({
     .optional(),
   // Index into images[] used as the storefront card thumbnail. Negative or
   // out-of-range values are coerced to 0 in the action layer when persisting.
+  // Phase 19 (19-10) removed the 10-image cap (REQ-6), so max is raised to
+  // 999 to match maxImages={999} on ImageUploader. The action-layer
+  // clampThumbnailIndex() still guards against out-of-bounds at persist time.
   thumbnailIndex: z.coerce
     .number()
     .int()
     .min(0)
-    .max(9)
+    .max(999)
     .optional()
     .default(0),
   materialType: z.string().optional().default(""),
