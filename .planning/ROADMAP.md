@@ -307,11 +307,11 @@ Plans:
 **Plans**: 11 plans
 
 Plans:
-- [ ] 19-01-PLAN.md — Schema foundation: productType + product_config_fields + tier pricing cols + order_items.configurationData (Wave 1)
-- [ ] 19-02-PLAN.md — Helper library: ensureConfigJson + ensureTiers + ensureImagesV2 + lookupTierPrice + Zod schemas per fieldType (Wave 1)
+- [x] 19-01-PLAN.md — Schema foundation: productType + product_config_fields + tier pricing cols + order_items.configurationData (Wave 1)
+- [x] 19-02-PLAN.md — Helper library: ensureConfigJson + ensureTiers + ensureImagesV2 + lookupTierPrice + Zod schemas per fieldType (Wave 1)
 - [ ] 19-03-PLAN.md — Product-type radio + flip-block guard + product-form integration (Wave 2)
 - [ ] 19-04-PLAN.md — Configurator builder page + 4 field-type modal + colour-picker select-multiple mode + 5 server actions (Wave 2)
-- [ ] 19-05-PLAN.md — Pricing tier table editor + saveTierTable + reduce-max confirmation (Wave 2)
+- [x] 19-05-PLAN.md — Pricing tier table editor + saveTierTable + reduce-max confirmation (Wave 2)
 - [ ] 19-06-PLAN.md — PDP configurable branch + ConfiguratorForm + KeychainPreview + ConfigurableImageGallery (Wave 3)
 - [ ] 19-07-PLAN.md — /shop + listing rendering for configurable products (From MYR X) (Wave 3)
 - [ ] 19-08-PLAN.md — Cart configurationData payload + hash-based dedupe + cart drawer/bag rendering (Wave 4)
@@ -344,5 +344,5 @@ Phases execute in numeric order: 1 → 2 → ... → 15
 | 16. Product Variant System (Generic Options) | 7/7 | Complete | 2026-04-22 |
 | 17. Variant Enhancements + Legacy Cleanup | 5/5 | Complete | 2026-04-22 |
 | 18. Colour Management | 9/9 | Verifying | — |
-| 19. Made-to-Order Product Type | 0/11 | Planned | — |
+| 19. Made-to-Order Product Type | 3/11 | In Progress|  |
 | 20. User & Role Management | 0/0 | Backlog | — |
