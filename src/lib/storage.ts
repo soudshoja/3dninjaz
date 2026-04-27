@@ -14,6 +14,8 @@ const ALLOWED_MIMES = new Set([
   "image/png",
   "image/webp",
   "image/gif",
+  "image/heic",
+  "image/heif",
 ]);
 
 function safeBucket(input: string): string {

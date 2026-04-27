@@ -246,7 +246,7 @@ export function ImageUploader({
   }
 
   const atLimit = images.length >= maxImages;
-  const isUploading = pending && progress !== null;
+  const isUploading = progress !== null;
 
   return (
     <div className="space-y-3">
