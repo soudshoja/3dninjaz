@@ -192,9 +192,10 @@ export function ConfigurableProductView({
     if (!touched) {
       setTouched(true);
       setShowPreview(true);
+      // Scroll preview into view ONCE on first touch so mobile users see it.
+      // Doing this on every change hijacks the input + breaks typing on mobile.
+      previewRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-    // Scroll the preview into view so mobile users see it above the keyboard
-    previewRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
   const addItem = useCartStore((s) => s.addItem);
