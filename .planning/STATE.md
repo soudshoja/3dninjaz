@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 19 COMPLETE — 11/11 plans shipped, 13/13 ROADMAP criteria verified, pushed to dev (22 commits 49b8a2d). Awaiting human smoke on app.3dninjaz.com
-last_updated: "2026-04-27T03:30:00.000Z"
+stopped_at: Phase 19 COMPLETE + post-shipment upload hotfix sweep — 27 commits on dev (head c118ae6). 50 MB caps, HEIC support, XHR progress UI, manifest-redirect route handler. WhatsApp alerting LIVE via Resayil + 1-min cron on prod log.
+last_updated: "2026-04-27T07:00:00.000Z"
 last_activity: 2026-04-27
 progress:
   total_phases: 20
@@ -41,10 +41,10 @@ See: .planning/PROJECT.md (updated 2026-04-12)
 
 ## Current Position
 
-Phase: 19 (Made-to-Order Product Type) — COMPLETE
-Plans: 11/11 shipped across 5 waves; phase verifier 13/13 PASS; D-14 backwards-compat 0 lines on variant code path
+Phase: 19 (Made-to-Order Product Type) — COMPLETE + post-shipment hotfix sweep
+Plans: 11/11 shipped + 5 hotfix commits applied (e5b55bd → c118ae6) addressing pre-existing Phase 7 upload bug, 50MB cap lift, XHR progress UI, server log monitor
 Next Phase: 20 (User & Role Management) — backlog, awaiting /gsd-spec-phase 20
-Status: Pushed to dev — awaiting human smoke (24-step checklist at .planning/phases/19-made-to-order-product-type/19-SMOKE-CHECKLIST.md)
+Status: c118ae6 on dev. CI auto-deploying. Server-side log monitor LIVE (1-min cron WhatsApp alerts to +96599800027). Awaiting human smoke on app.3dninjaz.com
 Last activity: 2026-04-27
 
 Progress: [██████████] 100% (code) | Pre-launch admin actions pending
