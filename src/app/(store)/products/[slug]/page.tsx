@@ -72,6 +72,8 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
           slug: product.slug,
           description: product.description,
           images: product.images,
+          // Phase 19 (19-10) — captions parallel to images[] for configurable PDP figcaption
+          imageCaptions: product.imagesV2.map((e) => e.caption ?? null),
           materialType: product.materialType,
           estimatedProductionDays: product.estimatedProductionDays,
           category: product.category

@@ -31,6 +31,8 @@ export type ProductFormInitial = {
   name: string;
   description: string;
   images: string[];
+  /** Phase 19 (19-10) — image entries with captions; preferred over images[] when present */
+  imagesV2?: Array<{ url: string; caption?: string | null; alt?: string | null }>;
   thumbnailIndex: number;
   materialType: string | null;
   estimatedProductionDays: number | null;
@@ -68,7 +70,13 @@ export function ProductForm({
   const [description, setDescription] = useState(
     initialData?.description ?? ""
   );
-  const [images, setImages] = useState<string[]>(initialData?.images ?? []);
+  const [images, setImages] = useState<string[]>(
+    initialData?.imagesV2?.map((e) => e.url) ?? initialData?.images ?? []
+  );
+  // Phase 19 (19-10) — captions parallel to images[]; index-aligned.
+  const [captions, setCaptions] = useState<string[]>(
+    initialData?.imagesV2?.map((e) => e.caption ?? "") ?? (initialData?.images ?? []).map(() => "")
+  );
   const [thumbnailIndex, setThumbnailIndex] = useState<number>(
     initialData?.thumbnailIndex ?? 0
   );
@@ -101,7 +109,7 @@ export function ProductForm({
     const next: Record<string, string> = {};
     if (!name.trim()) next.name = "Product name is required";
     if (!description.trim()) next.description = "Description is required";
-    if (images.length > 10) next.images = "Maximum 10 images allowed";
+    // Phase 19 (19-10) — no image count cap (REQ-6)
 
     if (
       productionDays !== "" &&
@@ -130,10 +138,18 @@ export function ProductForm({
         ? thumbnailIndex
         : 0;
 
+    // Phase 19 (19-10) — build imagesV2 array with captions; images[] is derived from it.
+    const imagesV2 = images.map((url, idx) => ({
+      url,
+      caption: captions[idx]?.trim() || null,
+      alt: null,
+    }));
+
     const payload = {
       name: name.trim(),
       description: description.trim(),
       images,
+      imagesV2,
       thumbnailIndex: safeThumbnailIndex,
       materialType: materialType.trim(),
       estimatedProductionDays:
@@ -323,16 +339,58 @@ export function ProductForm({
       <Card>
         <CardHeader>
           <CardTitle>Images</CardTitle>
+          <p className="text-xs text-[var(--color-brand-text-muted)]">
+            No count limit. Recommended: 4–8 images for best customer experience.
+          </p>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <ImageUploader
             images={images}
-            onImagesChange={setImages}
+            onImagesChange={(next) => {
+              // Keep captions array in sync: prune removed entries, pad new ones.
+              setCaptions((prev) => {
+                const next2 = next.map((url) => {
+                  const idx = images.indexOf(url);
+                  return idx >= 0 ? (prev[idx] ?? "") : "";
+                });
+                return next2;
+              });
+              setImages(next);
+            }}
             productId={initialData?.id}
-            maxImages={10}
+            maxImages={999}
             thumbnailIndex={thumbnailIndex}
             onThumbnailChange={setThumbnailIndex}
           />
+          {/* Phase 19 (19-10) — caption input per image */}
+          {images.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-[var(--color-brand-text-muted)]">
+                Captions (shown under each image on the product page — optional)
+              </p>
+              {images.map((url, idx) => (
+                <div key={url + idx} className="flex items-center gap-2">
+                  <span className="min-w-[24px] text-xs text-[var(--color-brand-text-muted)]">
+                    {idx + 1}.
+                  </span>
+                  <input
+                    type="text"
+                    value={captions[idx] ?? ""}
+                    onChange={(e) =>
+                      setCaptions((prev) => {
+                        const next = [...prev];
+                        next[idx] = e.target.value;
+                        return next;
+                      })
+                    }
+                    placeholder={`Caption for image ${idx + 1}`}
+                    maxLength={200}
+                    className="h-8 flex-1 rounded-md border border-[var(--color-brand-border)] bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-brand-blue)]"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
           {errors.images && (
             <p className="mt-2 text-sm text-red-500">{errors.images}</p>
           )}

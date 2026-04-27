@@ -46,6 +46,8 @@ type Props = {
     slug: string;
     description: string;
     images: string[];
+    /** Phase 19 (19-10) — optional captions parallel to images[]; for figcaption under hero */
+    imageCaptions?: (string | null | undefined)[];
     materialType: string | null;
     estimatedProductionDays: number | null;
     category: { name: string; slug: string } | null;
@@ -213,6 +215,7 @@ export function ConfigurableProductView({
       <div>
         <ConfigurableImageGallery
           displayImages={product.images}
+          imageCaptions={product.imageCaptions}
           pictures={product.pictures}
           showPreview={showPreview}
           onTogglePreview={setShowPreview}

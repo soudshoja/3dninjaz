@@ -111,8 +111,19 @@ export const productSchema = z.object({
         .string()
         .min(1)
         .regex(/^\/uploads\/products\//, "Image URL must be a local upload path")
+    ),
+  // Phase 19 (19-10) — image entries with captions. Optional; when provided,
+  // images is derived from imagesV2.map(e => e.url) for backwards-compat.
+  // No count limit — REQ-6 removes the 10-image cap.
+  imagesV2: z
+    .array(
+      z.object({
+        url: z.string().min(1).regex(/^\/uploads\/products\//, "Image URL must be a local upload path"),
+        caption: z.string().max(200).optional().nullable(),
+        alt: z.string().max(200).optional().nullable(),
+      })
     )
-    .max(10, "Maximum 10 images allowed"),
+    .optional(),
   // Index into images[] used as the storefront card thumbnail. Negative or
   // out-of-range values are coerced to 0 in the action layer when persisting.
   thumbnailIndex: z.coerce

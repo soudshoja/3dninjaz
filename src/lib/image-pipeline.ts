@@ -18,7 +18,7 @@ import path from "node:path";
  *   - mime sniffed via magic bytes (ignores multipart Content-Type header)
  */
 
-const WIDTHS = [400, 800, 1600] as const;
+const WIDTHS = [400, 480, 800, 960, 1440, 1600] as const;
 const MAX_INPUT_BYTES = 10 * 1024 * 1024;
 const MAX_PIXEL_AREA = 100_000_000; // 10_000 × 10_000
 

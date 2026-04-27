@@ -137,9 +137,10 @@ export const products = mysqlTable("products", {
   slug: varchar("slug", { length: 220 }).notNull().unique(),
   description: text("description").notNull(),
   // Relative URLs served from public/uploads/products/<id>/<file>.
-  // Stored as JSON array of strings (MySQL has no native array type).
-  // Max 10 enforced at app level (raised from 5 post-launch).
-  images: json("images").$type<string[]>().notNull().default([]),
+  // Stored as JSON array of strings OR ImageEntryV2 objects (MySQL has no native array type).
+  // Phase 19 (19-10) — widened from string[] to accept {url, caption?, alt?} objects.
+  // Read sites use ensureImagesV2() which handles both shapes.
+  images: json("images").$type<string[] | Array<{ url: string; caption?: string | null; alt?: string | null }>>().notNull().default([]),
   // Index into `images` that should be used as the storefront card thumbnail.
   // Defaults to 0 so existing rows behave identically. Out-of-range values
   // (image deleted after selection) are coerced back to 0 at the read site.

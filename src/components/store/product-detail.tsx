@@ -21,6 +21,8 @@ type ProductDetailProps = {
     slug: string;
     description: string;
     images: string[];
+    /** Phase 19 (19-10) — optional captions parallel to images[]; for configurable PDP figcaption */
+    imageCaptions?: (string | null | undefined)[];
     materialType: string | null;
     estimatedProductionDays: number | null;
     category: { name: string; slug: string } | null;

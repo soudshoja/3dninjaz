@@ -220,12 +220,19 @@ export async function updateProduct(
     ? await resolveParentCategoryId(productData.subcategoryId)
     : productData.categoryId || null;
 
+  // Phase 19 (19-10) — if imagesV2 is provided (new shape with captions),
+  // persist it directly (Drizzle's json() column handles serialization).
+  // Otherwise fall back to the legacy string[].
+  const imagesToPersist = productData.imagesV2 && productData.imagesV2.length > 0
+    ? productData.imagesV2
+    : productData.images;
+
   await db
     .update(products)
     .set({
       name: productData.name,
       description: productData.description,
-      images: productData.images,
+      images: imagesToPersist,
       thumbnailIndex: safeThumb,
       materialType: productData.materialType?.trim() || null,
       estimatedProductionDays: productData.estimatedProductionDays ?? null,

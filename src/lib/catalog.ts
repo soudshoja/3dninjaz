@@ -17,7 +17,7 @@ import {
   type HydratedVariant,
 } from "@/lib/variants";
 import { buildColourSlugMap } from "@/lib/colours";
-import { ensureTiers } from "@/lib/config-fields";
+import { ensureTiers, ensureImagesV2, type ImageEntryV2 } from "@/lib/config-fields";
 
 // ============================================================================
 // MariaDB 10.11 note — Drizzle's relational `db.query.products.findMany({ with })`
@@ -31,21 +31,10 @@ import { ensureTiers } from "@/lib/config-fields";
 /**
  * MariaDB stores JSON as LONGTEXT; mysql2 returns raw strings. Normalise
  * images back to string[] at the read path so callers don't have to care.
+ * Delegates to ensureImagesV2 for forwards-compat with the new object shape.
  */
 function ensureImagesArray(raw: unknown): string[] {
-  if (Array.isArray(raw)) return raw.filter((v): v is string => typeof v === "string");
-  if (typeof raw === "string") {
-    if (raw.trim() === "") return [];
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed.filter((v): v is string => typeof v === "string");
-      }
-    } catch {
-      return [];
-    }
-  }
-  return [];
+  return ensureImagesV2(raw).map((e) => e.url);
 }
 
 type ProductRow = typeof products.$inferSelect;
@@ -57,6 +46,8 @@ export type CatalogVariant = VariantRow;
 
 export type CatalogProduct = Omit<ProductRow, "images" | "productType" | "priceTiers"> & {
   images: string[];
+  /** Phase 19 (19-10) — image entries with caption/alt; backwards-compat with legacy string[] */
+  imagesV2: ImageEntryV2[];
   variants: CatalogVariant[];
   category: CategoryRow | null;
   subcategory: SubcategoryRow | null;
@@ -249,6 +240,7 @@ async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
     return {
       ...p,
       images: ensureImagesArray(p.images),
+      imagesV2: ensureImagesV2(p.images),
       variants: rawVariants,
       hydratedVariants,
       options: hydratedOptions,

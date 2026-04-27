@@ -22,6 +22,8 @@ import type { PictureData } from "@/lib/image-manifest";
 type Props = {
   /** URL strings for admin's display images */
   displayImages: string[];
+  /** Optional captions parallel to displayImages; shown as figcaption under the hero */
+  imageCaptions?: (string | null | undefined)[];
   /** Optional pre-resolved PictureData parallel to displayImages (for srcset) */
   pictures?: PictureData[];
   /** When true, hero shows the live preview; when false, shows selected display image */
@@ -35,6 +37,7 @@ type Props = {
 
 export function ConfigurableImageGallery({
   displayImages,
+  imageCaptions,
   pictures,
   showPreview,
   onTogglePreview,
@@ -45,6 +48,7 @@ export function ConfigurableImageGallery({
 
   const activePic = pictures?.[activeDisplayIdx];
   const activeDisplayImage = displayImages[activeDisplayIdx] ?? null;
+  const activeCaption = imageCaptions?.[activeDisplayIdx] ?? null;
 
   const sizes = "(max-width: 1024px) 100vw, 50vw";
   const thumbSizes = "80px";
@@ -52,6 +56,7 @@ export function ConfigurableImageGallery({
   return (
     <div className="flex flex-col gap-4">
       {/* ── Hero area ── */}
+      <figure className="flex flex-col gap-1">
       <div
         className="relative aspect-square rounded-[28px] overflow-hidden shadow-lg flex items-center justify-center"
         style={{ backgroundColor: `${BRAND.blue}15` }}
@@ -71,8 +76,9 @@ export function ConfigurableImageGallery({
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={activePic.fallbackSrc}
-                alt="Product display"
+                alt={activeCaption ?? "Product display"}
                 className="absolute inset-0 h-full w-full object-cover"
+                loading="eager"
                 fetchPriority="high"
               />
             </picture>
@@ -80,8 +86,9 @@ export function ConfigurableImageGallery({
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={activeDisplayImage}
-              alt="Product display"
+              alt={activeCaption ?? "Product display"}
               className="absolute inset-0 h-full w-full object-cover"
+              loading="eager"
               fetchPriority="high"
             />
           )
@@ -91,6 +98,13 @@ export function ConfigurableImageGallery({
           </div>
         )}
       </div>
+      {/* Phase 19 (19-10) — figcaption shown under hero when a caption is set */}
+      {!showPreview && activeCaption && (
+        <figcaption className="text-xs text-slate-500 text-center mt-1 px-2">
+          {activeCaption}
+        </figcaption>
+      )}
+      </figure>
 
       {/* ── Thumbstrip ── */}
       <ul
