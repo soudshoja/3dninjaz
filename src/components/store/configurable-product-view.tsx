@@ -26,6 +26,7 @@ import Image from "next/image";
 import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
 import { lookupTierPrice } from "@/lib/config-fields";
+import { useCartStore } from "@/stores/cart-store";
 import { ConfiguratorForm } from "@/components/store/configurator-form";
 import { ConfigurableImageGallery } from "@/components/store/configurable-image-gallery";
 import { KeychainPreview } from "@/components/store/keychain-preview";
@@ -176,6 +177,9 @@ export function ConfigurableProductView({
     }
   }
 
+  const addItem = useCartStore((s) => s.addItem);
+  const setDrawerOpen = useCartStore((s) => s.setDrawerOpen);
+
   function handleAddToBag() {
     if (!canAdd || currentPrice === null) return;
     const summary = buildSummary(fields, values, currentPrice);
@@ -184,13 +188,9 @@ export function ConfigurableProductView({
       computedPrice: currentPrice,
       computedSummary: summary,
     };
-    // TODO Wave 4 plan 19-08: wire cart-store.addConfigurableItem with configurationData
-    console.info("[19-06] add stub — wire in plan 19-08", {
-      productId: product.id,
-      qty: 1,
-      unitPrice: currentPrice,
-      configurationData,
-    });
+    // Phase 19 (19-08): wire cart store — same config hash dedupes qty
+    addItem({ productId: product.id, configurationData });
+    setDrawerOpen(true);
   }
 
   const material = product.materialType ?? "PLA";
