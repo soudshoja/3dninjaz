@@ -70,8 +70,18 @@ function buildSummary(
   fields: PublicConfigField[],
   values: Record<string, string>,
   price: number,
+  baseClickerColorName?: string,
 ): string {
   const parts: string[] = [];
+  // Track whether we've already emitted the base+clicker colour (first colour field).
+  // If so, we skip the default label for that field and use "Base & Clicker" instead.
+  let firstColourFieldId: string | null = null;
+  for (const f of fields) {
+    if (f.fieldType === "colour" && firstColourFieldId === null) {
+      firstColourFieldId = f.id;
+    }
+  }
+
   for (const f of fields) {
     const v = values[f.id] ?? "";
     if (!v) continue;
@@ -79,7 +89,11 @@ function buildSummary(
       parts.push(`"${v}" (${v.length} ${f.label.toLowerCase()})`);
     } else if (f.fieldType === "colour") {
       const c = f.resolvedColours?.find((x) => x.id === v);
-      if (c) parts.push(`${c.name} ${f.label.toLowerCase()}`);
+      if (c) {
+        // First colour field = base+clicker — use explicit label
+        const label = f.id === firstColourFieldId ? "base & clicker" : f.label.toLowerCase();
+        parts.push(`${c.name} ${label}`);
+      }
     } else if (f.fieldType === "number") {
       parts.push(`${f.label}: ${v}`);
     } else if (f.fieldType === "select") {
@@ -87,6 +101,7 @@ function buildSummary(
     }
   }
   void price; // price is included in computedPrice field, not inline summary
+  void baseClickerColorName; // consumed by caller for the snapshot field
   return parts.join(" · ");
 }
 
@@ -184,11 +199,24 @@ export function ConfigurableProductView({
 
   function handleAddToBag() {
     if (!canAdd || currentPrice === null) return;
-    const summary = buildSummary(fields, values, currentPrice);
+
+    // Snapshot base+clicker colour name at add-to-bag time (no DB lookup needed
+    // at render — name is already in resolvedColours).
+    const firstColourField = colourFields[0];
+    const baseClickerColourId = firstColourField ? (values[firstColourField.id] ?? "") : "";
+    const baseClickerColourEntry = firstColourField?.resolvedColours?.find(
+      (c) => c.id === baseClickerColourId,
+    );
+    const baseClickerColorName = baseClickerColourEntry?.name;
+    const baseClickerColor = baseClickerColourEntry?.hex;
+
+    const summary = buildSummary(fields, values, currentPrice, baseClickerColorName);
     const configurationData = {
       values,
       computedPrice: currentPrice,
       computedSummary: summary,
+      ...(baseClickerColor ? { baseClickerColor } : {}),
+      ...(baseClickerColorName ? { baseClickerColorName } : {}),
     };
     // Phase 19 (19-08): wire cart store — same config hash dedupes qty
     addItem({ productId: product.id, configurationData });
@@ -270,6 +298,7 @@ export function ConfigurableProductView({
             values={values}
             onChange={setValues}
             onTouch={handleTouch}
+            baseClickerFieldId={colourFields[0]?.id}
           />
         </div>
 

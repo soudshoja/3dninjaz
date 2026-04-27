@@ -29,6 +29,12 @@ type Props = {
   onChange: (values: Record<string, string>) => void;
   /** Called on first non-empty input or colour click — triggers hero swap */
   onTouch: () => void;
+  /**
+   * Optional: the fieldId of the first colour field that represents the shared
+   * "Base & Clicker" colour. When set, the label for that field is overridden
+   * to "Base & Clicker color" and a descriptive sub-label is shown.
+   */
+  baseClickerFieldId?: string;
 };
 
 // ============================================================================
@@ -294,7 +300,7 @@ function SelectField({
 // ConfiguratorForm — main export
 // ============================================================================
 
-export function ConfiguratorForm({ fields, values, onChange, onTouch }: Props) {
+export function ConfiguratorForm({ fields, values, onChange, onTouch, baseClickerFieldId }: Props) {
   // Track first-touch per form instance (not per field) — single hero swap.
   const touchedRef = useRef(false);
 
@@ -313,6 +319,17 @@ export function ConfiguratorForm({ fields, values, onChange, onTouch }: Props) {
         const filled = isFilled(value);
         const showRequiredError = field.required && !filled;
 
+        // Base & Clicker override: when this field is the designated
+        // base+clicker field, show a clear shared-colour label instead of
+        // the admin-authored field label.
+        const isBaseClicker = baseClickerFieldId
+          ? field.id === baseClickerFieldId
+          : false;
+        const displayLabel = isBaseClicker ? "Base & Clicker color" : field.label;
+        const displayHelp = isBaseClicker
+          ? "The carabiner clip and bottom cube share this colour."
+          : field.helpText;
+
         function handleFieldChange(v: string) {
           onChange({ ...values, [field.id]: v });
         }
@@ -321,7 +338,7 @@ export function ConfiguratorForm({ fields, values, onChange, onTouch }: Props) {
           <div key={field.id} className="flex flex-col gap-2">
             {/* Field label */}
             <label className="flex items-center gap-1 text-sm font-bold text-zinc-800 uppercase tracking-wide">
-              {field.label}
+              {displayLabel}
               {field.required && (
                 <span aria-hidden="true" className="text-red-500 ml-0.5">
                   *
@@ -330,8 +347,8 @@ export function ConfiguratorForm({ fields, values, onChange, onTouch }: Props) {
             </label>
 
             {/* Help text (above input) */}
-            {field.helpText && field.fieldType !== "text" && field.fieldType !== "number" ? (
-              <p className="text-xs text-zinc-400">{field.helpText}</p>
+            {displayHelp && field.fieldType !== "text" && field.fieldType !== "number" ? (
+              <p className="text-xs text-zinc-400">{displayHelp}</p>
             ) : null}
 
             {/* Type-dispatched input */}

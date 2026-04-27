@@ -210,6 +210,29 @@ export default async function OrderDetailPage({
                       return <>{summary ? `${summary} · ` : ""}Qty {i.quantity} · {formatMYR(i.unitPrice)} each</>;
                     })()}
                   </p>
+                  {(() => {
+                    const cfg = ensureOrderItemConfigData(i.configurationData);
+                    if (!cfg?.baseClickerColor) return null;
+                    return (
+                      <p className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            display: "inline-block",
+                            width: 12,
+                            height: 12,
+                            borderRadius: "999px",
+                            background: cfg.baseClickerColor,
+                            border: "1px solid rgba(0,0,0,0.15)",
+                            flexShrink: 0,
+                          }}
+                        />
+                        {cfg.baseClickerColorName
+                          ? `Base & Clicker: ${cfg.baseClickerColorName}`
+                          : "Base & Clicker color set"}
+                      </p>
+                    );
+                  })()}
                 </div>
                 <div className="text-right">
                   <p className="font-[var(--font-heading)] text-lg">

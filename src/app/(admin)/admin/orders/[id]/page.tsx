@@ -263,12 +263,33 @@ export default async function AdminOrderDetailPage({
                         const cfg = ensureOrderItemConfigData(i.configurationData);
                         if (!cfg) return null;
                         return (
-                          <details className="mt-1 text-xs text-slate-500">
-                            <summary className="cursor-pointer">Configuration JSON (printer manifest)</summary>
-                            <pre className="text-[11px] mt-1 p-2 bg-slate-50 rounded overflow-x-auto">
-                              {JSON.stringify(cfg.values, null, 2)}
-                            </pre>
-                          </details>
+                          <>
+                            {cfg.baseClickerColor ? (
+                              <p className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
+                                <span
+                                  aria-hidden="true"
+                                  style={{
+                                    display: "inline-block",
+                                    width: 12,
+                                    height: 12,
+                                    borderRadius: "999px",
+                                    background: cfg.baseClickerColor,
+                                    border: "1px solid rgba(0,0,0,0.15)",
+                                    flexShrink: 0,
+                                  }}
+                                />
+                                {cfg.baseClickerColorName
+                                  ? `Base & Clicker: ${cfg.baseClickerColorName}`
+                                  : "Base & Clicker color set"}
+                              </p>
+                            ) : null}
+                            <details className="mt-1 text-xs text-slate-500">
+                              <summary className="cursor-pointer">Configuration JSON (printer manifest)</summary>
+                              <pre className="text-[11px] mt-1 p-2 bg-slate-50 rounded overflow-x-auto">
+                                {JSON.stringify(cfg.values, null, 2)}
+                              </pre>
+                            </details>
+                          </>
                         );
                       })()}
                     </div>

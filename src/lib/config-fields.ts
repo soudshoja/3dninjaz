@@ -67,6 +67,13 @@ export type ConfigurationData = {
   values: Record<string, string>; // fieldId -> customer-supplied value
   computedPrice: number;          // MYR at time of add-to-bag
   computedSummary: string;        // human-readable e.g. "JACOB (5 letters) · Red base+chain"
+  /**
+   * Base & Clicker colour hex — snapshotted at add-to-bag for display in cart /
+   * order detail without a DB lookup. Optional for backwards compat with cart
+   * items created before this field was added.
+   */
+  baseClickerColor?: string;      // hex e.g. "#39E600"
+  baseClickerColorName?: string;  // display name e.g. "Neon Green"
 };
 
 // ============================================================================
@@ -227,6 +234,8 @@ const ConfigurationDataSchema = z.object({
   values: z.record(z.string()),
   computedPrice: z.number().nonnegative(),
   computedSummary: z.string(),
+  baseClickerColor: z.string().optional(),
+  baseClickerColorName: z.string().optional(),
 });
 
 /**
