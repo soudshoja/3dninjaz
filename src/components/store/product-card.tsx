@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { BRAND } from "@/lib/brand";
-import { priceRangeMYR } from "@/lib/format";
+import { priceRangeMYR, formatFromTier } from "@/lib/format";
 import { pickThumbnail, type CatalogProduct } from "@/lib/catalog";
 import { WishlistButton } from "@/components/store/wishlist-button";
 import { SoldOutBadge } from "@/components/store/sold-out-badge";
@@ -58,12 +58,14 @@ export async function ProductCard({
   // Falls back to raw variants for products not yet migrated to Phase 16.
   const allHydrated = product.hydratedVariants.length > 0 ? product.hydratedVariants : [];
   const availableVariants = allHydrated.filter(isVariantAvailable);
-  const allSoldOut = allHydrated.length > 0 && availableVariants.length === 0;
+  const allSoldOut = product.productType !== "configurable" && allHydrated.length > 0 && availableVariants.length === 0;
 
-  // If no hydrated variants at all (legacy path), fall back to raw variants
-  // with the old simple logic.
+  // Phase 19 (19-07) — configurable products use tier-based "From MYR X" label.
+  // Stocked products use the existing priceRangeMYR flow — UNTOUCHED.
   let priceLabel: string;
-  if (allHydrated.length === 0) {
+  if (product.productType === "configurable") {
+    priceLabel = formatFromTier(product.priceTiers);
+  } else if (allHydrated.length === 0) {
     priceLabel = priceRangeMYR(product.variants);
   } else if (allSoldOut) {
     priceLabel = "Sold out";
@@ -72,7 +74,7 @@ export async function ProductCard({
   }
 
   // Show SALE chip when any AVAILABLE variant has an active sale.
-  const hasSale = availableVariants.some((v) => v.isOnSale);
+  const hasSale = product.productType !== "configurable" && availableVariants.some((v) => v.isOnSale);
 
   return (
     <div className="relative group">
@@ -124,7 +126,7 @@ export async function ProductCard({
             </span>
           ) : null}
 
-          {allSoldOut ? <SoldOutBadge /> : null}
+          {product.productType !== "configurable" && allSoldOut ? <SoldOutBadge /> : null}
         </div>
 
         {/* Card footer — white bar with name + price */}

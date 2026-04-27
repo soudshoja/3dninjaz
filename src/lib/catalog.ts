@@ -17,6 +17,7 @@ import {
   type HydratedVariant,
 } from "@/lib/variants";
 import { buildColourSlugMap } from "@/lib/colours";
+import { ensureTiers } from "@/lib/config-fields";
 
 // ============================================================================
 // MariaDB 10.11 note — Drizzle's relational `db.query.products.findMany({ with })`
@@ -54,7 +55,7 @@ type SubcategoryRow = typeof subcategories.$inferSelect;
 
 export type CatalogVariant = VariantRow;
 
-export type CatalogProduct = Omit<ProductRow, "images"> & {
+export type CatalogProduct = Omit<ProductRow, "images" | "productType" | "priceTiers"> & {
   images: string[];
   variants: CatalogVariant[];
   category: CategoryRow | null;
@@ -62,6 +63,10 @@ export type CatalogProduct = Omit<ProductRow, "images"> & {
   // Phase 16 — generic options/variants (additive; existing callers unaffected)
   hydratedVariants: HydratedVariant[];
   options: HydratedOption[];
+  // Phase 19 (19-07) — made-to-order fields (parsed; stocked products get defaults)
+  productType: "stocked" | "configurable";
+  priceTiers: Record<string, number> | null;
+  maxUnitCount: number | null;
 };
 
 /**
@@ -251,6 +256,10 @@ async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
       subcategory: p.subcategoryId
         ? subcategoryById.get(p.subcategoryId) ?? null
         : null,
+      // Phase 19 (19-07) — made-to-order fields
+      productType: (p.productType ?? "stocked") as "stocked" | "configurable",
+      priceTiers: p.productType === "configurable" ? ensureTiers(p.priceTiers) : null,
+      maxUnitCount: p.maxUnitCount ?? null,
     };
   });
 }
