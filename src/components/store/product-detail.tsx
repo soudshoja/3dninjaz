@@ -11,6 +11,8 @@ import { WishlistButton } from "@/components/store/wishlist-button";
 import { RatingBadge } from "@/components/store/rating-badge";
 import type { HydratedOption, HydratedVariant } from "@/lib/variants";
 import type { PictureData } from "@/lib/image-manifest";
+import { ConfigurableProductView } from "@/components/store/configurable-product-view";
+import type { PublicConfigField } from "@/lib/configurable-product-data";
 
 type ProductDetailProps = {
   product: {
@@ -24,6 +26,7 @@ type ProductDetailProps = {
     category: { name: string; slug: string } | null;
     options: HydratedOption[];
     hydratedVariants: HydratedVariant[];
+    productType?: "stocked" | "configurable";
   };
   isWishlistedInitial?: boolean;
   ratingAvg?: number;
@@ -32,6 +35,7 @@ type ProductDetailProps = {
   pictures?: PictureData[];
   /** Pre-resolved PictureData keyed by variantId for variants that have imageUrl set */
   variantPictures?: Record<string, PictureData | null>;
+  configurableData?: { fields: PublicConfigField[]; maxUnitCount: number | null; priceTiers: Record<string, number>; unitField: string | null };
 };
 
 /**
@@ -48,7 +52,11 @@ export function ProductDetail({
   ratingCount = 0,
   pictures,
   variantPictures = {},
+  configurableData,
 }: ProductDetailProps) {
+  if (product.productType === "configurable" && configurableData) {
+    return <ConfigurableProductView product={{ ...product, pictures }} {...configurableData} isWishlistedInitial={isWishlistedInitial} ratingAvg={ratingAvg} ratingCount={ratingCount} />;
+  }
   const [selectedHydrated, setSelectedHydrated] = useState<HydratedVariant | null>(null);
   // Bug fix: track first missing option name for the Add-to-bag button label.
   const [firstMissingOptionName, setFirstMissingOptionName] = useState<string | null>(null);
