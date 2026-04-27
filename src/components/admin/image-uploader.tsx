@@ -9,8 +9,8 @@ import {
 } from "@/actions/uploads";
 import { Button } from "@/components/ui/button";
 
-const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp"];
-const MAX_BYTES = 5 * 1024 * 1024;
+const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
+const MAX_BYTES = 50 * 1024 * 1024;
 
 export function ImageUploader({
   images,
@@ -49,11 +49,11 @@ export function ImageUploader({
     const added: string[] = [];
     for (const file of files) {
       if (!ALLOWED_MIME.includes(file.type)) {
-        setError(`Unsupported type: ${file.type}. Use JPEG, PNG, or WebP.`);
+        setError(`Unsupported type: ${file.type}. Use JPEG, PNG, WebP, or HEIC.`);
         continue;
       }
       if (file.size > MAX_BYTES) {
-        setError(`"${file.name}" exceeds 5 MB.`);
+        setError(`"${file.name}" exceeds 50 MB.`);
         continue;
       }
 
@@ -157,7 +157,7 @@ export function ImageUploader({
               : "Drag & drop images here or click to upload"}
         </p>
         <p className="text-xs text-[var(--color-brand-text-muted)]">
-          JPEG, PNG, or WebP &middot; up to 5 MB each &middot; {images.length}/
+          JPEG, PNG, WebP, or HEIC &middot; any size — auto-compressed &middot; {images.length}/
           {maxImages} images
         </p>
         {onThumbnailChange ? (
@@ -168,7 +168,7 @@ export function ImageUploader({
         <input
           ref={inputRef}
           type="file"
-          accept={ALLOWED_MIME.join(",")}
+          accept={[...ALLOWED_MIME, ".heic", ".heif"].join(",")}
           multiple
           className="hidden"
           onChange={onInputChange}

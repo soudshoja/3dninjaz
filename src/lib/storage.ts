@@ -6,9 +6,9 @@ import { compressUploadedImage } from "@/lib/image-pipeline";
 
 const UPLOADS_DIR = process.env.UPLOADS_DIR ?? "./public/uploads";
 const PUBLIC_PREFIX = process.env.UPLOADS_PUBLIC_PREFIX ?? "/uploads";
-// Phase 7 (07-08): pre-compress cap raised to 10 MB. The image pipeline
-// downscales+re-encodes so the on-disk footprint is still small.
-const MAX_BYTES = 10 * 1024 * 1024;
+// Pre-compress cap: 50 MB. The image pipeline downscales+re-encodes so the
+// on-disk footprint is still small regardless of input size.
+const MAX_BYTES = 50 * 1024 * 1024;
 const ALLOWED_MIMES = new Set([
   "image/jpeg",
   "image/png",
@@ -50,7 +50,7 @@ export async function writeUpload(bucket: string, file: File): Promise<string> {
     );
   }
   if (file.size > MAX_BYTES) {
-    throw new Error("File too large (max 10 MB)");
+    throw new Error("File too large (max 50 MB)");
   }
   const safe = safeBucket(bucket);
   const id = crypto.randomUUID();
