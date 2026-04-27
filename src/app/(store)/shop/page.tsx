@@ -17,7 +17,7 @@ import {
   type CategoryTreeNode,
 } from "@/lib/catalog";
 import { getWishlistedProductIds } from "@/actions/wishlist";
-import { ColourFilterSection } from "@/components/store/colour-filter-section";
+// Temporarily disabled: import { ColourFilterSection } from "@/components/store/colour-filter-section";
 
 export const metadata: Metadata = { title: "Shop" };
 
@@ -141,10 +141,10 @@ export default async function ShopPage({
         </nav>
       ) : null}
 
-      {/* Mobile-only horizontal colour chip strip (D-13 mobile parity) */}
-      <div className="md:hidden max-w-6xl mx-auto px-6 mt-3">
+      {/* Colour filter temporarily hidden — re-enable when filter UX is finalized */}
+      {/* <div className="md:hidden max-w-6xl mx-auto px-6 mt-3">
         <ColourFilterSection chips={colourChips} />
-      </div>
+      </div> */}
 
       <section className="max-w-6xl mx-auto px-6 mt-6 grid gap-8 md:grid-cols-[240px_1fr]">
         <aside className="hidden md:block">
@@ -153,7 +153,7 @@ export default async function ShopPage({
             activeCategory={category ?? null}
             activeSubcategory={subcategory ?? null}
           />
-          <ColourFilterSection chips={colourChips} />
+          {/* <ColourFilterSection chips={colourChips} /> */}
         </aside>
 
         <div>

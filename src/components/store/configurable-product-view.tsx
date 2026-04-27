@@ -21,7 +21,7 @@
  * product-detail.tsx is completely untouched.
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import Image from "next/image";
 import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
@@ -122,6 +122,7 @@ export function ConfigurableProductView({
   const [values, setValues] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const previewRef = useRef<HTMLDivElement>(null);
 
   // ── Derived state ──────────────────────────────────────────────────────────
 
@@ -192,6 +193,8 @@ export function ConfigurableProductView({
       setTouched(true);
       setShowPreview(true);
     }
+    // Scroll the preview into view so mobile users see it above the keyboard
+    previewRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
   const addItem = useCartStore((s) => s.addItem);
@@ -229,12 +232,14 @@ export function ConfigurableProductView({
   // ── Render ────────────────────────────────────────────────────────────────
 
   const previewNode = (
-    <KeychainPreview
-      text={textValue}
-      baseHex={baseHex}
-      letterHex={letterHex}
-      maxLength={maxLength}
-    />
+    <div ref={previewRef}>
+      <KeychainPreview
+        text={textValue}
+        baseHex={baseHex}
+        letterHex={letterHex}
+        maxLength={maxLength}
+      />
+    </div>
   );
 
   return (
