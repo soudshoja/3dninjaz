@@ -22,7 +22,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 16: Product Variant System (Generic Options)** - Replace fixed size/color with admin-defined option/value/variant model (cartesian combos, per-variant price/stock/image/SKU). Supports size+color products AND parts-based products in one system.
 - [x] **Phase 17: Variant Enhancements + Legacy Cleanup** - Sale price, variant image upload + PDP swap, bulk edit, OOS hardening, default pre-selection, reactivity contract, pre-variant-era code purged
 - [ ] **Phase 18: Colour Management** - Admin colour library (seeded from Bambu/Polymaker HTML files, reusable across products), per-product enable/disable toggle, colour joins variant system as additional axis when enabled, PDP swatch grid (name + hex)
-- [ ] **Phase 19: Made-to-Order Product Type** - New `productType` (stocked vs made-to-order) chosen at product creation. Made-to-order = print-on-demand: configurator inputs (text/number/colour/select fields with admin-curated colour subsets), tier-table pricing (fixed price per letter count, lookup not multiplication), no per-row stock, unlimited captioned images with Sharp WebP/AVIF, generic SVG live preview swapping with display image. Variant flow UNTOUCHED — existing products auto-migrate to `productType='stocked'`.
+- [x] **Phase 19: Made-to-Order Product Type** - New `productType` (stocked vs made-to-order) chosen at product creation. Made-to-order = print-on-demand: configurator inputs (text/number/colour/select fields with admin-curated colour subsets), tier-table pricing (fixed price per letter count, lookup not multiplication), no per-row stock, unlimited captioned images with Sharp WebP/AVIF, generic SVG live preview swapping with display image. Variant flow UNTOUCHED — existing products auto-migrate to `productType='stocked'`.
 - [ ] **Phase 20: User & Role Management** - Admin can create users and define roles; each system feature is enable/disable per role (RBAC matrix). Replaces the current single-admin model.
 
 ## Phase Details
@@ -309,15 +309,15 @@ Plans:
 Plans:
 - [x] 19-01-PLAN.md — Schema foundation: productType + product_config_fields + tier pricing cols + order_items.configurationData (Wave 1)
 - [x] 19-02-PLAN.md — Helper library: ensureConfigJson + ensureTiers + ensureImagesV2 + lookupTierPrice + Zod schemas per fieldType (Wave 1)
-- [ ] 19-03-PLAN.md — Product-type radio + flip-block guard + product-form integration (Wave 2)
-- [ ] 19-04-PLAN.md — Configurator builder page + 4 field-type modal + colour-picker select-multiple mode + 5 server actions (Wave 2)
+- [x] 19-03-PLAN.md — Product-type radio + flip-block guard + product-form integration (Wave 2)
+- [x] 19-04-PLAN.md — Configurator builder page + 4 field-type modal + colour-picker select-multiple mode + 5 server actions (Wave 2)
 - [x] 19-05-PLAN.md — Pricing tier table editor + saveTierTable + reduce-max confirmation (Wave 2)
 - [x] 19-06-PLAN.md — PDP configurable branch + ConfiguratorForm + KeychainPreview + ConfigurableImageGallery (Wave 3)
 - [x] 19-07-PLAN.md — /shop + listing rendering for configurable products (From MYR X) (Wave 3)
 - [x] 19-08-PLAN.md — Cart configurationData payload + hash-based dedupe + cart drawer/bag rendering (Wave 4)
 - [x] 19-09-PLAN.md — Order capture snapshot + admin/customer order detail + invoice PDF + order email render summary (Wave 4)
-- [ ] 19-10-PLAN.md — Sharp WebP/AVIF + 6-width srcset + admin caption per image + ConfigurableProductPicture (Wave 5)
-- [ ] 19-11-PLAN.md — Seed Custom Name Keychain + profanity allowlist + admin guide article + 24-step verifier checklist (Wave 5)
+- [x] 19-10-PLAN.md — Sharp WebP/AVIF + 6-width srcset + admin caption per image (Wave 5)
+- [x] 19-11-PLAN.md — Seed Custom Name Keychain + admin guide article + 24-step verifier checklist (Wave 5; profanity seed deferred — no storage table yet)
 
 ## Progress
 
@@ -344,5 +344,6 @@ Phases execute in numeric order: 1 → 2 → ... → 15
 | 16. Product Variant System (Generic Options) | 7/7 | Complete | 2026-04-22 |
 | 17. Variant Enhancements + Legacy Cleanup | 5/5 | Complete | 2026-04-22 |
 | 18. Colour Management | 9/9 | Verifying | — |
-| 19. Made-to-Order Product Type | 7/11 | In Progress|  |
+| 19. Made-to-Order Product Type | 11/11 | Complete (smoke pending) | 2026-04-27 |
+| 20. User & Role Management | 0/0 | Backlog | — |
 | 20. User & Role Management | 0/0 | Backlog | — |
