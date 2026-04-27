@@ -73,10 +73,17 @@ export function KeychainPreview({ text, baseHex, letterHex, maxLength }: Props) 
   return (
     <svg
       viewBox={`0 0 ${SVG_WIDTH} ${height}`}
-      width="100%"
+      preserveAspectRatio="xMidYMid meet"
       aria-label={text ? `Preview shows ${text}` : "Type your name to see preview"}
       role="img"
-      style={{ display: "block", maxWidth: SVG_WIDTH * 2, margin: "0 auto" }}
+      style={{
+        display: "block",
+        height: "auto",
+        width: "auto",
+        maxHeight: "min(70vh, 520px)",
+        maxWidth: "100%",
+        margin: "0 auto",
+      }}
     >
       {/* ── Carabiner D-ring clip at top ── */}
       {/* Outer D-ring: ellipse outline */}
