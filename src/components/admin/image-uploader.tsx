@@ -2,9 +2,9 @@
 
 import { useRef, useState, useTransition } from "react";
 import Image from "next/image";
-import { UploadCloud, X, Star } from "lucide-react";
+import { UploadCloud, Trash2, Star } from "lucide-react";
 import { deleteProductImage } from "@/actions/uploads";
-import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
 const MAX_BYTES = 50 * 1024 * 1024;
@@ -228,19 +228,26 @@ export function ImageUploader({
 
   function handleRemove(url: string) {
     const removedIndex = images.findIndex((u) => u === url);
+    // Optimistically remove from UI immediately so the admin sees instant feedback.
+    const next = images.filter((u) => u !== url);
+    onImagesChange(next);
+    if (onThumbnailChange && removedIndex !== -1) {
+      if (removedIndex === thumbnailIndex || thumbnailIndex >= next.length) {
+        onThumbnailChange(0);
+      } else if (removedIndex < thumbnailIndex) {
+        onThumbnailChange(thumbnailIndex - 1);
+      }
+    }
+    // Fire the server-side delete in a transition so pending stays accurate.
     startTransition(async () => {
-      await deleteProductImage(url);
-      const next = images.filter((u) => u !== url);
-      onImagesChange(next);
-      // If the removed image was the thumbnail, OR was positioned before it,
-      // the thumbnail index shifts — re-anchor it so we keep pointing at the
-      // same image (or fall back to 0 when the thumb itself was removed).
-      if (onThumbnailChange && removedIndex !== -1) {
-        if (removedIndex === thumbnailIndex || thumbnailIndex >= next.length) {
-          onThumbnailChange(0);
-        } else if (removedIndex < thumbnailIndex) {
-          onThumbnailChange(thumbnailIndex - 1);
-        }
+      try {
+        await deleteProductImage(url);
+      } catch (err) {
+        // Server action threw (e.g. session expired). Restore the image.
+        console.error("[ImageUploader] deleteProductImage failed:", err);
+        onImagesChange(images); // revert to original list
+        if (onThumbnailChange) onThumbnailChange(thumbnailIndex);
+        toast.error("Failed to delete image — please try again.");
       }
     });
   }
@@ -400,17 +407,15 @@ export function ImageUploader({
                     />
                   </button>
                 ) : null}
-                <Button
+                <button
                   type="button"
-                  variant="destructive"
-                  size="icon-xs"
-                  className="absolute right-1 top-1 h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
                   onClick={() => handleRemove(url)}
                   disabled={pending}
                   aria-label="Remove image"
+                  className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-md bg-black/70 text-white transition-colors hover:bg-red-600 disabled:pointer-events-none disabled:opacity-50"
                 >
-                  <X className="h-3 w-3" />
-                </Button>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
                 {isThumb ? (
                   <span className="absolute bottom-1 left-1 rounded-full bg-[var(--color-brand-cta)] px-2 py-0.5 text-[10px] font-bold text-white">
                     Thumb

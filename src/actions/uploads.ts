@@ -30,6 +30,12 @@ export async function deleteProductImage(
   url: string
 ): Promise<{ success: boolean }> {
   await requireAdmin();
-  await deleteUpload(url);
+  try {
+    await deleteUpload(url);
+  } catch (err) {
+    console.error("[deleteProductImage] filesystem delete failed:", url, err);
+    // Re-throw so the client can surface the error to the admin.
+    throw err;
+  }
   return { success: true };
 }
