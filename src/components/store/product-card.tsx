@@ -144,7 +144,7 @@ export async function ProductCard({
             className="mt-1 text-sm font-bold"
             style={{ color: allSoldOut ? "#9ca3af" : accent }}
           >
-            {allSoldOut ? "Sold out" : `from ${priceLabel}`}
+            {allSoldOut ? "Sold out" : product.productType === "configurable" ? priceLabel : `from ${priceLabel}`}
           </p>
         </div>
       </Link>
