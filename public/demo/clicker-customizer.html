@@ -4,96 +4,208 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex,nofollow" />
-<title>Clicker Customizer — Demo</title>
+<title>Pancake Clicker — 3-Colour Concept Demo</title>
 <style>
+  /* Brand palette — mirrors src/lib/brand.ts + globals.css */
+  :root {
+    --blue: #0080ff;       --blue-d: #0061C2;
+    --green: #03C03C;      --green-d: #018A29;
+    --purple: #8A00C2;     --purple-d: #62008C;
+    --ink: #0B1020;
+    --cream: #F7FAF4;
+    --line: #E2E8F0;
+    --muted: #64748B;
+    --soft: #f8fafc;
+    --error: #be123c;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
   body {
-    margin: 0;
-    padding: 32px 16px;
-    background: #f3f7f7;
-    min-height: 100vh;
-    box-sizing: border-box;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: var(--ink);
+    background: var(--cream);
+    line-height: 1.5;
   }
 
-  .demo-wrap {
-    max-width: 1100px;
-    margin: 0 auto;
-  }
+  .page { max-width: 72rem; margin: 0 auto; padding: 24px 16px 80px; }
+  @media (min-width: 640px) { .page { padding: 24px 24px 80px; } }
+  @media (min-width: 768px) { .page { padding: 40px 24px 100px; } }
 
-  .demo-title {
-    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    font-size: 14px;
-    font-weight: 700;
-    color: #758692;
-    margin: 0 0 16px;
+  .demo-banner {
+    background: #fff;
+    border: 2px dashed var(--purple);
+    border-radius: 14px;
+    padding: 10px 14px;
+    margin-bottom: 18px;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .demo-banner b { color: var(--purple-d); }
+
+  .breadcrumb {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.18em;
+    font-weight: 800;
+    color: var(--purple);
+    text-decoration: none;
+    margin-bottom: 20px;
   }
 
-  .name-tag-customizer {
+  .pdp-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 380px;
+    grid-template-columns: 1fr;
     gap: 24px;
     align-items: start;
-    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
+  @media (min-width: 1024px) { .pdp-grid { grid-template-columns: 1fr 1fr; gap: 48px; } }
 
-  .preview-panel,
-  .controls-panel {
-    background: #ffffff;
-    border: 1px solid #e6eded;
-    border-radius: 24px;
-    box-shadow: 0 14px 34px rgba(24, 45, 55, 0.08);
+  /* ── LEFT: gallery card (claymorphism) ──────────────────── */
+  .gallery-wrap { position: sticky; top: 24px; }
+  @media (max-width: 1023px) { .gallery-wrap { position: static; } }
+
+  .gallery-card {
+    background: #fff;
+    border: 2.5px solid rgba(11, 16, 32, 0.10);
+    border-radius: 28px;
+    overflow: hidden;
+    box-shadow: 0 8px 0 rgba(11, 16, 32, 0.07), 0 20px 40px rgba(11, 16, 32, 0.06);
   }
+  .gallery-inner { padding: 16px 16px 0; }
 
-  .preview-panel {
-    padding: 24px;
-  }
-
-  .product-preview {
-    min-height: 280px;
+  .hero {
+    position: relative;
     border-radius: 20px;
-    background: #ffffff;
+    aspect-ratio: 1 / 1;
+    background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .hero-stage {
+    width: 100%;
+    height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
     overflow-x: auto;
-    padding: 32px 28px;
+    padding: 24px 20px 60px;
     position: relative;
   }
-
-  .product-preview::after {
+  .hero-stage::after {
     content: "";
     position: absolute;
-    bottom: 34px;
+    bottom: 38px;
     left: 50%;
     transform: translateX(-50%);
-    width: 420px;
-    max-width: 75%;
-    height: 24px;
-    background: rgba(20, 40, 50, 0.12);
+    width: 300px;
+    max-width: 70%;
+    height: 22px;
+    background: rgba(11, 16, 32, 0.18);
     filter: blur(14px);
     border-radius: 999px;
     pointer-events: none;
   }
+  .hero-tag {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--green-d);
+    background: rgba(255, 255, 255, 0.92);
+    padding: 5px 11px;
+    border-radius: 999px;
+    z-index: 3;
+    box-shadow: 0 2px 8px rgba(11,16,32,0.08);
+  }
 
+  /* Thumb strip */
+  .thumbs {
+    display: flex;
+    gap: 8px;
+    padding: 12px 4px 16px;
+    overflow-x: auto;
+  }
+  .thumb {
+    flex: 0 0 64px;
+    width: 64px;
+    height: 64px;
+    border-radius: 14px;
+    border: 2.5px solid var(--line);
+    background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 800;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .thumb.active { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(11,16,32,0.06); }
+  .thumb.preview { background: rgba(0,128,255,0.08); border-color: var(--blue); color: var(--blue-d); }
+
+  .preview-hint {
+    padding: 12px 16px;
+    margin-top: 8px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .preview-hint.live { color: var(--green-d); background: rgba(3,192,60,0.08); }
+
+  .trust-pill {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    margin-top: 16px;
+    padding: 12px 16px;
+    border-radius: 16px;
+    background: rgba(3, 192, 60, 0.10);
+    border: 1.5px solid rgba(3, 192, 60, 0.30);
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 500;
+  }
+  @media (min-width: 1024px) { .trust-pill { display: flex; } }
+  .trust-icon {
+    width: 28px; height: 28px;
+    border-radius: 999px;
+    background: var(--green);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex: 0 0 auto;
+  }
+
+  /* ── Cube chain (the concept) ───────────────────────────── */
   .clicker-chain {
     --base: #b8f0dd;
     --clicker: #22b8b2;
     --letter: #ffffff;
-
     position: relative;
     display: flex;
     align-items: center;
-    gap: 3px;
+    gap: 4px;
     padding-left: 28px;
     z-index: 2;
   }
-
   .cube {
-    width: 74px;
-    height: 74px;
+    width: 64px; height: 64px;
     position: relative;
-    border-radius: 18px;
+    border-radius: 16px;
     background: var(--base);
     box-shadow:
       inset 4px 4px 7px rgba(255, 255, 255, 0.55),
@@ -102,19 +214,16 @@
       0 10px 16px rgba(0, 0, 0, 0.12);
     flex: 0 0 auto;
   }
-
   .cube::before {
     content: "";
     position: absolute;
-    inset: 7px;
-    border-radius: 14px;
+    inset: 6px;
+    border-radius: 12px;
     background: var(--clicker);
     box-shadow:
       inset 4px 4px 6px rgba(255, 255, 255, 0.42),
-      inset -5px -5px 8px rgba(0, 0, 0, 0.18),
-      0 3px 0 rgba(0, 0, 0, 0.10);
+      inset -5px -5px 8px rgba(0, 0, 0, 0.18);
   }
-
   .cube .letter {
     position: absolute;
     inset: 0;
@@ -122,23 +231,21 @@
     align-items: center;
     justify-content: center;
     color: var(--letter);
-    font-size: 31px;
+    font-size: 28px;
     font-weight: 900;
     line-height: 1;
     text-transform: uppercase;
     z-index: 2;
-    text-shadow:
-      0 1px 0 rgba(0, 0, 0, 0.10),
-      0 3px 6px rgba(0, 0, 0, 0.14);
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.10), 0 3px 6px rgba(0, 0, 0, 0.14);
+    letter-spacing: 0.02em;
   }
-
   .cube.first .side-tab {
     position: absolute;
     left: -22px;
     top: 50%;
     transform: translateY(-50%);
     width: 28px;
-    height: 34px;
+    height: 32px;
     border-radius: 14px 0 0 14px;
     background: var(--base);
     box-shadow:
@@ -146,7 +253,6 @@
       inset -5px -5px 8px rgba(0, 0, 0, 0.16),
       0 5px 0 rgba(0, 0, 0, 0.10);
   }
-
   .cube.first .side-tab::after {
     content: "";
     position: absolute;
@@ -160,169 +266,551 @@
     box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.16);
   }
 
-  .controls-panel {
-    padding: 24px;
-  }
+  /* ── RIGHT: form column ─────────────────────────────────── */
+  .info-col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 
-  .field {
-    margin-bottom: 22px;
+  .clay-card {
+    background: #fff;
+    border: 2.5px solid rgba(11, 16, 32, 0.08);
+    border-radius: 28px;
+    padding: 22px;
+    box-shadow: 0 6px 0 rgba(11, 16, 32, 0.05), 0 16px 32px rgba(11, 16, 32, 0.04);
   }
+  @media (min-width: 640px) { .clay-card { padding: 26px; } }
 
-  .field label {
-    display: block;
-    font-size: 14px;
+  .product-title {
+    font-size: 26px;
     font-weight: 800;
-    color: #233440;
-    margin-bottom: 10px;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    margin: 0 0 12px;
+  }
+  @media (min-width: 768px) { .product-title { font-size: 36px; } }
+
+  .rating-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(243, 201, 74, 0.18);
+    color: #92400e;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-weight: 700;
+    font-size: 13px;
+    margin-bottom: 14px;
   }
 
-  .field input {
+  .price-pill {
+    display: inline-flex;
+    align-items: center;
+    background: var(--green);
+    color: var(--ink);
+    font-size: 22px;
+    font-weight: 800;
+    padding: 8px 20px;
+    border-radius: 999px;
+    box-shadow: 0 4px 0 var(--green-d);
+    letter-spacing: -0.01em;
+    margin-bottom: 14px;
+  }
+  .price-pill.muted {
+    background: var(--soft);
+    color: var(--muted);
+    box-shadow: 0 2px 0 var(--line);
+    border: 2px solid var(--line);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 9px 16px;
+  }
+
+  .desc {
+    color: #374151;
+    font-size: 15px;
+    margin: 0;
+    line-height: 1.6;
+  }
+
+  /* Section header pill */
+  .section-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+  .section-head .bar {
+    width: 6px;
+    height: 24px;
+    border-radius: 999px;
+    background: var(--blue);
+    flex: 0 0 auto;
+  }
+  .section-head h2 {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--ink);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0;
+  }
+
+  /* Field block */
+  .field { display: flex; flex-direction: column; gap: 10px; margin-bottom: 22px; }
+  .field:last-child { margin-bottom: 0; }
+  .field-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--ink);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 0;
+  }
+  .field-label .dot {
+    width: 8px; height: 8px;
+    border-radius: 999px;
+    flex: 0 0 auto;
+  }
+  .field-label .dot.blue   { background: var(--blue); }
+  .field-label .dot.purple { background: var(--purple); }
+  .field-label .req { color: #ef4444; margin-left: 2px; }
+  .field-help { font-size: 12px; color: var(--muted); margin: 0; padding: 0 4px; }
+
+  /* Text input — claymorphism style mirrors configurator-form TextField */
+  .text-input-wrap { position: relative; }
+  .text-input {
     width: 100%;
-    height: 50px;
-    border: 1px solid #dbe6e6;
-    border-radius: 14px;
-    padding: 0 14px;
-    font-size: 17px;
+    height: 56px;
+    padding: 0 64px 0 20px;
+    border-radius: 16px;
+    font-size: 18px;
     font-weight: 800;
-    color: #233440;
+    color: var(--ink);
+    background: #fff;
+    border: 2.5px solid var(--line);
     outline: none;
     text-transform: uppercase;
-    box-sizing: border-box;
+    letter-spacing: 0.2em;
+    transition: border-color .15s, box-shadow .15s;
+    font-family: inherit;
   }
-
-  .field input:focus {
-    border-color: #22b8b2;
-    box-shadow: 0 0 0 4px rgba(34, 184, 178, 0.14);
+  .text-input.filled {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(0, 128, 255, 0.12), 0 4px 0 rgba(0, 97, 194, 0.30);
   }
-
-  .field small {
-    display: block;
-    margin-top: 8px;
-    color: #758692;
+  .text-input::placeholder { color: #94a3b8; letter-spacing: normal; font-weight: 600; }
+  .char-count {
+    position: absolute;
+    right: 16px; top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: #94a3b8;
+    pointer-events: none;
   }
+  .char-count.warn { color: #f59e0b; }
+  .char-count.full { color: var(--error); }
 
-  .swatches {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-
+  /* Colour swatches — round chips with green selected ring + check */
+  .swatches { display: flex; flex-wrap: wrap; gap: 12px; padding: 4px 0; }
   .swatch {
-    width: 42px;
-    height: 42px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    background: none;
     border: none;
-    border-radius: 13px;
+    padding: 0;
+    cursor: pointer;
+    min-width: 56px;
+    transition: transform .15s;
+  }
+  .swatch:active { transform: scale(0.95); }
+  .swatch .disc {
+    width: 48px; height: 48px;
+    border-radius: 999px;
     background: var(--sw);
+    border: 2.5px solid rgba(0, 0, 0, 0.10);
     box-shadow:
       inset 4px 4px 6px rgba(255, 255, 255, 0.35),
       inset -4px -4px 6px rgba(0, 0, 0, 0.12),
       0 6px 14px rgba(0, 0, 0, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: transparent;
+    font-weight: 900;
+    font-size: 18px;
+    transition: transform .15s, box-shadow .15s, border-color .15s;
+  }
+  .swatch.active .disc {
+    border: 3px solid var(--green);
+    box-shadow:
+      0 0 0 3px rgba(3, 192, 60, 0.30),
+      0 6px 14px rgba(3, 192, 60, 0.35),
+      inset 4px 4px 6px rgba(255, 255, 255, 0.35),
+      inset -4px -4px 6px rgba(0, 0, 0, 0.12);
+    transform: scale(1.10);
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  }
+  .swatch.active .disc.light { color: var(--ink); text-shadow: none; }
+  .swatch .name {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--muted);
+    text-align: center;
+    max-width: 60px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .swatch.active .name { color: var(--ink); font-weight: 800; }
+
+  /* CTA card */
+  .cta-card {
+    background: rgba(3, 192, 60, 0.08);
+    border: 2.5px solid var(--green);
+    border-radius: 28px;
+    padding: 22px;
+    box-shadow: 0 6px 0 rgba(1, 138, 41, 0.30), 0 16px 32px rgba(11, 16, 32, 0.04);
+    transition: background .2s, border-color .2s, box-shadow .2s;
+  }
+  .cta-card.disabled {
+    background: var(--soft);
+    border-color: rgba(11, 16, 32, 0.10);
+    box-shadow: 0 6px 0 rgba(11, 16, 32, 0.06), 0 16px 32px rgba(11, 16, 32, 0.04);
+  }
+  .cta-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+  .cta-btn {
+    flex: 1;
+    min-width: 0;
+    background: var(--green);
+    color: var(--ink);
+    font-weight: 800;
+    font-size: 16px;
+    padding: 16px;
+    border-radius: 16px;
+    border: none;
     cursor: pointer;
+    box-shadow: 0 4px 0 var(--green-d), 0 8px 24px rgba(3, 192, 60, 0.25);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 56px;
+    transition: transform .1s, background .15s;
   }
-
-  .swatch.active {
-    outline: 3px solid #233440;
-    outline-offset: 3px;
+  .cta-btn:hover { background: var(--green-d); color: #fff; }
+  .cta-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 var(--green-d); }
+  .cta-btn:disabled {
+    background: #e2e8f0;
+    color: #94a3b8;
+    box-shadow: none;
+    cursor: not-allowed;
+    transform: none;
   }
-
-  @media (max-width: 900px) {
-    .name-tag-customizer {
-      grid-template-columns: 1fr;
-    }
+  .wishlist-btn {
+    width: 56px; height: 56px;
+    border-radius: 16px;
+    border: 2.5px solid var(--line);
+    background: #fff;
+    cursor: pointer;
+    font-size: 22px;
+    color: #ef4444;
+    transition: transform .1s, border-color .15s;
   }
+  .wishlist-btn:hover { border-color: #ef4444; transform: scale(1.05); }
 
+  /* Trust strip */
+  .trust-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  @media (min-width: 640px) { .trust-row { grid-template-columns: 1fr 1fr; } }
+  .trust-cell {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 16px;
+  }
+  .trust-cell.blue   { background: rgba(0, 128, 255, 0.06); border: 1.5px solid rgba(0, 128, 255, 0.18); }
+  .trust-cell.green  { background: rgba(3, 192, 60, 0.06); border: 1.5px solid rgba(3, 192, 60, 0.18); }
+  @media (min-width: 1024px) { .trust-cell.green { display: none; } }
+  .trust-cell .ico {
+    width: 32px; height: 32px;
+    border-radius: 10px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex: 0 0 auto;
+  }
+  .trust-cell.blue .ico  { background: var(--blue); }
+  .trust-cell.green .ico { background: var(--green); }
+  .trust-cell .text  { font-size: 13px; color: var(--ink); line-height: 1.4; }
+  .trust-cell .text b { display: block; font-weight: 800; }
+
+  /* Material card */
+  .material-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .material-cell {
+    background: var(--soft);
+    border: 1.5px solid var(--line);
+    border-radius: 14px;
+    padding: 12px 14px;
+  }
+  .material-cell .k {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .material-cell .v { font-size: 14px; font-weight: 700; color: var(--ink); }
+
+  /* Mobile cube tweak */
   @media (max-width: 560px) {
-    .product-preview {
-      justify-content: flex-start;
-      padding-left: 24px;
-      padding-right: 24px;
-    }
-
-    .cube {
-      width: 62px;
-      height: 62px;
-      border-radius: 15px;
-    }
-
-    .cube::before {
-      inset: 6px;
-      border-radius: 12px;
-    }
-
-    .cube .letter {
-      font-size: 26px;
-    }
-
-    .cube.first .side-tab {
-      width: 24px;
-      height: 28px;
-      left: -18px;
-    }
-
-    .cube.first .side-tab::after {
-      width: 12px;
-      height: 12px;
-      left: 4px;
-    }
+    .cube { width: 56px; height: 56px; border-radius: 14px; }
+    .cube::before { inset: 5px; border-radius: 11px; }
+    .cube .letter { font-size: 22px; }
+    .cube.first .side-tab { width: 24px; height: 28px; left: -18px; }
+    .cube.first .side-tab::after { width: 12px; height: 12px; left: 4px; }
   }
 </style>
 </head>
 <body>
-<div class="demo-wrap">
-  <p class="demo-title">Clicker customizer · throwaway demo</p>
-  <section class="name-tag-customizer">
-    <div class="preview-panel">
-      <div class="product-preview">
-        <div class="clicker-chain" id="clickerChain"></div>
+<div class="page">
+
+  <div class="demo-banner">
+    <b>Concept demo</b> — applying the 3-colour cube preview (base + clicker + letter) to the live <b>Pancake Clicker</b> PDP. Layout, palette, claymorphism cards mirror production.
+  </div>
+
+  <a class="breadcrumb">← Keychains</a>
+
+  <div class="pdp-grid">
+
+    <!-- ── LEFT: gallery card ─────────────────────────────── -->
+    <div class="gallery-wrap">
+      <div class="gallery-card">
+        <div class="gallery-inner">
+          <div class="hero">
+            <span class="hero-tag">Live preview</span>
+            <div class="hero-stage">
+              <div class="clicker-chain" id="clickerChain"></div>
+            </div>
+          </div>
+
+          <div class="thumbs">
+            <div class="thumb preview active" title="Live preview">PRE&shy;VIEW</div>
+            <div class="thumb">IMG 1</div>
+            <div class="thumb">IMG 2</div>
+            <div class="thumb">IMG 3</div>
+            <div class="thumb">IMG 4</div>
+          </div>
+        </div>
+
+        <div class="preview-hint live">This is your personalised keychain</div>
+      </div>
+
+      <div class="trust-pill">
+        <span class="trust-icon">✓</span>
+        Secure checkout via PayPal. Made in Kuala Lumpur.
       </div>
     </div>
 
-    <div class="controls-panel">
-      <div class="field">
-        <label for="nameInput">Name / Text</label>
-        <input id="nameInput" type="text" maxlength="8" value="ALAINA" placeholder="Enter name">
-        <small><span id="count">6</span>/8 letters</small>
+    <!-- ── RIGHT: info column ─────────────────────────────── -->
+    <div class="info-col">
+
+      <!-- Header card -->
+      <div class="clay-card">
+        <h1 class="product-title">Pancake Clicker</h1>
+        <div class="rating-row">★ 4.8 <span style="font-weight:600;color:var(--muted)">· 24 reviews</span></div>
+        <div><span class="price-pill" id="pricePill">RM 22.00</span></div>
+        <p class="desc">3D-printed personalised name keychain. Pick your base, clicker, and letter colours — each cube is built with claymorphism layers in food-safe PLA. Made to order from KL.</p>
       </div>
 
-      <div class="field">
-        <label>Base Colour</label>
-        <div class="swatches" data-target="base">
-          <button type="button" class="swatch active" data-color="#b8f0dd" style="--sw:#b8f0dd"></button>
-          <button type="button" class="swatch" data-color="#f8df84" style="--sw:#f8df84"></button>
-          <button type="button" class="swatch" data-color="#f7b1cf" style="--sw:#f7b1cf"></button>
-          <button type="button" class="swatch" data-color="#9fe7f1" style="--sw:#9fe7f1"></button>
-          <button type="button" class="swatch" data-color="#ffae69" style="--sw:#ffae69"></button>
-          <button type="button" class="swatch" data-color="#c7b4ff" style="--sw:#c7b4ff"></button>
+      <!-- Personalise card -->
+      <div class="clay-card">
+        <div class="section-head">
+          <span class="bar"></span>
+          <h2>Personalise your keychain</h2>
+        </div>
+
+        <!-- Name / text -->
+        <div class="field">
+          <label class="field-label" for="nameInput">
+            <span class="dot blue"></span>
+            Your name
+            <span class="req" aria-hidden="true">*</span>
+          </label>
+          <p class="field-help">Letters A–Z only (uppercase), max 8 characters.</p>
+          <div class="text-input-wrap">
+            <input id="nameInput" class="text-input filled" type="text" maxlength="8" value="ALAINA" placeholder="Type your name…" />
+            <span id="charCount" class="char-count">6/8</span>
+          </div>
+        </div>
+
+        <!-- Base colour -->
+        <div class="field">
+          <label class="field-label">
+            <span class="dot purple"></span>
+            Base colour
+            <span class="req" aria-hidden="true">*</span>
+          </label>
+          <p class="field-help">The outer cube shell — pick one.</p>
+          <div class="swatches" data-target="base">
+            <button type="button" class="swatch active" data-color="#b8f0dd">
+              <span class="disc light" style="--sw:#b8f0dd">✓</span><span class="name">Mint</span>
+            </button>
+            <button type="button" class="swatch" data-color="#f8df84">
+              <span class="disc light" style="--sw:#f8df84"></span><span class="name">Butter</span>
+            </button>
+            <button type="button" class="swatch" data-color="#f7b1cf">
+              <span class="disc" style="--sw:#f7b1cf"></span><span class="name">Pink</span>
+            </button>
+            <button type="button" class="swatch" data-color="#9fe7f1">
+              <span class="disc light" style="--sw:#9fe7f1"></span><span class="name">Sky</span>
+            </button>
+            <button type="button" class="swatch" data-color="#ffae69">
+              <span class="disc" style="--sw:#ffae69"></span><span class="name">Mango</span>
+            </button>
+            <button type="button" class="swatch" data-color="#c7b4ff">
+              <span class="disc light" style="--sw:#c7b4ff"></span><span class="name">Lilac</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Clicker colour -->
+        <div class="field">
+          <label class="field-label">
+            <span class="dot purple"></span>
+            Clicker colour
+            <span class="req" aria-hidden="true">*</span>
+          </label>
+          <p class="field-help">The inset middle — pops against the base.</p>
+          <div class="swatches" data-target="clicker">
+            <button type="button" class="swatch active" data-color="#22b8b2">
+              <span class="disc" style="--sw:#22b8b2">✓</span><span class="name">Teal</span>
+            </button>
+            <button type="button" class="swatch" data-color="#c9ea3a">
+              <span class="disc light" style="--sw:#c9ea3a"></span><span class="name">Lime</span>
+            </button>
+            <button type="button" class="swatch" data-color="#e95aa0">
+              <span class="disc" style="--sw:#e95aa0"></span><span class="name">Magenta</span>
+            </button>
+            <button type="button" class="swatch" data-color="#38b8e6">
+              <span class="disc" style="--sw:#38b8e6"></span><span class="name">Azure</span>
+            </button>
+            <button type="button" class="swatch" data-color="#ef8736">
+              <span class="disc" style="--sw:#ef8736"></span><span class="name">Tangerine</span>
+            </button>
+            <button type="button" class="swatch" data-color="#f3c94a">
+              <span class="disc light" style="--sw:#f3c94a"></span><span class="name">Sunny</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Letter colour -->
+        <div class="field">
+          <label class="field-label">
+            <span class="dot purple"></span>
+            Letter colour
+            <span class="req" aria-hidden="true">*</span>
+          </label>
+          <p class="field-help">High-contrast subset for legibility.</p>
+          <div class="swatches" data-target="letter">
+            <button type="button" class="swatch active" data-color="#ffffff">
+              <span class="disc light" style="--sw:#ffffff">✓</span><span class="name">White</span>
+            </button>
+            <button type="button" class="swatch" data-color="#0B1020">
+              <span class="disc" style="--sw:#0B1020"></span><span class="name">Ink</span>
+            </button>
+            <button type="button" class="swatch" data-color="#0080ff">
+              <span class="disc" style="--sw:#0080ff"></span><span class="name">Blue</span>
+            </button>
+            <button type="button" class="swatch" data-color="#ff5b97">
+              <span class="disc" style="--sw:#ff5b97"></span><span class="name">Pink</span>
+            </button>
+            <button type="button" class="swatch" data-color="#8A00C2">
+              <span class="disc" style="--sw:#8A00C2"></span><span class="name">Purple</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      <div class="field">
-        <label>Clicker Colour</label>
-        <div class="swatches" data-target="clicker">
-          <button type="button" class="swatch active" data-color="#22b8b2" style="--sw:#22b8b2"></button>
-          <button type="button" class="swatch" data-color="#c9ea3a" style="--sw:#c9ea3a"></button>
-          <button type="button" class="swatch" data-color="#e95aa0" style="--sw:#e95aa0"></button>
-          <button type="button" class="swatch" data-color="#38b8e6" style="--sw:#38b8e6"></button>
-          <button type="button" class="swatch" data-color="#ef8736" style="--sw:#ef8736"></button>
-          <button type="button" class="swatch" data-color="#f3c94a" style="--sw:#f3c94a"></button>
+      <!-- CTA card -->
+      <div class="cta-card" id="ctaCard">
+        <div class="cta-row">
+          <button class="cta-btn" id="ctaBtn" type="button">
+            <span aria-hidden="true">🛍</span>
+            <span id="ctaLabel">Add to bag · RM 22.00</span>
+          </button>
+          <button class="wishlist-btn" type="button" title="Wishlist">♥</button>
         </div>
       </div>
 
-      <div class="field">
-        <label>Letter Colour</label>
-        <div class="swatches" data-target="letter">
-          <button type="button" class="swatch active" data-color="#ffffff" style="--sw:#ffffff"></button>
-          <button type="button" class="swatch" data-color="#243042" style="--sw:#243042"></button>
-          <button type="button" class="swatch" data-color="#2ea8dc" style="--sw:#2ea8dc"></button>
-          <button type="button" class="swatch" data-color="#ff5b97" style="--sw:#ff5b97"></button>
-          <button type="button" class="swatch" data-color="#8b5cf6" style="--sw:#8b5cf6"></button>
+      <!-- Trust row -->
+      <div class="trust-row">
+        <div class="trust-cell blue">
+          <span class="ico">📦</span>
+          <div class="text">
+            <b>Made to order</b>
+            Ships in 7 business days from KL
+          </div>
+        </div>
+        <div class="trust-cell green">
+          <span class="ico">🔒</span>
+          <div class="text">
+            <b>Secure checkout</b>
+            Protected by PayPal
+          </div>
         </div>
       </div>
+
+      <!-- Material card -->
+      <div class="clay-card">
+        <div class="section-head">
+          <span class="bar" style="background:var(--purple)"></span>
+          <h2>Material &amp; craft</h2>
+        </div>
+        <div class="material-grid">
+          <div class="material-cell">
+            <div class="k">Material</div>
+            <div class="v">PLA · food-safe</div>
+          </div>
+          <div class="material-cell">
+            <div class="k">Layer height</div>
+            <div class="v">0.16 mm</div>
+          </div>
+          <div class="material-cell">
+            <div class="k">Lead time</div>
+            <div class="v">7 business days</div>
+          </div>
+          <div class="material-cell">
+            <div class="k">Origin</div>
+            <div class="v">Kuala Lumpur, MY</div>
+          </div>
+        </div>
+      </div>
+
     </div>
-  </section>
+  </div>
 </div>
 
 <script>
+  // Price tiers mirror seed-keychain-product.ts (1→7, 2→9, 3→12, … 8→30)
+  const TIERS = { 1:7, 2:9, 3:12, 4:15, 5:18, 6:22, 7:26, 8:30 };
+
   const state = {
     name: "ALAINA",
     base: "#b8f0dd",
@@ -330,67 +818,94 @@
     letter: "#ffffff"
   };
 
-  const chain = document.getElementById("clickerChain");
-  const input = document.getElementById("nameInput");
-  const count = document.getElementById("count");
+  const chain      = document.getElementById("clickerChain");
+  const input      = document.getElementById("nameInput");
+  const charCount  = document.getElementById("charCount");
+  const pricePill  = document.getElementById("pricePill");
+  const ctaBtn     = document.getElementById("ctaBtn");
+  const ctaLabel   = document.getElementById("ctaLabel");
+  const ctaCard    = document.getElementById("ctaCard");
 
   function cleanName(value) {
-    return (value || "")
-      .replace(/[^a-zA-Z]/g, "")
-      .toUpperCase()
-      .slice(0, 8);
+    return (value || "").replace(/[^a-zA-Z]/g, "").toUpperCase().slice(0, 8);
+  }
+
+  function fmt(n) { return "RM " + n.toFixed(2); }
+
+  function renderPrice() {
+    const len = cleanName(state.name).length;
+    if (len === 0) {
+      pricePill.textContent = "Enter your name to see price";
+      pricePill.classList.add("muted");
+      ctaBtn.disabled = true;
+      ctaLabel.textContent = "Fill in all fields first";
+      ctaCard.classList.add("disabled");
+      return;
+    }
+    const p = TIERS[len];
+    pricePill.classList.remove("muted");
+    pricePill.textContent = fmt(p);
+    ctaBtn.disabled = false;
+    ctaLabel.textContent = "Add to bag · " + fmt(p);
+    ctaCard.classList.remove("disabled");
   }
 
   function renderChain() {
     const text = cleanName(state.name) || "NAME";
     chain.innerHTML = "";
-
     text.split("").forEach((char, index) => {
       const cube = document.createElement("div");
       cube.className = "cube" + (index === 0 ? " first" : "");
-
       if (index === 0) {
         const tab = document.createElement("div");
         tab.className = "side-tab";
         cube.appendChild(tab);
       }
-
       const letter = document.createElement("div");
       letter.className = "letter";
       letter.textContent = char;
-
       cube.appendChild(letter);
       chain.appendChild(cube);
     });
-
     chain.style.setProperty("--base", state.base);
     chain.style.setProperty("--clicker", state.clicker);
     chain.style.setProperty("--letter", state.letter);
-    count.textContent = cleanName(state.name).length;
   }
 
+  function renderCount() {
+    const len = cleanName(state.name).length;
+    charCount.textContent = len + "/8";
+    charCount.classList.toggle("full", len >= 8);
+    charCount.classList.toggle("warn", len >= 6 && len < 8);
+    input.classList.toggle("filled", len > 0);
+  }
+
+  function rerender() { renderChain(); renderCount(); renderPrice(); }
+
   input.addEventListener("input", function () {
-    state.name = this.value;
-    renderChain();
+    state.name = this.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 8);
+    if (this.value !== state.name) this.value = state.name;
+    rerender();
   });
 
   document.querySelectorAll(".swatches").forEach(group => {
     group.addEventListener("click", function (event) {
       const btn = event.target.closest(".swatch");
       if (!btn) return;
-
       group.querySelectorAll(".swatch").forEach(el => {
         el.classList.remove("active");
+        const d = el.querySelector(".disc");
+        if (d) d.textContent = "";
       });
-
       btn.classList.add("active");
-
+      const d = btn.querySelector(".disc");
+      if (d) d.textContent = "✓";
       state[group.dataset.target] = btn.dataset.color;
       renderChain();
     });
   });
 
-  renderChain();
+  rerender();
 </script>
 </body>
 </html>
