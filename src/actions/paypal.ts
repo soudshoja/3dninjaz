@@ -25,6 +25,11 @@ type BagLineInput = {
   // for configurable items because there is no DB variant to re-verify against;
   // the price was server-derived at add-to-bag time (D-12).
   configurationData?: ConfigurationData | null;
+  // Phase 19 gap fix — configurable lines also send productId so the order_items
+  // snapshot can carry the real product reference (slug looked up server-side).
+  // Empty productId would break "View product" links from order detail and the
+  // admin's printer manifest. Stocked lines derive productId from variantId.
+  productId?: string;
 };
 
 type CreateOrderInput = {
@@ -257,6 +262,25 @@ export async function createPayPalOrder(
   // Phase 19 (19-09) — append configurable line snapshots.
   // Price is trusted from configurationData.computedPrice (server-derived at
   // add-to-bag time — no DB variant to re-verify for made-to-order items).
+  // Phase 19 gap fix — fetch real productId/slug/name for configurable lines
+  // so order_items has true product references (admin printer manifest +
+  // "View product" links from order detail).
+  const configurableProductIds = [
+    ...new Set(
+      configurableInputLines
+        .map((l) => l.productId)
+        .filter((id): id is string => typeof id === "string" && id.length > 0),
+    ),
+  ];
+  const configurableProductRows =
+    configurableProductIds.length > 0
+      ? await db
+          .select({ id: products.id, slug: products.slug, name: products.name })
+          .from(products)
+          .where(inArray(products.id, configurableProductIds))
+      : [];
+  const productById = new Map(configurableProductRows.map((p) => [p.id, p]));
+
   type ConfigSnap = typeof snapshots[0] & { configurationData: ConfigurationData | null };
   const allSnapshots: ConfigSnap[] = [
     ...snapshots.map((s) => ({ ...s, configurationData: null as ConfigurationData | null })),
@@ -264,11 +288,12 @@ export async function createPayPalOrder(
       const cfg = line.configurationData!;
       const qty = Math.max(1, Math.min(10, Math.floor(Number(line.quantity) || 1)));
       const unitPrice = cfg.computedPrice.toFixed(2);
+      const product = line.productId ? productById.get(line.productId) : undefined;
       return {
         variantId: "NONE", // sentinel — configurable lines have no variant
-        productId: "",     // unknown at this layer; written empty, admin sees configurationData
-        productName: cfg.computedSummary.slice(0, 127),
-        productSlug: "",
+        productId: product?.id ?? line.productId ?? "",
+        productName: product?.name ?? cfg.computedSummary.slice(0, 127),
+        productSlug: product?.slug ?? "",
         productImage: null,
         variantLabel: cfg.computedSummary,
         unitPrice,

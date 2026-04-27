@@ -60,7 +60,9 @@ export function PayPalButton({
       items: itemsRef.current.map((i) => ({
         variantId: i.variantId,
         quantity: i.quantity,
-        ...(i.configurationData ? { configurationData: i.configurationData } : {}),
+        ...(i.configurationData
+          ? { configurationData: i.configurationData, productId: i.productId }
+          : {}),
       })),
       // Plan 05-03: optional coupon code; server re-validates + recomputes
       // discount; client-supplied amount is never trusted (T-05-03-tampering)
