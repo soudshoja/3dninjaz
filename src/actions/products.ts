@@ -141,6 +141,8 @@ export async function createProduct(
     isFeatured: productData.isFeatured,
     categoryId: resolvedCategoryId,
     subcategoryId: productData.subcategoryId || null,
+    // Phase 19 (19-03) — persist product type chosen at creation
+    productType: productData.productType ?? "stocked",
   });
 
   if (variants.length > 0) {
@@ -231,6 +233,8 @@ export async function updateProduct(
       isFeatured: productData.isFeatured,
       categoryId: resolvedCategoryId,
       subcategoryId: productData.subcategoryId || null,
+      // Phase 19 (19-03) — persist product type (additive, no variant logic change)
+      productType: productData.productType ?? "stocked",
     })
     .where(eq(products.id, id));
 

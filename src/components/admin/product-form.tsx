@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Save } from "lucide-react";
 import { createProduct, updateProduct } from "@/actions/products";
+import { updateProductType } from "@/actions/configurator";
+import { ProductTypeRadio } from "@/components/admin/product-type-radio";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,6 +38,9 @@ export type ProductFormInitial = {
   isFeatured: boolean;
   categoryId: string | null;
   subcategoryId: string | null;
+  // Phase 19 (19-03) — product type + lock state
+  productType?: "stocked" | "configurable";
+  lockedReason?: string;
 };
 
 export type CategoryOption = { id: string; name: string };
@@ -83,6 +88,10 @@ export function ProductForm({
   );
   const [isActive, setIsActive] = useState(initialData?.isActive ?? true);
   const [isFeatured, setIsFeatured] = useState(initialData?.isFeatured ?? false);
+  // Phase 19 (19-03) — product type state
+  const [productType, setProductType] = useState<"stocked" | "configurable">(
+    initialData?.productType ?? "stocked"
+  );
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -133,10 +142,22 @@ export function ProductForm({
       isFeatured,
       categoryId: categoryId === NO_CATEGORY ? null : categoryId,
       subcategoryId: subcategoryId === NO_CATEGORY ? null : subcategoryId,
+      // Phase 19 (19-03) — include productType in every save
+      productType,
       variants: [],
     };
 
     startTransition(async () => {
+      // Phase 19 (19-03) — if editing and productType changed, call updateProductType
+      // before the regular updateProduct to enforce attachment guard server-side.
+      if (editing && initialData!.productType !== productType) {
+        const typeResult = await updateProductType(initialData!.id, productType);
+        if (!typeResult.ok) {
+          setSubmitError(typeResult.error);
+          return;
+        }
+      }
+
       const result = editing
         ? await updateProduct(initialData!.id, payload)
         : await createProduct(payload);
@@ -156,7 +177,12 @@ export function ProductForm({
       }
 
       if (!editing && "productId" in result && result.productId) {
-        router.push(`/admin/products/${result.productId}/variants`);
+        // Phase 19 (19-03) — new configurable products go to configurator, stocked to variants
+        if (productType === "configurable") {
+          router.push(`/admin/products/${result.productId}/configurator`);
+        } else {
+          router.push(`/admin/products/${result.productId}/variants`);
+        }
       } else {
         router.push("/admin/products");
       }
@@ -166,6 +192,24 @@ export function ProductForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Phase 19 (19-03) — Product type radio: must be first child of form */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Product Type</CardTitle>
+          <p className="text-sm text-[var(--color-brand-text-muted)]">
+            Choose the type before filling in details. This determines how customers interact with the product.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <ProductTypeRadio
+            value={productType}
+            onChange={setProductType}
+            locked={!!initialData?.lockedReason}
+            lockedReason={initialData?.lockedReason}
+          />
+        </CardContent>
+      </Card>
+
       {/* Basic Info */}
       <Card>
         <CardHeader>
@@ -295,30 +339,51 @@ export function ProductForm({
         </CardContent>
       </Card>
 
-      {/* Variants */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Variants</CardTitle>
-          <p className="text-sm text-[var(--color-brand-text-muted)]">
-            Sizes, colors, parts, prices, stock, and images are managed on the
-            dedicated variants page.
-          </p>
-        </CardHeader>
-        <CardContent>
-          {initialData?.id ? (
+      {/* Variants — only shown for stocked products; configurator link shown for configurable */}
+      {productType === "stocked" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Variants</CardTitle>
+            <p className="text-sm text-[var(--color-brand-text-muted)]">
+              Sizes, colors, parts, prices, stock, and images are managed on the
+              dedicated variants page.
+            </p>
+          </CardHeader>
+          <CardContent>
+            {initialData?.id ? (
+              <a
+                href={`/admin/products/${initialData.id}/variants`}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
+              >
+                Manage variants →
+              </a>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Save the product first, then manage its variants.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+      {/* Phase 19 (19-03) — Configurator link for made-to-order products */}
+      {productType === "configurable" && initialData?.id && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Configurator</CardTitle>
+            <p className="text-sm text-[var(--color-brand-text-muted)]">
+              Define the customisation fields customers fill in (name, colours, etc.) and set tier pricing.
+            </p>
+          </CardHeader>
+          <CardContent>
             <a
-              href={`/admin/products/${initialData.id}/variants`}
+              href={`/admin/products/${initialData.id}/configurator`}
               className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
             >
-              Manage variants →
+              Manage Configurator →
             </a>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Save the product first, then manage its variants.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Details */}
       <Card>

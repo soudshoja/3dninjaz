@@ -136,6 +136,11 @@ export const productSchema = z.object({
   // rows are backfilled; the storefront treats null-subcategory products
   // as "uncategorized" until admin edits them.
   subcategoryId: z.string().uuid().optional().nullable(),
+  // Phase 19 (19-03) — product type discriminator. Defaults to 'stocked' for
+  // backwards compat with existing forms that don't send this field.
+  productType: z
+    .enum(["stocked", "configurable"])
+    .default("stocked"),
   variants: z
     .array(productVariantSchema)
     .default([]),
