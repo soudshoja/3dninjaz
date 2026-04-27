@@ -253,6 +253,27 @@ export function ensureConfigurationData(raw: unknown): ConfigurationData | null 
 }
 
 // ============================================================================
+// ensureOrderItemConfigData
+// ============================================================================
+
+/**
+ * Read-side parse for order_items.configurationData LONGTEXT column.
+ *
+ * Returns null on parse error or shape mismatch — never throws.
+ * Accepts both a raw JSON string (what MariaDB 10.11 returns for LONGTEXT)
+ * and a pre-parsed object (defensive for future mysql2 behaviour changes).
+ *
+ * Used by all four order-render surfaces:
+ *   - admin order detail  (/admin/orders/[id])
+ *   - customer order detail (/orders/[id])
+ *   - invoice PDF          (/orders/[id]/invoice.pdf)
+ *   - order-confirmation email
+ */
+export function ensureOrderItemConfigData(raw: unknown): ConfigurationData | null {
+  return ensureConfigurationData(raw);
+}
+
+// ============================================================================
 // lookupTierPrice
 // ============================================================================
 

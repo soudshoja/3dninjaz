@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { getAdminOrder } from "@/actions/admin-orders";
+import { ensureOrderItemConfigData } from "@/lib/config-fields";
 import { BRAND } from "@/lib/brand";
 import { formatOrderNumber } from "@/lib/orders";
 import { formatMYR } from "@/lib/format";
@@ -252,8 +253,24 @@ export default async function AdminOrderDetailPage({
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold truncate">{i.productName}</p>
                       <p className="text-sm text-slate-600">
-                        {i.variantLabel ?? (i.size ? `Size ${i.size}` : null)} · Qty {i.quantity} · {formatMYR(i.unitPrice)} each
+                        {(() => {
+                          const cfg = ensureOrderItemConfigData(i.configurationData);
+                          const summary = cfg?.computedSummary ?? i.variantLabel ?? (i.size ? `Size ${i.size}` : null);
+                          return <>{summary ? `${summary} · ` : ""}Qty {i.quantity} · {formatMYR(i.unitPrice)} each</>;
+                        })()}
                       </p>
+                      {(() => {
+                        const cfg = ensureOrderItemConfigData(i.configurationData);
+                        if (!cfg) return null;
+                        return (
+                          <details className="mt-1 text-xs text-slate-500">
+                            <summary className="cursor-pointer">Configuration JSON (printer manifest)</summary>
+                            <pre className="text-[11px] mt-1 p-2 bg-slate-50 rounded overflow-x-auto">
+                              {JSON.stringify(cfg.values, null, 2)}
+                            </pre>
+                          </details>
+                        );
+                      })()}
                     </div>
                     <p className="font-[var(--font-heading)] text-lg whitespace-nowrap">
                       {formatMYR(i.lineTotal)}

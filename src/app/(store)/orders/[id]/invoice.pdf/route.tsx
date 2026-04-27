@@ -148,6 +148,7 @@ export async function GET(
           productName: i.productName,
           size: i.size,
           variantLabel: i.variantLabel ?? null,
+          configurationData: i.configurationData ?? null, // Phase 19 (19-09)
           quantity: i.quantity,
           unitPrice: i.unitPrice,
           lineTotal: i.lineTotal,
