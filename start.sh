@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
 # Canonical boot script for the 3D Ninjaz /v1 Node app on the cPanel server.
 #
+# ============================================================
+# DEPLOY WARNING — READ BEFORE RUNNING RSYNC / TAR DEPLOYS
+# ============================================================
+# public/uploads is a SYMLINK on the server pointing to:
+#   /home/ninjaz/uploads/3dninjaz_v1
+# This persistent directory lives OUTSIDE the deploy tree so
+# that deploys can never clobber user-uploaded product images.
+#
+# Any rsync or tar transfer MUST exclude this path:
+#   rsync --exclude-from=.deployignore ...
+#   tar --exclude-from=.deployignore ...
+#
+# See .deployignore in the repo root for the full exclusion list.
+# ============================================================
+#
 # Context / why this exists:
 #   When operators boot the app via `ssh root@server "su - ninjaz -c './start.sh'"`,
 #   the outer ssh channel exits immediately. Without `setsid`, the ninjaz shell

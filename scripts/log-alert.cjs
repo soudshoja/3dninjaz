@@ -61,6 +61,10 @@ const IGNORE_PATTERNS = [
   /^\s+at /,                        // Stack trace continuation lines
   /^\s*\{$/,                        // Opening brace of structured log object
   /^\s*\}$/,                        // Closing brace
+  /ChunkLoadError/,                 // Stale browser sessions hitting old _next chunks after deploy — self-resolves on reload
+  /Loading chunk \d+ failed/,       // Same: old chunks vs new BUILD_ID
+  /\[pickImage\] manifest read failed/, // Logged for monitoring but not crash-level — informational
+  /next\/dist\/.*ChunkLoad/,        // Next.js chunk-load stack frames
 ];
 
 // ---------------------------------------------------------------------------
