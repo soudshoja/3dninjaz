@@ -52,10 +52,9 @@ export function KeychainPreview({ text, baseHex, letterHex, maxLength }: Props) 
   return (
     <svg
       viewBox={`0 0 ${width} ${SVG_HEIGHT}`}
-      width="100%"
       aria-label={text ? `Preview shows ${text}` : "Type your name to see preview"}
       role="img"
-      style={{ display: "block", width: "100%", height: "auto" }}
+      style={{ display: "block", height: 200, width: "auto", margin: "0 auto" }}
     >
       {/* Keychain ring — same fill as base */}
       <circle
