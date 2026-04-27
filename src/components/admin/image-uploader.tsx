@@ -3,14 +3,93 @@
 import { useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import { UploadCloud, X, Star } from "lucide-react";
-import {
-  uploadProductImage,
-  deleteProductImage,
-} from "@/actions/uploads";
+import { deleteProductImage } from "@/actions/uploads";
 import { Button } from "@/components/ui/button";
 
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
 const MAX_BYTES = 50 * 1024 * 1024;
+
+// ---------------------------------------------------------------------------
+// Progress tracking types
+// ---------------------------------------------------------------------------
+
+type UploadProgress = {
+  fileName: string;
+  index: number;
+  total: number;
+  /** 0-100 — represents the XHR upload phase only. */
+  percent: number;
+  bytesUploaded: number;
+  bytesTotal: number;
+  /** True when XHR upload is complete but the server is still processing (Sharp encoding). */
+  processing: boolean;
+};
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * Upload a single FormData payload to the Route Handler using XHR so that
+ * `upload.onprogress` fires during the actual byte transfer phase.
+ *
+ * The returned promise resolves to `{ url }` on success or `{ error }` on
+ * failure — the same shape the old Server Action returned.
+ */
+function uploadWithProgress(
+  fd: FormData,
+  onProgress: (loaded: number, total: number) => void,
+  onUploaded: () => void,
+): Promise<{ url?: string; error?: string }> {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/admin/upload-image");
+
+    // Fires repeatedly while bytes are being sent to the server.
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(e.loaded, e.total);
+    };
+
+    // Fires when the upload byte-transfer phase ends (before server responds).
+    // At this point Sharp is encoding — no further progress signal is available.
+    xhr.upload.onload = () => {
+      onUploaded();
+    };
+
+    xhr.onload = () => {
+      try {
+        const json = JSON.parse(xhr.responseText) as {
+          url?: string;
+          error?: string;
+        };
+        if (xhr.status >= 200 && xhr.status < 300 && json.url) {
+          resolve({ url: json.url });
+        } else {
+          resolve({ error: json.error ?? `HTTP ${xhr.status}` });
+        }
+      } catch {
+        resolve({ error: `HTTP ${xhr.status}` });
+      }
+    };
+
+    xhr.onerror = () => resolve({ error: "Network error" });
+    xhr.ontimeout = () => resolve({ error: "Upload timed out" });
+    // 2-minute timeout — Sharp encoding large images can take 30+ seconds.
+    xhr.timeout = 120_000;
+
+    xhr.send(fd);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 export function ImageUploader({
   images,
@@ -37,6 +116,7 @@ export function ImageUploader({
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [progress, setProgress] = useState<UploadProgress | null>(null);
   const bucket = productId ?? "new";
   const remaining = Math.max(0, maxImages - images.length);
 
@@ -45,9 +125,12 @@ export function ImageUploader({
     if (files.length === 0) return;
 
     setError(null);
-
+    const total = files.length;
     const added: string[] = [];
-    for (const file of files) {
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+
       if (!ALLOWED_MIME.includes(file.type)) {
         setError(`Unsupported type: ${file.type}. Use JPEG, PNG, WebP, or HEIC.`);
         continue;
@@ -57,17 +140,58 @@ export function ImageUploader({
         continue;
       }
 
+      // Show initial progress state for this file.
+      setProgress({
+        fileName: file.name,
+        index: i + 1,
+        total,
+        percent: 0,
+        bytesUploaded: 0,
+        bytesTotal: file.size,
+        processing: false,
+      });
+
       const fd = new FormData();
       fd.set("file", file);
       fd.set("productId", bucket);
-      const result = await uploadProductImage(fd);
-      if ("error" in result) {
+
+      const result = await uploadWithProgress(
+        fd,
+        (loaded, t) => {
+          setProgress({
+            fileName: file.name,
+            index: i + 1,
+            total,
+            percent: Math.round((loaded / t) * 100),
+            bytesUploaded: loaded,
+            bytesTotal: t,
+            processing: false,
+          });
+        },
+        () => {
+          // Upload transfer complete — server is now encoding with Sharp.
+          setProgress((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  percent: 100,
+                  bytesUploaded: prev.bytesTotal,
+                  processing: true,
+                }
+              : prev,
+          );
+        },
+      );
+
+      if (result.error) {
         setError(result.error);
+        setProgress(null);
         continue;
       }
-      added.push(result.url);
+      if (result.url) added.push(result.url);
     }
 
+    setProgress(null);
     if (added.length > 0) {
       onImagesChange([...images, ...added]);
     }
@@ -122,6 +246,7 @@ export function ImageUploader({
   }
 
   const atLimit = images.length >= maxImages;
+  const isUploading = pending && progress !== null;
 
   return (
     <div className="space-y-3">
@@ -150,21 +275,61 @@ export function ImageUploader({
       >
         <UploadCloud className="h-8 w-8 text-[var(--color-brand-text-muted)]" />
         <p className="text-sm font-medium">
-          {atLimit
-            ? "Maximum images reached"
-            : pending
-              ? "Uploading..."
-              : "Drag & drop images here or click to upload"}
+          {atLimit ? (
+            "Maximum images reached"
+          ) : isUploading && progress ? (
+            progress.processing ? (
+              <span>
+                Processing {progress.fileName}
+                {progress.total > 1 ? ` (${progress.index} of ${progress.total})` : ""}
+                &hellip;
+              </span>
+            ) : (
+              <span>
+                Uploading {progress.fileName}
+                {progress.total > 1 ? ` (${progress.index} of ${progress.total})` : ""} &mdash;{" "}
+                {progress.percent}%
+              </span>
+            )
+          ) : pending ? (
+            "Uploading..."
+          ) : (
+            "Drag & drop images here or click to upload"
+          )}
         </p>
-        <p className="text-xs text-[var(--color-brand-text-muted)]">
-          JPEG, PNG, WebP, or HEIC &middot; any size — auto-compressed &middot; {images.length}/
-          {maxImages} images
-        </p>
-        {onThumbnailChange ? (
+
+        {/* Progress bar — only visible during active upload */}
+        {isUploading && progress ? (
+          <div className="w-full max-w-xs space-y-1">
+            <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+              <div
+                className="h-full rounded-full bg-[var(--color-brand-cta)] transition-all duration-150"
+                style={{ width: `${progress.percent}%` }}
+              />
+            </div>
+            <p className="text-center text-xs text-[var(--color-brand-text-muted)]">
+              {progress.processing ? (
+                "Encoding image — please wait..."
+              ) : (
+                <>
+                  {formatBytes(progress.bytesUploaded)} / {formatBytes(progress.bytesTotal)}
+                </>
+              )}
+            </p>
+          </div>
+        ) : (
+          <p className="text-xs text-[var(--color-brand-text-muted)]">
+            JPEG, PNG, WebP, or HEIC &middot; any size — auto-compressed &middot; {images.length}/
+            {maxImages} images
+          </p>
+        )}
+
+        {!isUploading && onThumbnailChange ? (
           <p className="text-xs text-[var(--color-brand-text-muted)]">
             Tap the star on an image to use it as the storefront card thumbnail.
           </p>
         ) : null}
+
         <input
           ref={inputRef}
           type="file"
