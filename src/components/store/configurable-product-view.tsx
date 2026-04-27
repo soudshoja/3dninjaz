@@ -264,18 +264,21 @@ export function ConfigurableProductView({
   const leadDays = product.estimatedProductionDays ?? 7;
 
   // ── Preview node (passed to gallery) ─────────────────────────────────────
+  // Container sized so the keychain preview is large enough to read on phones.
+  // The KeychainPreview SVG itself uses width:100% and scales to its container.
   const previewNode = (
     <div
       ref={previewRef}
-      className="flex w-full items-center justify-center py-6 sm:py-10 overflow-x-auto"
-      style={{ minHeight: 240 }}
+      className="flex w-full items-center justify-center px-4 py-6 sm:py-10 min-h-[320px] lg:min-h-[480px] overflow-x-auto"
     >
-      <KeychainPreview
-        text={textValue}
-        baseHex={baseHex}
-        letterHex={letterHex}
-        maxLength={maxLength}
-      />
+      <div style={{ width: "100%", maxWidth: "100%" }}>
+        <KeychainPreview
+          text={textValue}
+          baseHex={baseHex}
+          letterHex={letterHex}
+          maxLength={maxLength}
+        />
+      </div>
     </div>
   );
 
