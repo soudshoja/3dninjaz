@@ -350,7 +350,8 @@ export async function reorderConfigFields(
   const existing = await db
     .select({ id: productConfigFields.id })
     .from(productConfigFields)
-    .where(eq(productConfigFields.productId, productId));
+    .where(eq(productConfigFields.productId, productId))
+    .limit(1000); // explicit limit; 1000 fields per product is far beyond realistic use
 
   const existingSet = new Set(existing.map((r) => r.id));
   const orderedSet = new Set(orderedIds);

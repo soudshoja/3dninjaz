@@ -54,6 +54,23 @@ type Props = {
    * Awaited before the dialog closes so variant matrix stays consistent.
    */
   onConfirmed: () => Promise<void> | void;
+  // ---------------------------------------------------------------------------
+  // Phase 19-04 (D-08) — select-multiple mode for configurator builder.
+  // Default: "attach-to-option" (Phase 18 behaviour unchanged).
+  // ---------------------------------------------------------------------------
+  /**
+   * "attach-to-option" (default) — calls attachLibraryColours server action,
+   * then onConfirmed(). Phase 18 behaviour.
+   *
+   * "select-multiple" — does NOT write to DB. Seeds selection from
+   * preSelectedColourIds. Confirm calls onSelectMultiple(ids) and closes.
+   * Used by config-field-modal to pick allowedColorIds for a colour field.
+   */
+  mode?: "attach-to-option" | "select-multiple";
+  /** Pre-selected colour ids when mode="select-multiple" */
+  preSelectedColourIds?: string[];
+  /** Called on Confirm when mode="select-multiple" */
+  onSelectMultiple?: (selectedIds: string[]) => void;
 };
 
 type Brand = "All" | "Bambu" | "Polymaker" | "Other";
@@ -66,6 +83,10 @@ export function ColourPickerDialog({
   productId: _productId, // see prop docstring — kept for caller symmetry
   alreadyAttachedColourIds,
   onConfirmed,
+  // Phase 19-04 (D-08) additions — default to existing behaviour
+  mode = "attach-to-option",
+  preSelectedColourIds,
+  onSelectMultiple,
 }: Props) {
   const [pending, startTransition] = useTransition();
   const [loading, setLoading] = useState(false);
@@ -81,7 +102,12 @@ export function ColourPickerDialog({
     if (!open) return;
     setLoading(true);
     setError(null);
-    setSelectedIds(new Set());
+    // Phase 19-04: seed pre-selected ids in select-multiple mode
+    setSelectedIds(
+      mode === "select-multiple" && preSelectedColourIds
+        ? new Set(preSelectedColourIds)
+        : new Set()
+    );
     setSearch("");
     setBrand("All");
     setFamily("All");
@@ -89,6 +115,7 @@ export function ColourPickerDialog({
       .then((data) => setRows(data))
       .catch(() => setError("Could not load colours. Please close and reopen."))
       .finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   // Client-side filter (D-06). Brand + Family selects intersect with search.
@@ -115,6 +142,16 @@ export function ColourPickerDialog({
   const onConfirm = () => {
     if (selectedIds.size === 0) return;
     setError(null);
+
+    // Phase 19-04: branch by mode
+    if (mode === "select-multiple") {
+      // No DB write — return selected ids to caller via onSelectMultiple
+      onSelectMultiple?.(Array.from(selectedIds));
+      onOpenChange(false);
+      return;
+    }
+
+    // Default: "attach-to-option" — Phase 18 behaviour unchanged
     startTransition(async () => {
       const ids = Array.from(selectedIds);
       const res = await attachLibraryColours(optionId, ids);
@@ -385,9 +422,12 @@ export function ColourPickerDialog({
               className="rounded-full px-6 py-3 font-bold text-white min-h-[48px] disabled:opacity-50"
               style={{ backgroundColor: BRAND.ink }}
             >
-              {pending
-                ? "Adding…"
-                : `Add ${selectedCount} colour${selectedCount === 1 ? "" : "s"}`}
+              {/* Phase 19-04: different label in select-multiple mode */}
+              {mode === "select-multiple"
+                ? `Use ${selectedCount} selected colour${selectedCount === 1 ? "" : "s"}`
+                : pending
+                  ? "Adding…"
+                  : `Add ${selectedCount} colour${selectedCount === 1 ? "" : "s"}`}
             </button>
           </div>
         </DialogFooter>
