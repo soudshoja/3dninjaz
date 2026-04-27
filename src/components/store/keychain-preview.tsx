@@ -24,14 +24,14 @@ type Props = {
   maxLength: number;
 };
 
-const CAP_SIZE = 56;
-const CAP_GAP = 8;
-const CAP_RX = 10;
-const RING_R = 16;
-const RING_STROKE = 5;
+const CAP_SIZE = 120;
+const CAP_GAP = 12;
+const CAP_RX = 22;
+const RING_R = 32;
+const RING_STROKE = 9;
 // Left padding for ring; ring takes ~RING_R*2 + gap before first cap
-const LEFT_PAD = RING_R * 2 + CAP_GAP + 4;
-const SVG_HEIGHT = 80;
+const LEFT_PAD = RING_R * 2 + CAP_GAP + 6;
+const SVG_HEIGHT = CAP_SIZE + 40; // caps + breathing room top/bottom
 const SVG_TOP_PAD = (SVG_HEIGHT - CAP_SIZE) / 2; // vertically centred
 
 /**
@@ -103,10 +103,10 @@ export function KeychainPreview({ text, baseHex, letterHex, maxLength }: Props) 
             {!isEmpty && (
               <text
                 x={x + CAP_SIZE / 2}
-                y={y + CAP_SIZE / 2 + 9}
+                y={y + CAP_SIZE / 2 + 18}
                 textAnchor="middle"
                 fill={letterHex}
-                fontSize={22}
+                fontSize={48}
                 fontWeight="800"
                 fontFamily="Chakra Petch, ui-sans-serif, system-ui, sans-serif"
                 style={{ userSelect: "none" }}
