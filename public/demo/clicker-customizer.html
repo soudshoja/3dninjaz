@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex,nofollow" />
+<title>Clicker Customizer — Demo</title>
+<style>
+  body {
+    margin: 0;
+    padding: 32px 16px;
+    background: #f3f7f7;
+    min-height: 100vh;
+    box-sizing: border-box;
+  }
+
+  .demo-wrap {
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .demo-title {
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: #758692;
+    margin: 0 0 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .name-tag-customizer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 380px;
+    gap: 24px;
+    align-items: start;
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  .preview-panel,
+  .controls-panel {
+    background: #ffffff;
+    border: 1px solid #e6eded;
+    border-radius: 24px;
+    box-shadow: 0 14px 34px rgba(24, 45, 55, 0.08);
+  }
+
+  .preview-panel {
+    padding: 24px;
+  }
+
+  .product-preview {
+    min-height: 280px;
+    border-radius: 20px;
+    background: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow-x: auto;
+    padding: 32px 28px;
+    position: relative;
+  }
+
+  .product-preview::after {
+    content: "";
+    position: absolute;
+    bottom: 34px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 420px;
+    max-width: 75%;
+    height: 24px;
+    background: rgba(20, 40, 50, 0.12);
+    filter: blur(14px);
+    border-radius: 999px;
+    pointer-events: none;
+  }
+
+  .clicker-chain {
+    --base: #b8f0dd;
+    --clicker: #22b8b2;
+    --letter: #ffffff;
+
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding-left: 28px;
+    z-index: 2;
+  }
+
+  .cube {
+    width: 74px;
+    height: 74px;
+    position: relative;
+    border-radius: 18px;
+    background: var(--base);
+    box-shadow:
+      inset 4px 4px 7px rgba(255, 255, 255, 0.55),
+      inset -5px -5px 8px rgba(0, 0, 0, 0.16),
+      0 5px 0 rgba(0, 0, 0, 0.12),
+      0 10px 16px rgba(0, 0, 0, 0.12);
+    flex: 0 0 auto;
+  }
+
+  .cube::before {
+    content: "";
+    position: absolute;
+    inset: 7px;
+    border-radius: 14px;
+    background: var(--clicker);
+    box-shadow:
+      inset 4px 4px 6px rgba(255, 255, 255, 0.42),
+      inset -5px -5px 8px rgba(0, 0, 0, 0.18),
+      0 3px 0 rgba(0, 0, 0, 0.10);
+  }
+
+  .cube .letter {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--letter);
+    font-size: 31px;
+    font-weight: 900;
+    line-height: 1;
+    text-transform: uppercase;
+    z-index: 2;
+    text-shadow:
+      0 1px 0 rgba(0, 0, 0, 0.10),
+      0 3px 6px rgba(0, 0, 0, 0.14);
+  }
+
+  .cube.first .side-tab {
+    position: absolute;
+    left: -22px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 28px;
+    height: 34px;
+    border-radius: 14px 0 0 14px;
+    background: var(--base);
+    box-shadow:
+      inset 4px 4px 7px rgba(255, 255, 255, 0.50),
+      inset -5px -5px 8px rgba(0, 0, 0, 0.16),
+      0 5px 0 rgba(0, 0, 0, 0.10);
+  }
+
+  .cube.first .side-tab::after {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.16);
+  }
+
+  .controls-panel {
+    padding: 24px;
+  }
+
+  .field {
+    margin-bottom: 22px;
+  }
+
+  .field label {
+    display: block;
+    font-size: 14px;
+    font-weight: 800;
+    color: #233440;
+    margin-bottom: 10px;
+  }
+
+  .field input {
+    width: 100%;
+    height: 50px;
+    border: 1px solid #dbe6e6;
+    border-radius: 14px;
+    padding: 0 14px;
+    font-size: 17px;
+    font-weight: 800;
+    color: #233440;
+    outline: none;
+    text-transform: uppercase;
+    box-sizing: border-box;
+  }
+
+  .field input:focus {
+    border-color: #22b8b2;
+    box-shadow: 0 0 0 4px rgba(34, 184, 178, 0.14);
+  }
+
+  .field small {
+    display: block;
+    margin-top: 8px;
+    color: #758692;
+  }
+
+  .swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .swatch {
+    width: 42px;
+    height: 42px;
+    border: none;
+    border-radius: 13px;
+    background: var(--sw);
+    box-shadow:
+      inset 4px 4px 6px rgba(255, 255, 255, 0.35),
+      inset -4px -4px 6px rgba(0, 0, 0, 0.12),
+      0 6px 14px rgba(0, 0, 0, 0.12);
+    cursor: pointer;
+  }
+
+  .swatch.active {
+    outline: 3px solid #233440;
+    outline-offset: 3px;
+  }
+
+  @media (max-width: 900px) {
+    .name-tag-customizer {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .product-preview {
+      justify-content: flex-start;
+      padding-left: 24px;
+      padding-right: 24px;
+    }
+
+    .cube {
+      width: 62px;
+      height: 62px;
+      border-radius: 15px;
+    }
+
+    .cube::before {
+      inset: 6px;
+      border-radius: 12px;
+    }
+
+    .cube .letter {
+      font-size: 26px;
+    }
+
+    .cube.first .side-tab {
+      width: 24px;
+      height: 28px;
+      left: -18px;
+    }
+
+    .cube.first .side-tab::after {
+      width: 12px;
+      height: 12px;
+      left: 4px;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="demo-wrap">
+  <p class="demo-title">Clicker customizer · throwaway demo</p>
+  <section class="name-tag-customizer">
+    <div class="preview-panel">
+      <div class="product-preview">
+        <div class="clicker-chain" id="clickerChain"></div>
+      </div>
+    </div>
+
+    <div class="controls-panel">
+      <div class="field">
+        <label for="nameInput">Name / Text</label>
+        <input id="nameInput" type="text" maxlength="8" value="ALAINA" placeholder="Enter name">
+        <small><span id="count">6</span>/8 letters</small>
+      </div>
+
+      <div class="field">
+        <label>Base Colour</label>
+        <div class="swatches" data-target="base">
+          <button type="button" class="swatch active" data-color="#b8f0dd" style="--sw:#b8f0dd"></button>
+          <button type="button" class="swatch" data-color="#f8df84" style="--sw:#f8df84"></button>
+          <button type="button" class="swatch" data-color="#f7b1cf" style="--sw:#f7b1cf"></button>
+          <button type="button" class="swatch" data-color="#9fe7f1" style="--sw:#9fe7f1"></button>
+          <button type="button" class="swatch" data-color="#ffae69" style="--sw:#ffae69"></button>
+          <button type="button" class="swatch" data-color="#c7b4ff" style="--sw:#c7b4ff"></button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Clicker Colour</label>
+        <div class="swatches" data-target="clicker">
+          <button type="button" class="swatch active" data-color="#22b8b2" style="--sw:#22b8b2"></button>
+          <button type="button" class="swatch" data-color="#c9ea3a" style="--sw:#c9ea3a"></button>
+          <button type="button" class="swatch" data-color="#e95aa0" style="--sw:#e95aa0"></button>
+          <button type="button" class="swatch" data-color="#38b8e6" style="--sw:#38b8e6"></button>
+          <button type="button" class="swatch" data-color="#ef8736" style="--sw:#ef8736"></button>
+          <button type="button" class="swatch" data-color="#f3c94a" style="--sw:#f3c94a"></button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Letter Colour</label>
+        <div class="swatches" data-target="letter">
+          <button type="button" class="swatch active" data-color="#ffffff" style="--sw:#ffffff"></button>
+          <button type="button" class="swatch" data-color="#243042" style="--sw:#243042"></button>
+          <button type="button" class="swatch" data-color="#2ea8dc" style="--sw:#2ea8dc"></button>
+          <button type="button" class="swatch" data-color="#ff5b97" style="--sw:#ff5b97"></button>
+          <button type="button" class="swatch" data-color="#8b5cf6" style="--sw:#8b5cf6"></button>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+  const state = {
+    name: "ALAINA",
+    base: "#b8f0dd",
+    clicker: "#22b8b2",
+    letter: "#ffffff"
+  };
+
+  const chain = document.getElementById("clickerChain");
+  const input = document.getElementById("nameInput");
+  const count = document.getElementById("count");
+
+  function cleanName(value) {
+    return (value || "")
+      .replace(/[^a-zA-Z]/g, "")
+      .toUpperCase()
+      .slice(0, 8);
+  }
+
+  function renderChain() {
+    const text = cleanName(state.name) || "NAME";
+    chain.innerHTML = "";
+
+    text.split("").forEach((char, index) => {
+      const cube = document.createElement("div");
+      cube.className = "cube" + (index === 0 ? " first" : "");
+
+      if (index === 0) {
+        const tab = document.createElement("div");
+        tab.className = "side-tab";
+        cube.appendChild(tab);
+      }
+
+      const letter = document.createElement("div");
+      letter.className = "letter";
+      letter.textContent = char;
+
+      cube.appendChild(letter);
+      chain.appendChild(cube);
+    });
+
+    chain.style.setProperty("--base", state.base);
+    chain.style.setProperty("--clicker", state.clicker);
+    chain.style.setProperty("--letter", state.letter);
+    count.textContent = cleanName(state.name).length;
+  }
+
+  input.addEventListener("input", function () {
+    state.name = this.value;
+    renderChain();
+  });
+
+  document.querySelectorAll(".swatches").forEach(group => {
+    group.addEventListener("click", function (event) {
+      const btn = event.target.closest(".swatch");
+      if (!btn) return;
+
+      group.querySelectorAll(".swatch").forEach(el => {
+        el.classList.remove("active");
+      });
+
+      btn.classList.add("active");
+
+      state[group.dataset.target] = btn.dataset.color;
+      renderChain();
+    });
+  });
+
+  renderChain();
+</script>
+</body>
+</html>
