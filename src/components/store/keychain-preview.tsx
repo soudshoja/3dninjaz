@@ -35,10 +35,11 @@ const SVG_HEIGHT = 80;
 const SVG_TOP_PAD = (SVG_HEIGHT - CAP_SIZE) / 2; // vertically centred
 
 /**
- * Compute the viewBox width based on maxLength + ring + gaps.
+ * Compute the viewBox width based on maxLength + ring + letter caps + base cube + gaps.
+ * The base cube is one extra CAP_SIZE block at the right end of the strip.
  */
 function svgWidth(maxLength: number): number {
-  return LEFT_PAD + maxLength * (CAP_SIZE + CAP_GAP) + CAP_GAP;
+  return LEFT_PAD + (maxLength + 1) * (CAP_SIZE + CAP_GAP) + CAP_GAP;
 }
 
 export function KeychainPreview({ text, baseHex, letterHex, maxLength }: Props) {
@@ -116,6 +117,34 @@ export function KeychainPreview({ text, baseHex, letterHex, maxLength }: Props) 
           </g>
         );
       })}
+
+      {/* Base cube — solid filled keycap at the right end, no character */}
+      {(() => {
+        const x = LEFT_PAD + total * (CAP_SIZE + CAP_GAP);
+        const y = SVG_TOP_PAD;
+        return (
+          <g>
+            <rect
+              x={x}
+              y={y}
+              width={CAP_SIZE}
+              height={CAP_SIZE}
+              rx={CAP_RX}
+              fill={baseHex}
+              stroke="rgba(0,0,0,0.10)"
+              strokeWidth={1}
+            />
+            <rect
+              x={x + 6}
+              y={y + 6}
+              width={CAP_SIZE - 12}
+              height={14}
+              rx={5}
+              fill="rgba(255,255,255,0.18)"
+            />
+          </g>
+        );
+      })()}
     </svg>
   );
 }

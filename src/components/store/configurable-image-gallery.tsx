@@ -58,8 +58,11 @@ export function ConfigurableImageGallery({
       {/* ── Hero area ── */}
       <figure className="flex flex-col gap-1">
       <div
-        className="relative aspect-square rounded-[28px] overflow-hidden shadow-lg flex items-center justify-center"
-        style={{ backgroundColor: `${BRAND.blue}15` }}
+        className="relative aspect-square rounded-[28px] overflow-hidden flex items-center justify-center"
+        style={{
+          backgroundColor: `${BRAND.blue}10`,
+          boxShadow: `inset 0 2px 8px ${BRAND.ink}08`,
+        }}
       >
         {showPreview ? (
           /* Live preview mode */
@@ -119,10 +122,11 @@ export function ConfigurableImageGallery({
             onClick={() => onTogglePreview(true)}
             aria-label="Show your live preview"
             aria-current={showPreview ? "true" : undefined}
-            className="relative h-20 w-20 shrink-0 rounded-xl overflow-hidden border-2 transition flex flex-col items-center justify-center gap-1"
+            className="relative h-20 w-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all duration-200 flex flex-col items-center justify-center gap-1 cursor-pointer"
             style={{
-              borderColor: showPreview ? BRAND.ink : "transparent",
+              borderColor: showPreview ? BRAND.green : "transparent",
               backgroundColor: `${BRAND.green}15`,
+              boxShadow: showPreview ? `0 0 0 2px ${BRAND.green}40, 0 3px 0 ${BRAND.greenDark}40` : "0 2px 4px rgba(0,0,0,0.06)",
               minHeight: 44,
               minWidth: 44,
             }}
@@ -159,10 +163,11 @@ export function ConfigurableImageGallery({
                 }}
                 aria-label={`View display image ${i + 1}`}
                 aria-current={isActive ? "true" : undefined}
-                className="relative h-20 w-20 shrink-0 rounded-xl overflow-hidden border-2 transition"
+                className="relative h-20 w-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer"
                 style={{
-                  borderColor: isActive ? BRAND.ink : "transparent",
+                  borderColor: isActive ? BRAND.blue : "transparent",
                   backgroundColor: `${BRAND.blue}10`,
+                  boxShadow: isActive ? `0 0 0 2px ${BRAND.blue}40, 0 3px 0 ${BRAND.blueDark}40` : "0 2px 4px rgba(0,0,0,0.06)",
                   minHeight: 44,
                   minWidth: 44,
                 }}

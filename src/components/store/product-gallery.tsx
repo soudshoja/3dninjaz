@@ -117,11 +117,13 @@ export function ProductGallery({
                     onClick={() => setActiveIndex(i)}
                     aria-label={`View image ${i + 1} of ${images.length}`}
                     aria-current={i === activeIndex ? "true" : undefined}
-                    className="relative h-20 w-20 shrink-0 rounded-xl overflow-hidden border-2 transition min-h-[48px] min-w-[48px]"
+                    className="relative h-20 w-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer min-h-[48px] min-w-[48px]"
                     style={{
-                      borderColor:
-                        i === activeIndex ? BRAND.ink : "transparent",
-                      backgroundColor: `${BRAND.green}10`,
+                      borderColor: i === activeIndex ? BRAND.blue : "transparent",
+                      backgroundColor: `${BRAND.blue}10`,
+                      boxShadow: i === activeIndex
+                        ? `0 0 0 2px ${BRAND.blue}40, 0 3px 0 ${BRAND.blueDark}40`
+                        : "0 2px 4px rgba(0,0,0,0.06)",
                     }}
                   >
                     {tp && tp.sources.length > 0 ? (

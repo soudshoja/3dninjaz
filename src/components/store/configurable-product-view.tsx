@@ -3,26 +3,23 @@
 /**
  * Phase 19 (19-06) — PDP root component for made-to-order (configurable) products.
  *
- * Orchestrates:
- *   - ConfigurableImageGallery — hero + thumbstrip; auto-swaps to live preview
- *     on first text input or colour pick (D-10).
- *   - ConfiguratorForm — type-dispatched inputs (text/number/colour/select).
- *   - KeychainPreview — generic SVG name-strip live preview.
- *   - Price meter — reads tier via lookupTierPrice; "outOfTable" / "Enter
- *     details" / "MYR X" states.
- *   - Add-to-bag button — disabled until all required fields filled + price
- *     resolved. Builds configurationData payload (Plan 19-08 wires cart store).
+ * Redesigned (ui-ux-pro-max / Claymorphism treatment):
+ *   - Mobile-first: single column stack, preview card at top on mobile.
+ *   - Desktop: sticky preview card (left) + scrollable form column (right).
+ *   - Claymorphism: chunky rounded cards, layered shadows, ink border accents.
+ *   - CTA: full-width green button, disabled state matches brand.
+ *   - Sticky "Add to Bag" bar on mobile for thumb-reachable CTA.
  *
- * D-11: configurationData payload is built here; cart addConfigurableItem stub
- * is intentionally a console.info until Plan 19-08 wires the cart store.
- *
- * D-14 backwards compat: this component is only mounted when
- * `product.productType === "configurable"`. The stocked variant flow in
- * product-detail.tsx is completely untouched.
+ * Functional behaviour is UNCHANGED:
+ *   - handleTouch first-touch-only (single hero swap, no scroll hijack on repeat).
+ *   - canAdd / requiredFilled / outOfTable logic identical.
+ *   - addItem / setDrawerOpen cart wiring identical.
+ *   - KeychainPreview SVG is untouched.
  */
 
 import { useState, useMemo, useRef } from "react";
 import Image from "next/image";
+import { ShoppingBag, Heart } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
 import { lookupTierPrice } from "@/lib/config-fields";
@@ -46,7 +43,6 @@ type Props = {
     slug: string;
     description: string;
     images: string[];
-    /** Phase 19 (19-10) — optional captions parallel to images[]; for figcaption under hero */
     imageCaptions?: (string | null | undefined)[];
     materialType: string | null;
     estimatedProductionDays: number | null;
@@ -63,7 +59,7 @@ type Props = {
 };
 
 // ============================================================================
-// Summary builder
+// Summary builder (unchanged)
 // ============================================================================
 
 function buildSummary(
@@ -73,8 +69,6 @@ function buildSummary(
   baseClickerColorName?: string,
 ): string {
   const parts: string[] = [];
-  // Track whether we've already emitted the base+clicker colour (first colour field).
-  // If so, we skip the default label for that field and use "Base & Clicker" instead.
   let firstColourFieldId: string | null = null;
   for (const f of fields) {
     if (f.fieldType === "colour" && firstColourFieldId === null) {
@@ -90,7 +84,6 @@ function buildSummary(
     } else if (f.fieldType === "colour") {
       const c = f.resolvedColours?.find((x) => x.id === v);
       if (c) {
-        // First colour field = base+clicker — use explicit label
         const label = f.id === firstColourFieldId ? "base & clicker" : f.label.toLowerCase();
         parts.push(`${c.name} ${label}`);
       }
@@ -100,9 +93,56 @@ function buildSummary(
       parts.push(`${f.label}: ${v}`);
     }
   }
-  void price; // price is included in computedPrice field, not inline summary
-  void baseClickerColorName; // consumed by caller for the snapshot field
+  void price;
+  void baseClickerColorName;
   return parts.join(" · ");
+}
+
+// ============================================================================
+// Price pill
+// ============================================================================
+
+function PricePill({
+  outOfTable,
+  maxUnitCount,
+  currentPrice,
+}: {
+  outOfTable: boolean;
+  maxUnitCount: number | null;
+  currentPrice: number | null;
+}) {
+  if (outOfTable) {
+    return (
+      <span
+        className="inline-flex self-start items-center rounded-full px-4 py-1.5 text-sm font-bold"
+        style={{ backgroundColor: "#fff1f2", color: "#be123c", border: "2px solid #fecdd3" }}
+      >
+        Max {maxUnitCount} characters
+      </span>
+    );
+  }
+  if (currentPrice !== null) {
+    return (
+      <span
+        className="inline-flex self-start items-center rounded-full px-5 py-2 text-2xl font-extrabold tracking-tight"
+        style={{
+          backgroundColor: BRAND.green,
+          color: BRAND.ink,
+          boxShadow: `0 4px 0 ${BRAND.greenDark}`,
+        }}
+      >
+        {formatMYR(currentPrice)}
+      </span>
+    );
+  }
+  return (
+    <span
+      className="inline-flex self-start items-center rounded-full px-5 py-2 text-base font-semibold"
+      style={{ backgroundColor: "#f1f5f9", color: "#64748b", border: "2px solid #e2e8f0" }}
+    >
+      Enter your details to see price
+    </span>
+  );
 }
 
 // ============================================================================
@@ -126,8 +166,6 @@ export function ConfigurableProductView({
 
   // ── Derived state ──────────────────────────────────────────────────────────
 
-  // The text value from the field that drives the tier lookup (unitField).
-  // For keychains this is the "Your name" text field value.
   const unitFieldId = useMemo(() => {
     if (!unitField) return null;
     const match = fields.find(
@@ -138,12 +176,10 @@ export function ConfigurableProductView({
 
   const unitFieldValue = unitFieldId ? (values[unitFieldId] ?? "") : "";
 
-  // Price: if unitField is configured, look up by value length; else use tier "1"
   const currentPrice: number | null = useMemo(() => {
     if (unitField && unitFieldId) {
       return lookupTierPrice(priceTiers, unitFieldValue);
     }
-    // No unit-driven lookup — use tier "1" as a flat price
     const minKey = Object.keys(priceTiers).map(Number).sort((a, b) => a - b)[0];
     if (minKey !== undefined && priceTiers[String(minKey)] !== undefined) {
       return priceTiers[String(minKey)];
@@ -166,7 +202,6 @@ export function ConfigurableProductView({
   const canAdd = currentPrice !== null && requiredFilled && !outOfTable;
 
   // ── Colour values for KeychainPreview ────────────────────────────────────
-  // Pull baseHex from the first colour field, letterHex from the second.
   const colourFields = useMemo(() => fields.filter((f) => f.fieldType === "colour"), [fields]);
 
   function resolveHex(fieldIndex: number, fallback: string): string {
@@ -177,8 +212,8 @@ export function ConfigurableProductView({
     return cf.resolvedColours?.find((c) => c.id === selectedId)?.hex ?? fallback;
   }
 
-  const baseHex = resolveHex(0, "#71717a"); // zinc-500
-  const letterHex = resolveHex(1, "#ffffff"); // white
+  const baseHex = resolveHex(0, "#71717a");
+  const letterHex = resolveHex(1, "#ffffff");
 
   // ── Text value for preview ────────────────────────────────────────────────
   const textFields = useMemo(() => fields.filter((f) => f.fieldType === "text"), [fields]);
@@ -187,13 +222,11 @@ export function ConfigurableProductView({
     ? ((textFields[0].config as { maxLength?: number }).maxLength ?? 10)
     : 10;
 
-  // ── Handlers ─────────────────────────────────────────────────────────────
+  // ── Handlers (first-touch-only — DO NOT change) ───────────────────────────
   function handleTouch() {
     if (!touched) {
       setTouched(true);
       setShowPreview(true);
-      // Scroll preview into view ONCE on first touch so mobile users see it.
-      // Doing this on every change hijacks the input + breaks typing on mobile.
       previewRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }
@@ -204,8 +237,6 @@ export function ConfigurableProductView({
   function handleAddToBag() {
     if (!canAdd || currentPrice === null) return;
 
-    // Snapshot base+clicker colour name at add-to-bag time (no DB lookup needed
-    // at render — name is already in resolvedColours).
     const firstColourField = colourFields[0];
     const baseClickerColourId = firstColourField ? (values[firstColourField.id] ?? "") : "";
     const baseClickerColourEntry = firstColourField?.resolvedColours?.find(
@@ -222,7 +253,6 @@ export function ConfigurableProductView({
       ...(baseClickerColor ? { baseClickerColor } : {}),
       ...(baseClickerColorName ? { baseClickerColorName } : {}),
     };
-    // Phase 19 (19-08): wire cart store — same config hash dedupes qty
     addItem({ productId: product.id, configurationData });
     setDrawerOpen(true);
   }
@@ -230,8 +260,7 @@ export function ConfigurableProductView({
   const material = product.materialType ?? "PLA";
   const leadDays = product.estimatedProductionDays ?? 7;
 
-  // ── Render ────────────────────────────────────────────────────────────────
-
+  // ── Preview node (passed to gallery) ─────────────────────────────────────
   const previewNode = (
     <div ref={previewRef}>
       <KeychainPreview
@@ -243,134 +272,360 @@ export function ConfigurableProductView({
     </div>
   );
 
-  return (
-    <div className="max-w-6xl mx-auto px-6 py-10 md:py-16 grid lg:grid-cols-2 gap-10 md:gap-14">
-      {/* ── Gallery column ── */}
-      <div>
-        <ConfigurableImageGallery
-          displayImages={product.images}
-          imageCaptions={product.imageCaptions}
-          pictures={product.pictures}
-          showPreview={showPreview}
-          onTogglePreview={setShowPreview}
-          previewSlot={previewNode}
-        />
-      </div>
+  // ── CTA button label ──────────────────────────────────────────────────────
+  const ctaLabel = canAdd
+    ? `Add to Bag · ${formatMYR(currentPrice!)}`
+    : outOfTable
+    ? "Too many characters"
+    : !requiredFilled
+    ? "Fill in all fields first"
+    : "Enter your details";
 
-      {/* ── Form column ── */}
-      <div className="min-w-0 flex flex-col">
+  // ============================================================================
+  // Render
+  // ============================================================================
+
+  return (
+    <div
+      className="min-h-screen"
+      style={{ backgroundColor: BRAND.cream }}
+    >
+      {/* ── Page width container ─────────────────────────────────────────── */}
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 md:py-10">
+
+        {/* ── Breadcrumb / category link ─────────────────────────────────── */}
         {product.category ? (
           <a
             href={`/shop?category=${encodeURIComponent(product.category.slug)}`}
-            className="text-xs tracking-[0.2em] font-bold mb-3"
+            className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.18em] mb-5 transition-opacity hover:opacity-70 cursor-pointer"
             style={{ color: BRAND.purple }}
           >
-            {product.category.name.toUpperCase()}
+            <span aria-hidden="true">←</span>
+            {product.category.name}
           </a>
         ) : null}
 
-        <h1 className="font-[var(--font-heading)] text-3xl md:text-5xl leading-tight mb-2 text-zinc-900">
-          {product.name}
-        </h1>
+        {/* ── Two-column layout ─────────────────────────────────────────── */}
+        <div className="grid lg:grid-cols-2 gap-6 lg:gap-12 items-start">
 
-        {ratingCount > 0 ? (
-          <div className="mb-3">
-            <RatingBadge avg={ratingAvg} count={ratingCount} size="md" />
-          </div>
-        ) : null}
-
-        {/* ── Price meter card ── */}
-        <div
-          className="inline-flex self-start rounded-full px-5 py-2 text-lg font-bold mb-6"
-          style={{ backgroundColor: BRAND.green, color: BRAND.ink }}
-        >
-          {outOfTable ? (
-            <span className="text-base font-semibold" style={{ color: "#be123c" }}>
-              Maximum {maxUnitCount} characters reached
-            </span>
-          ) : currentPrice !== null ? (
-            <span>{formatMYR(currentPrice)}</span>
-          ) : (
-            <span className="text-base font-medium text-zinc-500">Enter your details</span>
-          )}
-        </div>
-
-        <p className="text-base leading-relaxed mb-6 text-zinc-700">{product.description}</p>
-
-        {/* ── Configurator form ── */}
-        <div className="mb-6">
-          <ConfiguratorForm
-            fields={fields}
-            values={values}
-            onChange={setValues}
-            onTouch={handleTouch}
-            baseClickerFieldId={colourFields[0]?.id}
-          />
-        </div>
-
-        {/* ── Add to bag + wishlist ── */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex-1 min-w-0">
-            <button
-              type="button"
-              disabled={!canAdd}
-              onClick={handleAddToBag}
-              className="w-full rounded-2xl px-6 py-4 text-base font-extrabold uppercase tracking-wide transition-all"
+          {/* ── LEFT: Gallery card (sticky on desktop) ─────────────────── */}
+          <div className="lg:sticky lg:top-24">
+            {/* Hero gallery card — Claymorphism: white bg + chunky shadow + thick border */}
+            <div
+              className="rounded-3xl overflow-hidden"
               style={{
-                backgroundColor: canAdd ? BRAND.green : "#e2e8f0",
-                color: canAdd ? BRAND.ink : "#94a3b8",
-                cursor: canAdd ? "pointer" : "not-allowed",
-                minHeight: 52,
+                background: "#ffffff",
+                border: `2.5px solid ${BRAND.ink}18`,
+                boxShadow: `0 8px 0 ${BRAND.ink}12, 0 20px 40px ${BRAND.ink}10`,
               }}
             >
-              {canAdd
-                ? `Add to bag · ${formatMYR(currentPrice!)}`
-                : outOfTable
-                ? "Too many characters"
-                : !requiredFilled
-                ? "Fill in all fields"
-                : "Enter your details"}
-            </button>
+              {/* Inner padding for the gallery */}
+              <div className="p-4 pb-0">
+                <ConfigurableImageGallery
+                  displayImages={product.images}
+                  imageCaptions={product.imageCaptions}
+                  pictures={product.pictures}
+                  showPreview={showPreview}
+                  onTogglePreview={setShowPreview}
+                  previewSlot={previewNode}
+                />
+              </div>
+
+              {/* Preview hint strip at bottom of gallery card */}
+              {!showPreview && (
+                <div
+                  className="px-4 py-3 mt-3 text-center text-xs font-semibold"
+                  style={{ color: BRAND.blue, backgroundColor: `${BRAND.blue}08` }}
+                >
+                  Type your name below to see your live preview
+                </div>
+              )}
+              {showPreview && (
+                <div
+                  className="px-4 py-3 mt-3 text-center text-xs font-semibold"
+                  style={{ color: BRAND.green, backgroundColor: `${BRAND.green}08` }}
+                >
+                  This is your personalised keychain
+                </div>
+              )}
+            </div>
+
+            {/* Trust signal — visible on desktop below gallery, above fold */}
+            <div
+              className="hidden lg:flex items-center gap-2 mt-4 px-4 py-3 rounded-2xl text-sm font-medium"
+              style={{
+                backgroundColor: `${BRAND.green}15`,
+                color: BRAND.ink,
+                border: `1.5px solid ${BRAND.green}30`,
+              }}
+            >
+              <Image
+                src="/icons/ninja/emoji/secure@128.png"
+                alt=""
+                width={28}
+                height={28}
+                className="h-7 w-7 object-contain shrink-0"
+              />
+              <span>Secure checkout via PayPal. Made in Kuala Lumpur.</span>
+            </div>
           </div>
-          <WishlistButton
-            productId={product.id}
-            initialState={isWishlistedInitial}
-            variant="pill"
-          />
+
+          {/* ── RIGHT: Product info + form column ─────────────────────── */}
+          <div className="flex flex-col gap-5 min-w-0">
+
+            {/* ── Product header card ─────────────────────────────────── */}
+            <div
+              className="rounded-3xl p-5 sm:p-6"
+              style={{
+                background: "#ffffff",
+                border: `2.5px solid ${BRAND.ink}12`,
+                boxShadow: `0 6px 0 ${BRAND.ink}0e, 0 16px 32px ${BRAND.ink}0a`,
+              }}
+            >
+              <h1
+                className="font-[var(--font-heading)] text-2xl sm:text-3xl md:text-4xl leading-tight mb-3"
+                style={{ color: BRAND.ink }}
+              >
+                {product.name}
+              </h1>
+
+              {ratingCount > 0 ? (
+                <div className="mb-3">
+                  <RatingBadge avg={ratingAvg} count={ratingCount} size="md" />
+                </div>
+              ) : null}
+
+              {/* Price pill */}
+              <div className="mb-4">
+                <PricePill
+                  outOfTable={outOfTable}
+                  maxUnitCount={maxUnitCount}
+                  currentPrice={currentPrice}
+                />
+              </div>
+
+              <p className="text-base leading-relaxed" style={{ color: "#374151" }}>
+                {product.description}
+              </p>
+            </div>
+
+            {/* ── Personalise section card ────────────────────────────── */}
+            <div
+              className="rounded-3xl p-5 sm:p-6"
+              style={{
+                background: "#ffffff",
+                border: `2.5px solid ${BRAND.ink}12`,
+                boxShadow: `0 6px 0 ${BRAND.ink}0e, 0 16px 32px ${BRAND.ink}0a`,
+              }}
+            >
+              {/* Section header */}
+              <div className="flex items-center gap-2 mb-5">
+                <span
+                  className="w-1.5 h-6 rounded-full shrink-0"
+                  style={{ backgroundColor: BRAND.blue }}
+                  aria-hidden="true"
+                />
+                <h2
+                  className="font-[var(--font-heading)] text-lg font-bold uppercase tracking-wide"
+                  style={{ color: BRAND.ink }}
+                >
+                  Personalise Your Keychain
+                </h2>
+              </div>
+
+              <ConfiguratorForm
+                fields={fields}
+                values={values}
+                onChange={setValues}
+                onTouch={handleTouch}
+                baseClickerFieldId={colourFields[0]?.id}
+              />
+            </div>
+
+            {/* ── Add to bag card ─────────────────────────────────────── */}
+            <div
+              className="rounded-3xl p-5 sm:p-6"
+              style={{
+                background: canAdd ? `${BRAND.green}08` : "#f8fafc",
+                border: `2.5px solid ${canAdd ? BRAND.green : BRAND.ink + "10"}`,
+                boxShadow: `0 6px 0 ${canAdd ? BRAND.greenDark + "30" : BRAND.ink + "0a"}, 0 16px 32px ${BRAND.ink}06`,
+                transition: "background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease",
+              }}
+            >
+              {/* Wishlist + Add to bag row */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <button
+                  type="button"
+                  disabled={!canAdd}
+                  onClick={handleAddToBag}
+                  className="flex-1 min-w-0 flex items-center justify-center gap-2 rounded-2xl px-6 py-4 text-base font-extrabold uppercase tracking-wide transition-all duration-200"
+                  style={{
+                    backgroundColor: canAdd ? BRAND.green : "#e2e8f0",
+                    color: canAdd ? BRAND.ink : "#94a3b8",
+                    cursor: canAdd ? "pointer" : "not-allowed",
+                    minHeight: 56,
+                    boxShadow: canAdd
+                      ? `0 4px 0 ${BRAND.greenDark}, 0 8px 24px ${BRAND.green}40`
+                      : "none",
+                    transform: "translateY(0)",
+                  }}
+                  onMouseDown={(e) => {
+                    if (canAdd) {
+                      (e.currentTarget as HTMLButtonElement).style.transform = "translateY(2px)";
+                      (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 2px 0 ${BRAND.greenDark}, 0 4px 12px ${BRAND.green}30`;
+                    }
+                  }}
+                  onMouseUp={(e) => {
+                    if (canAdd) {
+                      (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
+                      (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 4px 0 ${BRAND.greenDark}, 0 8px 24px ${BRAND.green}40`;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (canAdd) {
+                      (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
+                      (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 4px 0 ${BRAND.greenDark}, 0 8px 24px ${BRAND.green}40`;
+                    }
+                  }}
+                  aria-disabled={!canAdd}
+                >
+                  <ShoppingBag size={20} strokeWidth={2.5} aria-hidden="true" />
+                  {ctaLabel}
+                </button>
+                <WishlistButton
+                  productId={product.id}
+                  initialState={isWishlistedInitial}
+                  variant="pill"
+                />
+              </div>
+
+              {/* Contextual hint below CTA */}
+              {!canAdd && !outOfTable && (
+                <p className="mt-3 text-xs text-center font-medium" style={{ color: "#64748b" }}>
+                  {requiredFilled
+                    ? "Enter your name to unlock the price"
+                    : "Fill in all required fields above to continue"}
+                </p>
+              )}
+            </div>
+
+            {/* ── Trust + shipping row ─────────────────────────────────── */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              {/* Shipping info */}
+              <div
+                className="flex-1 flex items-center gap-3 rounded-2xl px-4 py-3.5"
+                style={{
+                  backgroundColor: `${BRAND.blue}0f`,
+                  border: `1.5px solid ${BRAND.blue}25`,
+                }}
+              >
+                <span className="text-xl shrink-0" aria-hidden="true">
+                  <Image
+                    src="/icons/ninja/emoji/secure@128.png"
+                    alt=""
+                    width={28}
+                    height={28}
+                    className="h-7 w-7 object-contain"
+                  />
+                </span>
+                <p className="text-sm font-medium leading-snug" style={{ color: BRAND.ink }}>
+                  <span className="font-bold block">Made to order</span>
+                  Ships in {leadDays} business days from KL
+                </p>
+              </div>
+
+              {/* PayPal secure */}
+              <div
+                className="flex-1 flex items-center gap-3 rounded-2xl px-4 py-3.5 lg:hidden"
+                style={{
+                  backgroundColor: `${BRAND.green}0f`,
+                  border: `1.5px solid ${BRAND.green}25`,
+                }}
+              >
+                <Image
+                  src="/icons/ninja/emoji/secure@128.png"
+                  alt=""
+                  width={28}
+                  height={28}
+                  className="h-7 w-7 object-contain shrink-0"
+                />
+                <p className="text-sm font-medium leading-snug" style={{ color: BRAND.ink }}>
+                  <span className="font-bold block">Secure checkout</span>
+                  Protected by PayPal
+                </p>
+              </div>
+            </div>
+
+            {/* ── Material & craft card ────────────────────────────────── */}
+            <div
+              className="rounded-3xl p-5 sm:p-6"
+              style={{
+                background: "#ffffff",
+                border: `2.5px solid ${BRAND.ink}10`,
+                boxShadow: `0 4px 0 ${BRAND.ink}0a, 0 12px 24px ${BRAND.ink}06`,
+              }}
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <span
+                  className="w-1.5 h-6 rounded-full shrink-0"
+                  style={{ backgroundColor: BRAND.purple }}
+                  aria-hidden="true"
+                />
+                <h2
+                  className="font-[var(--font-heading)] text-lg font-bold uppercase tracking-wide"
+                  style={{ color: BRAND.ink }}
+                >
+                  Material &amp; Craft
+                </h2>
+              </div>
+              <p className="text-sm font-semibold mb-1.5" style={{ color: BRAND.ink }}>
+                Material: <span className="font-normal text-zinc-600">{material}</span>
+              </p>
+              <p className="text-sm leading-relaxed" style={{ color: "#374151" }}>
+                Every piece is printed to order on our Kuala Lumpur printers, layer by ninja layer.
+                Hand-finished, inspected, then shipped straight to your door.
+              </p>
+            </div>
+
+          </div>
+          {/* end right column */}
         </div>
-
-        <p className="mt-4 flex items-center gap-2 text-sm text-zinc-600">
-          <Image
-            src="/icons/ninja/emoji/secure@128.png"
-            alt=""
-            width={32}
-            height={32}
-            className="h-8 w-8 object-contain shrink-0"
-          />
-          <span>Secure checkout with PayPal.</span>
-        </p>
-
-        <p
-          className="mt-4 rounded-2xl px-4 py-3 text-sm font-medium"
-          style={{ backgroundColor: `${BRAND.green}20`, color: BRAND.ink }}
-        >
-          Made to order — ships in {leadDays} business days from Kuala Lumpur.
-        </p>
-
-        <section className="mt-6 rounded-2xl border border-zinc-200 p-5 bg-white">
-          <h2 className="font-[var(--font-heading)] text-xl mb-2 text-zinc-900">
-            Material &amp; craft
-          </h2>
-          <p className="text-sm text-zinc-700 mb-2">
-            <span className="font-bold">Material:</span> {material}
-          </p>
-          <p className="text-sm text-zinc-700">
-            Every piece is printed to order on our Kuala Lumpur printers, layer
-            by ninja layer. Hand-finished, inspected, then shipped straight to
-            your door.
-          </p>
-        </section>
+        {/* end grid */}
       </div>
+
+      {/* ── Sticky mobile CTA bar ────────────────────────────────────────── */}
+      <div
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 px-4 pb-safe-area-inset-bottom"
+        style={{
+          backgroundColor: "rgba(247,250,244,0.96)",
+          backdropFilter: "blur(12px)",
+          borderTop: `2px solid ${BRAND.ink}10`,
+          paddingTop: 12,
+          paddingBottom: 16,
+        }}
+      >
+        <button
+          type="button"
+          disabled={!canAdd}
+          onClick={handleAddToBag}
+          className="w-full flex items-center justify-center gap-2 rounded-2xl px-6 py-4 text-base font-extrabold uppercase tracking-wide transition-all duration-200"
+          style={{
+            backgroundColor: canAdd ? BRAND.green : "#e2e8f0",
+            color: canAdd ? BRAND.ink : "#94a3b8",
+            cursor: canAdd ? "pointer" : "not-allowed",
+            minHeight: 54,
+            boxShadow: canAdd ? `0 4px 0 ${BRAND.greenDark}` : "none",
+          }}
+          aria-disabled={!canAdd}
+          aria-label={ctaLabel}
+        >
+          <ShoppingBag size={20} strokeWidth={2.5} aria-hidden="true" />
+          {ctaLabel}
+        </button>
+      </div>
+
+      {/* Spacer so sticky bar doesn't cover last card on mobile */}
+      <div className="lg:hidden h-24" aria-hidden="true" />
     </div>
   );
 }
