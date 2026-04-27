@@ -168,8 +168,11 @@ export function ConfigurableProductView({
 
   const unitFieldId = useMemo(() => {
     if (!unitField) return null;
+    // unitField stores the config-field UUID (set by admin via tier-table-editor).
+    // Match by ID — label matching was wrong and always missed, causing fallback to
+    // min-tier price regardless of what the customer typed.
     const match = fields.find(
-      (f) => f.fieldType === "text" && f.label.toLowerCase() === unitField.toLowerCase(),
+      (f) => (f.fieldType === "text" || f.fieldType === "number") && f.id === unitField,
     );
     return match?.id ?? null;
   }, [fields, unitField]);
