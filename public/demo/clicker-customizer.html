@@ -255,7 +255,12 @@
     font-weight: 600;
   }
 
-  /* ── Cube chain (the concept) ───────────────────────────── */
+  /* ── Keycap chain — geometry sourced from letter.3mf
+        Body: 18×18×7 mm rounded keycap. Three real layers:
+          • outer body (--base)         — the rounded shell
+          • inner inset top face (--clicker) — the pressable face, lip ≈10% inset
+          • raised glyph (--letter)     — extruded +3.5 mm above face
+        Tiles sit very close together (1px gap) per the spec. ──────────── */
   .clicker-chain {
     --base: #b8f0dd;
     --clicker: #22b8b2;
@@ -263,46 +268,53 @@
     position: relative;
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding-left: 28px;
+    gap: 1px;
+    padding-left: 26px;
     z-index: 2;
   }
   .cube {
-    width: 60px; height: 60px;
+    width: 64px; height: 64px;
     position: relative;
     border-radius: 14px;
     background: var(--base);
+    /* Body bevel — top highlight, side shadow, bottom drop = 7mm slab */
     box-shadow:
-      inset 4px 4px 7px rgba(255, 255, 255, 0.55),
-      inset -5px -5px 8px rgba(0, 0, 0, 0.16),
-      0 5px 0 rgba(0, 0, 0, 0.12),
-      0 10px 16px rgba(0, 0, 0, 0.12);
+      inset 3px 3px 5px rgba(255, 255, 255, 0.45),
+      inset -3px -3px 5px rgba(0, 0, 0, 0.14),
+      0 4px 0 rgba(0, 0, 0, 0.10),
+      0 8px 14px rgba(0, 0, 0, 0.10);
     flex: 0 0 auto;
   }
   .cube::before {
+    /* Inner pressable face — thin 10% lip suggests the clicker top */
     content: "";
     position: absolute;
-    inset: 6px;
+    inset: 5px;
     border-radius: 10px;
     background: var(--clicker);
     box-shadow:
-      inset 4px 4px 6px rgba(255, 255, 255, 0.42),
-      inset -5px -5px 8px rgba(0, 0, 0, 0.18);
+      inset 2px 2px 4px rgba(255, 255, 255, 0.38),
+      inset -2px -2px 4px rgba(0, 0, 0, 0.14);
   }
   .cube .letter {
+    /* Raised glyph — text-shadow stack mimics 3.5mm extrusion */
     position: absolute;
     inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--letter);
-    font-size: 26px;
+    font-size: 30px;
     font-weight: 900;
     line-height: 1;
     text-transform: uppercase;
     z-index: 2;
-    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.10), 0 3px 6px rgba(0, 0, 0, 0.14);
-    letter-spacing: 0.02em;
+    letter-spacing: 0.01em;
+    text-shadow:
+      0 1px 0 rgba(0, 0, 0, 0.08),
+      0 2px 0 rgba(0, 0, 0, 0.06),
+      0 3px 0 rgba(0, 0, 0, 0.04),
+      0 4px 8px rgba(0, 0, 0, 0.18);
   }
   .cube.first .side-tab {
     position: absolute;
@@ -737,7 +749,7 @@
 <div class="page">
 
   <div class="demo-banner">
-    <b>Concept demo</b> — applying the 3-colour cube preview to the live <b>Pancake Clicker</b> PDP. Static page, not the real product.
+    <b>Concept demo</b> — applying the 3-colour cube preview to the live <b>Pancake Clicker</b> PDP. Cube proportions sourced from <code style="background:#f1f5f9;padding:1px 6px;border-radius:6px;color:var(--ink)">letter.3mf</code>: 18×18×7 mm rounded keycap · base + clicker face + raised glyph extruded +3.5 mm · 65 supported glyphs (A–Z, 0–9, symbols).
   </div>
 
   <a class="breadcrumb" href="#">← Fidgets</a>
