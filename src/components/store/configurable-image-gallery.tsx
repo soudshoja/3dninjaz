@@ -58,15 +58,13 @@ export function ConfigurableImageGallery({
       {/* ── Hero area ── */}
       <figure className="flex flex-col gap-1">
       <div
-        className="relative aspect-square rounded-[28px] flex items-center justify-center"
+        className={`relative rounded-[28px] flex items-center justify-center ${showPreview ? "aspect-square" : ""}`}
         style={{
           backgroundColor: `${BRAND.blue}10`,
           boxShadow: `inset 0 2px 8px ${BRAND.ink}08`,
           containerType: "inline-size",
-          /* overflow-hidden only when showing images so the image fills the
-             rounded square; in preview mode we allow the ring tab to overflow
-             slightly left without clipping. */
           overflow: showPreview ? "visible" : "hidden",
+          maxHeight: showPreview ? undefined : 700,
         }}
       >
         {showPreview ? (
@@ -76,9 +74,10 @@ export function ConfigurableImageGallery({
             {previewSlot}
           </div>
         ) : activeDisplayImage ? (
-          /* Display image mode — with srcset if available */
+          /* Display image mode — image drives the container height so there's
+             no empty padding around portrait/landscape product photos. */
           activePic && activePic.sources.length > 0 ? (
-            <picture className="absolute inset-0">
+            <picture className="block w-full">
               {activePic.sources.map((s) => (
                 <source key={s.type} type={s.type} srcSet={s.srcSet} sizes={sizes} />
               ))}
@@ -86,7 +85,8 @@ export function ConfigurableImageGallery({
               <img
                 src={activePic.fallbackSrc}
                 alt={activeCaption ?? "Product display"}
-                className="absolute inset-0 h-full w-full object-contain"
+                className="block w-full h-auto object-contain"
+                style={{ maxHeight: 700 }}
                 loading="eager"
                 fetchPriority="high"
               />
@@ -96,13 +96,14 @@ export function ConfigurableImageGallery({
             <img
               src={activeDisplayImage}
               alt={activeCaption ?? "Product display"}
-              className="absolute inset-0 h-full w-full object-contain"
+              className="block w-full h-auto object-contain"
+              style={{ maxHeight: 700 }}
               loading="eager"
               fetchPriority="high"
             />
           )
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-sm font-medium text-zinc-400">
+          <div className="aspect-square flex w-full items-center justify-center text-sm font-medium text-zinc-400">
             No image available
           </div>
         )}
