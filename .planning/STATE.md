@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 19 COMPLETE + post-shipment upload hotfix sweep — 27 commits on dev (head c118ae6). 50 MB caps, HEIC support, XHR progress UI, manifest-redirect route handler. WhatsApp alerting LIVE via Resayil + 1-min cron on prod log.
-last_updated: "2026-04-27T07:00:00.000Z"
-last_activity: 2026-04-27
+last_updated: "2026-04-29T09:15:00.000Z"
+last_activity: 2026-04-29
 progress:
   total_phases: 20
   completed_phases: 9
@@ -185,6 +185,12 @@ Recent decisions affecting current work:
 - Email deliverability to Malaysian addresses — Phase 3 smoke test pending; re-verify against real MY ISP in LAUNCH-CHECKLIST.md step 12.
 - **PayPal Reporting API NOT_AUTHORIZED (Q-07-08):** Phase 7 nightly recon cron is installed but first run errored with NOT_AUTHORIZED. Admin must contact PayPal support to enable the Reporting feature on the live merchant account. Until then, recon_runs.status='error' on every run; drift detection is paused but admin sees the error on /admin/recon.
 - **Sharp deploy footprint:** sharp native binaries add ~80MB to node_modules but are required for the Phase 7 image pipeline. Install was clean on cPanel CloudLinux Node 20 — no fallback needed.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260429-nuu | Fix stale RSC cache in configurator — revalidatePath PDP on color/option field changes | 2026-04-29 | 2056a11 | [260429-nuu-fix-stale-rsc-cache-in-configurator-reva](./quick/260429-nuu-fix-stale-rsc-cache-in-configurator-reva/) |
 
 ### Roadmap Evolution
 
