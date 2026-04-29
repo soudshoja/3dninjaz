@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, Plus, Trash2 } from "lucide-react";
 import { ColourPickerDialog, type ColourPickerRow } from "@/components/admin/colour-picker-dialog";
+import { getActiveColoursForPicker } from "@/actions/admin-colours";
 import {
   addConfigField,
   updateConfigField,
@@ -184,6 +185,23 @@ function ColourConfigForm({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [knownRows, setKnownRows] = useState<ColourPickerRow[]>([]);
   const ids = value.allowedColorIds ?? [];
+
+  // Hydrate swatches on mount so the chips show the actual colour, not a
+  // truncated UUID. Without this, the picker has to be opened once before
+  // selected colours render correctly.
+  useEffect(() => {
+    let cancelled = false;
+    getActiveColoursForPicker()
+      .then((rows) => {
+        if (!cancelled) setKnownRows(rows);
+      })
+      .catch(() => {
+        // Fail soft — chips fall back to truncated UUID, picker still works.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Build a lookup map from whatever rows we received from the picker.
   const rowById = new Map(knownRows.map((r) => [r.id, r]));

@@ -171,29 +171,37 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
   };
 
   // -------------------------------------------------------------------------
-  // Auto-fill Clicker + Letter palettes when Base palette is saved
-  // Only fires when the saved field is locked + labelled "Base".
-  // Only overwrites a target if its palette is empty OR identical to the
-  // previous Base palette (i.e. admin hasn't manually customised it).
+  // Auto-fill Clicker + Letter palettes when Base palette is saved.
+  // Filter is label-only (not locked-gated) so a manually-unlocked Clicker /
+  // Letter still receives the propagation. Failures from any single target
+  // surface as a visible error so silent partial-fills can't happen.
   // -------------------------------------------------------------------------
   const handleBaseAutoFill = async (
     savedField: ConfigField,
   ) => {
-    if (!savedField.locked || savedField.label !== "Base") return;
+    if (savedField.label !== "Base") return;
     const newBaseIds = (savedField.config as { allowedColorIds?: string[] }).allowedColorIds ?? [];
     if (newBaseIds.length === 0) return;
 
     const targets = fields.filter(
-      (f) => f.locked && (f.label === "Clicker" || f.label === "Letter"),
+      (f) => f.fieldType === "colour" && (f.label === "Clicker" || f.label === "Letter"),
     );
 
+    const failures: string[] = [];
     for (const target of targets) {
-      await updateConfigField(target.id, {
+      const result = await updateConfigField(target.id, {
         config: { allowedColorIds: newBaseIds },
       });
+      if (!result.ok) {
+        failures.push(`${target.label}: ${result.error}`);
+      }
     }
 
     await refetch();
+
+    if (failures.length > 0) {
+      setError(`Auto-fill failed for: ${failures.join("; ")}`);
+    }
   };
 
   // -------------------------------------------------------------------------
