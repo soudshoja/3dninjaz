@@ -13,7 +13,7 @@
  * Functional behaviour is UNCHANGED:
  *   - First-touch-only onTouch (touchedRef pattern).
  *   - uppercase / allowedChars / maxLength filtering.
- *   - baseClickerFieldId label override.
+ *   - Field label and helpText used directly (no overrides).
  */
 
 import { useRef } from "react";
@@ -32,7 +32,6 @@ type Props = {
   values: Record<string, string>;
   onChange: (values: Record<string, string>) => void;
   onTouch: () => void;
-  baseClickerFieldId?: string;
 };
 
 // ============================================================================
@@ -86,7 +85,7 @@ function TextField({
           value={value}
           onChange={handleChange}
           maxLength={maxLen}
-          placeholder={`Enter ${field.label.toLowerCase()}…`}
+          placeholder="Enter your text…"
           className="w-full px-5 py-4 rounded-2xl text-lg font-bold tracking-widest uppercase outline-none transition-all duration-200"
           style={{
             minHeight: 56,
@@ -380,7 +379,7 @@ function SelectField({
 // ConfiguratorForm — main export
 // ============================================================================
 
-export function ConfiguratorForm({ fields, values, onChange, onTouch, baseClickerFieldId }: Props) {
+export function ConfiguratorForm({ fields, values, onChange, onTouch }: Props) {
   const touchedRef = useRef(false);
 
   if (fields.length === 0) {
@@ -398,11 +397,8 @@ export function ConfiguratorForm({ fields, values, onChange, onTouch, baseClicke
         const filled = isFilled(value);
         const showRequiredError = field.required && !filled;
 
-        const isBaseClicker = baseClickerFieldId ? field.id === baseClickerFieldId : false;
-        const displayLabel = isBaseClicker ? "Base & Clicker Color" : field.label;
-        const displayHelp = isBaseClicker
-          ? "The carabiner clip and bottom cube share this colour."
-          : field.helpText;
+        const displayLabel = field.label;
+        const displayHelp = field.helpText;
 
         function handleFieldChange(v: string) {
           onChange({ ...values, [field.id]: v });

@@ -41,7 +41,7 @@ export type ProductFormInitial = {
   categoryId: string | null;
   subcategoryId: string | null;
   // Phase 19 (19-03) — product type + lock state
-  productType?: "stocked" | "configurable";
+  productType?: "stocked" | "configurable" | "keychain";
   lockedReason?: string;
 };
 
@@ -97,7 +97,7 @@ export function ProductForm({
   const [isActive, setIsActive] = useState(initialData?.isActive ?? true);
   const [isFeatured, setIsFeatured] = useState(initialData?.isFeatured ?? false);
   // Phase 19 (19-03) — product type state
-  const [productType, setProductType] = useState<"stocked" | "configurable">(
+  const [productType, setProductType] = useState<"stocked" | "configurable" | "keychain">(
     initialData?.productType ?? "stocked"
   );
 
@@ -194,8 +194,11 @@ export function ProductForm({
 
       if (!editing && "productId" in result && result.productId) {
         // Phase 19 (19-03) — new configurable products go to configurator, stocked to variants
+        // Keychain goes to edit page (fixed schema — no configurator builder needed)
         if (productType === "configurable") {
           router.push(`/admin/products/${result.productId}/configurator`);
+        } else if (productType === "keychain") {
+          router.push(`/admin/products/${result.productId}/edit`);
         } else {
           router.push(`/admin/products/${result.productId}/variants`);
         }
@@ -439,6 +442,20 @@ export function ProductForm({
             >
               Manage Configurator →
             </a>
+          </CardContent>
+        </Card>
+      )}
+      {/* Keychain — fixed schema, no configurator builder */}
+      {productType === "keychain" && initialData?.id && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Keychain — Fixed Schema</CardTitle>
+            <p className="text-sm text-[var(--color-brand-text-muted)]">
+              Keychain products have a fixed field shape: 1 name text field + 3 colour fields (base / clicker / letter). Fields are seeded automatically on creation.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">No configurator builder needed — field schema is fixed.</p>
           </CardContent>
         </Card>
       )}

@@ -66,15 +66,8 @@ function buildSummary(
   fields: PublicConfigField[],
   values: Record<string, string>,
   price: number,
-  baseClickerColorName?: string,
 ): string {
   const parts: string[] = [];
-  let firstColourFieldId: string | null = null;
-  for (const f of fields) {
-    if (f.fieldType === "colour" && firstColourFieldId === null) {
-      firstColourFieldId = f.id;
-    }
-  }
 
   for (const f of fields) {
     const v = values[f.id] ?? "";
@@ -84,8 +77,7 @@ function buildSummary(
     } else if (f.fieldType === "colour") {
       const c = f.resolvedColours?.find((x) => x.id === v);
       if (c) {
-        const label = f.id === firstColourFieldId ? "base & clicker" : f.label.toLowerCase();
-        parts.push(`${c.name} ${label}`);
+        parts.push(`${c.name} ${f.label.toLowerCase()}`);
       }
     } else if (f.fieldType === "number") {
       parts.push(`${f.label}: ${v}`);
@@ -94,7 +86,6 @@ function buildSummary(
     }
   }
   void price;
-  void baseClickerColorName;
   return parts.join(" · ");
 }
 
@@ -216,7 +207,8 @@ export function ConfigurableProductView({
   }
 
   const baseHex = resolveHex(0, "#71717a");
-  const letterHex = resolveHex(1, "#ffffff");
+  const clickerHex = resolveHex(1, "#71717a");
+  const letterHex = resolveHex(2, "#ffffff");
 
   // ── Text value for preview ────────────────────────────────────────────────
   const textFields = useMemo(() => fields.filter((f) => f.fieldType === "text"), [fields]);
@@ -240,21 +232,11 @@ export function ConfigurableProductView({
   function handleAddToBag() {
     if (!canAdd || currentPrice === null) return;
 
-    const firstColourField = colourFields[0];
-    const baseClickerColourId = firstColourField ? (values[firstColourField.id] ?? "") : "";
-    const baseClickerColourEntry = firstColourField?.resolvedColours?.find(
-      (c) => c.id === baseClickerColourId,
-    );
-    const baseClickerColorName = baseClickerColourEntry?.name;
-    const baseClickerColor = baseClickerColourEntry?.hex;
-
-    const summary = buildSummary(fields, values, currentPrice, baseClickerColorName);
+    const summary = buildSummary(fields, values, currentPrice);
     const configurationData = {
       values,
       computedPrice: currentPrice,
       computedSummary: summary,
-      ...(baseClickerColor ? { baseClickerColor } : {}),
-      ...(baseClickerColorName ? { baseClickerColorName } : {}),
     };
     addItem({ productId: product.id, configurationData });
     setDrawerOpen(true);
@@ -275,6 +257,7 @@ export function ConfigurableProductView({
         <KeychainPreview
           text={textValue}
           baseHex={baseHex}
+          clickerHex={clickerHex}
           letterHex={letterHex}
           maxLength={maxLength}
         />
@@ -448,7 +431,6 @@ export function ConfigurableProductView({
                 values={values}
                 onChange={setValues}
                 onTouch={handleTouch}
-                baseClickerFieldId={colourFields[0]?.id}
               />
             </div>
 

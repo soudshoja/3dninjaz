@@ -44,6 +44,17 @@ type SubcategoryRow = typeof subcategories.$inferSelect;
 
 export type CatalogVariant = VariantRow;
 
+/** Discriminator union for all product types. */
+export type ProductType = "stocked" | "configurable" | "keychain";
+
+/**
+ * Returns true for product types that use configurationData instead of
+ * variantId — used for cart/order partitioning and PDP routing.
+ */
+export function isConfigurableLike(t: ProductType): boolean {
+  return t === "configurable" || t === "keychain";
+}
+
 export type CatalogProduct = Omit<ProductRow, "images" | "productType" | "priceTiers"> & {
   images: string[];
   /** Phase 19 (19-10) — image entries with caption/alt; backwards-compat with legacy string[] */
@@ -55,7 +66,7 @@ export type CatalogProduct = Omit<ProductRow, "images" | "productType" | "priceT
   hydratedVariants: HydratedVariant[];
   options: HydratedOption[];
   // Phase 19 (19-07) — made-to-order fields (parsed; stocked products get defaults)
-  productType: "stocked" | "configurable";
+  productType: ProductType;
   priceTiers: Record<string, number> | null;
   maxUnitCount: number | null;
 };
@@ -249,8 +260,8 @@ async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
         ? subcategoryById.get(p.subcategoryId) ?? null
         : null,
       // Phase 19 (19-07) — made-to-order fields
-      productType: (p.productType ?? "stocked") as "stocked" | "configurable",
-      priceTiers: p.productType === "configurable" ? ensureTiers(p.priceTiers) : null,
+      productType: (p.productType ?? "stocked") as ProductType,
+      priceTiers: isConfigurableLike((p.productType ?? "stocked") as ProductType) ? ensureTiers(p.priceTiers) : null,
       maxUnitCount: p.maxUnitCount ?? null,
     };
   });

@@ -28,6 +28,11 @@ export default async function ConfiguratorPage({ params }: { params: Params }) {
   }
 
   // Guard: this page is only for configurable products.
+  // Keychain has a fixed schema — redirect to edit page instead.
+  if (data.product.productType === "keychain") {
+    const { redirect } = await import("next/navigation");
+    redirect(`/admin/products/${id}/edit`);
+  }
   if (data.product.productType !== "configurable") {
     return (
       <div className="p-6 space-y-3">

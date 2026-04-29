@@ -63,7 +63,7 @@ type ProductSummary = {
   id: string;
   name: string;
   slug: string;
-  productType: "stocked" | "configurable";
+  productType: "stocked" | "configurable" | "keychain";
   maxUnitCount: number | null;
   priceTiers: Record<string, number>;
   unitField: string | null;

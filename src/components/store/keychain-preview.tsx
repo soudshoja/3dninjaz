@@ -1,149 +1,170 @@
 "use client";
 
 /**
- * Phase 19 (19-06) — Generic SVG name-strip preview for made-to-order products.
+ * Phase 19 / keychain — CSS-cube row preview for keychain products.
  *
- * Renders a horizontal row of keycap SVG shapes (rounded squares), one per
- * character, filled with `baseHex`, with the character rendered on top in
- * `letterHex`. Empty slots (when text.length < maxLength) are faint outlines.
+ * Replaces the old SVG strip. Renders a horizontal row of 3-layer CSS "cubes"
+ * (base shell + inset clicker face + raised letter glyph) matching the design
+ * contract in public/demo/clicker-customizer.html lines ~264-344.
  *
- * Works for any text-driven product — not keychain-specific. The ring on the
- * left is a universal keychain metaphor matching the demo design.
+ * Props:
+ *   text        — already uppercased & trimmed string to display
+ *   baseHex     — hex for the outer keycap shell + side-tab
+ *   clickerHex  — hex for the inset pressable face (5 px lip)
+ *   letterHex   — hex for the raised glyph text
+ *   maxLength   — total slot count (filled + empty)
  *
- * Stateless — no state or side effects.
+ * Stateless. Accepts width:100% semantics inside its container.
  */
 
 type Props = {
-  /** Already uppercased and trimmed text to display. */
   text: string;
-  /** Hex fill for each keycap (base colour). Default: zinc-400 (#a1a1aa) */
   baseHex: string;
-  /** Hex for character on top of cap (letter colour). Default: white (#ffffff) */
+  clickerHex: string;
   letterHex: string;
-  /** Maximum number of characters (determines SVG width and empty slot count). */
   maxLength: number;
 };
 
-const CAP_SIZE = 120;
-const CAP_GAP = 12;
-const CAP_RX = 22;
-const RING_R = 32;
-const RING_STROKE = 9;
-// Left padding for ring; ring takes ~RING_R*2 + gap before first cap
-const LEFT_PAD = RING_R * 2 + CAP_GAP + 6;
-const SVG_HEIGHT = CAP_SIZE + 40; // caps + breathing room top/bottom
-const SVG_TOP_PAD = (SVG_HEIGHT - CAP_SIZE) / 2; // vertically centred
+// Cube sizing — 64 px desktop, 50 px mobile (via CSS variable set on wrapper)
+const CUBE_SIZE_D = 64;
 
-/**
- * Compute the viewBox width based on maxLength + ring + letter caps + base cube + gaps.
- * The base cube is one extra CAP_SIZE block at the right end of the strip.
- */
-function svgWidth(maxLength: number): number {
-  return LEFT_PAD + (maxLength + 1) * (CAP_SIZE + CAP_GAP) + CAP_GAP;
-}
-
-export function KeychainPreview({ text, baseHex, letterHex, maxLength }: Props) {
+export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLength }: Props) {
   const chars = text.slice(0, maxLength).split("");
   const total = Math.max(maxLength, 1);
-  const width = svgWidth(total);
-  const ringCy = SVG_HEIGHT / 2;
-  const ringCx = RING_R + 4;
 
   return (
-    <svg
-      viewBox={`0 0 ${width} ${SVG_HEIGHT}`}
-      aria-label={text ? `Preview shows ${text}` : "Type your name to see preview"}
+    <div
+      data-keychain-preview
+      aria-label={text ? `Preview shows: ${text}` : "Type your name to see preview"}
       role="img"
-      style={{ display: "block", width: "100%", maxWidth: "100%", height: "auto" }}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 1,
+        paddingLeft: 26,         // room for side-tab on first cube
+        overflowX: "auto",
+        overflowY: "visible",
+        paddingTop: 12,
+        paddingBottom: 20,       // room for drop shadow
+      }}
     >
-      {/* Keychain ring — same fill as base */}
-      <circle
-        cx={ringCx}
-        cy={ringCy}
-        r={RING_R}
-        stroke={baseHex}
-        strokeWidth={RING_STROKE}
-        fill="none"
-      />
-
-      {/* Keycap slots */}
       {Array.from({ length: total }, (_, i) => {
         const ch = chars[i] ?? "";
         const isEmpty = ch === "";
-        const x = LEFT_PAD + i * (CAP_SIZE + CAP_GAP);
-        const y = SVG_TOP_PAD;
+        const isFirst = i === 0;
 
         return (
-          <g key={i}>
-            {/* Outer cap */}
-            <rect
-              x={x}
-              y={y}
-              width={CAP_SIZE}
-              height={CAP_SIZE}
-              rx={CAP_RX}
-              fill={isEmpty ? "none" : baseHex}
-              stroke={isEmpty ? "#d1d5db" : baseHex}
-              strokeWidth={isEmpty ? 1.5 : 0}
-              opacity={isEmpty ? 0.5 : 1}
-            />
-            {/* Highlight shimmer (non-empty caps only) */}
+          <div
+            key={i}
+            style={{
+              position: "relative",
+              width: CUBE_SIZE_D,
+              height: CUBE_SIZE_D,
+              flexShrink: 0,
+              borderRadius: 14,
+              background: isEmpty ? "transparent" : baseHex,
+              border: isEmpty ? "1.5px dashed #d1d5db" : "none",
+              opacity: isEmpty ? 0.45 : 1,
+              // Body bevel — top highlight, side shadow, bottom drop
+              boxShadow: isEmpty
+                ? "none"
+                : `inset 3px 3px 5px rgba(255,255,255,0.45),
+                   inset -3px -3px 5px rgba(0,0,0,0.14),
+                   0 4px 0 rgba(0,0,0,0.10),
+                   0 8px 14px rgba(0,0,0,0.10)`,
+            }}
+          >
+            {/* Side-tab (ring/loop) — first cube only, same base colour */}
+            {isFirst && !isEmpty && (
+              <div
+                style={{
+                  position: "absolute",
+                  left: -22,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  width: 28,
+                  height: 32,
+                  borderRadius: "14px 0 0 14px",
+                  background: baseHex,
+                  boxShadow: `inset 4px 4px 7px rgba(255,255,255,0.50),
+                               inset -5px -5px 8px rgba(0,0,0,0.16),
+                               0 5px 0 rgba(0,0,0,0.10)`,
+                }}
+              >
+                {/* Loop dot */}
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 5,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    width: 14,
+                    height: 14,
+                    borderRadius: "50%",
+                    background: "#ffffff",
+                    boxShadow: "inset 2px 2px 4px rgba(0,0,0,0.16)",
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Inset clicker face — only on filled cubes */}
             {!isEmpty && (
-              <rect
-                x={x + 6}
-                y={y + 6}
-                width={CAP_SIZE - 12}
-                height={14}
-                rx={5}
-                fill="rgba(255,255,255,0.18)"
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 5,
+                  borderRadius: 10,
+                  background: clickerHex,
+                  boxShadow: `inset 2px 2px 4px rgba(255,255,255,0.38),
+                               inset -2px -2px 4px rgba(0,0,0,0.14)`,
+                }}
               />
             )}
-            {/* Character */}
+
+            {/* Raised letter glyph — only on filled cubes */}
             {!isEmpty && (
-              <text
-                x={x + CAP_SIZE / 2}
-                y={y + CAP_SIZE / 2 + 18}
-                textAnchor="middle"
-                fill={letterHex}
-                fontSize={48}
-                fontWeight="800"
-                fontFamily="Chakra Petch, ui-sans-serif, system-ui, sans-serif"
-                style={{ userSelect: "none" }}
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: letterHex,
+                  fontSize: 30,
+                  fontWeight: 900,
+                  lineHeight: 1,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.01em",
+                  zIndex: 2,
+                  userSelect: "none",
+                  textShadow: `0 1px 0 rgba(0,0,0,0.08),
+                               0 2px 0 rgba(0,0,0,0.06),
+                               0 3px 0 rgba(0,0,0,0.04),
+                               0 4px 8px rgba(0,0,0,0.18)`,
+                  fontFamily: "Chakra Petch, ui-sans-serif, system-ui, sans-serif",
+                }}
+                aria-hidden="true"
               >
                 {ch}
-              </text>
+              </div>
             )}
-          </g>
+          </div>
         );
       })}
 
-      {/* Base cube — solid filled keycap at the right end, no character */}
-      {(() => {
-        const x = LEFT_PAD + total * (CAP_SIZE + CAP_GAP);
-        const y = SVG_TOP_PAD;
-        return (
-          <g>
-            <rect
-              x={x}
-              y={y}
-              width={CAP_SIZE}
-              height={CAP_SIZE}
-              rx={CAP_RX}
-              fill={baseHex}
-              stroke="rgba(0,0,0,0.10)"
-              strokeWidth={1}
-            />
-            <rect
-              x={x + 6}
-              y={y + 6}
-              width={CAP_SIZE - 12}
-              height={14}
-              rx={5}
-              fill="rgba(255,255,255,0.18)"
-            />
-          </g>
-        );
-      })()}
-    </svg>
+      <style>{`
+        @media (max-width: 560px) {
+          /* Scale down cubes on small screens by targeting the flex children
+             of the preview container via a scoped class added to wrapper.
+             We use a data-attr selector to avoid global pollution. */
+          [data-keychain-preview] > div {
+            width: 50px !important;
+            height: 50px !important;
+          }
+        }
+      `}</style>
+    </div>
   );
 }

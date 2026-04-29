@@ -46,9 +46,9 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
     hydrateProductVariants(product.id),
   ]);
 
-  // Phase 19 (19-06) — fetch configurable-product data when productType === "configurable"
+  // Phase 19 (19-06) — fetch configurable-product data when productType is configurable-like
   const configurableData =
-    product.productType === "configurable"
+    (product.productType === "configurable" || product.productType === "keychain")
       ? await getConfigurableProductData(product.id)
       : undefined;
 

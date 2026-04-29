@@ -41,7 +41,7 @@ export default async function EditProductPage({
         ? "This product already has configurator fields — type cannot be changed. Delete all fields first."
         : undefined;
 
-  const productType = (product.productType ?? "stocked") as "stocked" | "configurable";
+  const productType = (product.productType ?? "stocked") as "stocked" | "configurable" | "keychain";
 
   const initialData: ProductFormInitial = {
     id: product.id,
@@ -83,6 +83,12 @@ export default async function EditProductPage({
           >
             Manage Configurator →
           </a>
+        ) : productType === "keychain" ? (
+          <span
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-100 text-slate-500 text-sm font-medium min-h-[44px]"
+          >
+            Keychain — fixed schema
+          </span>
         ) : (
           <a
             href={`/admin/products/${id}/variants`}

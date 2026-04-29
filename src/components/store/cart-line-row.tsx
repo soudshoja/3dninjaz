@@ -79,26 +79,6 @@ export function CartLineRow({
           {item.variantLabel ? `${item.variantLabel} · ` : ""}
           {formatMYR(item.unitPrice)} each
         </p>
-        {/* Base & Clicker colour swatch — shown for configurable keychain items */}
-        {item.configurationData?.baseClickerColor ? (
-          <p className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
-            <span
-              aria-hidden="true"
-              style={{
-                display: "inline-block",
-                width: 12,
-                height: 12,
-                borderRadius: "999px",
-                background: item.configurationData.baseClickerColor,
-                border: "1px solid rgba(0,0,0,0.15)",
-                flexShrink: 0,
-              }}
-            />
-            {item.configurationData.baseClickerColorName
-              ? `Base & Clicker: ${item.configurationData.baseClickerColorName}`
-              : "Base & Clicker color set"}
-          </p>
-        ) : null}
         {!item.available ? (
           <p className="text-xs font-semibold mt-0.5" style={{ color: "#dc2626" }}>
             Out of stock

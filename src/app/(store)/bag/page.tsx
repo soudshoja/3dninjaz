@@ -53,7 +53,7 @@ function BagContent() {
         // Remove store entries for deleted/inactive variants/products.
         // Stocked lines key on variantId; configurable lines key on productId.
         const liveKeys = new Set(
-          items.map((i) => (i.productType === "configurable" ? i.productId : i.variantId))
+          items.map((i) => (i.productType === "configurable" || i.productType === "keychain" ? i.productId : i.variantId))
         );
         for (const si of storeItems) {
           const lookupKey = isConfigurableCartItem(si) ? si.productId : si.variantId;

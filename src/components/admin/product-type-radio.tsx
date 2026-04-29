@@ -1,18 +1,18 @@
 "use client";
 
-import { Package, Wand2, Check, AlertCircle } from "lucide-react";
+import { Package, Wand2, Link, Check, AlertCircle } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 
 // ============================================================================
 // Phase 19-03 — Product type radio cards
-// Renders two-card radio for Stocked vs Made-to-Order at the top of the
-// product form. Locked state shows a yellow info banner and disables both
-// cards (used when a product already has variants or config fields attached).
+// Renders three-card radio for Stocked / Made-to-Order / Keychain at the top
+// of the product form. Locked state shows a yellow info banner and disables
+// all cards (used when a product already has variants or config fields).
 // ============================================================================
 
 type Props = {
-  value: "stocked" | "configurable";
-  onChange: (v: "stocked" | "configurable") => void;
+  value: "stocked" | "configurable" | "keychain";
+  onChange: (v: "stocked" | "configurable" | "keychain") => void;
   /** When true, render disabled state + the explanation message. */
   locked?: boolean;
   lockedReason?: string;
@@ -38,6 +38,7 @@ export function ProductTypeRadio({
 }: Props) {
   const stockedSelected = value === "stocked";
   const configurableSelected = value === "configurable";
+  const keychainSelected = value === "keychain";
 
   return (
     <div>
@@ -52,11 +53,11 @@ export function ProductTypeRadio({
         </div>
       )}
 
-      {/* Radio group — two cards side-by-side (md:grid-cols-2; 1-col mobile) */}
+      {/* Radio group — three cards (md:grid-cols-3; 1-col mobile) */}
       <div
         role="radiogroup"
         aria-label="Product type"
-        className="grid gap-3 md:grid-cols-2"
+        className="grid gap-3 md:grid-cols-3"
       >
         {/* Card 1: Stocked */}
         <button
@@ -132,6 +133,45 @@ export function ProductTypeRadio({
             </span>
             <span className="text-xs leading-relaxed" style={{ color: "#52525B" }}>
               Customisable print-on-demand products. Customers fill a form (name/colour/etc.) and we make each one.
+            </span>
+          </span>
+        </button>
+
+        {/* Card 3: Keychain */}
+        <button
+          type="button"
+          role="radio"
+          aria-checked={keychainSelected}
+          disabled={locked}
+          onClick={() => { if (!locked) onChange("keychain"); }}
+          className="relative flex items-start gap-3 rounded-xl p-4 text-left transition-all outline-none focus-visible:ring-2 focus-visible:ring-offset-2 min-h-[48px]"
+          style={{
+            border: keychainSelected ? `2px solid ${BRAND.green}` : "1px solid #E4E4E7",
+            background: keychainSelected ? `${BRAND.green}0D` : "white",
+            cursor: locked ? "not-allowed" : "pointer",
+            opacity: locked ? 0.6 : 1,
+          }}
+        >
+          {keychainSelected && <SelectedBadge />}
+          <span
+            className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+            style={{
+              backgroundColor: keychainSelected ? BRAND.green : "#F4F4F5",
+              color: keychainSelected ? "white" : BRAND.ink,
+            }}
+            aria-hidden
+          >
+            <Link className="h-5 w-5" />
+          </span>
+          <span className="flex flex-col gap-0.5">
+            <span
+              className="font-display text-sm font-semibold leading-tight"
+              style={{ color: BRAND.ink }}
+            >
+              Keychain
+            </span>
+            <span className="text-xs leading-relaxed" style={{ color: "#52525B" }}>
+              Name + 3 colours (base / clicker / letter), tier pricing per character. Fixed field schema — auto-seeded on creation.
             </span>
           </span>
         </button>
