@@ -172,9 +172,9 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
 
   // -------------------------------------------------------------------------
   // Auto-fill Clicker + Letter palettes when Base palette is saved.
-  // Filter is label-only (not locked-gated) so a manually-unlocked Clicker /
-  // Letter still receives the propagation. Failures from any single target
-  // surface as a visible error so silent partial-fills can't happen.
+  // Pulls a fresh field list from the server before filtering so a stale
+  // closure can't drop targets. Any per-target failure surfaces as a visible
+  // error so silent partial-fills can't happen.
   // -------------------------------------------------------------------------
   const handleBaseAutoFill = async (
     savedField: ConfigField,
@@ -183,7 +183,8 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
     const newBaseIds = (savedField.config as { allowedColorIds?: string[] }).allowedColorIds ?? [];
     if (newBaseIds.length === 0) return;
 
-    const targets = fields.filter(
+    const fresh = await getConfiguratorData(product.id);
+    const targets = fresh.fields.filter(
       (f) => f.fieldType === "colour" && (f.label === "Clicker" || f.label === "Letter"),
     );
 
@@ -201,6 +202,8 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
 
     if (failures.length > 0) {
       setError(`Auto-fill failed for: ${failures.join("; ")}`);
+    } else if (targets.length === 0) {
+      setError(`Auto-fill found no Clicker/Letter targets to update.`);
     }
   };
 

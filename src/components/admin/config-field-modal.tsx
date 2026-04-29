@@ -223,27 +223,24 @@ function ColourConfigForm({
       </div>
 
       {ids.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-2">
           {ids.map((id) => {
             const row = rowById.get(id);
+            if (!row) return null;
             return (
               <span
                 key={id}
-                className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium"
-                style={{ borderColor: "#E4E4E7", color: BRAND.ink }}
-              >
-                <span
-                  className="inline-block rounded-full shrink-0"
-                  aria-hidden
-                  style={{
-                    width: 12,
-                    height: 12,
-                    backgroundColor: row?.hex ?? "#CBD5E1",
-                    border: "1px solid rgba(0,0,0,0.12)",
-                  }}
-                />
-                {row?.name ?? id.slice(0, 8) + "…"}
-              </span>
+                title={row.name}
+                aria-label={row.name}
+                className="inline-block rounded-full shrink-0"
+                style={{
+                  width: 32,
+                  height: 32,
+                  backgroundColor: row.hex,
+                  border: "1px solid rgba(0,0,0,0.12)",
+                  boxShadow: "inset 0 0 0 2px #fff",
+                }}
+              />
             );
           })}
         </div>
