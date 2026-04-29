@@ -153,7 +153,9 @@ export function ConfigurableProductView({
 }: Props) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
+  // Default to preview mode for keychain products so the cube hero is the first
+  // thing the customer sees — not the admin's product photos.
+  const [showPreview, setShowPreview] = useState(product.productType === "keychain");
   const previewRef = useRef<HTMLDivElement>(null);
 
   // ── Derived state ──────────────────────────────────────────────────────────
@@ -249,25 +251,26 @@ export function ConfigurableProductView({
   // ── Preview node (passed to gallery) ─────────────────────────────────────
   // Container sized so the keychain preview is large enough to read on phones.
   // The KeychainPreview SVG itself uses width:100% and scales to its container.
+  // previewNode is rendered inside the hero square (which has containerType set
+  // on it in ConfigurableImageGallery). Keep this wrapper minimal — no extra
+  // padding or nested container queries that would interfere with cube sizing.
   const previewNode = (
     <div
       ref={previewRef}
-      className="flex w-full items-center justify-center px-4 py-6 sm:py-10 overflow-x-visible"
+      className="w-full flex items-center justify-center"
     >
-      <div style={{ width: "100%", maxWidth: "100%" }}>
-        <KeychainPreview
-          text={textValue}
-          baseHex={baseHex}
-          clickerHex={clickerHex}
-          letterHex={letterHex}
-          maxLength={maxLength}
-          placeholder={
-            product.productType === "keychain" || textFields.length > 0
-              ? "YOURTEXT"
-              : ""
-          }
-        />
-      </div>
+      <KeychainPreview
+        text={textValue}
+        baseHex={baseHex}
+        clickerHex={clickerHex}
+        letterHex={letterHex}
+        maxLength={maxLength}
+        placeholder={
+          product.productType === "keychain" || textFields.length > 0
+            ? "YOURTEXT"
+            : ""
+        }
+      />
     </div>
   );
 

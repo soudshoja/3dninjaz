@@ -62,11 +62,13 @@ export function ConfigurableImageGallery({
         style={{
           backgroundColor: `${BRAND.blue}10`,
           boxShadow: `inset 0 2px 8px ${BRAND.ink}08`,
+          containerType: "inline-size",
         }}
       >
         {showPreview ? (
-          /* Live preview mode */
-          <div className="w-full h-full flex items-center justify-center p-8">
+          /* Live preview mode — previewSlot uses 100cqw which resolves to this
+             container's width, so cubes auto-size to fit the hero square. */
+          <div className="w-full h-full flex items-center justify-center">
             {previewSlot}
           </div>
         ) : activeDisplayImage ? (

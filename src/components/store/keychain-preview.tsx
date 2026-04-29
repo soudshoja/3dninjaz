@@ -60,9 +60,15 @@ export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLengt
   const fontSizeExpr = `clamp(13px, calc(100cqw / ${maxLength + 1} * 0.42), 26px)`;
 
   return (
-    // Outer wrapper establishes a CSS inline-size containment context so
-    // 100cqw inside refers to this element's width, not the viewport.
-    <div style={{ containerType: "inline-size" }}>
+    // The outer hero container in ConfigurableImageGallery now owns the
+    // containerType: "inline-size" so 100cqw resolves to the full hero width.
+    // This wrapper is kept for the thumbstrip miniature which renders
+    // previewSlot outside the hero; the inner containerType there still helps.
+    <div style={{ containerType: "inline-size", width: "100%" }}>
+      {/* Centering wrapper: offsets the 26px left-padding so the visible cube
+          row is optically centred in the hero square despite the ring tab
+          hanging left of cube #1. */}
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
       <div
         data-keychain-preview
         aria-label={display ? `Preview shows: ${display}` : "Colour swatch preview"}
@@ -71,7 +77,7 @@ export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLengt
           display: "flex",
           alignItems: "center",
           gap: 1,
-          paddingLeft: 26,      // room for side-tab on first cube
+          paddingLeft: 26,      // room for side-tab/ring on first cube
           overflowX: "visible",
           overflowY: "visible",
           paddingTop: 12,
@@ -177,6 +183,7 @@ export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLengt
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );
