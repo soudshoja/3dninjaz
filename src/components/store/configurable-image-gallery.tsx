@@ -142,7 +142,7 @@ export function ConfigurableImageGallery({
               className="w-14 h-14 flex items-center justify-center overflow-hidden"
               aria-hidden="true"
             >
-              <div style={{ transform: "scale(0.2)", transformOrigin: "center center", width: "500%", height: "500%" }}>
+              <div style={{ transform: "scale(0.2)", transformOrigin: "center center", width: "500%", height: "auto" }}>
                 {previewSlot}
               </div>
             </div>
