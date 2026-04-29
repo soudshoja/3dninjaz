@@ -32,6 +32,7 @@ import {
   ArrowUp,
   ArrowDown,
   AlertCircle,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -259,24 +260,36 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
               : "Define the fields customers fill in when ordering this product."}
           </p>
         </div>
-        <Button
-          onClick={() => setAddModalOpen(true)}
-          disabled={pending}
-          className="min-h-[44px] gap-2"
-          style={{ backgroundColor: BRAND.green, color: "white" }}
-        >
-          <Plus className="h-4 w-4" />
-          Add field
-          {fields.length > 0 && (
-            <Badge
-              variant="secondary"
-              className="ml-1 text-xs"
-              style={{ backgroundColor: "rgba(255,255,255,0.2)", color: "white" }}
-            >
-              {fields.length}
-            </Badge>
-          )}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <a
+            href={`/products/${product.slug}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium hover:bg-slate-50 transition-colors min-h-[44px]"
+            style={{ borderColor: BRAND.blue, color: BRAND.blue }}
+          >
+            <ExternalLink className="h-4 w-4" />
+            View product
+          </a>
+          <Button
+            onClick={() => setAddModalOpen(true)}
+            disabled={pending}
+            className="min-h-[44px] gap-2"
+            style={{ backgroundColor: BRAND.green, color: "white" }}
+          >
+            <Plus className="h-4 w-4" />
+            Add field
+            {fields.length > 0 && (
+              <Badge
+                variant="secondary"
+                className="ml-1 text-xs"
+                style={{ backgroundColor: "rgba(255,255,255,0.2)", color: "white" }}
+              >
+                {fields.length}
+              </Badge>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Error banner */}

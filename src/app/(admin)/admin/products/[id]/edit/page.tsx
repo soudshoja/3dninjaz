@@ -75,29 +75,39 @@ export default async function EditProductPage({
             {product.name}
           </p>
         </div>
-        {/* Phase 19 (19-03) — swap Manage Variants for Manage Configurator on configurable products */}
-        {productType === "configurable" ? (
+        <div className="flex flex-wrap items-center gap-2">
           <a
-            href={`/admin/products/${id}/configurator`}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px]"
+            href={`/products/${product.slug}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-[var(--color-brand-blue)] text-[var(--color-brand-blue)] text-sm font-medium hover:bg-slate-50 transition-colors min-h-[44px]"
           >
-            Manage Configurator →
+            View product ↗
           </a>
-        ) : productType === "keychain" ? (
-          <a
-            href={`/admin/products/${id}/configurator`}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px]"
-          >
-            Manage Keyboard Clicker Fields →
-          </a>
-        ) : (
-          <a
-            href={`/admin/products/${id}/variants`}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px]"
-          >
-            Manage Variants →
-          </a>
-        )}
+          {/* Phase 19 (19-03) — swap Manage Variants for Manage Configurator on configurable products */}
+          {productType === "configurable" ? (
+            <a
+              href={`/admin/products/${id}/configurator`}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px]"
+            >
+              Manage Configurator →
+            </a>
+          ) : productType === "keychain" ? (
+            <a
+              href={`/admin/products/${id}/configurator`}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px]"
+            >
+              Manage Keyboard Clicker Fields →
+            </a>
+          ) : (
+            <a
+              href={`/admin/products/${id}/variants`}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px]"
+            >
+              Manage Variants →
+            </a>
+          )}
+        </div>
       </div>
       <ProductForm
         initialData={initialData}
