@@ -170,13 +170,13 @@ export function VendingPreview({ primaryHex, secondaryHex, label }: Props) {
           fill="url(#vending-body-sheen)"
         />
 
-        {/* ── Dispenser knob — circular, sticks out the right side ───────── */}
-        <circle cx="370" cy="455" r="44" fill={secondaryHex} />
-        <circle cx="370" cy="455" r="44" fill="url(#vending-knob-sheen)" />
+        {/* ── Dispenser knob — circular, mounted on front-centre of lower body ── */}
+        <circle cx="250" cy="465" r="42" fill={secondaryHex} />
+        <circle cx="250" cy="465" r="42" fill="url(#vending-knob-sheen)" />
         {/* Wave / swirl detail inside knob — drawn in primary so it reads as
             the candy chute behind a transparent disc. */}
         <path
-          d="M 338 455 Q 354 432 370 455 T 402 455"
+          d="M 220 465 Q 235 444 250 465 T 280 465"
           stroke={primaryHex}
           strokeWidth="6"
           strokeLinecap="round"
@@ -184,9 +184,9 @@ export function VendingPreview({ primaryHex, secondaryHex, label }: Props) {
         />
         {/* knob rim */}
         <circle
-          cx="370"
-          cy="455"
-          r="44"
+          cx="250"
+          cy="465"
+          r="42"
           fill="none"
           stroke="rgba(0,0,0,0.16)"
           strokeWidth="2"

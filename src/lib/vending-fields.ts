@@ -5,8 +5,9 @@
  *   position 0 — colour "Primary"   (locked: true) — body / back panel / honeycomb screen
  *   position 1 — colour "Secondary" (locked: true) — frame / dispenser knob / tray / base
  *
- * Allowed-colour palette is seeded with EVERY currently-seeded colour. Admin
- * prunes per slot via the configurator UI ("colour gallery").
+ * Allowed-colour palette is seeded EMPTY on purpose — admin manually adds
+ * each colour from the colour gallery via the configurator UI. The product
+ * cannot be ordered until at least one colour is added per slot.
  *
  * Used by:
  *   - Admin product-form save flow when productType='vending' is created fresh
@@ -17,7 +18,7 @@
 
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
-import { productConfigFields, colors } from "@/lib/db/schema";
+import { productConfigFields } from "@/lib/db/schema";
 
 export async function seedVendingFields(
   productId: string,
@@ -27,21 +28,7 @@ export async function seedVendingFields(
     ? () => {}
     : (msg: string) => console.log(`[vending-fields] ${msg}`);
 
-  const colourRows = await db
-    .select({ id: colors.id, name: colors.name })
-    .from(colors);
-
-  const allColourIds = colourRows.map((c) => c.id);
-
-  if (allColourIds.length === 0) {
-    console.warn(
-      "[vending-fields] no colours in library — run scripts/seed-colours.ts first",
-    );
-  }
-
-  const safeIds = allColourIds.length > 0 ? allColourIds : ["placeholder-run-seed-colours-first"];
-
-  // Field 0 — colour: "Primary" (locked)
+  // Field 0 — colour: "Primary" (locked, EMPTY palette — admin curates)
   const primaryFieldId = randomUUID();
   await db.insert(productConfigFields).values({
     id: primaryFieldId,
@@ -52,11 +39,11 @@ export async function seedVendingFields(
     helpText: "Body, back panel, and honeycomb screen.",
     required: true,
     locked: true,
-    configJson: JSON.stringify({ allowedColorIds: safeIds }),
+    configJson: JSON.stringify({ allowedColorIds: [] }),
   });
-  log(`  colour field "${primaryFieldId}" (Primary, ${safeIds.length} colours, locked)`);
+  log(`  colour field "${primaryFieldId}" (Primary, EMPTY — admin curates, locked)`);
 
-  // Field 1 — colour: "Secondary" (locked)
+  // Field 1 — colour: "Secondary" (locked, EMPTY palette — admin curates)
   const secondaryFieldId = randomUUID();
   await db.insert(productConfigFields).values({
     id: secondaryFieldId,
@@ -67,9 +54,9 @@ export async function seedVendingFields(
     helpText: "Frame, dispenser knob, tray, and base.",
     required: true,
     locked: true,
-    configJson: JSON.stringify({ allowedColorIds: safeIds }),
+    configJson: JSON.stringify({ allowedColorIds: [] }),
   });
-  log(`  colour field "${secondaryFieldId}" (Secondary, ${safeIds.length} colours, locked)`);
+  log(`  colour field "${secondaryFieldId}" (Secondary, EMPTY — admin curates, locked)`);
 
-  log(`done — 2 locked fields inserted for product ${productId}`);
+  log(`done — 2 locked fields inserted for product ${productId} (empty palettes — admin must add colours via configurator)`);
 }
