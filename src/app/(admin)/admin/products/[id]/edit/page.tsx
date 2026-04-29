@@ -84,11 +84,12 @@ export default async function EditProductPage({
             Manage Configurator →
           </a>
         ) : productType === "keychain" ? (
-          <span
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-100 text-slate-500 text-sm font-medium min-h-[44px]"
+          <a
+            href={`/admin/products/${id}/configurator`}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px]"
           >
-            Keychain — fixed schema
-          </span>
+            Manage Keychain Fields →
+          </a>
         ) : (
           <a
             href={`/admin/products/${id}/variants`}

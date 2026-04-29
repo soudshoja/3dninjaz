@@ -27,18 +27,14 @@ export default async function ConfiguratorPage({ params }: { params: Params }) {
     notFound();
   }
 
-  // Guard: this page is only for configurable products.
-  // Keychain has a fixed schema — redirect to edit page instead.
-  if (data.product.productType === "keychain") {
-    const { redirect } = await import("next/navigation");
-    redirect(`/admin/products/${id}/edit`);
-  }
-  if (data.product.productType !== "configurable") {
+  // Guard: this page is for configurable + keychain products.
+  // Keychain uses the same builder but with a locked field shape (no add/remove/reorder).
+  if (data.product.productType !== "configurable" && data.product.productType !== "keychain") {
     return (
       <div className="p-6 space-y-3">
         <h1 className="text-xl font-bold">This product is stocked, not made-to-order</h1>
         <p className="text-sm text-muted-foreground">
-          The configurator is only available for Made-to-Order products.
+          The configurator is only available for Made-to-Order and Keychain products.
         </p>
         <a
           href={`/admin/products/${id}/variants`}
