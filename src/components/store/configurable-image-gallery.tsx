@@ -58,11 +58,15 @@ export function ConfigurableImageGallery({
       {/* ── Hero area ── */}
       <figure className="flex flex-col gap-1">
       <div
-        className="relative aspect-square rounded-[28px] overflow-hidden flex items-center justify-center"
+        className="relative aspect-square rounded-[28px] flex items-center justify-center"
         style={{
           backgroundColor: `${BRAND.blue}10`,
           boxShadow: `inset 0 2px 8px ${BRAND.ink}08`,
           containerType: "inline-size",
+          /* overflow-hidden only when showing images so the image fills the
+             rounded square; in preview mode we allow the ring tab to overflow
+             slightly left without clipping. */
+          overflow: showPreview ? "visible" : "hidden",
         }}
       >
         {showPreview ? (
