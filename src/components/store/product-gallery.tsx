@@ -68,7 +68,7 @@ export function ProductGallery({
               <img
                 src={activePic.fallbackSrc}
                 alt={alt}
-                className="absolute inset-0 h-full w-full object-cover"
+                className="absolute inset-0 h-full w-full object-contain"
                 fetchPriority="high"
               />
             </picture>
@@ -78,7 +78,7 @@ export function ProductGallery({
             <img
               src={activeImage}
               alt={alt}
-              className="absolute inset-0 h-full w-full object-cover"
+              className="absolute inset-0 h-full w-full object-contain"
               fetchPriority="high"
             />
           )
@@ -140,7 +140,7 @@ export function ProductGallery({
                         <img
                           src={tp.fallbackSrc}
                           alt=""
-                          className="absolute inset-0 h-full w-full object-cover"
+                          className="absolute inset-0 h-full w-full object-contain"
                           loading="lazy"
                         />
                       </picture>
@@ -149,7 +149,7 @@ export function ProductGallery({
                       <img
                         src={img}
                         alt=""
-                        className="absolute inset-0 h-full w-full object-cover"
+                        className="absolute inset-0 h-full w-full object-contain"
                         loading="lazy"
                       />
                     )}

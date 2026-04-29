@@ -86,7 +86,7 @@ export function ConfigurableImageGallery({
               <img
                 src={activePic.fallbackSrc}
                 alt={activeCaption ?? "Product display"}
-                className="absolute inset-0 h-full w-full object-cover"
+                className="absolute inset-0 h-full w-full object-contain"
                 loading="eager"
                 fetchPriority="high"
               />
@@ -96,7 +96,7 @@ export function ConfigurableImageGallery({
             <img
               src={activeDisplayImage}
               alt={activeCaption ?? "Product display"}
-              className="absolute inset-0 h-full w-full object-cover"
+              className="absolute inset-0 h-full w-full object-contain"
               loading="eager"
               fetchPriority="high"
             />
@@ -150,7 +150,7 @@ export function ConfigurableImageGallery({
               className="absolute bottom-1 text-[9px] font-bold uppercase tracking-wide"
               style={{ color: showPreview ? BRAND.ink : "#64748b" }}
             >
-              Yours
+              Name
             </span>
           </button>
         </li>
@@ -187,7 +187,7 @@ export function ConfigurableImageGallery({
                     <img
                       src={tp.fallbackSrc}
                       alt=""
-                      className="absolute inset-0 h-full w-full object-cover"
+                      className="absolute inset-0 h-full w-full object-contain"
                       loading="lazy"
                     />
                   </picture>
@@ -196,7 +196,7 @@ export function ConfigurableImageGallery({
                   <img
                     src={img}
                     alt=""
-                    className="absolute inset-0 h-full w-full object-cover"
+                    className="absolute inset-0 h-full w-full object-contain"
                     loading="lazy"
                   />
                 )}
