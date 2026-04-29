@@ -16,6 +16,7 @@
  */
 
 import { useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import type { PictureData } from "@/lib/image-manifest";
 
@@ -105,6 +106,37 @@ export function ConfigurableImageGallery({
           <div className="flex h-full w-full items-center justify-center text-sm font-medium text-zinc-400">
             No image available
           </div>
+        )}
+
+        {displayImages.length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                const prev = (activeDisplayIdx - 1 + displayImages.length) % displayImages.length;
+                setActiveDisplayIdx(prev);
+                if (showPreview) onTogglePreview(false);
+              }}
+              aria-label="Previous image"
+              className="absolute left-3 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center rounded-full border border-zinc-200 bg-white/90 shadow-md transition hover:bg-white active:scale-95"
+              style={{ width: 44, height: 44, color: BRAND.ink }}
+            >
+              <ChevronLeft size={22} strokeWidth={2.5} />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const next = (activeDisplayIdx + 1) % displayImages.length;
+                setActiveDisplayIdx(next);
+                if (showPreview) onTogglePreview(false);
+              }}
+              aria-label="Next image"
+              className="absolute right-3 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center rounded-full border border-zinc-200 bg-white/90 shadow-md transition hover:bg-white active:scale-95"
+              style={{ width: 44, height: 44, color: BRAND.ink }}
+            >
+              <ChevronRight size={22} strokeWidth={2.5} />
+            </button>
+          </>
         )}
       </div>
       {/* Phase 19 (19-10) — figcaption shown under hero when a caption is set */}
