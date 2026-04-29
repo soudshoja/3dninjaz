@@ -247,6 +247,13 @@ export async function addConfigField(
 
   revalidatePath(`/admin/products/${productId}/configurator`);
 
+  const [prod] = await db
+    .select({ slug: products.slug })
+    .from(products)
+    .where(eq(products.id, productId))
+    .limit(1);
+  if (prod) revalidatePath(`/products/${prod.slug}`);
+
   const [row] = await db
     .select()
     .from(productConfigFields)
@@ -309,6 +316,13 @@ export async function updateConfigField(
 
   revalidatePath(`/admin/products/${existing.productId}/configurator`);
 
+  const [prod] = await db
+    .select({ slug: products.slug })
+    .from(products)
+    .where(eq(products.id, existing.productId))
+    .limit(1);
+  if (prod) revalidatePath(`/products/${prod.slug}`);
+
   return { ok: true as const };
 }
 
@@ -337,6 +351,13 @@ export async function deleteConfigField(
 
   if (existing?.productId) {
     revalidatePath(`/admin/products/${existing.productId}/configurator`);
+
+    const [prod] = await db
+      .select({ slug: products.slug })
+      .from(products)
+      .where(eq(products.id, existing.productId))
+      .limit(1);
+    if (prod) revalidatePath(`/products/${prod.slug}`);
   }
 
   return { ok: true as const };
