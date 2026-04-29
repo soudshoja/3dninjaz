@@ -87,6 +87,33 @@ export function ProductGallery({
             No image available
           </div>
         )}
+
+        {images.length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={() =>
+                setActiveIndex((i) => (i - 1 + images.length) % images.length)
+              }
+              aria-label="Previous image"
+              className="absolute left-3 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center rounded-full border border-zinc-200 bg-white/90 shadow-md transition hover:bg-white active:scale-95"
+              style={{ width: 44, height: 44, color: BRAND.ink }}
+            >
+              <ChevronLeft size={22} strokeWidth={2.5} />
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setActiveIndex((i) => (i + 1) % images.length)
+              }
+              aria-label="Next image"
+              className="absolute right-3 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center rounded-full border border-zinc-200 bg-white/90 shadow-md transition hover:bg-white active:scale-95"
+              style={{ width: 44, height: 44, color: BRAND.ink }}
+            >
+              <ChevronRight size={22} strokeWidth={2.5} />
+            </button>
+          </>
+        )}
       </div>
       {images.length > 1 ? (
         <div className="relative flex items-center gap-1 -mx-2 px-2">
