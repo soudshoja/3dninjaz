@@ -64,7 +64,7 @@ type ProductSummary = {
   id: string;
   name: string;
   slug: string;
-  productType: "stocked" | "configurable" | "keychain";
+  productType: "stocked" | "configurable" | "keychain" | "vending";
   maxUnitCount: number | null;
   priceTiers: Record<string, number>;
   unitField: string | null;
@@ -233,6 +233,7 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
   // -------------------------------------------------------------------------
 
   const isKeychain = product.productType === "keychain";
+  const isVending = product.productType === "vending";
 
   const textAndNumberFields = fields.filter(
     (f) => f.fieldType === "text" || f.fieldType === "number"
@@ -252,12 +253,14 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
             </a>
           </div>
           <h1 className="font-heading text-2xl font-bold" style={{ color: BRAND.ink }}>
-            {isKeychain ? "Keyboard Clicker fields" : "Configurator"}
+            {isKeychain ? "Keyboard Clicker fields" : isVending ? "Vending Machine fields" : "Configurator"}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {isKeychain
               ? "Pre-seeded with Base, Clicker, and Letter colour fields (locked). Add extra fields such as a name text field via \"Add field\"."
-              : "Define the fields customers fill in when ordering this product."}
+              : isVending
+                ? "Pre-seeded with Primary and Secondary colour fields (locked). Use the colour gallery on each field to pick which colours customers can choose."
+                : "Define the fields customers fill in when ordering this product."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

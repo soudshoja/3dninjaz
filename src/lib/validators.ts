@@ -153,7 +153,7 @@ export const productSchema = z.object({
   // Phase 19 (19-03) — product type discriminator. Defaults to 'stocked' for
   // backwards compat with existing forms that don't send this field.
   productType: z
-    .enum(["stocked", "configurable", "keychain"])
+    .enum(["stocked", "configurable", "keychain", "vending"])
     .default("stocked"),
   variants: z
     .array(productVariantSchema)

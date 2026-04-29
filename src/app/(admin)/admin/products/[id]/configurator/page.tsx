@@ -29,12 +29,12 @@ export default async function ConfiguratorPage({ params }: { params: Params }) {
 
   // Guard: this page is for configurable + keychain products.
   // Keychain uses the same builder but with a locked field shape (no add/remove/reorder).
-  if (data.product.productType !== "configurable" && data.product.productType !== "keychain") {
+  if (data.product.productType !== "configurable" && data.product.productType !== "keychain" && data.product.productType !== "vending") {
     return (
       <div className="p-6 space-y-3">
         <h1 className="text-xl font-bold">This product is stocked, not made-to-order</h1>
         <p className="text-sm text-muted-foreground">
-          The configurator is only available for Made-to-Order and Keychain products.
+          The configurator is only available for Made-to-Order, Keychain, and Vending products.
         </p>
         <a
           href={`/admin/products/${id}/variants`}

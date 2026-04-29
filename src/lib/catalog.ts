@@ -45,14 +45,14 @@ type SubcategoryRow = typeof subcategories.$inferSelect;
 export type CatalogVariant = VariantRow;
 
 /** Discriminator union for all product types. */
-export type ProductType = "stocked" | "configurable" | "keychain";
+export type ProductType = "stocked" | "configurable" | "keychain" | "vending";
 
 /**
  * Returns true for product types that use configurationData instead of
  * variantId — used for cart/order partitioning and PDP routing.
  */
 export function isConfigurableLike(t: ProductType): boolean {
-  return t === "configurable" || t === "keychain";
+  return t === "configurable" || t === "keychain" || t === "vending";
 }
 
 export type CatalogProduct = Omit<ProductRow, "images" | "productType" | "priceTiers"> & {

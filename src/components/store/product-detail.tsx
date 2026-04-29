@@ -28,7 +28,7 @@ type ProductDetailProps = {
     category: { name: string; slug: string } | null;
     options: HydratedOption[];
     hydratedVariants: HydratedVariant[];
-    productType?: "stocked" | "configurable" | "keychain";
+    productType?: "stocked" | "configurable" | "keychain" | "vending";
   };
   isWishlistedInitial?: boolean;
   ratingAvg?: number;
@@ -56,7 +56,7 @@ export function ProductDetail({
   variantPictures = {},
   configurableData,
 }: ProductDetailProps) {
-  if ((product.productType === "configurable" || product.productType === "keychain") && configurableData) {
+  if ((product.productType === "configurable" || product.productType === "keychain" || product.productType === "vending") && configurableData) {
     return <ConfigurableProductView product={{ ...product, pictures }} {...configurableData} isWishlistedInitial={isWishlistedInitial} ratingAvg={ratingAvg} ratingCount={ratingCount} />;
   }
   const [selectedHydrated, setSelectedHydrated] = useState<HydratedVariant | null>(null);

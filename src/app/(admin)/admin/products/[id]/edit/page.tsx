@@ -41,7 +41,7 @@ export default async function EditProductPage({
         ? "This product already has configurator fields — type cannot be changed. Delete all fields first."
         : undefined;
 
-  const productType = (product.productType ?? "stocked") as "stocked" | "configurable" | "keychain";
+  const productType = (product.productType ?? "stocked") as "stocked" | "configurable" | "keychain" | "vending";
 
   const initialData: ProductFormInitial = {
     id: product.id,
@@ -98,6 +98,13 @@ export default async function EditProductPage({
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px]"
             >
               Manage Keyboard Clicker Fields →
+            </a>
+          ) : productType === "vending" ? (
+            <a
+              href={`/admin/products/${id}/configurator`}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px]"
+            >
+              Manage Vending Machine Fields →
             </a>
           ) : (
             <a
