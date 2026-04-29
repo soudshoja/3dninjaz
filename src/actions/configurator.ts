@@ -82,7 +82,7 @@ function hydrateConfigField(r: typeof productConfigFields.$inferSelect): ConfigF
  */
 export async function updateProductType(
   productId: string,
-  newType: "stocked" | "configurable" | "keychain",
+  newType: "stocked" | "configurable" | "keychain" | "vending",
 ): Promise<
   | { ok: true }
   | { ok: false; error: "Cannot change product type with attached variants" }
@@ -152,7 +152,7 @@ export async function getConfiguratorData(productId: string): Promise<{
     id: string;
     name: string;
     slug: string;
-    productType: "stocked" | "configurable" | "keychain";
+    productType: "stocked" | "configurable" | "keychain" | "vending";
     maxUnitCount: number | null;
     priceTiers: Record<string, number>;
     unitField: string | null;
@@ -190,7 +190,7 @@ export async function getConfiguratorData(productId: string): Promise<{
       id: product.id,
       name: product.name,
       slug: product.slug,
-      productType: product.productType as "stocked" | "configurable" | "keychain",
+      productType: product.productType as "stocked" | "configurable" | "keychain" | "vending",
       maxUnitCount: product.maxUnitCount ?? null,
       priceTiers: ensureTiers(product.priceTiersRaw),
       unitField: product.unitField ?? null,

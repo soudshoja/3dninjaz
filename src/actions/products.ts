@@ -17,6 +17,7 @@ import { computeVariantCost } from "@/lib/cost-breakdown";
 import { getStoreSettingsCached } from "@/lib/store-settings";
 import { ensureImagesV2 } from "@/lib/config-fields";
 import { seedKeychainFields } from "@/lib/keychain-fields";
+import { seedVendingFields } from "@/lib/vending-fields";
 
 export type ProductActionResult =
   | { success: true; productId?: string }
@@ -230,6 +231,29 @@ export async function createProduct(
     }
   }
 
+  // Auto-seed 2 locked colour fields for vending products + flat-price tier.
+  if (productData.productType === "vending") {
+    try {
+      await seedVendingFields(id, { silent: true });
+      await db
+        .update(products)
+        .set({
+          unitField: null,
+          maxUnitCount: 1,
+          priceTiers: JSON.stringify({ 1: 25 }),
+        })
+        .where(eq(products.id, id));
+    } catch (err) {
+      console.error("[createProduct] seedVendingFields failed:", err);
+      try {
+        await db.delete(products).where(eq(products.id, id));
+      } catch {
+        /* best-effort rollback */
+      }
+      return { error: { _form: ["Failed to seed vending fields"] } };
+    }
+  }
+
   revalidatePath("/admin/products");
   revalidatePath("/admin");
   return { success: true, productId: id };
@@ -363,6 +387,30 @@ export async function updateProduct(
       } catch (err) {
         console.error("[updateProduct] seedKeychainFields failed:", err);
         // Non-fatal for update — product row is already saved. Log and continue.
+      }
+    }
+  }
+
+  // If the admin switches an existing product TO vending type, auto-seed the
+  // 2 locked colour fields if none exist yet. Wire flat-price tier.
+  if (productData.productType === "vending") {
+    const [{ value: fieldCount }] = await db
+      .select({ value: count() })
+      .from(productConfigFields)
+      .where(eq(productConfigFields.productId, id));
+    if (fieldCount === 0) {
+      try {
+        await seedVendingFields(id, { silent: true });
+        await db
+          .update(products)
+          .set({
+            unitField: null,
+            maxUnitCount: 1,
+            priceTiers: JSON.stringify({ 1: 25 }),
+          })
+          .where(eq(products.id, id));
+      } catch (err) {
+        console.error("[updateProduct] seedVendingFields failed:", err);
       }
     }
   }

@@ -41,7 +41,7 @@ export type ProductFormInitial = {
   categoryId: string | null;
   subcategoryId: string | null;
   // Phase 19 (19-03) — product type + lock state
-  productType?: "stocked" | "configurable" | "keychain";
+  productType?: "stocked" | "configurable" | "keychain" | "vending";
   lockedReason?: string;
 };
 
@@ -97,7 +97,7 @@ export function ProductForm({
   const [isActive, setIsActive] = useState(initialData?.isActive ?? true);
   const [isFeatured, setIsFeatured] = useState(initialData?.isFeatured ?? false);
   // Phase 19 (19-03) — product type state
-  const [productType, setProductType] = useState<"stocked" | "configurable" | "keychain">(
+  const [productType, setProductType] = useState<"stocked" | "configurable" | "keychain" | "vending">(
     initialData?.productType ?? "stocked"
   );
 
@@ -195,7 +195,7 @@ export function ProductForm({
       if (!editing && "productId" in result && result.productId) {
         // Phase 19 (19-03) — new configurable + keychain products go to configurator,
         // stocked to variants. Keychain is pre-seeded but fully editable.
-        if (productType === "configurable" || productType === "keychain") {
+        if (productType === "configurable" || productType === "keychain" || productType === "vending") {
           router.push(`/admin/products/${result.productId}/configurator`);
         } else {
           router.push(`/admin/products/${result.productId}/variants`);
@@ -458,6 +458,25 @@ export function ProductForm({
               className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
             >
               Manage Keyboard Clicker Fields →
+            </a>
+          </CardContent>
+        </Card>
+      )}
+      {/* Vending Machine — pre-seeded but editable */}
+      {productType === "vending" && initialData?.id && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Vending Machine — Pre-Seeded Fields</CardTitle>
+            <p className="text-sm text-[var(--color-brand-text-muted)]">
+              Created with 2 locked colour fields (Primary / Secondary). Set the allowed-colour palette per field via the configurator (your colour gallery).
+            </p>
+          </CardHeader>
+          <CardContent>
+            <a
+              href={`/admin/products/${initialData.id}/configurator`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
+            >
+              Manage Vending Machine Fields →
             </a>
           </CardContent>
         </Card>

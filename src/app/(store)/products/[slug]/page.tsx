@@ -48,7 +48,7 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
 
   // Phase 19 (19-06) — fetch configurable-product data when productType is configurable-like
   const configurableData =
-    (product.productType === "configurable" || product.productType === "keychain")
+    (product.productType === "configurable" || product.productType === "keychain" || product.productType === "vending")
       ? await getConfigurableProductData(product.id)
       : undefined;
 

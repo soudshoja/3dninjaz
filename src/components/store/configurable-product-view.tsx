@@ -27,6 +27,7 @@ import { useCartStore } from "@/stores/cart-store";
 import { ConfiguratorForm } from "@/components/store/configurator-form";
 import { ConfigurableImageGallery } from "@/components/store/configurable-image-gallery";
 import { KeychainPreview } from "@/components/store/keychain-preview";
+import { VendingPreview } from "@/components/store/vending-preview";
 import { WishlistButton } from "@/components/store/wishlist-button";
 import { RatingBadge } from "@/components/store/rating-badge";
 import type { PublicConfigField } from "@/lib/configurable-product-data";
@@ -48,7 +49,7 @@ type Props = {
     estimatedProductionDays: number | null;
     category: { name: string; slug: string } | null;
     pictures?: PictureData[];
-    productType?: "stocked" | "configurable" | "keychain";
+    productType?: "stocked" | "configurable" | "keychain" | "vending";
   };
   fields: PublicConfigField[];
   maxUnitCount: number | null;
@@ -153,9 +154,11 @@ export function ConfigurableProductView({
 }: Props) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState(false);
-  // Default to preview mode for keychain products so the cube hero is the first
-  // thing the customer sees — not the admin's product photos.
-  const [showPreview, setShowPreview] = useState(product.productType === "keychain");
+  // Default to preview mode for keychain + vending products so the live preview
+  // is the first thing the customer sees — not the admin's product photos.
+  const [showPreview, setShowPreview] = useState(
+    product.productType === "keychain" || product.productType === "vending",
+  );
   const previewRef = useRef<HTMLDivElement>(null);
 
   // ── Derived state ──────────────────────────────────────────────────────────
@@ -259,18 +262,25 @@ export function ConfigurableProductView({
       ref={previewRef}
       className="w-full flex items-center justify-center"
     >
-      <KeychainPreview
-        text={textValue}
-        baseHex={baseHex}
-        clickerHex={clickerHex}
-        letterHex={letterHex}
-        maxLength={maxLength}
-        placeholder={
-          product.productType === "keychain" || textFields.length > 0
-            ? "YOURTEXT"
-            : ""
-        }
-      />
+      {product.productType === "vending" ? (
+        <VendingPreview
+          primaryHex={baseHex}
+          secondaryHex={clickerHex}
+        />
+      ) : (
+        <KeychainPreview
+          text={textValue}
+          baseHex={baseHex}
+          clickerHex={clickerHex}
+          letterHex={letterHex}
+          maxLength={maxLength}
+          placeholder={
+            product.productType === "keychain" || textFields.length > 0
+              ? "YOURTEXT"
+              : ""
+          }
+        />
+      )}
     </div>
   );
 
