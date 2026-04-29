@@ -47,8 +47,12 @@ type Props = {
   productId: string;
   mode: "add" | "edit";
   initialField?: ConfigField;
-  /** Pattern B refetch — called after successful save to refresh builder */
-  onSaved: () => Promise<void> | void;
+  /**
+   * Pattern B refetch — called after successful save to refresh builder.
+   * In edit mode, receives the updated ConfigField so the builder can
+   * run auto-fill logic (e.g. Base → Clicker/Letter palette sync).
+   */
+  onSaved: (savedField?: ConfigField) => Promise<void> | void;
 };
 
 const FIELD_TYPES: { value: FieldType; label: string; description: string }[] = [
@@ -418,8 +422,24 @@ export function ConfigFieldModal({
         return;
       }
 
+      // Build a synthetic ConfigField for the caller (edit mode only) so the
+      // builder can run auto-fill logic without an extra round-trip.
+      let savedField: ConfigField | undefined;
+      if (mode === "edit" && initialField) {
+        savedField = {
+          ...initialField,
+          // Locked fields: label + fieldType are not changed server-side,
+          // but we reflect any palette update so the builder sees the new ids.
+          label: initialField.locked ? initialField.label : label.trim(),
+          fieldType: fieldType!,
+          helpText: helpText.trim() || null,
+          required,
+          config: config as ConfigField["config"],
+        };
+      }
+
       // Pattern B refetch — caller-driven
-      await onSaved();
+      await onSaved(savedField);
       onOpenChange(false);
     });
   };
@@ -495,12 +515,21 @@ export function ConfigFieldModal({
 
           {/* Edit mode: locked type badge */}
           {mode === "edit" && fieldType && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Label>Field type</Label>
               <Badge variant="secondary" className="capitalize">
                 {fieldType}
               </Badge>
               <span className="text-xs text-muted-foreground">(cannot change)</span>
+              {initialField?.locked && (
+                <Badge
+                  variant="secondary"
+                  className="text-xs"
+                  style={{ backgroundColor: "#DBEAFE", color: "#1D4ED8" }}
+                >
+                  Locked
+                </Badge>
+              )}
             </div>
           )}
 
@@ -509,14 +538,30 @@ export function ConfigFieldModal({
             <>
               <div className="space-y-1">
                 <Label htmlFor="fieldLabel">Label *</Label>
-                <Input
-                  id="fieldLabel"
-                  value={label}
-                  onChange={(e) => setLabel(e.target.value)}
-                  placeholder="e.g. Your name"
-                  className="h-9"
-                  maxLength={80}
-                />
+                {mode === "edit" && initialField?.locked ? (
+                  <>
+                    <Input
+                      id="fieldLabel"
+                      value={label}
+                      readOnly
+                      disabled
+                      className="h-9 bg-slate-50 text-slate-400 cursor-not-allowed"
+                      title="Locked label — fixed for Keyboard Clicker products"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Locked label — fixed for Keyboard Clicker products
+                    </p>
+                  </>
+                ) : (
+                  <Input
+                    id="fieldLabel"
+                    value={label}
+                    onChange={(e) => setLabel(e.target.value)}
+                    placeholder="e.g. Your name"
+                    className="h-9"
+                    maxLength={80}
+                  />
+                )}
               </div>
 
               <div className="space-y-1">

@@ -1,21 +1,24 @@
 /**
  * keychain-fields.ts
  *
- * Helper that inserts the 4 fixed config fields for a keychain product:
- *   position 0 — text  "Your name"       (maxLength:8, A-Z, uppercase, profanityCheck)
- *   position 1 — colour "Base colour"     (base palette)
- *   position 2 — colour "Clicker colour"  (clicker palette)
- *   position 3 — colour "Letter colour"   (letter palette)
+ * Helper that inserts the 3 fixed (locked) colour config fields for a keychain
+ * product:
+ *   position 0 — colour "Base"    (locked: true)
+ *   position 1 — colour "Clicker" (locked: true)
+ *   position 2 — colour "Letter"  (locked: true)
+ *
+ * The admin text field (e.g. "Your name") is NOT seeded here — admin adds it
+ * via "Add field" if personalisation is needed.
  *
  * Used by:
  *   - scripts/migrate-pancake-clicker-to-keychain.ts  (one-off migration)
- *   - Admin product-form save flow when productType='keychain' is created
+ *   - Admin product-form save flow when productType='keychain' is created fresh
  *
- * Idempotency: callers are responsible for deleting existing rows before
- * calling this (or ensuring the product has no rows yet). The function does
- * a clean insert — it does NOT check for duplicates itself.
+ * Idempotency: callers are responsible for ensuring the product has no core
+ * colour rows yet before calling this. The function does a clean insert — it
+ * does NOT check for duplicates itself.
  *
- * Returns the UUID of the text field (used as unitField on the product row).
+ * Returns void. The caller no longer needs a unitField UUID from here.
  */
 
 import { randomUUID } from "node:crypto";
@@ -30,7 +33,7 @@ const LETTER_COLOUR_NAMES  = ["White", "Gold", "Black"];
 export async function seedKeychainFields(
   productId: string,
   options?: { silent?: boolean },
-): Promise<string> {
+): Promise<void> {
   const log = options?.silent
     ? () => {}
     : (msg: string) => console.log(`[keychain-fields] ${msg}`);
@@ -53,76 +56,58 @@ export async function seedKeychainFields(
     return ids.length > 0 ? ids : ["placeholder-run-seed-colours-first"];
   }
 
-  const baseIds    = resolveIds(BASE_COLOUR_NAMES,    "Base colour");
-  const clickerIds = resolveIds(CLICKER_COLOUR_NAMES, "Clicker colour");
-  const letterIds  = resolveIds(LETTER_COLOUR_NAMES,  "Letter colour");
+  const baseIds    = resolveIds(BASE_COLOUR_NAMES,    "Base");
+  const clickerIds = resolveIds(CLICKER_COLOUR_NAMES, "Clicker");
+  const letterIds  = resolveIds(LETTER_COLOUR_NAMES,  "Letter");
 
   log(`resolved base(${baseIds.length}) clicker(${clickerIds.length}) letter(${letterIds.length}) colour ids`);
 
-  // ── Insert 4 fields ───────────────────────────────────────────────────────
+  // ── Insert 3 locked colour fields ─────────────────────────────────────────
 
-  // Field 0 — text: "Your name"
-  const textFieldId = randomUUID();
-  await db.insert(productConfigFields).values({
-    id: textFieldId,
-    productId,
-    position: 0,
-    fieldType: "text",
-    label: "Your name",
-    helpText: "Letters A–Z only (uppercase), max 8 characters.",
-    required: true,
-    configJson: JSON.stringify({
-      maxLength: 8,
-      allowedChars: "A-Z",
-      uppercase: true,
-      profanityCheck: true,
-    }),
-  });
-  log(`  text field "${textFieldId}" (Your name)`);
-
-  // Field 1 — colour: "Base colour"
+  // Field 0 — colour: "Base" (locked)
   const baseFieldId = randomUUID();
   await db.insert(productConfigFields).values({
     id: baseFieldId,
     productId,
-    position: 1,
+    position: 0,
     fieldType: "colour",
-    label: "Base colour",
+    label: "Base",
     helpText: "The outer shell of each keycap.",
     required: true,
+    locked: true,
     configJson: JSON.stringify({ allowedColorIds: baseIds }),
   });
-  log(`  colour field "${baseFieldId}" (Base colour, ${baseIds.length} colours)`);
+  log(`  colour field "${baseFieldId}" (Base, ${baseIds.length} colours, locked)`);
 
-  // Field 2 — colour: "Clicker colour"
+  // Field 1 — colour: "Clicker" (locked)
   const clickerFieldId = randomUUID();
   await db.insert(productConfigFields).values({
     id: clickerFieldId,
     productId,
-    position: 2,
+    position: 1,
     fieldType: "colour",
-    label: "Clicker colour",
+    label: "Clicker",
     helpText: "The inset pressable face on each keycap.",
     required: true,
+    locked: true,
     configJson: JSON.stringify({ allowedColorIds: clickerIds }),
   });
-  log(`  colour field "${clickerFieldId}" (Clicker colour, ${clickerIds.length} colours)`);
+  log(`  colour field "${clickerFieldId}" (Clicker, ${clickerIds.length} colours, locked)`);
 
-  // Field 3 — colour: "Letter colour"
+  // Field 2 — colour: "Letter" (locked)
   const letterFieldId = randomUUID();
   await db.insert(productConfigFields).values({
     id: letterFieldId,
     productId,
-    position: 3,
+    position: 2,
     fieldType: "colour",
-    label: "Letter colour",
+    label: "Letter",
     helpText: "High-contrast subset for letter legibility. Choose a colour that pops against your base.",
     required: true,
+    locked: true,
     configJson: JSON.stringify({ allowedColorIds: letterIds }),
   });
-  log(`  colour field "${letterFieldId}" (Letter colour, ${letterIds.length} colours)`);
+  log(`  colour field "${letterFieldId}" (Letter, ${letterIds.length} colours, locked)`);
 
-  log(`done — 4 fields inserted for product ${productId}. unitField = ${textFieldId}`);
-
-  return textFieldId;
+  log(`done — 3 locked colour fields inserted for product ${productId}`);
 }

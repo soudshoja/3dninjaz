@@ -3,18 +3,28 @@
 /**
  * Phase 19 / keychain — CSS-cube row preview for keychain products.
  *
- * Replaces the old SVG strip. Renders a horizontal row of 3-layer CSS "cubes"
- * (base shell + inset clicker face + raised letter glyph) matching the design
- * contract in public/demo/clicker-customizer.html lines ~264-344.
+ * Renders a horizontal row of 3-layer CSS "cubes"
+ * (base shell + inset clicker face + raised letter glyph).
+ *
+ * Behaviour:
+ *   - When text is empty: shows a SINGLE filled cube as a colour swatch
+ *     (no letter glyph on it).
+ *   - When text has chars: renders exactly chars.length cubes — no trailing
+ *     empty placeholders.
+ *   - Container expands via flex as cubes are added.
+ *   - Fluid cube sizing via clamp() so 8 cubes always fit on any screen
+ *     without horizontal scroll.
  *
  * Props:
  *   text        — already uppercased & trimmed string to display
  *   baseHex     — hex for the outer keycap shell + side-tab
  *   clickerHex  — hex for the inset pressable face (5 px lip)
  *   letterHex   — hex for the raised glyph text
- *   maxLength   — total slot count (filled + empty)
- *
- * Stateless. Accepts width:100% semantics inside its container.
+ *   maxLength   — maximum number of cubes (used for fluid sizing denominator)
+ *   placeholder — when text is empty AND placeholder is non-empty, render the
+ *                 placeholder letters so the customer sees a sample keychain.
+ *                 Empty string (default) disables the placeholder (single
+ *                 swatch cube fallback).
  */
 
 type Props = {
@@ -23,34 +33,48 @@ type Props = {
   clickerHex: string;
   letterHex: string;
   maxLength: number;
+  /**
+   * When `text` is empty AND placeholder is non-empty, render the placeholder
+   * letters in the cubes so the customer sees a sample of their keychain.
+   * Empty string disables the placeholder (single swatch cube fallback).
+   */
+  placeholder?: string;
 };
 
-// Cube sizing — 64 px desktop, 50 px mobile (via CSS variable set on wrapper)
-const CUBE_SIZE_D = 64;
+export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLength, placeholder = "" }: Props) {
+  const display = text || placeholder;
+  const chars = display.slice(0, maxLength).split("").filter(Boolean);
 
-export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLength }: Props) {
-  const chars = text.slice(0, maxLength).split("");
-  const total = Math.max(maxLength, 1);
+  // When display is empty: show one swatch cube (no letter). Otherwise show chars.
+  const isSwatch = chars.length === 0;
+  const cubeCount = isSwatch ? 1 : chars.length;
+
+  // Fluid cube size: fits maxLength+1 cubes across the available width.
+  // 80px accounts for page padding + ring/loop tab on cube #1.
+  // clamp: min 36px, fluid, max 64px.
+  const cubeSizeExpr = `clamp(36px, calc((100vw - 80px) / ${maxLength + 1}), 64px)`;
+
+  // Letter font scales with cube: ~47% of cube size (30px at 64px).
+  const fontSizeExpr = `calc(${cubeSizeExpr} * 0.47)`;
 
   return (
     <div
       data-keychain-preview
-      aria-label={text ? `Preview shows: ${text}` : "Type your name to see preview"}
+      aria-label={display ? `Preview shows: ${display}` : "Colour swatch preview"}
       role="img"
       style={{
         display: "flex",
         alignItems: "center",
         gap: 1,
-        paddingLeft: 26,         // room for side-tab on first cube
-        overflowX: "auto",
+        paddingLeft: 26,      // room for side-tab on first cube
+        overflowX: "visible",
         overflowY: "visible",
         paddingTop: 12,
-        paddingBottom: 20,       // room for drop shadow
+        paddingBottom: 20,    // room for drop shadow
       }}
     >
-      {Array.from({ length: total }, (_, i) => {
-        const ch = chars[i] ?? "";
-        const isEmpty = ch === "";
+      {Array.from({ length: cubeCount }, (_, i) => {
+        const ch = isSwatch ? "" : (chars[i] ?? "");
         const isFirst = i === 0;
 
         return (
@@ -58,24 +82,21 @@ export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLengt
             key={i}
             style={{
               position: "relative",
-              width: CUBE_SIZE_D,
-              height: CUBE_SIZE_D,
+              width: cubeSizeExpr,
+              height: cubeSizeExpr,
               flexShrink: 0,
               borderRadius: 14,
-              background: isEmpty ? "transparent" : baseHex,
-              border: isEmpty ? "1.5px dashed #d1d5db" : "none",
-              opacity: isEmpty ? 0.45 : 1,
+              background: baseHex,
+              border: "none",
               // Body bevel — top highlight, side shadow, bottom drop
-              boxShadow: isEmpty
-                ? "none"
-                : `inset 3px 3px 5px rgba(255,255,255,0.45),
-                   inset -3px -3px 5px rgba(0,0,0,0.14),
-                   0 4px 0 rgba(0,0,0,0.10),
-                   0 8px 14px rgba(0,0,0,0.10)`,
+              boxShadow: `inset 3px 3px 5px rgba(255,255,255,0.45),
+                         inset -3px -3px 5px rgba(0,0,0,0.14),
+                         0 4px 0 rgba(0,0,0,0.10),
+                         0 8px 14px rgba(0,0,0,0.10)`,
             }}
           >
             {/* Side-tab (ring/loop) — first cube only, same base colour */}
-            {isFirst && !isEmpty && (
+            {isFirst && (
               <div
                 style={{
                   position: "absolute",
@@ -108,22 +129,20 @@ export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLengt
               </div>
             )}
 
-            {/* Inset clicker face — only on filled cubes */}
-            {!isEmpty && (
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 5,
-                  borderRadius: 10,
-                  background: clickerHex,
-                  boxShadow: `inset 2px 2px 4px rgba(255,255,255,0.38),
-                               inset -2px -2px 4px rgba(0,0,0,0.14)`,
-                }}
-              />
-            )}
+            {/* Inset clicker face */}
+            <div
+              style={{
+                position: "absolute",
+                inset: 5,
+                borderRadius: 10,
+                background: clickerHex,
+                boxShadow: `inset 2px 2px 4px rgba(255,255,255,0.38),
+                             inset -2px -2px 4px rgba(0,0,0,0.14)`,
+              }}
+            />
 
-            {/* Raised letter glyph — only on filled cubes */}
-            {!isEmpty && (
+            {/* Raised letter glyph — only when there is a character */}
+            {ch && (
               <div
                 style={{
                   position: "absolute",
@@ -132,7 +151,7 @@ export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLengt
                   alignItems: "center",
                   justifyContent: "center",
                   color: letterHex,
-                  fontSize: 30,
+                  fontSize: fontSizeExpr,
                   fontWeight: 900,
                   lineHeight: 1,
                   textTransform: "uppercase",
@@ -153,18 +172,6 @@ export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLengt
           </div>
         );
       })}
-
-      <style>{`
-        @media (max-width: 560px) {
-          /* Scale down cubes on small screens by targeting the flex children
-             of the preview container via a scoped class added to wrapper.
-             We use a data-attr selector to avoid global pollution. */
-          [data-keychain-preview] > div {
-            width: 50px !important;
-            height: 50px !important;
-          }
-        }
-      `}</style>
     </div>
   );
 }

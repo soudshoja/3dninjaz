@@ -33,6 +33,7 @@ export type ConfigField = {
   label: string;
   helpText: string | null;
   required: boolean;
+  locked: boolean;
   config: AnyFieldConfig;
   createdAt: Date;
   updatedAt: Date;
@@ -64,6 +65,7 @@ function hydrateConfigField(r: typeof productConfigFields.$inferSelect): ConfigF
     label: r.label,
     helpText: r.helpText ?? null,
     required: r.required,
+    locked: r.locked,
     config: ensureConfigJson(r.fieldType as FieldType, r.configJson),
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
@@ -292,7 +294,8 @@ export async function updateConfigField(
   }
 
   const setValues: Partial<typeof productConfigFields.$inferInsert> = {};
-  if (patch.label !== undefined) setValues.label = patch.label;
+  // Locked fields: silently ignore label and fieldType changes — other updates proceed.
+  if (patch.label !== undefined && !existing.locked) setValues.label = patch.label;
   if (patch.helpText !== undefined) setValues.helpText = patch.helpText;
   if (patch.required !== undefined) setValues.required = patch.required;
   if (configJsonString !== undefined) setValues.configJson = configJsonString;
@@ -317,12 +320,16 @@ export async function deleteConfigField(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   await requireAdmin();
 
-  // Get productId before delete for revalidation
+  // Get productId + locked flag before delete for revalidation and guard
   const [existing] = await db
-    .select({ productId: productConfigFields.productId })
+    .select({ productId: productConfigFields.productId, locked: productConfigFields.locked })
     .from(productConfigFields)
     .where(eq(productConfigFields.id, fieldId))
     .limit(1);
+
+  if (existing?.locked) {
+    return { ok: false as const, error: "Locked field cannot be deleted" };
+  }
 
   await db
     .delete(productConfigFields)

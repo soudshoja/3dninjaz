@@ -121,11 +121,14 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
 
   // -------------------------------------------------------------------------
   // Reorder: Up/Down buttons → Pattern B
+  // Locked fields cannot be reordered — skip if either source or target is locked.
   // -------------------------------------------------------------------------
   const moveField = (index: number, direction: "up" | "down") => {
     const newFields = [...fields];
     const targetIndex = direction === "up" ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= newFields.length) return;
+    // Do not allow moving a locked field or swapping into a locked field's slot
+    if (newFields[index].locked || newFields[targetIndex].locked) return;
     [newFields[index], newFields[targetIndex]] = [newFields[targetIndex], newFields[index]];
     const orderedIds = newFields.map((f) => f.id);
 
@@ -162,6 +165,40 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
         setFields(snapshot); // rollback
       }
     });
+  };
+
+  // -------------------------------------------------------------------------
+  // Auto-fill Clicker + Letter palettes when Base palette is saved
+  // Only fires when the saved field is locked + labelled "Base".
+  // Only overwrites a target if its palette is empty OR identical to the
+  // previous Base palette (i.e. admin hasn't manually customised it).
+  // -------------------------------------------------------------------------
+  const handleBaseAutoFill = async (
+    savedField: ConfigField,
+    prevBaseIds: string[],
+  ) => {
+    if (!savedField.locked || savedField.label !== "Base") return;
+    const newBaseIds = (savedField.config as { allowedColorIds?: string[] }).allowedColorIds ?? [];
+
+    const targets = fields.filter(
+      (f) => f.locked && (f.label === "Clicker" || f.label === "Letter"),
+    );
+
+    for (const target of targets) {
+      const targetIds = (target.config as { allowedColorIds?: string[] }).allowedColorIds ?? [];
+      const isEmpty = targetIds.length === 0;
+      const isCopyOfOldBase =
+        targetIds.length === prevBaseIds.length &&
+        targetIds.every((id) => prevBaseIds.includes(id));
+
+      if (isEmpty || isCopyOfOldBase) {
+        await updateConfigField(target.id, {
+          config: { allowedColorIds: newBaseIds },
+        });
+      }
+    }
+
+    await refetch();
   };
 
   // -------------------------------------------------------------------------
@@ -212,7 +249,7 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {isKeychain
-              ? "Pre-seeded with name + base + clicker + letter. All fields are fully editable — rename labels, restrict palettes, add or remove fields as needed."
+              ? "Pre-seeded with Base, Clicker, and Letter colour fields (locked). Add extra fields such as a name text field via \"Add field\"."
               : "Define the fields customers fill in when ordering this product."}
           </p>
         </div>
@@ -307,35 +344,39 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
             <div
               key={field.id}
               className="flex items-center gap-3 rounded-xl border bg-white p-4"
-              style={{ borderColor: "#E4E4E7" }}
+              style={{ borderColor: field.locked ? "#BFDBFE" : "#E4E4E7" }}
             >
-              {/* Drag handle (visual) */}
+              {/* Drag handle (visual) — dimmed for locked fields */}
               <GripVertical
-                className="h-4 w-4 text-slate-300 shrink-0 cursor-grab"
+                className={`h-4 w-4 shrink-0 ${field.locked ? "text-slate-200 cursor-default" : "text-slate-300 cursor-grab"}`}
                 aria-hidden
               />
 
-              {/* Up/Down reorder */}
-              <div className="flex flex-col gap-0.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => moveField(index, "up")}
-                  disabled={index === 0 || pending}
-                  aria-label="Move up"
-                  className="p-1 rounded hover:bg-slate-100 disabled:opacity-30 min-h-[28px]"
-                >
-                  <ArrowUp className="h-3 w-3" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveField(index, "down")}
-                  disabled={index === fields.length - 1 || pending}
-                  aria-label="Move down"
-                  className="p-1 rounded hover:bg-slate-100 disabled:opacity-30 min-h-[28px]"
-                >
-                  <ArrowDown className="h-3 w-3" />
-                </button>
-              </div>
+              {/* Up/Down reorder — hidden for locked fields */}
+              {field.locked ? (
+                <div className="w-[28px] shrink-0" aria-hidden />
+              ) : (
+                <div className="flex flex-col gap-0.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => moveField(index, "up")}
+                    disabled={index === 0 || pending}
+                    aria-label="Move up"
+                    className="p-1 rounded hover:bg-slate-100 disabled:opacity-30 min-h-[28px]"
+                  >
+                    <ArrowUp className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveField(index, "down")}
+                    disabled={index === fields.length - 1 || pending}
+                    aria-label="Move down"
+                    className="p-1 rounded hover:bg-slate-100 disabled:opacity-30 min-h-[28px]"
+                  >
+                    <ArrowDown className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
 
               {/* Field info */}
               <div className="flex-1 min-w-0">
@@ -353,6 +394,15 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
                   >
                     {field.fieldType}
                   </Badge>
+                  {field.locked && (
+                    <Badge
+                      variant="secondary"
+                      className="text-xs"
+                      style={{ backgroundColor: "#DBEAFE", color: "#1D4ED8" }}
+                    >
+                      Locked
+                    </Badge>
+                  )}
                 </div>
                 {field.helpText && (
                   <p className="text-xs text-muted-foreground mt-0.5 truncate">
@@ -386,19 +436,21 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
                 <Pencil className="h-4 w-4" />
               </button>
 
-              {/* Delete */}
-              <button
-                type="button"
-                onClick={() => {
-                  setDeletingField(field);
-                  setDeleteConfirmOpen(true);
-                }}
-                disabled={pending}
-                aria-label={`Delete ${field.label}`}
-                className="p-2 rounded-lg hover:bg-red-50 text-red-500 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              {/* Delete — hidden for locked fields */}
+              {!field.locked && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeletingField(field);
+                    setDeleteConfirmOpen(true);
+                  }}
+                  disabled={pending}
+                  aria-label={`Delete ${field.label}`}
+                  className="p-2 rounded-lg hover:bg-red-50 text-red-500 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
             </div>
           ))
         )}
@@ -410,7 +462,7 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
         onOpenChange={setAddModalOpen}
         productId={product.id}
         mode="add"
-        onSaved={async () => {
+        onSaved={async (_savedField) => {
           setAddModalOpen(false);
           await refetch(); // Pattern B
         }}
@@ -427,10 +479,17 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
           productId={product.id}
           mode="edit"
           initialField={editingField}
-          onSaved={async () => {
+          onSaved={async (savedField) => {
             setEditModalOpen(false);
+            // Auto-fill Clicker + Letter when Base palette is saved
+            if (savedField && editingField.locked && editingField.label === "Base") {
+              const prevBaseIds =
+                (editingField.config as { allowedColorIds?: string[] }).allowedColorIds ?? [];
+              await handleBaseAutoFill(savedField, prevBaseIds);
+            } else {
+              await refetch(); // Pattern B
+            }
             setEditingField(null);
-            await refetch(); // Pattern B
           }}
         />
       )}

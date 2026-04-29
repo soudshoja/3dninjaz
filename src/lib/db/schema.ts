@@ -262,6 +262,7 @@ export const productConfigFields = mysqlTable(
     label: varchar("label", { length: 80 }).notNull(),
     helpText: varchar("helpText", { length: 200 }),
     required: boolean("required").notNull().default(true),
+    locked: boolean("locked").notNull().default(false),
     configJson: text("configJson"),
     createdAt: timestamp("createdAt").notNull().defaultNow(),
     updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),

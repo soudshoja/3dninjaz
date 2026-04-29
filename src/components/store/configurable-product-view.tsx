@@ -214,8 +214,8 @@ export function ConfigurableProductView({
   const textFields = useMemo(() => fields.filter((f) => f.fieldType === "text"), [fields]);
   const textValue = textFields.length > 0 ? (values[textFields[0].id] ?? "") : "";
   const maxLength = textFields.length > 0
-    ? ((textFields[0].config as { maxLength?: number }).maxLength ?? 10)
-    : 10;
+    ? ((textFields[0].config as { maxLength?: number }).maxLength ?? maxUnitCount ?? 8)
+    : (maxUnitCount ?? 8);
 
   // ── Handlers (first-touch-only — DO NOT change) ───────────────────────────
   function handleTouch() {
@@ -251,7 +251,7 @@ export function ConfigurableProductView({
   const previewNode = (
     <div
       ref={previewRef}
-      className="flex w-full items-center justify-center px-4 py-6 sm:py-10 min-h-[320px] lg:min-h-[480px] overflow-x-auto"
+      className="flex w-full items-center justify-center px-4 py-6 sm:py-10 overflow-x-visible"
     >
       <div style={{ width: "100%", maxWidth: "100%" }}>
         <KeychainPreview
@@ -260,6 +260,7 @@ export function ConfigurableProductView({
           clickerHex={clickerHex}
           letterHex={letterHex}
           maxLength={maxLength}
+          placeholder={textFields.length > 0 ? "YOURTEXT" : ""}
         />
       </div>
     </div>
