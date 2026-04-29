@@ -178,27 +178,19 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
   // -------------------------------------------------------------------------
   const handleBaseAutoFill = async (
     savedField: ConfigField,
-    prevBaseIds: string[],
   ) => {
     if (!savedField.locked || savedField.label !== "Base") return;
     const newBaseIds = (savedField.config as { allowedColorIds?: string[] }).allowedColorIds ?? [];
+    if (newBaseIds.length === 0) return;
 
     const targets = fields.filter(
       (f) => f.locked && (f.label === "Clicker" || f.label === "Letter"),
     );
 
     for (const target of targets) {
-      const targetIds = (target.config as { allowedColorIds?: string[] }).allowedColorIds ?? [];
-      const isEmpty = targetIds.length === 0;
-      const isCopyOfOldBase =
-        targetIds.length === prevBaseIds.length &&
-        targetIds.every((id) => prevBaseIds.includes(id));
-
-      if (isEmpty || isCopyOfOldBase) {
-        await updateConfigField(target.id, {
-          config: { allowedColorIds: newBaseIds },
-        });
-      }
+      await updateConfigField(target.id, {
+        config: { allowedColorIds: newBaseIds },
+      });
     }
 
     await refetch();
@@ -495,9 +487,7 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
                         onSaved={async (savedField) => {
                           setExpandedFieldId(null);
                           if (savedField && field.locked && field.label === "Base") {
-                            const prevBaseIds =
-                              (field.config as { allowedColorIds?: string[] }).allowedColorIds ?? [];
-                            await handleBaseAutoFill(savedField, prevBaseIds);
+                            await handleBaseAutoFill(savedField);
                           } else {
                             await refetch();
                           }
@@ -540,9 +530,7 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
             setEditModalOpen(false);
             // Auto-fill Clicker + Letter when Base palette is saved
             if (savedField && editingField.locked && editingField.label === "Base") {
-              const prevBaseIds =
-                (editingField.config as { allowedColorIds?: string[] }).allowedColorIds ?? [];
-              await handleBaseAutoFill(savedField, prevBaseIds);
+              await handleBaseAutoFill(savedField);
             } else {
               await refetch(); // Pattern B
             }

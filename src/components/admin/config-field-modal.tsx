@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, Plus, Trash2 } from "lucide-react";
-import { ColourPickerDialog } from "@/components/admin/colour-picker-dialog";
+import { ColourPickerDialog, type ColourPickerRow } from "@/components/admin/colour-picker-dialog";
 import {
   addConfigField,
   updateConfigField,
@@ -182,7 +182,11 @@ function ColourConfigForm({
   onChange: (v: Partial<ColourFieldConfig>) => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [knownRows, setKnownRows] = useState<ColourPickerRow[]>([]);
   const ids = value.allowedColorIds ?? [];
+
+  // Build a lookup map from whatever rows we received from the picker.
+  const rowById = new Map(knownRows.map((r) => [r.id, r]));
 
   return (
     <div className="space-y-3">
@@ -201,12 +205,29 @@ function ColourConfigForm({
       </div>
 
       {ids.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {ids.map((id) => (
-            <Badge key={id} variant="secondary" className="text-xs">
-              {id.slice(0, 8)}…
-            </Badge>
-          ))}
+        <div className="flex flex-wrap gap-1.5">
+          {ids.map((id) => {
+            const row = rowById.get(id);
+            return (
+              <span
+                key={id}
+                className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium"
+                style={{ borderColor: "#E4E4E7", color: BRAND.ink }}
+              >
+                <span
+                  className="inline-block rounded-full shrink-0"
+                  aria-hidden
+                  style={{
+                    width: 12,
+                    height: 12,
+                    backgroundColor: row?.hex ?? "#CBD5E1",
+                    border: "1px solid rgba(0,0,0,0.12)",
+                  }}
+                />
+                {row?.name ?? id.slice(0, 8) + "…"}
+              </span>
+            );
+          })}
         </div>
       )}
 
@@ -219,7 +240,8 @@ function ColourConfigForm({
         optionId=""
         alreadyAttachedColourIds={new Set()}
         preSelectedColourIds={ids}
-        onSelectMultiple={(selectedIds) => {
+        onSelectMultiple={(selectedIds, selectedRows) => {
+          setKnownRows(selectedRows);
           onChange({ ...value, allowedColorIds: selectedIds });
           setPickerOpen(false);
         }}

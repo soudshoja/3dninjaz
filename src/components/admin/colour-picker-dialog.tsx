@@ -16,6 +16,8 @@ import {
   getActiveColoursForPicker,
   type ColourPickerRow,
 } from "@/actions/admin-colours";
+
+export type { ColourPickerRow };
 import { BRAND } from "@/lib/brand";
 
 // ---------------------------------------------------------------------------
@@ -70,7 +72,7 @@ type Props = {
   /** Pre-selected colour ids when mode="select-multiple" */
   preSelectedColourIds?: string[];
   /** Called on Confirm when mode="select-multiple" */
-  onSelectMultiple?: (selectedIds: string[]) => void;
+  onSelectMultiple?: (selectedIds: string[], selectedRows: ColourPickerRow[]) => void;
 };
 
 type Brand = "All" | "Bambu" | "Polymaker" | "Other";
@@ -145,8 +147,9 @@ export function ColourPickerDialog({
 
     // Phase 19-04: branch by mode
     if (mode === "select-multiple") {
-      // No DB write — return selected ids to caller via onSelectMultiple
-      onSelectMultiple?.(Array.from(selectedIds));
+      // No DB write — return selected ids (and full row data) to caller
+      const selectedRows = rows.filter((r) => selectedIds.has(r.id));
+      onSelectMultiple?.(Array.from(selectedIds), selectedRows);
       onOpenChange(false);
       return;
     }
