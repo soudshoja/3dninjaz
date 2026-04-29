@@ -3,6 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { getSessionUser } from "@/lib/auth-helpers";
 import { getMyOrder } from "@/actions/orders";
+import { ensureOrderItemConfigData } from "@/lib/config-fields";
 import { BRAND } from "@/lib/brand";
 import { formatOrderNumber } from "@/lib/orders";
 import { formatMYR } from "@/lib/format";
@@ -203,8 +204,11 @@ export default async function OrderDetailPage({
                     {i.productName}
                   </Link>
                   <p className="text-sm text-slate-600 mt-0.5">
-                    {i.variantLabel ?? (i.size ? `Size ${i.size}` : null)} · Qty {i.quantity} · {formatMYR(i.unitPrice)}{" "}
-                    each
+                    {(() => {
+                      const cfg = ensureOrderItemConfigData(i.configurationData);
+                      const summary = cfg?.computedSummary ?? i.variantLabel ?? (i.size ? `Size ${i.size}` : null);
+                      return <>{summary ? `${summary} · ` : ""}Qty {i.quantity} · {formatMYR(i.unitPrice)} each</>;
+                    })()}
                   </p>
                 </div>
                 <div className="text-right">

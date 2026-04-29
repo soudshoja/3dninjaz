@@ -70,8 +70,21 @@ export async function pickImage(
       sources,
       fallbackSrc: `${baseUrlSlash}${fallbackVariant.jpg}`,
     };
-  } catch {
-    // Manifest missing or invalid — safe fallback to baseUrl as plain img.
+  } catch (err) {
+    // Manifest missing or corrupt — log so the server monitor catches it,
+    // then try to serve the first *.jpg in the directory as a best-effort
+    // fallback instead of the bare directory URL (which returns a 404/403).
+    console.error("[pickImage] manifest read failed:", baseUrl, err);
+    try {
+      const entries = await fs.readdir(dir);
+      const jpg = entries.find((f) => f.endsWith(".jpg"));
+      if (jpg) {
+        const baseUrlSlash = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";
+        return { sources: [], fallbackSrc: `${baseUrlSlash}${jpg}` };
+      }
+    } catch {
+      // Directory unreadable — fall through to bare-URL fallback below.
+    }
     return { sources: [], fallbackSrc: baseUrl };
   }
 }

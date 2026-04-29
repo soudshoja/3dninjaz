@@ -12,14 +12,14 @@ import path from "node:path";
  * (mozjpeg).
  *
  * Hard guardrails (T-07-08-image-DoS):
- *   - 10 MB pre-compress cap
+ *   - 50 MB pre-compress cap
  *   - 100M-pixel area cap (post-decode dimensions)
  *   - animated GIF > 5s rejected
  *   - mime sniffed via magic bytes (ignores multipart Content-Type header)
  */
 
-const WIDTHS = [400, 800, 1600] as const;
-const MAX_INPUT_BYTES = 10 * 1024 * 1024;
+const WIDTHS = [400, 480, 800, 960, 1440, 1600] as const;
+const MAX_INPUT_BYTES = 50 * 1024 * 1024;
 const MAX_PIXEL_AREA = 100_000_000; // 10_000 × 10_000
 
 export type ImageManifest = {
@@ -55,7 +55,7 @@ export async function compressUploadedImage(
   opts: { skipBackup?: boolean } = {},
 ): Promise<ImageManifest> {
   if (buf.length > MAX_INPUT_BYTES) {
-    throw new Error("Image exceeds 10MB cap");
+    throw new Error("Image exceeds 50MB cap");
   }
   const mime = sniffMime(buf);
   if (!mime) throw new Error("Unrecognized image format");

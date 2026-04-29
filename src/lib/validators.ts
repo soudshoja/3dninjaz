@@ -111,15 +111,29 @@ export const productSchema = z.object({
         .string()
         .min(1)
         .regex(/^\/uploads\/products\//, "Image URL must be a local upload path")
+    ),
+  // Phase 19 (19-10) — image entries with captions. Optional; when provided,
+  // images is derived from imagesV2.map(e => e.url) for backwards-compat.
+  // No count limit — REQ-6 removes the 10-image cap.
+  imagesV2: z
+    .array(
+      z.object({
+        url: z.string().min(1).regex(/^\/uploads\/products\//, "Image URL must be a local upload path"),
+        caption: z.string().max(200).optional().nullable(),
+        alt: z.string().max(200).optional().nullable(),
+      })
     )
-    .max(10, "Maximum 10 images allowed"),
+    .optional(),
   // Index into images[] used as the storefront card thumbnail. Negative or
   // out-of-range values are coerced to 0 in the action layer when persisting.
+  // Phase 19 (19-10) removed the 10-image cap (REQ-6), so max is raised to
+  // 999 to match maxImages={999} on ImageUploader. The action-layer
+  // clampThumbnailIndex() still guards against out-of-bounds at persist time.
   thumbnailIndex: z.coerce
     .number()
     .int()
     .min(0)
-    .max(9)
+    .max(999)
     .optional()
     .default(0),
   materialType: z.string().optional().default(""),
@@ -136,6 +150,11 @@ export const productSchema = z.object({
   // rows are backfilled; the storefront treats null-subcategory products
   // as "uncategorized" until admin edits them.
   subcategoryId: z.string().uuid().optional().nullable(),
+  // Phase 19 (19-03) — product type discriminator. Defaults to 'stocked' for
+  // backwards compat with existing forms that don't send this field.
+  productType: z
+    .enum(["stocked", "configurable", "keychain", "vending"])
+    .default("stocked"),
   variants: z
     .array(productVariantSchema)
     .default([]),
@@ -736,3 +755,40 @@ export const bulkImportRowSchema = z.object({
   option3_prices: z.string().optional().nullable(),
 });
 export type BulkImportRowInput = z.infer<typeof bulkImportRowSchema>;
+
+// ============================================================================
+// Phase 18 — colours library
+// ----------------------------------------------------------------------------
+// Re-uses the hex regex from productOptionValueSchema (line 622). Optional
+// fields use `.optional().or(z.literal("")).nullable()` so empty form inputs
+// from FormData round-trip cleanly to null in the server action.
+// ============================================================================
+
+export const colourSchema = z.object({
+  name: z.string().min(1, "Name is required").max(64, "Name too long (max 64 chars)"),
+  hex: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Hex must be in the form #RRGGBB"),
+  previousHex: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Previous hex must be in the form #RRGGBB")
+    .optional()
+    .or(z.literal(""))
+    .nullable(),
+  brand: z.enum(["Bambu", "Polymaker", "Other"]),
+  familyType: z.enum(["PLA", "PETG", "TPU", "CF", "Other"]),
+  familySubtype: z
+    .string()
+    .max(48, "Family subtype too long (max 48 chars)")
+    .optional()
+    .or(z.literal(""))
+    .nullable(),
+  code: z
+    .string()
+    .max(32, "Code too long (max 32 chars)")
+    .optional()
+    .or(z.literal(""))
+    .nullable(),
+  isActive: z.boolean().default(true),
+});
+export type ColourInput = z.infer<typeof colourSchema>;

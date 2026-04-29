@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
 # Canonical boot script for the 3D Ninjaz /v1 Node app on the cPanel server.
 #
+# ============================================================
+# DEPLOY WARNING — READ BEFORE RUNNING RSYNC / TAR DEPLOYS
+# ============================================================
+# public/uploads is a SYMLINK on the server pointing to:
+#   /home/ninjaz/uploads/3dninjaz_v1
+# This persistent directory lives OUTSIDE the deploy tree so
+# that deploys can never clobber user-uploaded product images.
+#
+# Any rsync or tar transfer MUST exclude this path:
+#   rsync --exclude-from=.deployignore ...
+#   tar --exclude-from=.deployignore ...
+#
+# See .deployignore in the repo root for the full exclusion list.
+# ============================================================
+#
 # Context / why this exists:
 #   When operators boot the app via `ssh root@server "su - ninjaz -c './start.sh'"`,
 #   the outer ssh channel exits immediately. Without `setsid`, the ninjaz shell
@@ -23,6 +38,21 @@ LOG_FILE="${APP_DIR}/app.log"
 PID_FILE="${APP_DIR}/.node.pid"
 
 cd "${APP_DIR}"
+
+# ─── Auto-heal uploads symlink ────────────────────────────────────────────────
+# Tarball-based deploys can replace the symlink at public/uploads/products with
+# a real (empty) directory containing only .gitkeep. Restore it on every boot
+# so user-uploaded images stay reachable. Idempotent: ln -sfn replaces an
+# existing dir/symlink with the correct symlink target.
+PERSIST_UPLOADS="/home/ninjaz/uploads/3dninjaz_v1/products"
+LINK_PATH="${APP_DIR}/public/uploads/products"
+if [ ! -L "${LINK_PATH}" ] || [ "$(readlink "${LINK_PATH}")" != "${PERSIST_UPLOADS}" ]; then
+  rm -rf "${LINK_PATH}"
+  mkdir -p "$(dirname "${LINK_PATH}")"
+  mkdir -p "${PERSIST_UPLOADS}"
+  ln -sfn "${PERSIST_UPLOADS}" "${LINK_PATH}"
+  echo "start.sh: restored uploads symlink ${LINK_PATH} -> ${PERSIST_UPLOADS}"
+fi
 
 # Activate the CloudLinux Node 20 virtualenv so child processes inherit PATH
 # and shared lib search paths. `activate` defines `node`/`npm` shims but we

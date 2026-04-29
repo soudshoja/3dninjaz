@@ -7,14 +7,17 @@ import {
   productOptionValues,
   categories,
   subcategories,
+  colors,
 } from "@/lib/db/schema";
-import { and, asc, eq, desc, inArray, or } from "drizzle-orm";
+import { and, asc, eq, desc, inArray, isNotNull, or } from "drizzle-orm";
 import {
   composeVariantLabel,
   type HydratedProductVariants,
   type HydratedOption,
   type HydratedVariant,
 } from "@/lib/variants";
+import { buildColourSlugMap } from "@/lib/colours";
+import { ensureTiers, ensureImagesV2, type ImageEntryV2 } from "@/lib/config-fields";
 
 // ============================================================================
 // MariaDB 10.11 note — Drizzle's relational `db.query.products.findMany({ with })`
@@ -28,21 +31,10 @@ import {
 /**
  * MariaDB stores JSON as LONGTEXT; mysql2 returns raw strings. Normalise
  * images back to string[] at the read path so callers don't have to care.
+ * Delegates to ensureImagesV2 for forwards-compat with the new object shape.
  */
 function ensureImagesArray(raw: unknown): string[] {
-  if (Array.isArray(raw)) return raw.filter((v): v is string => typeof v === "string");
-  if (typeof raw === "string") {
-    if (raw.trim() === "") return [];
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed.filter((v): v is string => typeof v === "string");
-      }
-    } catch {
-      return [];
-    }
-  }
-  return [];
+  return ensureImagesV2(raw).map((e) => e.url);
 }
 
 type ProductRow = typeof products.$inferSelect;
@@ -52,14 +44,31 @@ type SubcategoryRow = typeof subcategories.$inferSelect;
 
 export type CatalogVariant = VariantRow;
 
-export type CatalogProduct = Omit<ProductRow, "images"> & {
+/** Discriminator union for all product types. */
+export type ProductType = "stocked" | "configurable" | "keychain" | "vending";
+
+/**
+ * Returns true for product types that use configurationData instead of
+ * variantId — used for cart/order partitioning and PDP routing.
+ */
+export function isConfigurableLike(t: ProductType): boolean {
+  return t === "configurable" || t === "keychain" || t === "vending";
+}
+
+export type CatalogProduct = Omit<ProductRow, "images" | "productType" | "priceTiers"> & {
   images: string[];
+  /** Phase 19 (19-10) — image entries with caption/alt; backwards-compat with legacy string[] */
+  imagesV2: ImageEntryV2[];
   variants: CatalogVariant[];
   category: CategoryRow | null;
   subcategory: SubcategoryRow | null;
   // Phase 16 — generic options/variants (additive; existing callers unaffected)
   hydratedVariants: HydratedVariant[];
   options: HydratedOption[];
+  // Phase 19 (19-07) — made-to-order fields (parsed; stocked products get defaults)
+  productType: ProductType;
+  priceTiers: Record<string, number> | null;
+  maxUnitCount: number | null;
 };
 
 /**
@@ -183,6 +192,7 @@ async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
         value: v.value,
         position: v.position,
         swatchHex: v.swatchHex ?? null,
+        colorId: v.colorId ?? null,
       })),
     }));
 
@@ -241,6 +251,7 @@ async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
     return {
       ...p,
       images: ensureImagesArray(p.images),
+      imagesV2: ensureImagesV2(p.images),
       variants: rawVariants,
       hydratedVariants,
       options: hydratedOptions,
@@ -248,6 +259,10 @@ async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
       subcategory: p.subcategoryId
         ? subcategoryById.get(p.subcategoryId) ?? null
         : null,
+      // Phase 19 (19-07) — made-to-order fields
+      productType: (p.productType ?? "stocked") as ProductType,
+      priceTiers: isConfigurableLike((p.productType ?? "stocked") as ProductType) ? ensureTiers(p.priceTiers) : null,
+      maxUnitCount: p.maxUnitCount ?? null,
     };
   });
 }
@@ -436,4 +451,167 @@ export async function getActiveProductsBySubcategorySlug(
     subcategory: sub,
     products: await hydrateProducts(rows),
   };
+}
+
+// ===========================================================================
+// Phase 18 — /shop colour filter (D-13, D-15, D-16)
+// ---------------------------------------------------------------------------
+// Manual hydration (NO LATERAL — MariaDB 10.11). Customer-facing surface —
+// strips code/previous_hex/family_*; only id/name/hex/slug ever leave the
+// server boundary.
+// ===========================================================================
+
+export type ShopColourChip = { slug: string; name: string; hex: string };
+
+/**
+ * Returns the de-duplicated list of colours currently in use by ≥1 active
+ * product (variant in_stock = 1, parent product is_active = 1). Used to
+ * render the /shop sidebar Colour accordion (D-13).
+ *
+ * 4-step manual hydration:
+ *   1. Fetch all active colours (small table — ≤ ~150 rows).
+ *   2. Fetch all pov rows with non-null colorId (build pov.id → color.id map).
+ *   3. For each of the 6 variant slot columns, find variants whose slot
+ *      references one of those pov ids AND whose parent product is active +
+ *      variant is in stock. Collect distinct color ids actually in use.
+ *   4. Filter the colour list to those used ids; build collision-aware slug
+ *      map; project to {slug, name, hex} sorted alphabetically.
+ */
+export async function getActiveProductColourChips(): Promise<ShopColourChip[]> {
+  // Step 1 — all active colours
+  const allColours = await db
+    .select({
+      id: colors.id,
+      name: colors.name,
+      hex: colors.hex,
+      brand: colors.brand,
+    })
+    .from(colors)
+    .where(eq(colors.isActive, true));
+  if (allColours.length === 0) return [];
+
+  // Step 2 — pov rows with non-null colorId
+  const povRows = await db
+    .select({
+      id: productOptionValues.id,
+      colorId: productOptionValues.colorId,
+    })
+    .from(productOptionValues)
+    .where(isNotNull(productOptionValues.colorId));
+  if (povRows.length === 0) return [];
+  const povIds = povRows.map((r) => r.id);
+  const colourIdByPov = new Map<string, string>();
+  for (const r of povRows) {
+    if (r.colorId) colourIdByPov.set(r.id, r.colorId);
+  }
+
+  // Step 3 — variants referencing any pov in any of 6 slots, in stock,
+  // on active product. Six parallel queries — manual hydration (no LATERAL).
+  const slotCols = [
+    productVariants.option1ValueId,
+    productVariants.option2ValueId,
+    productVariants.option3ValueId,
+    productVariants.option4ValueId,
+    productVariants.option5ValueId,
+    productVariants.option6ValueId,
+  ];
+  const liveSets = await Promise.all(
+    slotCols.map((col) =>
+      db
+        .select({ povId: col, productId: productVariants.productId })
+        .from(productVariants)
+        .innerJoin(products, eq(productVariants.productId, products.id))
+        .where(
+          and(
+            inArray(col, povIds),
+            eq(products.isActive, true),
+            eq(productVariants.inStock, true),
+          ),
+        ),
+    ),
+  );
+  const usedColourIds = new Set<string>();
+  for (const set of liveSets) {
+    for (const row of set) {
+      const cid = colourIdByPov.get(row.povId as string);
+      if (cid) usedColourIds.add(cid);
+    }
+  }
+  if (usedColourIds.size === 0) return [];
+
+  // Step 4 — project to chip shape with collision-aware slugs (D-14)
+  const usedColours = allColours.filter((c) => usedColourIds.has(c.id));
+  if (usedColours.length === 0) return [];
+  const slugMap = buildColourSlugMap(usedColours);
+  return usedColours
+    .map((c) => ({ slug: slugMap.get(c.id)!, name: c.name, hex: c.hex }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Resolve a list of colour slugs to a Set<productId> that have ≥1 active
+ * in-stock variant matching one of the colours. Used by /shop to intersect
+ * the colour filter with the existing category/subcategory filter.
+ *
+ * Empty input → empty set (callers should bypass when slugs.length === 0).
+ *
+ * Manual hydration (NO LATERAL).
+ */
+export async function getProductIdsByColourSlugs(
+  slugs: string[],
+): Promise<Set<string>> {
+  if (slugs.length === 0) return new Set();
+
+  // Step 1 — all active colours (slug map is built collision-aware)
+  const allColours = await db
+    .select({ id: colors.id, name: colors.name, brand: colors.brand })
+    .from(colors)
+    .where(eq(colors.isActive, true));
+  if (allColours.length === 0) return new Set();
+
+  // Step 2 — match given slugs to colour ids via the same slug map
+  const slugMap = buildColourSlugMap(allColours);
+  const slugSet = new Set(slugs);
+  const matchedColourIds: string[] = [];
+  for (const c of allColours) {
+    const s = slugMap.get(c.id);
+    if (s && slugSet.has(s)) matchedColourIds.push(c.id);
+  }
+  if (matchedColourIds.length === 0) return new Set();
+
+  // Step 3 — pov rows whose colorId is in the matched set
+  const povRows = await db
+    .select({ id: productOptionValues.id })
+    .from(productOptionValues)
+    .where(inArray(productOptionValues.colorId, matchedColourIds));
+  if (povRows.length === 0) return new Set();
+  const povIds = povRows.map((r) => r.id);
+
+  // Step 4 — variants referencing any pov in any slot, in stock, on active product
+  const slotCols = [
+    productVariants.option1ValueId,
+    productVariants.option2ValueId,
+    productVariants.option3ValueId,
+    productVariants.option4ValueId,
+    productVariants.option5ValueId,
+    productVariants.option6ValueId,
+  ];
+  const hits = await Promise.all(
+    slotCols.map((col) =>
+      db
+        .select({ productId: productVariants.productId })
+        .from(productVariants)
+        .innerJoin(products, eq(productVariants.productId, products.id))
+        .where(
+          and(
+            inArray(col, povIds),
+            eq(products.isActive, true),
+            eq(productVariants.inStock, true),
+          ),
+        ),
+    ),
+  );
+  const productIdSet = new Set<string>();
+  for (const set of hits) for (const h of set) productIdSet.add(h.productId);
+  return productIdSet;
 }

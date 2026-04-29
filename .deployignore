@@ -1,0 +1,31 @@
+# .deployignore — files and directories to EXCLUDE from every deploy
+#
+# Usage: pass to rsync as --exclude-from=.deployignore
+#        or to tar as --exclude-from=.deployignore
+#
+# CRITICAL: public/uploads is a symlink on the server to
+#   /home/ninjaz/uploads/3dninjaz_v1
+# It lives OUTSIDE the deploy tree so that deploys can never wipe it.
+# Never include this path in any rsync/tar deploy transfer.
+
+# User-uploaded product images — symlinked on server, NEVER deploy
+public/uploads
+public/uploads/**
+
+# Runtime log — server-side only
+app.log
+
+# Secrets — never deploy
+.env
+.env.local
+.env.production
+.env.*
+
+# Build artifacts (Next.js standalone copies them already)
+.next/
+
+# Dev dependencies (install on server via npm ci --omit=dev)
+node_modules/
+
+# Local dev files
+.node.pid

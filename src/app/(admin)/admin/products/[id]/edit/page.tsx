@@ -6,6 +6,9 @@ import {
   ProductForm,
   type ProductFormInitial,
 } from "@/components/admin/product-form";
+import { db } from "@/lib/db";
+import { productVariants, productConfigFields } from "@/lib/db/schema";
+import { eq, sql } from "drizzle-orm";
 
 export const metadata: Metadata = {
   title: "Admin · Edit Product",
@@ -21,16 +24,34 @@ export default async function EditProductPage({
   const product = await getProduct(id);
   if (!product) notFound();
 
-  const [categories, subcategories] = await Promise.all([
+  const [categories, subcategories, variantCountRow, fieldCountRow] = await Promise.all([
     getCategories(),
     getAllSubcategories(),
+    // Phase 19 (19-03) — detect attached data to drive locked-radio state
+    db.select({ c: sql<number>`COUNT(*)` }).from(productVariants).where(eq(productVariants.productId, id)),
+    db.select({ c: sql<number>`COUNT(*)` }).from(productConfigFields).where(eq(productConfigFields.productId, id)),
   ]);
+
+  const variantCount = Number(variantCountRow[0]?.c ?? 0);
+  const fieldCount = Number(fieldCountRow[0]?.c ?? 0);
+  const lockedReason =
+    variantCount > 0
+      ? "This product already has variants — type cannot be changed. Delete all variants first."
+      : fieldCount > 0
+        ? "This product already has configurator fields — type cannot be changed. Delete all fields first."
+        : undefined;
+
+  const productType = (product.productType ?? "stocked") as "stocked" | "configurable" | "keychain" | "vending";
 
   const initialData: ProductFormInitial = {
     id: product.id,
     name: product.name,
     description: product.description,
     images: product.images ?? [],
+    // Phase 19 (19-10) — pass V2 entries so captions survive a reload and so
+    // the form initialises images[] from imagesV2 when the DB has object-shape
+    // entries (i.e. images stored as [{url,caption,alt}] rather than string[]).
+    imagesV2: product.imagesV2,
     thumbnailIndex: product.thumbnailIndex ?? 0,
     materialType: product.materialType,
     estimatedProductionDays: product.estimatedProductionDays,
@@ -38,6 +59,9 @@ export default async function EditProductPage({
     isFeatured: product.isFeatured,
     categoryId: product.categoryId,
     subcategoryId: product.subcategoryId,
+    // Phase 19 (19-03) — product type + lock state
+    productType,
+    lockedReason,
   };
 
   return (
@@ -51,12 +75,46 @@ export default async function EditProductPage({
             {product.name}
           </p>
         </div>
-        <a
-          href={`/admin/products/${id}/variants`}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px]"
-        >
-          Manage Variants →
-        </a>
+        <div className="flex flex-wrap items-center gap-2">
+          <a
+            href={`/products/${product.slug}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-[var(--color-brand-blue)] text-[var(--color-brand-blue)] text-sm font-medium hover:bg-slate-50 transition-colors min-h-[44px]"
+          >
+            View product ↗
+          </a>
+          {/* Phase 19 (19-03) — swap Manage Variants for Manage Configurator on configurable products */}
+          {productType === "configurable" ? (
+            <a
+              href={`/admin/products/${id}/configurator`}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px]"
+            >
+              Manage Configurator →
+            </a>
+          ) : productType === "keychain" ? (
+            <a
+              href={`/admin/products/${id}/configurator`}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px]"
+            >
+              Manage Keyboard Clicker Fields →
+            </a>
+          ) : productType === "vending" ? (
+            <a
+              href={`/admin/products/${id}/configurator`}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px]"
+            >
+              Manage Vending Machine Fields →
+            </a>
+          ) : (
+            <a
+              href={`/admin/products/${id}/variants`}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px]"
+            >
+              Manage Variants →
+            </a>
+          )}
+        </div>
       </div>
       <ProductForm
         initialData={initialData}

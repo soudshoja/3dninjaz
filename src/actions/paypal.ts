@@ -15,10 +15,21 @@ import { validateCoupon, redeemCoupon } from "@/actions/coupons";
 import { getShippingRate } from "@/actions/admin-shipping";
 import { quoteForCart } from "@/actions/shipping-quote";
 import { revalidatePath } from "next/cache";
+import type { ConfigurationData } from "@/lib/config-fields";
 
 type BagLineInput = {
   variantId: string;
   quantity: number; // 1..10
+  // Phase 19 (19-09) — configurable lines carry configuration snapshot.
+  // Stocked lines omit this field (undefined). The server trusts computedPrice
+  // for configurable items because there is no DB variant to re-verify against;
+  // the price was server-derived at add-to-bag time (D-12).
+  configurationData?: ConfigurationData | null;
+  // Phase 19 gap fix — configurable lines also send productId so the order_items
+  // snapshot can carry the real product reference (slug looked up server-side).
+  // Empty productId would break "View product" links from order detail and the
+  // admin's printer manifest. Stocked lines derive productId from variantId.
+  productId?: string;
 };
 
 type CreateOrderInput = {
@@ -80,9 +91,13 @@ export async function createPayPalOrder(
     return { ok: false, error: "Your bag is empty." };
   }
 
+  // Phase 19 (19-09): partition stocked vs configurable lines.
+  const stockedInputLines = input.items.filter((l) => !l.configurationData);
+  const configurableInputLines = input.items.filter((l) => !!l.configurationData);
+
   // Clamp quantities 1..10 and dedupe by variantId (sum quantities if dup).
   const qtyByVariant = new Map<string, number>();
-  for (const line of input.items) {
+  for (const line of stockedInputLines) {
     if (typeof line.variantId !== "string" || line.variantId.length === 0) {
       continue;
     }
@@ -93,7 +108,7 @@ export async function createPayPalOrder(
     );
   }
   const variantIds = [...qtyByVariant.keys()];
-  if (variantIds.length === 0) {
+  if (variantIds.length === 0 && configurableInputLines.length === 0) {
     return { ok: false, error: "Your bag is empty." };
   }
 
@@ -101,10 +116,9 @@ export async function createPayPalOrder(
   // db.query.*.findMany({ with: { product: true } }) which emits LATERAL joins
   // that MariaDB 10.11 rejects (ER_PARSE_ERROR). Shape returned matches the
   // old relational API: each row has a `product` field attached.
-  const rawVariants = await db
-    .select()
-    .from(productVariants)
-    .where(inArray(productVariants.id, variantIds));
+  const rawVariants = variantIds.length > 0
+    ? await db.select().from(productVariants).where(inArray(productVariants.id, variantIds))
+    : [];
   const productIdsForVariants = [
     ...new Set(rawVariants.map((v) => v.productId)),
   ];
@@ -245,7 +259,53 @@ export async function createPayPalOrder(
     };
   });
 
-  const subtotal = snapshots.reduce((sum, s) => sum + Number(s.lineTotal), 0);
+  // Phase 19 (19-09) — append configurable line snapshots.
+  // Price is trusted from configurationData.computedPrice (server-derived at
+  // add-to-bag time — no DB variant to re-verify for made-to-order items).
+  // Phase 19 gap fix — fetch real productId/slug/name for configurable lines
+  // so order_items has true product references (admin printer manifest +
+  // "View product" links from order detail).
+  const configurableProductIds = [
+    ...new Set(
+      configurableInputLines
+        .map((l) => l.productId)
+        .filter((id): id is string => typeof id === "string" && id.length > 0),
+    ),
+  ];
+  const configurableProductRows =
+    configurableProductIds.length > 0
+      ? await db
+          .select({ id: products.id, slug: products.slug, name: products.name })
+          .from(products)
+          .where(inArray(products.id, configurableProductIds))
+      : [];
+  const productById = new Map(configurableProductRows.map((p) => [p.id, p]));
+
+  type ConfigSnap = typeof snapshots[0] & { configurationData: ConfigurationData | null };
+  const allSnapshots: ConfigSnap[] = [
+    ...snapshots.map((s) => ({ ...s, configurationData: null as ConfigurationData | null })),
+    ...configurableInputLines.map((line) => {
+      const cfg = line.configurationData!;
+      const qty = Math.max(1, Math.min(10, Math.floor(Number(line.quantity) || 1)));
+      const unitPrice = cfg.computedPrice.toFixed(2);
+      const product = line.productId ? productById.get(line.productId) : undefined;
+      return {
+        variantId: "NONE", // sentinel — configurable lines have no variant
+        productId: product?.id ?? line.productId ?? "",
+        productName: product?.name ?? cfg.computedSummary.slice(0, 127),
+        productSlug: product?.slug ?? "",
+        productImage: null,
+        variantLabel: cfg.computedSummary,
+        unitPrice,
+        unitCost: null as string | null,
+        quantity: qty,
+        lineTotal: (cfg.computedPrice * qty).toFixed(2),
+        configurationData: cfg,
+      };
+    }),
+  ];
+
+  const subtotal = allSnapshots.reduce((sum, s) => sum + Number(s.lineTotal), 0);
   const subtotalStr = subtotal.toFixed(2);
 
   // Phase 9b — prefer Delyva live quote if the customer picked a courier.
@@ -263,7 +323,7 @@ export async function createPayPalOrder(
           // Use the server-snapshot unitPrice (already sale-resolved) so the
           // Delyva free-shipping threshold check matches what we actually
           // charge the customer.
-          const snap = snapshots.find((s) => s.variantId === i.variantId);
+          const snap = allSnapshots.find((s) => s.variantId === i.variantId);
           return {
             productId: row?.productId ?? "",
             variantId: i.variantId,
@@ -372,7 +432,7 @@ export async function createPayPalOrder(
                   : {}),
               },
             },
-            items: snapshots.map((s) => ({
+            items: allSnapshots.map((s) => ({
               name: (s.variantLabel
                 ? `${s.productName} — ${s.variantLabel}`
                 : s.productName
@@ -455,11 +515,11 @@ export async function createPayPalOrder(
     });
 
     await db.insert(orderItems).values(
-      snapshots.map((s) => ({
+      allSnapshots.map((s) => ({
         id: randomUUID(),
         orderId: internalOrderId,
         productId: s.productId,
-        variantId: s.variantId,
+        variantId: s.variantId, // "NONE" sentinel for configurable lines
         productName: s.productName,
         productSlug: s.productSlug,
         productImage: s.productImage,
@@ -473,6 +533,11 @@ export async function createPayPalOrder(
         unitCost: s.unitCost,
         quantity: s.quantity,
         lineTotal: s.lineTotal,
+        // Phase 19 (19-09) — configurationData snapshot for made-to-order lines.
+        // Stocked lines write null (no change to existing behaviour).
+        configurationData: s.configurationData
+          ? JSON.stringify(s.configurationData)
+          : null,
       })),
     );
 

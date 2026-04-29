@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { BRAND } from "@/lib/brand";
-import { priceRangeMYR } from "@/lib/format";
+import { priceRangeMYR, formatFromTier } from "@/lib/format";
 import { pickThumbnail, type CatalogProduct } from "@/lib/catalog";
 import { WishlistButton } from "@/components/store/wishlist-button";
 import { SoldOutBadge } from "@/components/store/sold-out-badge";
@@ -58,12 +58,14 @@ export async function ProductCard({
   // Falls back to raw variants for products not yet migrated to Phase 16.
   const allHydrated = product.hydratedVariants.length > 0 ? product.hydratedVariants : [];
   const availableVariants = allHydrated.filter(isVariantAvailable);
-  const allSoldOut = allHydrated.length > 0 && availableVariants.length === 0;
+  const allSoldOut = product.productType === "stocked" && allHydrated.length > 0 && availableVariants.length === 0;
 
-  // If no hydrated variants at all (legacy path), fall back to raw variants
-  // with the old simple logic.
+  // Phase 19 (19-07) — configurable/keychain products use tier-based "From MYR X" label.
+  // Stocked products use the existing priceRangeMYR flow — UNTOUCHED.
   let priceLabel: string;
-  if (allHydrated.length === 0) {
+  if (product.productType === "configurable" || product.productType === "keychain" || product.productType === "vending") {
+    priceLabel = formatFromTier(product.priceTiers);
+  } else if (allHydrated.length === 0) {
     priceLabel = priceRangeMYR(product.variants);
   } else if (allSoldOut) {
     priceLabel = "Sold out";
@@ -71,8 +73,8 @@ export async function ProductCard({
     priceLabel = priceRangeMYR(availableVariants);
   }
 
-  // Show SALE chip when any AVAILABLE variant has an active sale.
-  const hasSale = availableVariants.some((v) => v.isOnSale);
+  // Show SALE chip when any AVAILABLE variant has an active sale (stocked only).
+  const hasSale = product.productType === "stocked" && availableVariants.some((v) => v.isOnSale);
 
   return (
     <div className="relative group">
@@ -124,7 +126,7 @@ export async function ProductCard({
             </span>
           ) : null}
 
-          {allSoldOut ? <SoldOutBadge /> : null}
+          {product.productType === "stocked" && allSoldOut ? <SoldOutBadge /> : null}
         </div>
 
         {/* Card footer — white bar with name + price */}
@@ -142,7 +144,7 @@ export async function ProductCard({
             className="mt-1 text-sm font-bold"
             style={{ color: allSoldOut ? "#9ca3af" : accent }}
           >
-            {allSoldOut ? "Sold out" : `from ${priceLabel}`}
+            {allSoldOut ? "Sold out" : (product.productType === "configurable" || product.productType === "keychain" || product.productType === "vending") ? priceLabel : `from ${priceLabel}`}
           </p>
         </div>
       </Link>

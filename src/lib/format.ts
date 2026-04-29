@@ -40,6 +40,20 @@ export function fromDatetimeLocal(local: string | null | undefined): string | nu
 }
 
 /**
+ * Phase 19 (19-07) — Configurable-product listing label: "From MYR 7.00".
+ *
+ * Reads the smallest numeric tier key (cheapest possible config price).
+ * Returns "Coming soon" if priceTiers is null/empty (admin hasn't set tiers yet).
+ */
+export function formatFromTier(priceTiers: Record<string, number> | null): string {
+  if (!priceTiers || Object.keys(priceTiers).length === 0) return "Coming soon";
+  const minKey = Math.min(...Object.keys(priceTiers).map(Number));
+  const price = priceTiers[String(minKey)];
+  if (typeof price !== "number" || !Number.isFinite(price)) return "Coming soon";
+  return `From ${formatMYR(price)}`;
+}
+
+/**
  * Render the price of a product's variants as either a single price
  * (all variants equal) or a range "RM 18.00 - RM 45.00" (sorted ascending).
  *

@@ -186,6 +186,8 @@ export type AdminOrderDetail = {
     unitCost: string | null;
     quantity: number;
     lineTotal: string;
+    // Phase 19 (19-09) — configurationData snapshot for made-to-order lines
+    configurationData: string | null;
   }>;
 };
 
@@ -280,6 +282,7 @@ export async function getAdminOrder(orderId: string): Promise<AdminOrderDetail |
       unitCost: it.unitCost ?? null,
       quantity: it.quantity,
       lineTotal: it.lineTotal,
+      configurationData: it.configurationData ?? null, // Phase 19 (19-09)
     })),
   };
 }

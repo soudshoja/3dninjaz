@@ -5,15 +5,19 @@ import { db } from "@/lib/db";
 import {
   products,
   productVariants,
+  productConfigFields,
   categories,
   subcategories,
 } from "@/lib/db/schema";
-import { eq, desc, inArray } from "drizzle-orm";
+import { eq, desc, inArray, count } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { productSchema, type ProductInput } from "@/lib/validators";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { computeVariantCost } from "@/lib/cost-breakdown";
 import { getStoreSettingsCached } from "@/lib/store-settings";
+import { ensureImagesV2 } from "@/lib/config-fields";
+import { seedKeychainFields } from "@/lib/keychain-fields";
+import { seedVendingFields } from "@/lib/vending-fields";
 
 export type ProductActionResult =
   | { success: true; productId?: string }
@@ -78,19 +82,9 @@ async function resolveParentCategoryId(
 }
 
 function ensureImagesArray(raw: unknown): string[] {
-  if (Array.isArray(raw)) return raw.filter((v): v is string => typeof v === "string");
-  if (typeof raw === "string") {
-    if (raw.trim() === "") return [];
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed.filter((v): v is string => typeof v === "string");
-      }
-    } catch {
-      return [];
-    }
-  }
-  return [];
+  // Delegates to ensureImagesV2 so both the legacy string[] shape AND the
+  // Phase-19 {url, caption, alt} object shape are handled correctly.
+  return ensureImagesV2(raw).map((e) => e.url);
 }
 
 export async function createProduct(
@@ -111,6 +105,14 @@ export async function createProduct(
   const id = randomUUID();
   const baseSlug = slugify(productData.name);
   const slug = `${baseSlug || "product"}-${Date.now().toString(36)}`;
+
+  // Phase 19 (19-10) — if imagesV2 is provided (new shape with captions),
+  // persist it directly. Otherwise fall back to the legacy string[].
+  // Mirrors the same logic in updateProduct so both paths stay in sync.
+  const imagesToPersist =
+    productData.imagesV2 && productData.imagesV2.length > 0
+      ? productData.imagesV2
+      : productData.images;
 
   // Clamp the requested thumbnail index to a valid slot in the images array.
   // The form validator already bounds it to 0-9, but if images.length is
@@ -133,7 +135,7 @@ export async function createProduct(
     name: productData.name,
     slug,
     description: productData.description,
-    images: productData.images,
+    images: imagesToPersist,
     thumbnailIndex: safeThumb,
     materialType: productData.materialType?.trim() || null,
     estimatedProductionDays: productData.estimatedProductionDays ?? null,
@@ -141,6 +143,8 @@ export async function createProduct(
     isFeatured: productData.isFeatured,
     categoryId: resolvedCategoryId,
     subcategoryId: productData.subcategoryId || null,
+    // Phase 19 (19-03) — persist product type chosen at creation
+    productType: productData.productType ?? "stocked",
   });
 
   if (variants.length > 0) {
@@ -191,6 +195,65 @@ export async function createProduct(
     );
   }
 
+  // Phase 19 — auto-seed the 4 locked config fields for keychain products,
+  // then wire up unitField/maxUnitCount/priceTiers so new keychains are
+  // immediately ready for name personalisation + tier pricing.
+  // Wrapped in try/catch so a seeding failure rolls back cleanly: delete the
+  // just-inserted product row and return a form-level error.
+  if (productData.productType === "keychain") {
+    try {
+      await seedKeychainFields(id, { silent: true });
+      // Locate the text+locked row from the seeded fields (avoids AND on
+      // boolean column which can be dialect-sensitive in MariaDB).
+      const allFields = await db
+        .select({ id: productConfigFields.id, fieldType: productConfigFields.fieldType, locked: productConfigFields.locked })
+        .from(productConfigFields)
+        .where(eq(productConfigFields.productId, id));
+      const nameField = allFields.find((f) => f.fieldType === "text" && f.locked);
+      if (nameField) {
+        await db
+          .update(products)
+          .set({
+            unitField: nameField.id,
+            maxUnitCount: 8,
+            priceTiers: JSON.stringify({ 1: 7, 2: 9, 3: 12, 4: 15, 5: 18, 6: 22, 7: 26, 8: 30 }),
+          })
+          .where(eq(products.id, id));
+      }
+    } catch (err) {
+      console.error("[createProduct] seedKeychainFields failed:", err);
+      try {
+        await db.delete(products).where(eq(products.id, id));
+      } catch {
+        // best-effort rollback — ignore secondary error
+      }
+      return { error: { _form: ["Failed to seed keychain fields"] } };
+    }
+  }
+
+  // Auto-seed 2 locked colour fields for vending products + flat-price tier.
+  if (productData.productType === "vending") {
+    try {
+      await seedVendingFields(id, { silent: true });
+      await db
+        .update(products)
+        .set({
+          unitField: null,
+          maxUnitCount: 1,
+          priceTiers: JSON.stringify({ 1: 25 }),
+        })
+        .where(eq(products.id, id));
+    } catch (err) {
+      console.error("[createProduct] seedVendingFields failed:", err);
+      try {
+        await db.delete(products).where(eq(products.id, id));
+      } catch {
+        /* best-effort rollback */
+      }
+      return { error: { _form: ["Failed to seed vending fields"] } };
+    }
+  }
+
   revalidatePath("/admin/products");
   revalidatePath("/admin");
   return { success: true, productId: id };
@@ -218,12 +281,19 @@ export async function updateProduct(
     ? await resolveParentCategoryId(productData.subcategoryId)
     : productData.categoryId || null;
 
+  // Phase 19 (19-10) — if imagesV2 is provided (new shape with captions),
+  // persist it directly (Drizzle's json() column handles serialization).
+  // Otherwise fall back to the legacy string[].
+  const imagesToPersist = productData.imagesV2 && productData.imagesV2.length > 0
+    ? productData.imagesV2
+    : productData.images;
+
   await db
     .update(products)
     .set({
       name: productData.name,
       description: productData.description,
-      images: productData.images,
+      images: imagesToPersist,
       thumbnailIndex: safeThumb,
       materialType: productData.materialType?.trim() || null,
       estimatedProductionDays: productData.estimatedProductionDays ?? null,
@@ -231,6 +301,8 @@ export async function updateProduct(
       isFeatured: productData.isFeatured,
       categoryId: resolvedCategoryId,
       subcategoryId: productData.subcategoryId || null,
+      // Phase 19 (19-03) — persist product type (additive, no variant logic change)
+      productType: productData.productType ?? "stocked",
     })
     .where(eq(products.id, id));
 
@@ -282,6 +354,65 @@ export async function updateProduct(
         };
       })
     );
+  }
+
+  // Phase 19 — if the admin switches an existing product TO keychain type,
+  // auto-seed the 4 locked fields if none exist yet (idempotent: if fields
+  // already exist we leave them alone). Also wire up unitField/maxUnitCount/
+  // priceTiers so the product is immediately ready without manual setup.
+  if (productData.productType === "keychain") {
+    const [{ value: fieldCount }] = await db
+      .select({ value: count() })
+      .from(productConfigFields)
+      .where(eq(productConfigFields.productId, id));
+    if (fieldCount === 0) {
+      try {
+        await seedKeychainFields(id, { silent: true });
+        // Find the locked text field that was just inserted.
+        const allFields = await db
+          .select({ id: productConfigFields.id, fieldType: productConfigFields.fieldType, locked: productConfigFields.locked })
+          .from(productConfigFields)
+          .where(eq(productConfigFields.productId, id));
+        const nameField = allFields.find((f) => f.fieldType === "text" && f.locked);
+        if (nameField) {
+          await db
+            .update(products)
+            .set({
+              unitField: nameField.id,
+              maxUnitCount: 8,
+              priceTiers: JSON.stringify({ 1: 7, 2: 9, 3: 12, 4: 15, 5: 18, 6: 22, 7: 26, 8: 30 }),
+            })
+            .where(eq(products.id, id));
+        }
+      } catch (err) {
+        console.error("[updateProduct] seedKeychainFields failed:", err);
+        // Non-fatal for update — product row is already saved. Log and continue.
+      }
+    }
+  }
+
+  // If the admin switches an existing product TO vending type, auto-seed the
+  // 2 locked colour fields if none exist yet. Wire flat-price tier.
+  if (productData.productType === "vending") {
+    const [{ value: fieldCount }] = await db
+      .select({ value: count() })
+      .from(productConfigFields)
+      .where(eq(productConfigFields.productId, id));
+    if (fieldCount === 0) {
+      try {
+        await seedVendingFields(id, { silent: true });
+        await db
+          .update(products)
+          .set({
+            unitField: null,
+            maxUnitCount: 1,
+            priceTiers: JSON.stringify({ 1: 25 }),
+          })
+          .where(eq(products.id, id));
+      } catch (err) {
+        console.error("[updateProduct] seedVendingFields failed:", err);
+      }
+    }
   }
 
   revalidatePath("/admin/products");
@@ -362,6 +493,10 @@ export async function getProduct(id: string) {
   return {
     ...row,
     images: ensureImagesArray(row.images),
+    // Phase 19 (19-10) — expose the V2 shape so the admin edit form can
+    // populate captions without re-uploading. ensureImagesV2 handles both the
+    // legacy string[] and the new {url, caption, alt} object shape.
+    imagesV2: ensureImagesV2(row.images),
     variants,
     category,
     subcategory,

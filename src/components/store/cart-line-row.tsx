@@ -30,8 +30,8 @@ export function CartLineRow({
   const decrement = useCartStore((s) => s.decrementItem);
   const remove = useCartStore((s) => s.removeItem);
 
-  // key in the store is variantId (same as variantId field in v2)
-  const key = item.variantId;
+  // key in the store: stocked = variantId, configurable = `${productId}::${hash}`
+  const key = item.storeKey ?? item.variantId;
 
   const unit = parseFloat(item.unitPrice);
   const line = Number.isFinite(unit) ? unit * item.quantity : 0;

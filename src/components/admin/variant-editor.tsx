@@ -42,7 +42,7 @@
  */
 
 import { useState, useTransition, useCallback, useRef } from "react";
-import { Pencil, Trash2, Plus, RefreshCw, Star, Upload, X } from "lucide-react";
+import { Pencil, Trash2, Plus, RefreshCw, Star, Upload, X, Palette } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -74,6 +74,14 @@ import {
 } from "@/actions/variants";
 import type { HydratedOption, HydratedVariant } from "@/lib/variants";
 import { generateVariantSku } from "@/lib/sku";
+import { ColourPickerDialog } from "@/components/admin/colour-picker-dialog";
+
+// Phase 18 Plan 06 — case-insensitive Color/Colour option detection.
+// Mounting the picker is gated on this helper everywhere it appears.
+function isColourOption(opt: { name: string }): boolean {
+  const n = opt.name.trim().toLowerCase();
+  return n === "color" || n === "colour";
+}
 
 interface VariantEditorProps {
   productId: string;
@@ -93,6 +101,10 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
   const [newValueInputs, setNewValueInputs] = useState<Record<string, string>>({});
   const [deleteOptionDialog, setDeleteOptionDialog] = useState<{ optionId: string; name: string } | null>(null);
   const [deleteValueDialog, setDeleteValueDialog] = useState<{ valueId: string; value: string; count: number } | null>(null);
+  // Phase 18 Plan 06 — picker mount state. Tracks which option the picker is
+  // open for (null = closed). Guards against multiple Colour options on a
+  // single product (rare but defensible).
+  const [pickerOptionId, setPickerOptionId] = useState<string | null>(null);
 
   // Phase 17 — bulk edit state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -458,10 +470,17 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
               ))}
             </div>
 
-            {/* Add value */}
+            {/* Add value — for Colour-named options the freeform path is
+                fallback only; the picker (right-most button below) is the
+                preferred entry point. */}
+            {isColourOption(opt) ? (
+              <div className="text-xs uppercase tracking-wider font-semibold text-slate-500 mt-2">
+                Custom (not in library)
+              </div>
+            ) : null}
             <div className="flex gap-2">
               <Input
-                placeholder={`Add ${opt.name} value...`}
+                placeholder={isColourOption(opt) ? "Add custom (not in library)..." : `Add ${opt.name} value...`}
                 value={newValueInputs[opt.id] ?? ""}
                 onChange={(e) =>
                   setNewValueInputs((prev) => ({ ...prev, [opt.id]: e.target.value }))
@@ -475,7 +494,24 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
               <Button size="sm" variant="outline" onClick={() => handleAddValue(opt.id)} disabled={isPending}>
                 <Plus className="h-3 w-3 mr-1" /> Add
               </Button>
+              {isColourOption(opt) ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setPickerOptionId(opt.id)}
+                  className="gap-1"
+                  disabled={isPending}
+                >
+                  <Palette className="h-3 w-3" /> Pick from library
+                </Button>
+              ) : null}
             </div>
+            {isColourOption(opt) ? (
+              <p className="text-xs text-slate-500">
+                Use the picker for stocked colours. Custom values won&apos;t appear on /shop or in cross-product reuse.
+              </p>
+            ) : null}
           </div>
         ))}
 
@@ -674,6 +710,28 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Phase 18 Plan 06 — Colour library picker. Mounts only when an option
+          named "Color"/"Colour" has been opened via "Pick from library". On
+          confirm, we await refresh() (Pattern B refetch — Phase 17 AD-06). */}
+      {pickerOptionId ? (
+        <ColourPickerDialog
+          open={pickerOptionId !== null}
+          onOpenChange={(v) => { if (!v) setPickerOptionId(null); }}
+          optionId={pickerOptionId}
+          productId={productId}
+          alreadyAttachedColourIds={
+            new Set(
+              (options.find((o) => o.id === pickerOptionId)?.values ?? [])
+                .map((v) => v.colorId)
+                .filter((id): id is string => Boolean(id)),
+            )
+          }
+          onConfirmed={async () => {
+            await refresh();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex,nofollow" />
+<title>Variant Pivot Grid — Demo</title>
+<style>
+  :root{
+    --green:#03C03C; --green-d:#018A29;
+    --blue:#0080ff;  --blue-d:#0061C2;
+    --purple:#8A00C2; --purple-d:#62008C;
+    --ink:#0B1020;   --cream:#F7FAF4;
+    --line:#E2E8F0;  --muted:#64748B;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+       color:var(--ink);background:var(--cream);line-height:1.45}
+  .wrap{max-width:1100px;margin:0 auto;padding:32px 16px 80px}
+  h1{font-size:30px;margin:0 0 6px;font-weight:800;letter-spacing:-.02em}
+  h2{font-size:22px;margin:24px 0 8px;font-weight:800}
+  h3{font-size:15px;margin:0 0 4px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .lead{color:var(--muted);font-size:15px;max-width:760px;margin:0 0 20px}
+  .card{background:#fff;border-radius:18px;padding:24px;border:1px solid var(--line);
+        box-shadow:0 1px 0 rgba(11,16,32,.04)}
+  .card + .card{margin-top:20px}
+  .pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;
+        text-transform:uppercase;letter-spacing:.06em}
+  .pill-green{background:#dff8e3;color:var(--green-d)}
+  .pill-blue{background:#dbeeff;color:var(--blue-d)}
+  .pill-purple{background:#f1d9fc;color:var(--purple-d)}
+  .pill-ink{background:#e2e8f0;color:var(--ink)}
+
+  /* ---------- ADMIN PIVOT GRID ---------- */
+  .tabs{display:flex;gap:6px;margin:6px 0 14px;flex-wrap:wrap}
+  .tab{padding:8px 14px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;
+       background:#f1f5f9;border:1px solid var(--line);color:var(--ink)}
+  .tab.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .grid-wrap{overflow-x:auto;border-radius:12px;border:1px solid var(--line)}
+  table.grid{border-collapse:collapse;width:100%;min-width:680px;font-size:13px;background:#fff}
+  table.grid th, table.grid td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);
+       padding:0;text-align:center;vertical-align:middle;height:54px;min-width:80px}
+  table.grid thead th{background:#f8fafc;font-weight:700;color:var(--ink);cursor:pointer;
+       user-select:none;font-size:12px;letter-spacing:.04em;text-transform:uppercase;
+       transition:background .12s}
+  table.grid thead th:hover{background:#e2e8f0}
+  table.grid tbody th{background:#f8fafc;font-weight:700;cursor:pointer;text-align:left;
+       padding:0 14px;min-width:90px;border-right:1px solid var(--line);transition:background .12s}
+  table.grid tbody th:hover{background:#e2e8f0}
+  table.grid th.axis-selected, table.grid thead th.axis-selected{background:#e0eaff;color:var(--blue-d)}
+  table.grid td.cell{cursor:pointer;font-weight:600;color:var(--ink);position:relative;transition:all .1s}
+  table.grid td.cell:hover{background:#f1f5f9}
+  table.grid td.cell.empty{color:#cbd5e1;font-weight:400}
+  table.grid td.cell.empty:after{content:"+";position:absolute;top:4px;right:6px;font-size:11px;color:#94a3b8;opacity:0;transition:opacity .1s}
+  table.grid td.cell.empty:hover:after{opacity:1}
+  table.grid td.cell.oos{background:#fff1f2;color:#be123c}
+  table.grid td.cell.selected{background:#dbeafe !important;box-shadow:inset 0 0 0 2px var(--blue)}
+  table.grid td.cell.intersect{background:#bfdbfe !important;box-shadow:inset 0 0 0 2px var(--blue-d)}
+  .swatch{display:inline-block;width:12px;height:12px;border-radius:999px;margin-right:6px;
+          border:1px solid #cbd5e1;vertical-align:middle}
+
+  /* selection summary bar */
+  .sumbar{margin-top:14px;padding:14px 16px;border-radius:12px;background:var(--ink);color:#fff;
+          display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between}
+  .sumbar.hidden{display:none}
+  .sumbar .info{display:flex;flex-wrap:wrap;gap:18px;align-items:center;font-size:13px}
+  .sumbar .info b{font-size:14px}
+  .sumbar .actions{display:flex;flex-wrap:wrap;gap:6px}
+  .sumbar button{padding:6px 12px;border-radius:8px;border:1px solid #334155;background:#1e293b;
+                 color:#fff;font-size:12px;font-weight:600;cursor:pointer}
+  .sumbar button:hover{background:#334155}
+  .sumbar button.primary{background:var(--green);border-color:var(--green-d);color:var(--ink)}
+
+  /* filter chips */
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}
+  .chip{padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:#fff;
+        font-size:12px;font-weight:600;cursor:pointer;color:var(--ink)}
+  .chip:hover{background:#f1f5f9}
+  .chip.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .chip .count{opacity:.7;margin-left:4px;font-weight:500}
+
+  /* ---------- CUSTOMER PDP ---------- */
+  .pdp{display:grid;grid-template-columns:1fr;gap:20px}
+  @media(min-width:760px){.pdp{grid-template-columns:1.05fr 1fr}}
+  .hero{aspect-ratio:1/1;border-radius:16px;background:
+        linear-gradient(135deg,#f1f5f9 0,#e2e8f0 100%);display:flex;align-items:center;justify-content:center;
+        font-size:80px;font-weight:800;color:#94a3b8;letter-spacing:-.04em;border:1px solid var(--line)}
+  .preview-row{display:flex;justify-content:center;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .keycap{width:64px;height:64px;border-radius:14px;display:flex;align-items:center;justify-content:center;
+          font-weight:800;font-size:28px;box-shadow:0 6px 14px rgba(11,16,32,.18);
+          border:1px solid rgba(0,0,0,.08)}
+  .price-tag{font-size:30px;font-weight:800;letter-spacing:-.02em}
+  .price-meta{color:var(--muted);font-size:13px;margin-top:2px}
+  .axis-label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);
+              font-weight:700;margin:14px 0 8px}
+  .axis-label .meta{font-weight:500;color:var(--muted);text-transform:none;letter-spacing:0;font-size:12px;margin-left:6px}
+  .opts{display:flex;flex-wrap:wrap;gap:6px}
+  .opt{min-width:42px;height:42px;padding:0 12px;border-radius:10px;border:2px solid var(--line);
+       background:#fff;font-size:14px;font-weight:700;cursor:pointer;color:var(--ink);
+       display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .1s}
+  .opt:hover{border-color:#94a3b8}
+  .opt.selected{border-color:var(--ink);background:var(--ink);color:#fff}
+  .opt .sw{width:14px;height:14px;border-radius:999px;border:1px solid rgba(0,0,0,.15)}
+  .add{margin-top:20px;width:100%;background:var(--green);color:var(--ink);font-weight:800;font-size:16px;
+       padding:16px;border-radius:14px;border:none;cursor:pointer;letter-spacing:.01em}
+  .add:hover{background:var(--green-d);color:#fff}
+  .cart-preview{margin-top:14px;background:#f8fafc;border:1px dashed var(--line);border-radius:12px;padding:12px}
+  .cart-preview h4{margin:0 0 8px;font-size:13px;font-weight:700;color:var(--ink)}
+  .cart-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:6px 0;border-top:1px dashed var(--line)}
+  .cart-row:first-of-type{border-top:none}
+  .cart-total{display:flex;justify-content:space-between;font-weight:800;font-size:14px;margin-top:8px;padding-top:8px;border-top:1px solid var(--ink)}
+
+  /* doubt panel */
+  .doubt{background:#fff7e6;border:1px solid #f1c97c;border-radius:14px;padding:20px;margin-top:24px}
+  .doubt h2{margin-top:0;color:#7c4a00}
+  .doubt ul{margin:6px 0 0 18px;padding:0}
+  .doubt li{margin:4px 0}
+  .ok{color:var(--green-d);font-weight:700}
+  .not{color:#be123c;font-weight:700}
+
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{display:inline-block;width:14px;height:14px;border-radius:4px;border:1px solid var(--line)}
+  .legend i.s-empty{background:#fff;color:#cbd5e1}
+  .legend i.s-priced{background:#fff;border-color:var(--ink)}
+  .legend i.s-oos{background:#fff1f2;border-color:#fda4af}
+  .legend i.s-sel{background:#dbeafe;border-color:var(--blue)}
+
+  .small{font-size:12px;color:var(--muted)}
+  kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#f1f5f9;border:1px solid var(--line);
+      border-bottom-width:2px;border-radius:6px;padding:1px 6px;font-size:11px;color:var(--ink)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <h1>Variant Pivot Grid — Demo</h1>
+  <p class="lead">Two views on one page. Top: how <b>admin</b> edits variants. Bottom: how <b>customer</b> picks them.
+     Goal — kill the 216-row flat table, kill the "configurator" feeling, multi-select on both sides.</p>
+
+  <!-- ===================== ADMIN ===================== -->
+  <div class="card">
+    <h3>Admin view</h3>
+    <h2 style="margin-top:0">Edit variants — pivot grid</h2>
+    <p class="small">Product: <b>Custom T-Shirt</b> · 3 axes · 6×6×3 = <b>108 variants</b> max.
+      Click any axis label to select. Shift-click for range. Cmd / Ctrl-click to add. Empty cells don't exist in DB until you set a price.</p>
+
+    <!-- material tabs (3rd axis) -->
+    <div class="axis-label" style="margin-top:18px">Material <span class="meta">— 3rd axis · click to switch the grid</span></div>
+    <div class="tabs" id="matTabs">
+      <div class="tab active" data-mat="Cotton">Cotton</div>
+      <div class="tab" data-mat="Tri-blend">Tri-blend</div>
+      <div class="tab" data-mat="Premium">Premium</div>
+    </div>
+
+    <!-- filter chips -->
+    <div class="chips" id="chips">
+      <div class="chip active" data-filter="all">All <span class="count" id="cAll">36</span></div>
+      <div class="chip" data-filter="empty">Empty <span class="count" id="cEmpty">8</span></div>
+      <div class="chip" data-filter="oos">Out of stock <span class="count" id="cOos">2</span></div>
+      <div class="chip" data-filter="noimg">No image <span class="count" id="cNoImg">15</span></div>
+      <div class="chip" data-filter="onsale">On sale <span class="count" id="cSale">3</span></div>
+    </div>
+
+    <!-- pivot grid -->
+    <div class="grid-wrap">
+      <table class="grid" id="pivotGrid">
+        <thead>
+          <tr>
+            <th></th>
+            <th data-col="S">S</th>
+            <th data-col="M">M</th>
+            <th data-col="L">L</th>
+            <th data-col="XL">XL</th>
+            <th data-col="2XL">2XL</th>
+            <th data-col="3XL">3XL</th>
+          </tr>
+        </thead>
+        <tbody id="pivotBody"><!-- rendered by JS --></tbody>
+      </table>
+    </div>
+
+    <!-- legend -->
+    <div class="legend">
+      <span><i class="s-priced"></i> Priced</span>
+      <span><i class="s-empty"></i> Empty (no DB row yet)</span>
+      <span><i class="s-oos"></i> Out of stock</span>
+      <span><i class="s-sel"></i> Selected</span>
+      <span class="small" style="margin-left:auto">Click a row label or column header to bulk-select an axis.</span>
+    </div>
+
+    <!-- floating selection summary -->
+    <div class="sumbar hidden" id="sumbar">
+      <div class="info">
+        <span><b id="selCount">0</b> selected</span>
+        <span>Avg <b id="selAvg">—</b></span>
+        <span>Stock <b id="selStock">—</b></span>
+        <span><b id="selOos">0</b> OOS</span>
+      </div>
+      <div class="actions">
+        <button>Set price</button>
+        <button>+10%</button>
+        <button>Set stock</button>
+        <button class="primary">Activate</button>
+        <button>Deactivate</button>
+        <button>Add image</button>
+        <button>More ▾</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== CUSTOMER ===================== -->
+  <div class="card">
+    <h3>Customer view</h3>
+    <h2 style="margin-top:0">Buy this product — multi-select variants</h2>
+    <p class="small">Product: <b>Custom Keycap (single-letter)</b>. The <b>Letter</b> axis is multi-select (you need 5 letters for JACOB).
+      Colour axes are single-select (one base / letter / cap colour for the whole word). Cart auto-creates one line per letter.</p>
+
+    <div class="pdp">
+      <!-- left: hero + preview row -->
+      <div>
+        <div class="hero" id="heroBig">JACOB</div>
+        <div class="preview-row" id="previewRow"></div>
+        <p class="small" style="text-align:center;margin-top:8px">Live preview — colours apply to all selected letters.</p>
+      </div>
+
+      <!-- right: pickers -->
+      <div>
+        <div class="price-tag" id="priceTag">MYR 40</div>
+        <div class="price-meta" id="priceMeta">5 letters × MYR 8</div>
+
+        <div class="axis-label">Letters <span class="meta">multi-select · pick all letters of your name</span></div>
+        <div class="opts" id="letterOpts"></div>
+
+        <div class="axis-label">Base colour <span class="meta">single-select</span></div>
+        <div class="opts" id="baseOpts"></div>
+
+        <div class="axis-label">Letter colour <span class="meta">single-select</span></div>
+        <div class="opts" id="letterColOpts"></div>
+
+        <div class="axis-label">Cap colour <span class="meta">single-select</span></div>
+        <div class="opts" id="capOpts"></div>
+
+        <button class="add" id="addBtn">Add 5 letters to bag · MYR 40</button>
+
+        <div class="cart-preview" id="cartPrev">
+          <h4>Cart preview (auto-built from selection)</h4>
+          <div id="cartLines"></div>
+          <div class="cart-total"><span>Total</span><span id="cartTotal">MYR 40</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== DOUBT ANSWER ===================== -->
+  <div class="doubt">
+    <h2>Your doubt — does multi-select variants alone fix the keycap product?</h2>
+    <p style="margin-top:0">Honest caveman answer: <b class="ok">mostly yes</b>. You don't need a separate personalization layer for v1.</p>
+    <ul>
+      <li><span class="ok">✓ Solves:</span> "I want 5 letters of JACOB" → multi-select letter axis → cart auto-creates 5 lines.</li>
+      <li><span class="ok">✓ Solves:</span> "I want each letter in 2 colour ways" → multi-select on colour axis too → cart = 5×2 = 10 lines.</li>
+      <li><span class="ok">✓ Solves:</span> stock control per letter / colour — each variant has its own stock count.</li>
+      <li><span class="ok">✓ Solves:</span> price per letter — each variant priced independently.</li>
+      <li><span class="not">✗ Limit:</span> letter <b>order</b>. JACOB ≠ JBCAO. Customer ticks letters but not order. Fix: cart line carries <code>orderIndex</code> (1..N) auto-generated as customer ticks. Or one tiny text input "name to print: ___" feeding the multi-select.</li>
+      <li><span class="not">✗ Limit:</span> if word repeats letters (BOBBY = B,O,B,B,Y), variant qty must be 3 for B. Fix: tick-counter on the Letter chip (tap once = 1, twice = 2, etc) <b>OR</b> a small text field that auto-increments tick counts.</li>
+      <li><span class="not">✗ Limit:</span> if you want <b>per-letter different colour</b> (J=red, A=blue) → that's true configurator territory, not variants. v1 model is "all letters same colour set". 99% of customers want this anyway.</li>
+    </ul>
+    <p style="margin:10px 0 0">Recommended path:</p>
+    <ol style="margin:6px 0 0 18px;padding:0">
+      <li>Build the pivot grid + multi-select admin (above).</li>
+      <li>Add <b>per-axis multi-select toggle</b> on each option ("customer can pick multiple"). Default off.</li>
+      <li>For keycap product, mark Letter axis as multi-select.</li>
+      <li>Add a tiny text input "Type your name" that just <em>helps</em> tick the right letters in the right count. Feeds the variant multi-select. No new schema.</li>
+    </ol>
+    <p style="margin:10px 0 0"><b>Defer the personalization layer</b> until you hit a product that genuinely needs free-text input (engraving, custom logo). The keycap product does not.</p>
+  </div>
+
+</div>
+
+<script>
+/* =====================================================================
+   ADMIN PIVOT GRID
+   ===================================================================== */
+const COLOURS = [
+  {name:"Red",hex:"#ef4444"},
+  {name:"Black",hex:"#0B1020"},
+  {name:"White",hex:"#f8fafc"},
+  {name:"Pink",hex:"#ec4899"},
+  {name:"Gold",hex:"#eab308"},
+  {name:"Silver",hex:"#94a3b8"},
+];
+const SIZES = ["S","M","L","XL","2XL","3XL"];
+const MATERIALS = ["Cotton","Tri-blend","Premium"];
+
+// fake variant data per material
+function makeMatrix(mat){
+  const offset = mat==="Cotton"?0 : mat==="Tri-blend"?3 : 6;
+  const m = {};
+  COLOURS.forEach((c,ci)=>{
+    SIZES.forEach((s,si)=>{
+      const key = c.name+"|"+s;
+      // some empty (no DB row), some priced, a couple OOS
+      const isEmpty = (ci+si+offset) % 7 === 3;
+      const isOos   = (ci===0 && s==="3XL" && mat!=="Premium") || (ci===4 && s==="S" && mat==="Premium");
+      if(isEmpty){ m[key] = {empty:true}; return; }
+      const base = 25 + offset;
+      const sizeMod = ["S","M","L","XL","2XL","3XL"].indexOf(s);
+      const colMod = ["Red","Black","White"].includes(c.name)?0:5;
+      const price = base + sizeMod + colMod;
+      const stock = isOos?0:Math.max(2,(7-sizeMod-Math.abs(ci-2))*2);
+      m[key] = {price, stock, oos:isOos, hasImage: (ci+si)%3!==0};
+    });
+  });
+  return m;
+}
+
+let activeMat = "Cotton";
+let matrix = makeMatrix(activeMat);
+let selected = new Set();   // keys "Red|M"
+let activeFilter = "all";
+
+const $ = sel => document.querySelector(sel);
+const body = $("#pivotBody");
+
+function render(){
+  body.innerHTML = "";
+  COLOURS.forEach(c=>{
+    const tr = document.createElement("tr");
+    const th = document.createElement("th");
+    th.dataset.row = c.name;
+    th.innerHTML = `<span class="swatch" style="background:${c.hex}"></span>${c.name}`;
+    th.onclick = (e)=>toggleAxis("row", c.name, e.shiftKey, e.metaKey||e.ctrlKey);
+    tr.appendChild(th);
+
+    SIZES.forEach(s=>{
+      const td = document.createElement("td");
+      const key = c.name+"|"+s;
+      const v = matrix[key];
+      td.dataset.key = key;
+      td.dataset.row = c.name;
+      td.dataset.col = s;
+      td.classList.add("cell");
+      if(v.empty){
+        td.classList.add("empty");
+        td.textContent = "—";
+      } else {
+        td.classList.toggle("oos", v.oos);
+        td.innerHTML = `${v.price.toFixed(0)}<div style="font-size:10px;color:#64748b;font-weight:500">${v.oos?"OOS":"st "+v.stock}</div>`;
+      }
+      // filter visibility
+      if(!matchesFilter(v)) td.style.opacity = ".25";
+      if(selected.has(key)) td.classList.add("selected");
+
+      td.onclick = (e)=>toggleCell(key, e.shiftKey, e.metaKey||e.ctrlKey);
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+
+  // header axis-selected state
+  document.querySelectorAll("thead th[data-col]").forEach(th=>{
+    th.classList.toggle("axis-selected", isFullColumn(th.dataset.col));
+  });
+  document.querySelectorAll("tbody th[data-row]").forEach(th=>{
+    th.classList.toggle("axis-selected", isFullRow(th.dataset.row));
+  });
+
+  updateSumbar();
+  updateChipCounts();
+}
+
+function matchesFilter(v){
+  if(activeFilter==="all") return true;
+  if(v.empty) return activeFilter==="empty";
+  if(activeFilter==="oos") return v.oos;
+  if(activeFilter==="noimg") return !v.hasImage;
+  if(activeFilter==="onsale") return v.price >= 30 && !v.oos;
+  return false;
+}
+
+function isFullColumn(col){
+  return COLOURS.every(c=>selected.has(c.name+"|"+col));
+}
+function isFullRow(row){
+  return SIZES.every(s=>selected.has(row+"|"+s));
+}
+
+function toggleCell(key, shift, meta){
+  if(!shift && !meta) selected.clear();
+  if(selected.has(key)) selected.delete(key); else selected.add(key);
+  render();
+}
+
+let lastAxis = null;
+function toggleAxis(kind, name, shift, meta){
+  const keys = kind==="row" ? SIZES.map(s=>name+"|"+s) : COLOURS.map(c=>c.name+"|"+name);
+  if(!shift && !meta) selected.clear();
+  // if all already selected → deselect; else select all
+  const allSel = keys.every(k=>selected.has(k));
+  keys.forEach(k=> allSel ? selected.delete(k) : selected.add(k));
+  lastAxis = {kind,name};
+  render();
+}
+
+function updateSumbar(){
+  const bar = $("#sumbar");
+  if(selected.size===0){bar.classList.add("hidden");return;}
+  bar.classList.remove("hidden");
+  let total=0,count=0,stock=0,oos=0;
+  selected.forEach(k=>{
+    const v = matrix[k];
+    if(v.empty) return;
+    count++; total+=v.price; stock+=v.stock; if(v.oos) oos++;
+  });
+  $("#selCount").textContent = selected.size;
+  $("#selAvg").textContent = count? "MYR "+(total/count).toFixed(2) : "—";
+  $("#selStock").textContent = stock;
+  $("#selOos").textContent = oos;
+}
+
+function updateChipCounts(){
+  let empty=0,oos=0,noimg=0,sale=0,all=0;
+  Object.values(matrix).forEach(v=>{
+    all++;
+    if(v.empty){empty++;return;}
+    if(v.oos) oos++;
+    if(!v.hasImage) noimg++;
+    if(v.price>=30 && !v.oos) sale++;
+  });
+  $("#cAll").textContent = all;
+  $("#cEmpty").textContent = empty;
+  $("#cOos").textContent = oos;
+  $("#cNoImg").textContent = noimg;
+  $("#cSale").textContent = sale;
+}
+
+// material tabs
+document.querySelectorAll("#matTabs .tab").forEach(t=>{
+  t.onclick = ()=>{
+    document.querySelectorAll("#matTabs .tab").forEach(x=>x.classList.remove("active"));
+    t.classList.add("active");
+    activeMat = t.dataset.mat;
+    matrix = makeMatrix(activeMat);
+    render();
+  };
+});
+
+// filter chips
+document.querySelectorAll("#chips .chip").forEach(c=>{
+  c.onclick = ()=>{
+    document.querySelectorAll("#chips .chip").forEach(x=>x.classList.remove("active"));
+    c.classList.add("active");
+    activeFilter = c.dataset.filter;
+    render();
+  };
+});
+
+render();
+
+/* =====================================================================
+   CUSTOMER PDP — multi-select on Letter axis
+   ===================================================================== */
+const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+const PALETTES = [
+  {name:"Red",hex:"#ef4444"},
+  {name:"Black",hex:"#0B1020"},
+  {name:"White",hex:"#f8fafc"},
+  {name:"Gold",hex:"#eab308"},
+  {name:"Pink",hex:"#ec4899"},
+];
+
+const PRICE_PER_LETTER = 8;
+let selLetters = ["J","A","C","O","B"];   // multi
+let baseColor = "Black";
+let letterColor = "White";
+let capColor = "Black";
+
+function renderLetterOpts(){
+  const c = $("#letterOpts");
+  c.innerHTML = "";
+  LETTERS.forEach(l=>{
+    const b = document.createElement("button");
+    b.className = "opt" + (selLetters.includes(l)?" selected":"");
+    b.textContent = l;
+    b.style.minWidth = "42px";
+    b.onclick = ()=>{
+      if(selLetters.includes(l)) selLetters = selLetters.filter(x=>x!==l);
+      else selLetters.push(l);
+      renderAll();
+    };
+    c.appendChild(b);
+  });
+}
+function renderColorOpts(targetSel, current, setFn){
+  const c = $(targetSel); c.innerHTML="";
+  PALETTES.forEach(p=>{
+    const b = document.createElement("button");
+    b.className = "opt" + (current===p.name?" selected":"");
+    b.innerHTML = `<span class="sw" style="background:${p.hex}"></span>${p.name}`;
+    b.onclick = ()=>{ setFn(p.name); renderAll(); };
+    c.appendChild(b);
+  });
+}
+
+function paletteHex(name){ return PALETTES.find(p=>p.name===name)?.hex || "#000"; }
+
+function renderPreview(){
+  $("#heroBig").textContent = selLetters.join("") || "—";
+  $("#heroBig").style.color = paletteHex(letterColor);
+  $("#heroBig").style.background = `linear-gradient(135deg, ${paletteHex(baseColor)} 0%, ${paletteHex(capColor)} 100%)`;
+  if(letterColor==="White") $("#heroBig").style.textShadow="0 2px 8px rgba(0,0,0,.25)"; else $("#heroBig").style.textShadow="";
+  // preview row
+  const row = $("#previewRow"); row.innerHTML="";
+  selLetters.forEach(l=>{
+    const k = document.createElement("div");
+    k.className = "keycap";
+    k.textContent = l;
+    k.style.background = paletteHex(capColor);
+    k.style.color = paletteHex(letterColor);
+    k.style.borderTop = `4px solid ${paletteHex(baseColor)}`;
+    row.appendChild(k);
+  });
+}
+
+function renderCart(){
+  const total = selLetters.length * PRICE_PER_LETTER;
+  $("#priceTag").textContent = `MYR ${total}`;
+  $("#priceMeta").textContent = `${selLetters.length} letter${selLetters.length===1?"":"s"} × MYR ${PRICE_PER_LETTER}`;
+  $("#addBtn").textContent = `Add ${selLetters.length} letter${selLetters.length===1?"":"s"} to bag · MYR ${total}`;
+  $("#cartTotal").textContent = `MYR ${total}`;
+  const lines = $("#cartLines"); lines.innerHTML="";
+  selLetters.forEach((l,i)=>{
+    const r = document.createElement("div");
+    r.className="cart-row";
+    r.innerHTML = `<span><b>${i+1}.</b> Letter "${l}" · ${baseColor}/${letterColor}/${capColor}</span><span>MYR ${PRICE_PER_LETTER}</span>`;
+    lines.appendChild(r);
+  });
+}
+
+function renderAll(){
+  renderLetterOpts();
+  renderColorOpts("#baseOpts", baseColor, n=>baseColor=n);
+  renderColorOpts("#letterColOpts", letterColor, n=>letterColor=n);
+  renderColorOpts("#capOpts", capColor, n=>capColor=n);
+  renderPreview();
+  renderCart();
+}
+renderAll();
+</script>
+
+</body>
+</html>

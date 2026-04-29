@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
-import { useCartStore } from "@/stores/cart-store";
+import { useCartStore, isConfigurableCartItem } from "@/stores/cart-store";
 import { hydrateCartItems, type HydratedCartItem } from "@/actions/cart";
 import { CartLineRow } from "@/components/store/cart-line-row";
 import { Shuriken } from "@/components/brand/shuriken";
@@ -46,16 +46,18 @@ function BagContent() {
     }
     let cancelled = false;
     setLoading(true);
-    hydrateCartItems(
-      storeItems.map((i) => ({ variantId: i.variantId, quantity: i.quantity })),
-    )
+    hydrateCartItems(storeItems)
       .then((items) => {
         if (cancelled) return;
         setHydrated(items);
-        // Remove store entries for deleted/inactive variants
-        const liveIds = new Set(items.map((i) => i.variantId));
+        // Remove store entries for deleted/inactive variants/products.
+        // Stocked lines key on variantId; configurable lines key on productId.
+        const liveKeys = new Set(
+          items.map((i) => (i.productType === "configurable" || i.productType === "keychain" || i.productType === "vending" ? i.productId : i.variantId))
+        );
         for (const si of storeItems) {
-          if (!liveIds.has(si.variantId)) removeItem(si.key);
+          const lookupKey = isConfigurableCartItem(si) ? si.productId : si.variantId;
+          if (!liveKeys.has(lookupKey)) removeItem(si.key);
         }
       })
       .catch(() => {})
@@ -108,7 +110,7 @@ function BagContent() {
         <div className="grid lg:grid-cols-[1fr_320px] gap-8">
           <ul className="flex flex-col gap-4">
             {hydrated.map((i) => (
-              <li key={i.variantId}>
+              <li key={i.storeKey ?? i.variantId}>
                 <CartLineRow item={i} variant="full" />
               </li>
             ))}

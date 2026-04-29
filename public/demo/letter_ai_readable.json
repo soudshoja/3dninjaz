@@ -1,0 +1,1471 @@
+{
+  "source_file": "letter.3mf",
+  "format": "3MF zipped XML model package",
+  "unit": "millimeter",
+  "metadata": {
+    "Application": "BambuStudio-02.04.00.70",
+    "BambuStudio:3mfVersion": "1",
+    "Copyright": "",
+    "CreationDate": "2026-01-25",
+    "Description": "Mechanical Fidget Alphabet, Numbers, and Glyphs A minimalist mechanical-keycap–inspired fidget design featuring customizable letters, numbers, and symbols. Each key is designed with smooth edges and balanced proportions for a clean, premium look that prints reliably on FDM printers. This model is fully customizable in Bambu Studio , allowing you to easily adjust the font style and text size to create personalized initials, words, or symbols. Perfect for keychains, desk fidgets, name tags, or small custom gifts. Designed with simplicity and printability in mind, making it suitable for beginners while still offering creative freedom for advanced users. Features: Mechanical keycap–inspired design Supports alphabet, numbers, and glyphs Font and text size adjustable in Bambu Studio Clean geometry for smooth printing Ideal for keychains, fidgets, and personalization projects A simple, elegant model made for customization and everyday use.",
+    "Designer": "Jef",
+    "DesignerCover": "ac485d4470e6620d.png",
+    "DesignerUserId": "3833188328",
+    "License": "MakerWorld Exclusive License",
+    "ModificationDate": "2026-01-25",
+    "Origin": "original",
+    "ProfileCover": "ac485d4470e6620d.png",
+    "ProfileDescription": "",
+    "ProfileTitle": "0.2mm layer, 2 walls, 15% infill",
+    "Thumbnail_Middle": "/Metadata/plate_1.png",
+    "Thumbnail_Small": "/Metadata/plate_1_small.png",
+    "Title": "Mechanical Fidget Alphabet, Numbers, and Glyphs",
+    "CopyRight": "[]",
+    "ProfileUserId": "3833188328",
+    "ProfileUserName": "Jef",
+    "DesignRegion": "US",
+    "DesignModelId": "USd6cd4bcc47d7",
+    "DesignProfileId": "582846220"
+  },
+  "product_interpretation": {
+    "category": "mechanical-keycap-inspired fidget / alphabet clicker pieces",
+    "structure": "Character pieces are composite objects: a repeated base/keycap body plus a raised glyph mesh placed on top.",
+    "base_body_object": "3D/Objects/object_4.model",
+    "base_body_bbox_mm": {
+      "min": [
+        -9.00000095,
+        -9.00000095,
+        -3.5
+      ],
+      "max": [
+        9.00000095,
+        9.00000095,
+        3.5
+      ],
+      "size": [
+        18.0000019,
+        18.0000019,
+        7
+      ]
+    },
+    "raised_glyph_z_offset_mm": 3.50000095,
+    "website_customizer_parts": [
+      "base / outer rounded cube body",
+      "clicker / inner inset button face",
+      "raised letter / glyph",
+      "left-side keyring tab or round hole for the horizontal keychain"
+    ],
+    "layout_recommendation": "Horizontal chain. Cubes close together. Keyring tab/hole on the left of the first cube. No rope and no top knot in the web preview."
+  },
+  "counts": {
+    "composite_base_plus_glyph_objects": 65,
+    "build_items_on_plate": 76,
+    "object_model_files": 76
+  },
+  "base_mesh_stats": {
+    "file": "3D/Objects/object_4.model",
+    "vertices": 391,
+    "triangles": 778,
+    "bbox_mm": {
+      "min": [
+        -9.00000095,
+        -9.00000095,
+        -3.5
+      ],
+      "max": [
+        9.00000095,
+        9.00000095,
+        3.5
+      ],
+      "size": [
+        18.0000019,
+        18.0000019,
+        7
+      ]
+    }
+  },
+  "base_plus_glyph_composites": [
+    {
+      "composite_objectid": "3",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_4.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "5",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_216.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "7",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_217.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "9",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_218.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "11",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_219.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "13",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_220.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "15",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_221.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "17",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_222.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "19",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_223.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "21",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_224.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "23",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_225.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "25",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_226.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "27",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_227.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "29",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_228.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "31",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_229.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "33",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_230.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "35",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_231.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "37",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_232.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "39",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_233.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "41",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_234.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "43",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_235.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "45",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_236.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "47",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_237.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "49",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_238.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "51",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_239.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "53",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_240.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "55",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_241.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "57",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_242.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "59",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_243.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "61",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_244.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "63",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_245.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "65",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_246.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "67",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_247.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "69",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_248.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "71",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_249.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "73",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_250.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "75",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_251.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "78",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_253.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "80",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_254.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "82",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_255.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "84",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_256.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "86",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_257.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "88",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_258.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "90",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_259.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "92",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_260.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "94",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_261.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "96",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_262.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "98",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_263.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "100",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_264.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "102",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_265.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "104",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_266.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "106",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_267.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "108",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_268.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "110",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_269.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "112",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_270.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "133",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_227.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "134",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_229.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "135",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_231.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "136",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_233.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "137",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_235.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "138",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_247.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "139",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_248.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "140",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_249.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "141",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_250.model",
+      "glyph_z_offset_mm": 3.50000095
+    },
+    {
+      "composite_objectid": "142",
+      "base_component": "3D/Objects/object_4.model",
+      "glyph_component": "3D/Objects/object_251.model",
+      "glyph_z_offset_mm": 3.50000095
+    }
+  ],
+  "build_items": [
+    {
+      "objectid": "3",
+      "translation_mm": [
+        11.452651,
+        167.50097,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "5",
+      "translation_mm": [
+        30.452652,
+        167.500961,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "7",
+      "translation_mm": [
+        11.452652,
+        148.500961,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "9",
+      "translation_mm": [
+        30.452652,
+        148.500961,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "11",
+      "translation_mm": [
+        11.452652,
+        129.500961,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "13",
+      "translation_mm": [
+        49.452667,
+        167.500961,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "15",
+      "translation_mm": [
+        30.452652,
+        129.500961,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "17",
+      "translation_mm": [
+        49.452667,
+        148.500961,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "19",
+      "translation_mm": [
+        49.452667,
+        129.500961,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "21",
+      "translation_mm": [
+        68.452667,
+        167.500961,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "23",
+      "translation_mm": [
+        68.452667,
+        148.500961,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "25",
+      "translation_mm": [
+        68.452667,
+        129.500961,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "27",
+      "translation_mm": [
+        10.894436,
+        101.485369,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "29",
+      "translation_mm": [
+        87.452667,
+        167.500961,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "31",
+      "translation_mm": [
+        29.894436,
+        101.485369,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "33",
+      "translation_mm": [
+        87.452667,
+        148.500961,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "35",
+      "translation_mm": [
+        48.894451,
+        101.485369,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "37",
+      "translation_mm": [
+        87.452667,
+        129.500961,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "39",
+      "translation_mm": [
+        10.894436,
+        82.4853689,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "41",
+      "translation_mm": [
+        106.452667,
+        167.500961,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "43",
+      "translation_mm": [
+        67.894451,
+        101.485369,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "45",
+      "translation_mm": [
+        125.452667,
+        167.500946,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "47",
+      "translation_mm": [
+        106.452667,
+        148.500946,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "49",
+      "translation_mm": [
+        125.452667,
+        148.500946,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "51",
+      "translation_mm": [
+        144.452667,
+        148.500931,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "53",
+      "translation_mm": [
+        125.452667,
+        129.500931,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "55",
+      "translation_mm": [
+        144.452667,
+        167.500931,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "57",
+      "translation_mm": [
+        106.452667,
+        129.500931,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "59",
+      "translation_mm": [
+        144.452667,
+        129.500931,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "61",
+      "translation_mm": [
+        163.452667,
+        148.500931,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "63",
+      "translation_mm": [
+        163.452667,
+        167.500931,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "65",
+      "translation_mm": [
+        163.452667,
+        129.500931,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "67",
+      "translation_mm": [
+        86.894451,
+        101.485361,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "69",
+      "translation_mm": [
+        67.894451,
+        82.4853613,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "71",
+      "translation_mm": [
+        86.894451,
+        82.4853613,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "73",
+      "translation_mm": [
+        48.894451,
+        82.4853613,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "75",
+      "translation_mm": [
+        29.894451,
+        82.4853613,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "76",
+      "translation_mm": [
+        124.894451,
+        101.485361,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "78",
+      "translation_mm": [
+        143.894451,
+        101.485361,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "80",
+      "translation_mm": [
+        143.894451,
+        82.4853613,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "82",
+      "translation_mm": [
+        162.894451,
+        101.485361,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "84",
+      "translation_mm": [
+        124.894451,
+        82.4853613,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "86",
+      "translation_mm": [
+        162.894451,
+        82.4853613,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "88",
+      "translation_mm": [
+        143.894451,
+        63.4853613,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "90",
+      "translation_mm": [
+        124.894451,
+        63.4853613,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "92",
+      "translation_mm": [
+        162.894451,
+        63.4853613,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "94",
+      "translation_mm": [
+        143.894451,
+        44.4853574,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "96",
+      "translation_mm": [
+        162.894451,
+        44.4853574,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "98",
+      "translation_mm": [
+        124.894451,
+        44.4853574,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "100",
+      "translation_mm": [
+        105.894451,
+        44.4853574,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "102",
+      "translation_mm": [
+        143.894451,
+        25.4853555,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "104",
+      "translation_mm": [
+        124.894451,
+        25.4853555,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "106",
+      "translation_mm": [
+        162.894451,
+        25.4853555,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "108",
+      "translation_mm": [
+        105.894451,
+        25.4853555,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "110",
+      "translation_mm": [
+        86.894451,
+        25.4853555,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "112",
+      "translation_mm": [
+        86.894451,
+        44.4853574,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "114",
+      "translation_mm": [
+        90.070318,
+        -125.830237,
+        8.49900055
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "116",
+      "translation_mm": [
+        527.547086,
+        98.958146,
+        8.49900055
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "118",
+      "translation_mm": [
+        505.110064,
+        79.151304,
+        8.49900055
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "120",
+      "translation_mm": [
+        312.247552,
+        14.5433507,
+        8.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "122",
+      "translation_mm": [
+        322.434904,
+        40.4528075,
+        8.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "124",
+      "translation_mm": [
+        332.667113,
+        66.7604921,
+        8.49900055
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "126",
+      "translation_mm": [
+        343.002503,
+        93.1185561,
+        8.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "128",
+      "translation_mm": [
+        353.987713,
+        120.697454,
+        8.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "130",
+      "translation_mm": [
+        363.726661,
+        150.766518,
+        8.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "132",
+      "translation_mm": [
+        264.553645,
+        132.385881,
+        8.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "133",
+      "translation_mm": [
+        262.30005,
+        -111.44643,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "134",
+      "translation_mm": [
+        281.30005,
+        -111.44643,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "135",
+      "translation_mm": [
+        300.300065,
+        -111.44643,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "136",
+      "translation_mm": [
+        262.30005,
+        -130.44643,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "137",
+      "translation_mm": [
+        319.300065,
+        -111.44643,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "138",
+      "translation_mm": [
+        338.300065,
+        -111.446438,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "139",
+      "translation_mm": [
+        319.300065,
+        -130.446437,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "140",
+      "translation_mm": [
+        338.300065,
+        -130.446437,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "141",
+      "translation_mm": [
+        300.300065,
+        -130.446437,
+        3.5
+      ],
+      "printable": "1"
+    },
+    {
+      "objectid": "142",
+      "translation_mm": [
+        281.300065,
+        -130.446437,
+        3.5
+      ],
+      "printable": "1"
+    }
+  ],
+  "mesh_file_index": [
+    {
+      "file": "3D/Objects/object_4.model",
+      "size_bytes": 57550
+    },
+    {
+      "file": "3D/Objects/object_204.model",
+      "size_bytes": 881332
+    },
+    {
+      "file": "3D/Objects/object_205.model",
+      "size_bytes": 794874
+    },
+    {
+      "file": "3D/Objects/object_206.model",
+      "size_bytes": 705667
+    },
+    {
+      "file": "3D/Objects/object_208.model",
+      "size_bytes": 613659
+    },
+    {
+      "file": "3D/Objects/object_209.model",
+      "size_bytes": 527650
+    },
+    {
+      "file": "3D/Objects/object_211.model",
+      "size_bytes": 447488
+    },
+    {
+      "file": "3D/Objects/object_212.model",
+      "size_bytes": 357655
+    },
+    {
+      "file": "3D/Objects/object_213.model",
+      "size_bytes": 272148
+    },
+    {
+      "file": "3D/Objects/object_214.model",
+      "size_bytes": 195559
+    },
+    {
+      "file": "3D/Objects/object_215.model",
+      "size_bytes": 102362
+    },
+    {
+      "file": "3D/Objects/object_216.model",
+      "size_bytes": 52545
+    },
+    {
+      "file": "3D/Objects/object_217.model",
+      "size_bytes": 42905
+    },
+    {
+      "file": "3D/Objects/object_218.model",
+      "size_bytes": 38455
+    },
+    {
+      "file": "3D/Objects/object_219.model",
+      "size_bytes": 74839
+    },
+    {
+      "file": "3D/Objects/object_220.model",
+      "size_bytes": 65066
+    },
+    {
+      "file": "3D/Objects/object_221.model",
+      "size_bytes": 28097
+    },
+    {
+      "file": "3D/Objects/object_222.model",
+      "size_bytes": 23874
+    },
+    {
+      "file": "3D/Objects/object_223.model",
+      "size_bytes": 47947
+    },
+    {
+      "file": "3D/Objects/object_224.model",
+      "size_bytes": 40828
+    },
+    {
+      "file": "3D/Objects/object_225.model",
+      "size_bytes": 41205
+    },
+    {
+      "file": "3D/Objects/object_226.model",
+      "size_bytes": 26573
+    },
+    {
+      "file": "3D/Objects/object_227.model",
+      "size_bytes": 55036
+    },
+    {
+      "file": "3D/Objects/object_228.model",
+      "size_bytes": 36630
+    },
+    {
+      "file": "3D/Objects/object_229.model",
+      "size_bytes": 25695
+    },
+    {
+      "file": "3D/Objects/object_230.model",
+      "size_bytes": 35718
+    },
+    {
+      "file": "3D/Objects/object_231.model",
+      "size_bytes": 55687
+    },
+    {
+      "file": "3D/Objects/object_232.model",
+      "size_bytes": 44201
+    },
+    {
+      "file": "3D/Objects/object_233.model",
+      "size_bytes": 61516
+    },
+    {
+      "file": "3D/Objects/object_234.model",
+      "size_bytes": 32683
+    },
+    {
+      "file": "3D/Objects/object_235.model",
+      "size_bytes": 81425
+    },
+    {
+      "file": "3D/Objects/object_236.model",
+      "size_bytes": 71838
+    },
+    {
+      "file": "3D/Objects/object_237.model",
+      "size_bytes": 63212
+    },
+    {
+      "file": "3D/Objects/object_238.model",
+      "size_bytes": 38336
+    },
+    {
+      "file": "3D/Objects/object_239.model",
+      "size_bytes": 69678
+    },
+    {
+      "file": "3D/Objects/object_240.model",
+      "size_bytes": 26574
+    },
+    {
+      "file": "3D/Objects/object_241.model",
+      "size_bytes": 41196
+    },
+    {
+      "file": "3D/Objects/object_242.model",
+      "size_bytes": 37549
+    },
+    {
+      "file": "3D/Objects/object_243.model",
+      "size_bytes": 32053
+    },
+    {
+      "file": "3D/Objects/object_244.model",
+      "size_bytes": 55410
+    },
+    {
+      "file": "3D/Objects/object_245.model",
+      "size_bytes": 16224
+    },
+    {
+      "file": "3D/Objects/object_246.model",
+      "size_bytes": 62909
+    },
+    {
+      "file": "3D/Objects/object_247.model",
+      "size_bytes": 29814
+    },
+    {
+      "file": "3D/Objects/object_248.model",
+      "size_bytes": 80259
+    },
+    {
+      "file": "3D/Objects/object_249.model",
+      "size_bytes": 70002
+    },
+    {
+      "file": "3D/Objects/object_250.model",
+      "size_bytes": 32438
+    },
+    {
+      "file": "3D/Objects/object_251.model",
+      "size_bytes": 69920
+    },
+    {
+      "file": "3D/Objects/object_252.model",
+      "size_bytes": 413
+    },
+    {
+      "file": "3D/Objects/object_253.model",
+      "size_bytes": 17550
+    },
+    {
+      "file": "3D/Objects/object_254.model",
+      "size_bytes": 61351
+    },
+    {
+      "file": "3D/Objects/object_255.model",
+      "size_bytes": 48469
+    },
+    {
+      "file": "3D/Objects/object_256.model",
+      "size_bytes": 77470
+    },
+    {
+      "file": "3D/Objects/object_257.model",
+      "size_bytes": 15489
+    },
+    {
+      "file": "3D/Objects/object_258.model",
+      "size_bytes": 38831
+    },
+    {
+      "file": "3D/Objects/object_259.model",
+      "size_bytes": 45049
+    },
+    {
+      "file": "3D/Objects/object_260.model",
+      "size_bytes": 66890
+    },
+    {
+      "file": "3D/Objects/object_261.model",
+      "size_bytes": 32306
+    },
+    {
+      "file": "3D/Objects/object_262.model",
+      "size_bytes": 36301
+    },
+    {
+      "file": "3D/Objects/object_263.model",
+      "size_bytes": 8024
+    },
+    {
+      "file": "3D/Objects/object_264.model",
+      "size_bytes": 24170
+    },
+    {
+      "file": "3D/Objects/object_265.model",
+      "size_bytes": 33824
+    },
+    {
+      "file": "3D/Objects/object_266.model",
+      "size_bytes": 15522
+    },
+    {
+      "file": "3D/Objects/object_267.model",
+      "size_bytes": 32161
+    },
+    {
+      "file": "3D/Objects/object_268.model",
+      "size_bytes": 10966
+    },
+    {
+      "file": "3D/Objects/object_269.model",
+      "size_bytes": 34323
+    },
+    {
+      "file": "3D/Objects/object_270.model",
+      "size_bytes": 36717
+    },
+    {
+      "file": "3D/Objects/object_284.model",
+      "size_bytes": 413
+    },
+    {
+      "file": "3D/Objects/object_285.model",
+      "size_bytes": 413
+    },
+    {
+      "file": "3D/Objects/object_286.model",
+      "size_bytes": 413
+    },
+    {
+      "file": "3D/Objects/object_287.model",
+      "size_bytes": 413
+    },
+    {
+      "file": "3D/Objects/object_288.model",
+      "size_bytes": 413
+    },
+    {
+      "file": "3D/Objects/object_289.model",
+      "size_bytes": 413
+    },
+    {
+      "file": "3D/Objects/object_290.model",
+      "size_bytes": 413
+    },
+    {
+      "file": "3D/Objects/object_291.model",
+      "size_bytes": 413
+    },
+    {
+      "file": "3D/Objects/object_292.model",
+      "size_bytes": 413
+    },
+    {
+      "file": "3D/Objects/object_293.model",
+      "size_bytes": 413
+    }
+  ]
+}

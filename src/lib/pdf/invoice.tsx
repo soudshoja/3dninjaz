@@ -8,6 +8,7 @@ import {
 import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
 import { formatOrderNumber } from "@/lib/orders";
+import { ensureOrderItemConfigData } from "@/lib/config-fields";
 
 /**
  * Phase 6 06-06 — invoice PDF document.
@@ -111,6 +112,7 @@ export type InvoiceOrder = {
     productName: string;
     size: string | null;
     variantLabel?: string | null;
+    configurationData?: string | null; // Phase 19 (19-09) — raw LONGTEXT JSON or null
     quantity: number;
     unitPrice: string;
     lineTotal: string;
@@ -179,14 +181,18 @@ export function InvoiceDocument({
           <Text style={styles.col3}>Qty</Text>
           <Text style={styles.col4}>Line total</Text>
         </View>
-        {order.items.map((i) => (
-          <View key={i.id} style={styles.tableRow}>
-            <Text style={styles.col1}>{i.productName}</Text>
-            <Text style={styles.col2}>{i.variantLabel ?? (i.size ? `Size ${i.size}` : "—")}</Text>
-            <Text style={styles.col3}>{String(i.quantity)}</Text>
-            <Text style={styles.col4}>{formatMYR(i.lineTotal)}</Text>
-          </View>
-        ))}
+        {order.items.map((i) => {
+          const cfg = ensureOrderItemConfigData(i.configurationData);
+          const summary = cfg?.computedSummary ?? i.variantLabel ?? (i.size ? `Size ${i.size}` : "—");
+          return (
+            <View key={i.id} style={styles.tableRow}>
+              <Text style={styles.col1}>{i.productName}</Text>
+              <Text style={styles.col2}>{summary}</Text>
+              <Text style={styles.col3}>{String(i.quantity)}</Text>
+              <Text style={styles.col4}>{formatMYR(i.lineTotal)}</Text>
+            </View>
+          );
+        })}
 
         <View style={{ marginTop: 12 }}>
           <View style={styles.row}>

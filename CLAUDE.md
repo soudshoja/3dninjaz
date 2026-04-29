@@ -189,7 +189,7 @@ Do not make direct repo edits outside a GSD workflow unless the user explicitly 
 - **Database**: Neon Postgres → **cPanel MariaDB 10.11** (self-hosted). DATABASE_URL in `.env.local`
 - **Images**: Cloudinary → **local filesystem** `public/uploads/products/<uuid>/`
 - **Email**: Resend → **nodemailer + cPanel SMTP** via `noreply@3dninjaz.com` (see `src/lib/mailer.ts`)
-- **Brand palette unified**: blue `#2563EB`, green `#84CC16`, purple `#8B5CF6`, ink `#0B1020`, cream `#F7FAF4` — same across storefront + admin. See `.planning/phases/02-storefront-cart/DECISIONS.md` D-01
+- **Brand palette unified**: blue `#1E8BFF` (dark `#0A4FB3`), green `#39E600` (dark `#1FA300`), purple `#A855F7` (dark `#6B21A8`), ink `#0B1020`, cream `#F7FAF4` — same across storefront + admin. See `.planning/phases/02-storefront-cart/DECISIONS.md` D-01
 - **Cart vocabulary**: user-facing = "bag" (button/drawer/nav/route `/bag`). Internal code still `cart-store.ts`, `useCartStore`, `CartItem` — minimize diff. D-02 in same DECISIONS file
 
 ### MariaDB 10.11 gotchas (apply automatically)
@@ -243,6 +243,8 @@ Do not make direct repo edits outside a GSD workflow unless the user explicitly 
 - Social handles Instagram + TikTok — edit at `/admin/settings`
 - `public/logo.png` 1.5 MB → WebP ~200 KB (LCP blocker)
 - ~~`PAYPAL_ENV=live` in prod env~~ — DONE 2026-04-20
-- Privacy policy + Terms of Service pages — not yet built
+- ~~Privacy policy + Terms of Service pages~~ — DONE (live at `src/app/(store)/{privacy,terms}/page.tsx`)
 - Remove `<meta robots="noindex">` from coming-soon apex page (or swap domain on launch day)
 - ~~Rebuild without `/v1` basePath before domain swap~~ — N/A (app already serves at subdomain root with no basePath)
+- **Delyva HMAC webhook signing** — `DELYVA_WEBHOOK_SECRET` env var currently unset; webhook handler accepts unsigned POSTs because Delyva UI has no HMAC field to configure. No action required now; set env var and flip to strict verification once Delyva exposes signing in their merchant console.
+- **Delyva courier provisioning** — POSMY + 4 other couriers (see `project_delyva_couriers.md`) pending merchant-side activation. 7 live, 5 still missing. Contact Delyva support to enable before launch if those carriers are required for Malaysia coverage.

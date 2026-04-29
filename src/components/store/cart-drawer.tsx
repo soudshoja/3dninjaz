@@ -13,7 +13,7 @@ import {
   DrawerFooter,
   DrawerClose,
 } from "@/components/ui/drawer";
-import { useCartStore } from "@/stores/cart-store";
+import { useCartStore, isConfigurableCartItem } from "@/stores/cart-store";
 import { hydrateCartItems, type HydratedCartItem } from "@/actions/cart";
 import { formatMYR } from "@/lib/format";
 import { BRAND } from "@/lib/brand";
@@ -46,14 +46,18 @@ export function CartDrawer() {
     }
     let cancelled = false;
     setLoading(true);
-    hydrateCartItems(storeItems.map((i) => ({ variantId: i.variantId, quantity: i.quantity })))
+    hydrateCartItems(storeItems)
       .then((items) => {
         if (cancelled) return;
         setHydrated(items);
-        // Drop store items whose variants were deleted/inactive
-        const liveIds = new Set(items.map((i) => i.variantId));
+        // Drop store items whose variants/products were deleted/inactive.
+        // Stocked lines key on variantId; configurable lines key on productId.
+        const liveKeys = new Set(
+          items.map((i) => (i.productType === "configurable" || i.productType === "keychain" || i.productType === "vending" ? i.productId : i.variantId))
+        );
         for (const si of storeItems) {
-          if (!liveIds.has(si.variantId)) removeItem(si.key);
+          const lookupKey = isConfigurableCartItem(si) ? si.productId : si.variantId;
+          if (!liveKeys.has(lookupKey)) removeItem(si.key);
         }
       })
       .catch(() => { /* silent — stale display is acceptable */ })
@@ -113,7 +117,7 @@ export function CartDrawer() {
             <div className="py-10 text-center text-sm text-zinc-500">Loading…</div>
           ) : (
             hydrated.map((i) => (
-              <CartLineRow key={i.variantId} item={i} variant="compact" />
+              <CartLineRow key={i.storeKey ?? i.variantId} item={i} variant="compact" />
             ))
           )}
         </div>

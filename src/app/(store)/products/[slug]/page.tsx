@@ -11,6 +11,8 @@ import { ProductReviews } from "@/components/store/product-reviews";
 import { pickImage } from "@/lib/image-manifest";
 // Phase 16 — generic variant hydration
 import { hydrateProductVariants } from "@/lib/variants";
+// Phase 19 (19-06) — configurable product hydration
+import { getConfigurableProductData } from "@/lib/configurable-product-data";
 
 type Params = Promise<{ slug: string }>;
 
@@ -44,6 +46,12 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
     hydrateProductVariants(product.id),
   ]);
 
+  // Phase 19 (19-06) — fetch configurable-product data when productType is configurable-like
+  const configurableData =
+    (product.productType === "configurable" || product.productType === "keychain" || product.productType === "vending")
+      ? await getConfigurableProductData(product.id)
+      : undefined;
+
   // Phase 17 — resolve per-variant PictureData server-side so the client gallery
   // can swap to the variant image using the full srcset pipeline (AD-02).
   const variantPictureEntries = await Promise.all(
@@ -64,6 +72,8 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
           slug: product.slug,
           description: product.description,
           images: product.images,
+          // Phase 19 (19-10) — captions parallel to images[] for configurable PDP figcaption
+          imageCaptions: product.imagesV2.map((e) => e.caption ?? null),
           materialType: product.materialType,
           estimatedProductionDays: product.estimatedProductionDays,
           category: product.category
@@ -72,12 +82,15 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
           // Phase 16 — generic options + hydrated variants for VariantSelector
           options,
           hydratedVariants,
+          // Phase 19 (19-06) — product type discriminator
+          productType: product.productType,
         }}
         isWishlistedInitial={wished}
         ratingAvg={reviewsSummary.avgRating}
         ratingCount={reviewsSummary.totalApproved}
         pictures={pictures}
         variantPictures={variantPictures}
+        configurableData={configurableData}
       />
       <div className="max-w-6xl mx-auto px-6 pb-16 -mt-6">
         <ProductReviews productId={product.id} />

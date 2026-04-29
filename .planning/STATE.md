@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: pre-launch
-stopped_at: "Phase 17 complete. Variant system upgraded with sale/image/bulk/default + reactivity contract; legacy size/dimensions code purged. Run scripts/phase17-migrate.cjs on live DB. Next: admin go-live checklist (GO-LIVE-READINESS.md)."
-last_updated: "2026-04-22T00:00:00.000Z"
-last_activity: 2026-04-22 -- Phase 17 (Variant Enhancements + Legacy Cleanup) complete. 5/5 plans shipped. TypeScript clean. COMPLETION.md written.
+status: executing
+stopped_at: Phase 19 COMPLETE + post-shipment upload hotfix sweep — 27 commits on dev (head c118ae6). 50 MB caps, HEIC support, XHR progress UI, manifest-redirect route handler. WhatsApp alerting LIVE via Resayil + 1-min cron on prod log.
+last_updated: "2026-04-29T09:15:00.000Z"
+last_activity: 2026-04-29
 progress:
-  total_phases: 17
-  completed_phases: 17
-  total_plans: 51
-  completed_plans: 51
-  percent: 100
+  total_phases: 20
+  completed_phases: 9
+  total_plans: 84
+  completed_plans: 64
+  percent: 76
 ---
 
 # Project State
@@ -21,9 +21,10 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-12)
 
 **Core value:** Customers can easily browse and buy unique 3D printed products with a simple, clean shopping experience.
-**Current focus:** All 15 phases complete. Session 2026-04-20/21 shipped: Delyva courier integration (phases 08), theme lightening + UX polish (09), cost/profit tracking (10), site settings + social fields (11), 12 email templates + newsletter subscribers (12), per-variant inventory track_stock (13), cost breakdown with store defaults (14), customer + admin shipment tracking (15). PayPal live. Better Auth trustedOrigins fixed. 52 commits total this session. App live at https://app.3dninjaz.com/ (subdomain root, no basePath).
+**Current focus:** Phase 18 — Colour Management
 
 **Session 2026-04-21 closeout:**
+
 - All 52 session commits deployed + verified live
 - Master + dev branches synced
 - Delyva service catalog fix deployed (admin clicks Refresh → populates ~100 services from Grab/Pos Laju/GDEx/J&T/City-Link)
@@ -40,10 +41,11 @@ See: .planning/PROJECT.md (updated 2026-04-12)
 
 ## Current Position
 
-Phase: 17 (Variant Enhancements + Legacy Cleanup) — COMPLETE
-Next Phase: GO-LIVE — admin must complete checklist items in GO-LIVE-READINESS.md
-Status: All code complete. Pre-launch admin actions remain.
-Last activity: 2026-04-22 -- Phase 17 complete; 5/5 plans shipped; legacy code purged
+Phase: 19 (Made-to-Order Product Type) — COMPLETE + post-shipment hotfix sweep
+Plans: 11/11 shipped + 5 hotfix commits applied (e5b55bd → c118ae6) addressing pre-existing Phase 7 upload bug, 50MB cap lift, XHR progress UI, server log monitor
+Next Phase: 20 (User & Role Management) — backlog, awaiting /gsd-spec-phase 20
+Status: c118ae6 on dev. CI auto-deploying. Server-side log monitor LIVE (1-min cron WhatsApp alerts to +96599800027). Awaiting human smoke on app.3dninjaz.com
+Last activity: 2026-04-27
 
 Progress: [██████████] 100% (code) | Pre-launch admin actions pending
 
@@ -78,6 +80,12 @@ Progress: [██████████] 100% (code) | Pre-launch admin action
 - Trend: Phase 5 Admin Extensions complete in single executor session running in parallel with Phase 6. All ADM-07..ADM-15, PROMO-01/02, INV-01/02, REV-01, SHIP-01, SETTINGS-01, REPORT-01 requirements closed.
 
 *Updated after each plan completion*
+| Phase 18 P02 | 10 | 1 tasks | 1 files |
+| Phase 18 P03 | 50 | 6 tasks | 9 files |
+| Phase 18 P04 | 10 | 4 tasks | 3 files |
+| Phase 18 P06 | 5 | 4 tasks | 4 files |
+| Phase 18 P07 | 2 | 2 tasks | 1 files |
+| Phase 18 P08 | 5 | 4 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -142,6 +150,14 @@ Recent decisions affecting current work:
 - 2026-04-22 (Phase 17 AD-07): Legacy cleanup findings (L-01..L-19) executed as atomic commits. Each finding = one commit. ~11 commits landed in 17-04.
 - 2026-04-22 (Phase 17 AD-08): Per-variant shipping weight — `weight_g INT NULL` on `product_variants`. Delyva quote resolution ladder: `variant.weight_g ?? product.shippingWeightKg × 1000 ?? defaultWeightKg` (0.5 kg). `console.warn` emitted on final fallback citing variantId + productId. `CartItemForQuote.variantId` made mandatory; all callers updated.
 
+- 2026-04-26 (Phase 18 Plan 01): Schema foundation shipped. `colors` table (11 cols, InnoDB latin1 to match `product_option_values` charset) + `product_option_values.color_id VARCHAR(36) NULL` FK with `ON DELETE RESTRICT`. Live DDL applied via SSH-tunneled mysql client (cPanel Remote MySQL whitelist had rotated off the local dev IP); migration script proven idempotent end-to-end on the cPanel host (Node 20 + mysql2). Drizzle schema byte-aligned to `SHOW CREATE TABLE`. Helpers shipped: `slugifyColourBase` + `buildColourSlugMap` (D-14 cross-brand collision suffix), `getColourPublic` / `getColourAdmin` (REQ-7 — codes/family/previous_hex never customer-facing), `getReadableTextOn` (WCAG 2.2 SC 1.4.11 luminance), `colourSchema` Zod validator. Wave 2 (`18-02-PLAN.md` seed script) unblocked.
+- [Phase ?]: 2026-04-26 (Phase 18 Plan 02): HTML colour seed parser shipped. scripts/seed-colours.ts uses regex+Function-eval (D-01) anchored on 'const order =' to extract data block; section-key → (familyType, familySubtype) lookup tables for both brands; idempotent natural-key upsert. First run inserted 351 rows (95 Bambu + 256 Polymaker); second run reports 0 inserts / 0 updates. Polymaker dual (21 rows) + gradient (10 rows) skipped at seed time per RESEARCH P-3. Em-dash code normalised to NULL per P-4. Local IP whitelist re-applied via root SSH + uapi --user=ninjaz Mysql add_host (same wall as Plan 18-01).
+- 2026-04-26 (Phase 18 Plan 03): /admin/colours CRUD module shipped. 6 server actions in src/actions/admin-colours.ts (list/get/create/update/archive/reactivate), each starting with `await requireAdmin()` first await per CVE-2025-29927. 3 RSC route files (list/new/[id]/edit). ColourForm client component with 8 fields + native `<input type="color">` swatch picker bidirectionally synced with hex text input + live URL slug preview via slugifyColourBase. ColourRowActions Base UI dropdown — DropdownMenuLabel wrapped in DropdownMenuGroup per CLAUDE.md commit 51a90c9 (Base UI 1.3 quirk). + New colour CTA uses BRAND.ink (UI-SPEC override; coupons uses BRAND.green). Sidebar nav entry below Coupons. Hard-delete + cascade-rename deferred to Plan 18-04. Rule 1 deviation: extracted pure slug helpers into src/lib/colour-slug.ts so client-side colour-form.tsx imports don't pull mysql2/Drizzle/node:* APIs into the browser bundle through @/lib/colours; back-compat re-export keeps Plan 18-01 server-side callers working unchanged.
+- [Phase ?]: 2026-04-26 (Phase 18 Plan 04): deleteColour + renameColour + IN_USE guard shipped. MutateResult discriminated union extends with IN_USE branch. getProductsUsingColour uses 3-query manual hydration (pov→option→product) per MariaDB no-LATERAL rule. renameColour wraps cascade in db.transaction with diff-aware WHERE (D-11 manual-wins): UPDATE pov SET value=:new, swatch_hex=:new WHERE color_id=:id AND value=:pre.name. 1000-row D-12 guardrail returns error before transaction starts. labelCache nulled across all 6 positional option slots in parallel inside transaction (mirror renameOptionValue at variants.ts:288-294). FK violation race-condition catch re-runs guard and re-surfaces IN_USE. colour-row-actions.tsx Delete dropdown opens two-step modal that swaps to IN_USE error mode showing affected products with /admin/products/:id/edit Open links + Archive-instead recovery CTA. colour-form.tsx edit submit calls renameColour FIRST when name/hex changed (cascade-safe), then updateColour for non-cascade metadata.
+- 2026-04-26 (Phase 18 Plan 06): variant-editor.tsx integration shipped. Module-scoped isColourOption helper (case-insensitive `name === "color" || === "colour"`) gates 4 sites: input placeholder relabel ("Add custom (not in library)..."), section header caption ("Custom (not in library)"), Pick from library button (with lucide:Palette icon), helper-text paragraph below the row. ColourPickerDialog mounts as a sibling to the existing delete-option/delete-value dialogs at the JSX bottom; pickerOptionId state (string | null) supports multiple Colour-named options on the same product without ambiguity. alreadyAttachedColourIds computed inline at mount via options.find().values.map(v => v.colorId).filter(Boolean) into Set<string>. onConfirmed wired to `await refresh()` — Phase 17 AD-06 Pattern B refetch contract preserved (no router.refresh() anywhere). HydratedOptionValue.colorId field added (was missing from public type even though Plan 18-01 schema had the column); both hydration mappers (variants.ts, catalog.ts) updated to surface it. REQ-6 6-axis cap verified by inspection: addProductOption guard at existing.length >= 6 is name-agnostic; picker dialog has zero references to addProductOption. Stale Plan 18-04 reference on /admin/colours/[id]/edit page intro updated to current cascade-rename behaviour.
+- 2026-04-26 (Phase 18 Plan 08): /shop sidebar Colour chip filter shipped. Two new manual-hydration helpers in src/lib/catalog.ts: `getActiveProductColourChips()` (4-step DISTINCT JOIN — fetch active colours → fetch pov rows with non-null colorId → six parallel slot queries with `innerJoin(products)` + `eq(products.isActive, true)` + `eq(productVariants.inStock, true)` guards → project to {slug, name, hex} via `buildColourSlugMap` for D-14 cross-brand collision suffix) and `getProductIdsByColourSlugs(slugs)` (mirror shape returning Set<productId>). Both strip code/previous_hex/family_* at the SELECT clause boundary; only id/name/hex/brand ever leave the DB. New `src/components/store/colour-filter-section.tsx` client component — collapsible accordion (default open via useState(true)), first 12 chips visible with Show all (N) / Show less toggle, hex-tinted active state with `getReadableTextOn(hex)` for WCAG 2.2 SC 1.4.11 contrast, active count badge (16x16 ink-fill circle) beside accordion title, focus-visible 2px purple outline + 2px offset, min-h 36px desktop sidebar density, hide-when-empty via `chips.length === 0` early return null. URL grammar `?colour=galaxy-black,jade-white` — multi-select via `URLSearchParams` (preserves `?category=`/`?subcategory=`, sorts alphabetically for deterministic href). /shop `page.tsx` extended: SearchParams adds `colour?: string`; `resolveProducts` refactored from return-per-branch to assign-to-`base` so colour intersection runs uniformly after the existing 3-branch switch — `getProductIdsByColourSlugs(colourSlugs)` returns allowedIds Set, then `base.products.filter(p => allowedIds.has(p.id))`. ColourFilterSection mounted twice: inside `<aside className="hidden md:block">` AND inside `<div className="md:hidden">` above the grid for mobile parity. Customer-side admin-field audit grep clean: 0 matches for `previous_hex`, `family_type`, `family_subtype` anywhere in `src/app/(store)/` or `src/components/store/`. Manual-hydration discipline preserved: 0 new `db.query.X.findMany({with})` introduced; 2 new `innerJoin(products)` blocks (one per helper). `npx tsc --noEmit` clean. `npm run build` skipped per plan-level constraint (pre-existing CSS issue unrelated to this plan). 3 atomic commits (9f3a21f catalog helpers + 0208806 component + ad2c714 page wiring).
+- 2026-04-26 (Phase 18 Plan 07): PDP swatch grid refactor shipped. variant-selector.tsx `{isColorOption ? (...)}` branch (formerly lines 201-267) now uses a vertical-flex wrapper (`flex flex-col items-center gap-1`, fixed `width: 80px`) holding the existing 48x48 button (with the 32x32 hex circle child) on top and a sibling `<span>` below as the always-visible 12px Chakra_Petch name caption. Caption typography per UI-SPEC §Surface 4: `var(--font-body)` 12px, weight 500 default / 700 + `var(--color-brand-ink)` selected, line-through + `#A1A1AA` OOS, `max-w-[80px] truncate` so long names ellipsis-truncate without breaking layout. Outer container gap tightened from `gap-2` (8px) to `gap-3` (12px) to compensate for the extra caption row height. Caption is `aria-hidden` because the button's `aria-label` already names the colour for AT (avoids double-announcement). Phase 17 contracts preserved verbatim: hover-image-preview (`onMouseEnter`/`Leave` + `findPreviewVariant` + `hoverCapable` matchMedia gate), OOS hardening (disabled + aria-disabled + tabIndex=-1 + title="Out of stock" + diagonal-line gradient overlay), Phase 17 AD-06 reactivity contract (zero mutations on PDP, so contract preserved by inaction). Pill render branch for non-Colour options (Size, Material, Part, etc.) untouched. Customer-side audit grep on `src/app/(store)/` + `src/components/store/` returns zero matches for `previous_hex`, `previousHex`, `family_type`, `familyType`, `family_subtype`, `familySubtype`, `colors.code`, `color.code`, `colour.code` — REQ-7 admin-only field hygiene verified. Plan 18-01 public/admin query split (`getColourPublic` vs `getColourAdmin`) holds end-to-end. `npx tsc --noEmit` clean. Plan-level constraint applied: skipped `npm run build` due to pre-existing CSS issue.
+
 ### Pending Todos
 
 - **Launch (human-gated)** — see `.planning/GO-LIVE-READINESS.md` for the full checklist. Top blockers:
@@ -170,6 +186,12 @@ Recent decisions affecting current work:
 - **PayPal Reporting API NOT_AUTHORIZED (Q-07-08):** Phase 7 nightly recon cron is installed but first run errored with NOT_AUTHORIZED. Admin must contact PayPal support to enable the Reporting feature on the live merchant account. Until then, recon_runs.status='error' on every run; drift detection is paused but admin sees the error on /admin/recon.
 - **Sharp deploy footprint:** sharp native binaries add ~80MB to node_modules but are required for the Phase 7 image pipeline. Install was clean on cPanel CloudLinux Node 20 — no fallback needed.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260429-nuu | Fix stale RSC cache in configurator — revalidatePath PDP on color/option field changes | 2026-04-29 | 2056a11 | [260429-nuu-fix-stale-rsc-cache-in-configurator-reva](./quick/260429-nuu-fix-stale-rsc-cache-in-configurator-reva/) |
+
 ### Roadmap Evolution
 
 - 2026-04-24: Phase 16 added — Product Variant System (Generic Options). Replaces rigid `productVariants.size` enum with generic options/values/variants model. Supports size+color AND parts-based products. Plans not yet created.
@@ -177,6 +199,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-21T00:00:00.000Z (session ran 2026-04-20 → 2026-04-21)
-Stopped at: Phases 08-15 complete. 55 commits. Delyva shipping, theme polish, cost/profit, social settings, 12 email templates + newsletter, inventory track_stock, cost breakdown with store defaults, customer + admin tracking all live. PayPal live. Better Auth trustedOrigins fixed. GO-LIVE-READINESS.md written.
-Resume file: `.planning/GO-LIVE-READINESS.md` — admin must complete checklist before flipping the domain. Contact PayPal support for Reporting API (Q-07-08).
+Last session: 2026-04-27T02:28:31.739Z
+Stopped at: Phase 19 Wave 1 complete (19-01 + 19-02) — 4 commits; Waves 2-5 unblocked
+Resume file: None

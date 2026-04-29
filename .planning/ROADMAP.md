@@ -21,6 +21,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 7: Manual Orders + Image Pipeline + Custom Errors** - Admin creates one-off custom orders with PayPal payment-link generator, automatic image compression on every upload (WebP/AVIF, size + quality tiers), branded 404/500/maintenance pages
 - [x] **Phase 16: Product Variant System (Generic Options)** - Replace fixed size/color with admin-defined option/value/variant model (cartesian combos, per-variant price/stock/image/SKU). Supports size+color products AND parts-based products in one system.
 - [x] **Phase 17: Variant Enhancements + Legacy Cleanup** - Sale price, variant image upload + PDP swap, bulk edit, OOS hardening, default pre-selection, reactivity contract, pre-variant-era code purged
+- [ ] **Phase 18: Colour Management** - Admin colour library (seeded from Bambu/Polymaker HTML files, reusable across products), per-product enable/disable toggle, colour joins variant system as additional axis when enabled, PDP swatch grid (name + hex)
+- [x] **Phase 19: Made-to-Order Product Type** - New `productType` (stocked vs made-to-order) chosen at product creation. Made-to-order = print-on-demand: configurator inputs (text/number/colour/select fields with admin-curated colour subsets), tier-table pricing (fixed price per letter count, lookup not multiplication), no per-row stock, unlimited captioned images with Sharp WebP/AVIF, generic SVG live preview swapping with display image. Variant flow UNTOUCHED — existing products auto-migrate to `productType='stocked'`.
+- [ ] **Phase 20: User & Role Management** - Admin can create users and define roles; each system feature is enable/disable per role (RBAC matrix). Replaces the current single-admin model.
 
 ## Phase Details
 
@@ -257,6 +260,65 @@ Plans:
 - [x] 17-04-PLAN.md — Legacy cleanup — one atomic commit per finding (SizeSelector/SizeGuide deletion, legacyAddToCart, S|M|L purge, admin-guide rewrite, CSV price_s/m/l removal) (Wave 2)
 - [x] 17-05-PLAN.md — E2E PayPal sandbox smoke test + COMPLETION.md + ROADMAP + STATE update (Wave 3)
 
+### Phase 18: Colour Management
+**Goal**: Admin manages a central, reusable colour library (seeded once from Bambu + Polymaker HTML files) and picks per-product subsets via a picker modal in the variant editor. Colour joins the variant system as a normal axis (1 of 6). PDP renders swatches with name always visible (no hover); /shop offers a multi-select sidebar chip filter URL-synced to ?colour= and intersecting the existing category filter. Codes/family/previous_hex stay admin-only.
+**Depends on**: Phase 16, Phase 17
+**Requirements**: REQ-1 (colors table schema), REQ-2 (HTML seed script), REQ-3 (admin /admin/colours CRUD), REQ-4 (in-use deletion guard + soft-archive), REQ-5 (per-product picker integration with custom one-off fallback), REQ-6 (Colour counts as 1 of 6 axes), REQ-7 (PDP swatch grid with always-visible name + codes hidden), REQ-8 (/shop sidebar chip filter — multi-select, URL-synced, intersects category filter)
+**Success Criteria** (what must be TRUE):
+  1. `colors` table migrated on MariaDB 10.11; Drizzle schema matches `SHOW CREATE TABLE` byte-for-byte
+  2. `tsx scripts/seed-colours.ts` parses both HTML files idempotently (~145 rows; second run = 0 inserts / 0 updates)
+  3. Admin manages the library at /admin/colours (list, create, edit, soft-archive, hard-delete with IN_USE guard)
+  4. In-use deletion returns `{ok:false, code:"IN_USE", products:[...]}`; soft-archive always allowed
+  5. Variant editor shows "Pick from library" button on Colour-named options; picker confirms snapshot name+hex+colorId into pov rows; freeform "Custom (not in library)" path preserved
+  6. PDP swatch grid renders 32px hex circle + 12px always-visible name caption (no hover, no codes leaked); selection still updates price/stock/image per Phase 17 reactivity
+  7. /shop sidebar shows Colour accordion (default open, first 12 chips, Show all expands) with hex-tinted active state; URL syncs ?colour=galaxy-black,jade-white; intersects category filter
+  8. Cascade rename is diff-aware (manual product-level edits preserved) and runs in a single db.transaction
+**Plans**: 9 plans
+
+Plans:
+- [x] 18-01-PLAN.md — Schema (colors table + product_option_values.color_id FK) + helpers (colours.ts + colour-contrast.ts) + Zod + [BLOCKING] raw-SQL DDL applicator (Wave 1)
+- [x] 18-02-PLAN.md — HTML parser + idempotent seed script (Bambu + Polymaker → ~145 rows; em-dash codes → NULL; dual/gradient skipped) (Wave 1)
+- [x] 18-03-PLAN.md — Admin /admin/colours CRUD module — list page + new/edit forms + 6 server actions (list/get/create/update/archive/reactivate) + sidebar nav (Wave 2)
+- [x] 18-04-PLAN.md — In-use deletion guard (IN_USE error UI with product links + Archive instead CTA) + diff-aware cascade rename in db.transaction with 1000-row guard (Wave 2)
+- [x] 18-05-PLAN.md — ColourPickerDialog component (shadcn Dialog, 720px, client-side filter, multi-select stage, batch confirm) + getActiveColoursForPicker + attachLibraryColours server actions (Wave 3)
+- [x] 18-06-PLAN.md — variant-editor.tsx integration: mount picker on Colour-named options, custom-fallback relabel "Custom (not in library)", Pattern B refetch on confirm (Wave 3)
+- [x] 18-07-PLAN.md — PDP variant-selector refactor: always-visible name caption (32px circle + 12px caption, weight 500/700, OOS line-through); pill rendering for non-Colour options untouched (Wave 4)
+- [x] 18-08-PLAN.md — /shop sidebar Colour chip filter (accordion + hex-tinted active state) + getActiveProductColourChips + getProductIdsByColourSlugs (manual hydration, no LATERAL); URL grammar ?colour=slug,slug (Wave 4)
+- [x] 18-09-PLAN.md — Admin guide article (src/content/admin-guide/products/colours.md) + full CI battery (tsc + lint + build) + 24-step manual smoke checklist for verifier (Wave 4)
+
+### Phase 19: Made-to-Order Product Type
+**Goal**: Add a second `productType` ('configurable' / made-to-order) alongside the existing variant-based 'stocked' products. Admin picks type at product creation; type determines editor (variant matrix vs configurator builder). Made-to-order products use customer-fillable inputs (text/number/colour/select fields), per-field admin-curated colour subsets from the library, and a tier-table price lookup (fixed price per unit count). No per-row stock — `isActive` only. PDP swaps the admin display image with a live SVG preview the moment customer types/picks. Cart dedupes by config JSON hash. Existing products auto-migrate to `productType='stocked'`; variant code path is UNTOUCHED.
+**Depends on**: Phase 16 (variants), Phase 18 (colour library)
+**Requirements**: REQ-1 (productType discriminator + migration), REQ-2 (product_config_fields table for text/number/colour/select inputs with constraints), REQ-3 (admin product-type radio + configurator builder UI), REQ-4 (per-field admin-curated colour allowlist), REQ-5 (price tier table editor with admin-set max unit count), REQ-6 (image gallery: no limit + admin caption + Sharp WebP/AVIF + multi-resolution srcset), REQ-7 (PDP configurator form with live SVG preview that swaps on first interaction + tier-lookup price meter), REQ-8 (cart line carries configurationData JSON; dedupe by JSON-hash, qty-bump same / new line different), REQ-9 (variant editor + stocked products UNTOUCHED — verify by full smoke of an existing T-shirt product)
+**Success Criteria** (what must be TRUE):
+  1. `products.productType` column exists with ENUM('stocked','configurable') DEFAULT 'stocked'; migration sets all existing rows to 'stocked'
+  2. `product_config_fields` table created and Drizzle schema matches `SHOW CREATE TABLE` byte-for-byte
+  3. Admin "New Product" presents a Stocked vs Made-to-Order radio at the top — first decision before name/description
+  4. Made-to-order product edit page hides "Manage Variants" and shows "Manage Configurator" instead
+  5. Configurator builder allows adding/reordering/editing/deleting fields of all 4 types; colour fields persist an `allowedColorIds` array
+  6. Pricing tier table editor: admin sets max unit count + fixed MYR per row from 1..max
+  7. Customer types name → tier lookup returns price → "Add to bag" enabled with computed price
+  8. PDP gallery default = admin's primary display image; first text input or colour pick auto-swaps hero to live preview; thumbnail "Yours" / "Display" toggle works
+  9. Image upload accepts unlimited count, stores admin caption + alt text, generates WebP/AVIF + ≥3 resolution variants via Sharp
+  10. Cart line carries configurationData JSON; identical JSON on re-add bumps qty; different JSON creates new line
+  11. Order detail (admin + customer), invoice PDF, and order email all render the configuration summary
+  12. Backwards compat smoke: pick any existing stocked product (e.g., a T-shirt with variants) → variant editor opens unchanged → PDP renders unchanged → cart/checkout flow unchanged
+  13. Seed product "Custom Name Keychain" exists with: text field "Your name" (max 8 A-Z), 2 colour fields (Base+chain merged + Letters), 8-tier price table (1=7, 2=9, 3=12, 4=15, 5=18, 6=22, 7=26, 8=30 MYR)
+**Plans**: 11 plans
+
+Plans:
+- [x] 19-01-PLAN.md — Schema foundation: productType + product_config_fields + tier pricing cols + order_items.configurationData (Wave 1)
+- [x] 19-02-PLAN.md — Helper library: ensureConfigJson + ensureTiers + ensureImagesV2 + lookupTierPrice + Zod schemas per fieldType (Wave 1)
+- [x] 19-03-PLAN.md — Product-type radio + flip-block guard + product-form integration (Wave 2)
+- [x] 19-04-PLAN.md — Configurator builder page + 4 field-type modal + colour-picker select-multiple mode + 5 server actions (Wave 2)
+- [x] 19-05-PLAN.md — Pricing tier table editor + saveTierTable + reduce-max confirmation (Wave 2)
+- [x] 19-06-PLAN.md — PDP configurable branch + ConfiguratorForm + KeychainPreview + ConfigurableImageGallery (Wave 3)
+- [x] 19-07-PLAN.md — /shop + listing rendering for configurable products (From MYR X) (Wave 3)
+- [x] 19-08-PLAN.md — Cart configurationData payload + hash-based dedupe + cart drawer/bag rendering (Wave 4)
+- [x] 19-09-PLAN.md — Order capture snapshot + admin/customer order detail + invoice PDF + order email render summary (Wave 4)
+- [x] 19-10-PLAN.md — Sharp WebP/AVIF + 6-width srcset + admin caption per image (Wave 5)
+- [x] 19-11-PLAN.md — Seed Custom Name Keychain + admin guide article + 24-step verifier checklist (Wave 5; profanity seed deferred — no storage table yet)
+
 ## Progress
 
 **Execution Order:**
@@ -281,3 +343,7 @@ Phases execute in numeric order: 1 → 2 → ... → 15
 | 15. Customer + Admin Shipment Tracking | — | Complete | 2026-04-20 |
 | 16. Product Variant System (Generic Options) | 7/7 | Complete | 2026-04-22 |
 | 17. Variant Enhancements + Legacy Cleanup | 5/5 | Complete | 2026-04-22 |
+| 18. Colour Management | 9/9 | Verifying | — |
+| 19. Made-to-Order Product Type | 11/11 | Complete (smoke pending) | 2026-04-27 |
+| 20. User & Role Management | 0/0 | Backlog | — |
+| 20. User & Role Management | 0/0 | Backlog | — |

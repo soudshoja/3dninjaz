@@ -55,10 +55,14 @@ export function PayPalButton({
     }
     const res = await createPayPalOrder({
       address: addressRef.current,
-      // ONLY variantId + quantity cross the trust boundary (D3-07)
+      // variantId + quantity for stocked; also configurationData for
+      // configurable lines (price was server-derived at add-to-bag time).
       items: itemsRef.current.map((i) => ({
         variantId: i.variantId,
         quantity: i.quantity,
+        ...(i.configurationData
+          ? { configurationData: i.configurationData, productId: i.productId }
+          : {}),
       })),
       // Plan 05-03: optional coupon code; server re-validates + recomputes
       // discount; client-supplied amount is never trusted (T-05-03-tampering)

@@ -60,9 +60,7 @@ export function CheckoutIsland({
       setHydratedItems([]);
       return;
     }
-    hydrateCartItems(
-      storeItems.map((i) => ({ variantId: i.variantId, quantity: i.quantity })),
-    )
+    hydrateCartItems(storeItems)
       .then(setHydratedItems)
       .catch(() => {});
   }, [hydrated, storeItems.length]);

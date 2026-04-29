@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex,nofollow" />
+<title>Configurable Product Type — Demo</title>
+<style>
+  :root{
+    --green:#03C03C; --green-d:#018A29;
+    --blue:#0080ff;  --blue-d:#0061C2;
+    --purple:#8A00C2; --purple-d:#62008C;
+    --ink:#0B1020;   --cream:#F7FAF4;
+    --line:#E2E8F0;  --muted:#64748B; --soft:#f8fafc;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+       color:var(--ink);background:var(--cream);line-height:1.45}
+  .wrap{max-width:1100px;margin:0 auto;padding:32px 16px 80px}
+  h1{font-size:30px;margin:0 0 6px;font-weight:800;letter-spacing:-.02em}
+  h2{font-size:22px;margin:0 0 8px;font-weight:800}
+  h3{font-size:13px;margin:0 0 6px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .lead{color:var(--muted);font-size:15px;max-width:760px;margin:0 0 20px}
+  .card{background:#fff;border-radius:18px;padding:24px;border:1px solid var(--line);
+        box-shadow:0 1px 0 rgba(11,16,32,.04);margin-bottom:20px}
+  .small{font-size:12px;color:var(--muted)}
+  .pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;
+        text-transform:uppercase;letter-spacing:.06em}
+  .pill-green{background:#dff8e3;color:var(--green-d)}
+  .pill-blue{background:#dbeeff;color:var(--blue-d)}
+  .pill-purple{background:#f1d9fc;color:var(--purple-d)}
+  .pill-ink{background:#e2e8f0;color:var(--ink)}
+
+  /* ---------- ADMIN: product-type radio ---------- */
+  .typebar{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+  .typecard{flex:1 1 240px;border:2px solid var(--line);border-radius:14px;padding:14px;cursor:pointer;
+            background:#fff;transition:all .12s;min-width:240px}
+  .typecard:hover{border-color:#94a3b8}
+  .typecard.active{border-color:var(--ink);background:#fafbff;box-shadow:0 0 0 4px rgba(11,16,32,.06)}
+  .typecard h4{margin:0 0 4px;font-size:15px;font-weight:800}
+  .typecard p{margin:0;color:var(--muted);font-size:13px}
+  .typecard .pill{margin-bottom:6px}
+  .typecard .check{float:right;width:22px;height:22px;border:2px solid var(--line);border-radius:999px;
+                   display:flex;align-items:center;justify-content:center;font-weight:800;color:transparent}
+  .typecard.active .check{border-color:var(--ink);background:var(--ink);color:#fff}
+
+  /* ---------- ADMIN: configurator builder ---------- */
+  .field{border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px;background:#fff;
+         display:grid;grid-template-columns:36px 1fr auto;gap:14px;align-items:center}
+  .field .drag{color:#cbd5e1;cursor:grab;font-size:22px;text-align:center;user-select:none}
+  .field .meta{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .field .meta .top{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .field .meta .label{font-weight:700;font-size:14px;color:var(--ink)}
+  .field .meta .desc{color:var(--muted);font-size:12px}
+  .field .icons{display:flex;gap:4px}
+  .icobtn{width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer;
+          color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:14px}
+  .icobtn:hover{background:#f1f5f9;color:var(--ink)}
+  .icobtn.danger:hover{color:#be123c;border-color:#fecaca}
+  .add-field{margin-top:6px;display:flex;gap:8px;flex-wrap:wrap}
+  .add-field button{padding:10px 14px;border-radius:10px;border:1px dashed var(--line);background:#fff;
+                    color:var(--ink);cursor:pointer;font-weight:600;font-size:13px;display:inline-flex;
+                    align-items:center;gap:6px}
+  .add-field button:hover{border-color:var(--ink);background:#f8fafc}
+  .price-strip{margin-top:18px;padding:14px 16px;border-radius:12px;background:var(--ink);color:#fff;
+               display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between}
+  .price-strip input{padding:6px 10px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#fff;
+                     font-weight:600;width:80px;font-size:13px}
+  .price-strip .sumcalc{font-weight:700}
+
+  /* ---------- CUSTOMER PDP ---------- */
+  .pdp{display:grid;grid-template-columns:1fr;gap:20px}
+  @media(min-width:760px){.pdp{grid-template-columns:1.05fr 1fr}}
+  .hero{aspect-ratio:1/1;border-radius:16px;border:1px solid var(--line);
+        background:linear-gradient(135deg,#f1f5f9 0,#e2e8f0 100%);
+        display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+  .keychain-preview{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center}
+  .ring{width:36px;height:36px;border-radius:999px;border:6px solid #94a3b8;background:transparent;flex:0 0 auto}
+  .charcap{width:54px;height:54px;border-radius:14px;display:flex;align-items:center;justify-content:center;
+           font-weight:800;font-size:24px;box-shadow:0 6px 14px rgba(11,16,32,.18);
+           border:1px solid rgba(0,0,0,.08);position:relative;flex:0 0 auto}
+  .charcap:before{content:"";position:absolute;top:6px;left:6px;right:6px;height:14px;border-radius:8px;
+                  background:rgba(255,255,255,.18)}
+  .price-tag{font-size:32px;font-weight:800;letter-spacing:-.02em}
+  .price-meta{color:var(--muted);font-size:13px;margin-top:2px}
+  .axis-label{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);
+              font-weight:700;margin:14px 0 8px;display:flex;justify-content:space-between;align-items:baseline}
+  .axis-label .meta{font-weight:500;color:var(--muted);text-transform:none;letter-spacing:0;font-size:12px}
+  .text-input{width:100%;padding:14px 14px;border-radius:12px;border:2px solid var(--line);font-size:18px;
+              font-weight:700;letter-spacing:.06em;text-transform:uppercase;outline:none;background:#fff}
+  .text-input:focus{border-color:var(--ink)}
+  .charcount{margin-top:4px;font-size:12px;color:var(--muted);display:flex;justify-content:space-between}
+  .charcount.warn{color:#be123c}
+  .opts{display:flex;flex-wrap:wrap;gap:6px}
+  .opt{min-width:42px;height:42px;padding:0 12px;border-radius:10px;border:2px solid var(--line);
+       background:#fff;font-size:13px;font-weight:600;cursor:pointer;color:var(--ink);
+       display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .1s}
+  .opt:hover{border-color:#94a3b8}
+  .opt.selected{border-color:var(--ink);background:var(--ink);color:#fff}
+  .opt .sw{width:14px;height:14px;border-radius:999px;border:1px solid rgba(0,0,0,.15)}
+  .add{margin-top:18px;width:100%;background:var(--green);color:var(--ink);font-weight:800;font-size:16px;
+       padding:16px;border-radius:14px;border:none;cursor:pointer;letter-spacing:.01em}
+  .add:hover{background:var(--green-d);color:#fff}
+  .add:disabled{opacity:.4;cursor:not-allowed;background:#cbd5e1;color:var(--muted)}
+
+  /* ---------- CART ---------- */
+  .cart-row{display:grid;grid-template-columns:auto 1fr auto;gap:14px;padding:12px 0;border-top:1px solid var(--line);align-items:center}
+  .cart-row:first-of-type{border-top:none}
+  .cart-thumb{width:64px;height:64px;border-radius:10px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--muted);font-size:14px;flex:0 0 auto}
+  .cart-meta .name{font-weight:700;font-size:14px}
+  .cart-meta .config{color:var(--muted);font-size:12px;margin-top:2px}
+  .cart-meta .qty{display:inline-flex;align-items:center;gap:6px;margin-top:6px;border:1px solid var(--line);border-radius:8px;padding:2px 4px;font-size:12px}
+  .cart-meta .qty button{background:none;border:none;cursor:pointer;color:var(--muted);font-weight:800;width:18px;text-align:center}
+  .cart-price{font-weight:800;font-size:14px;text-align:right;white-space:nowrap}
+  .cart-total{display:flex;justify-content:space-between;font-weight:800;font-size:16px;margin-top:14px;padding-top:14px;border-top:2px solid var(--ink)}
+
+  /* ---------- decisions ---------- */
+  .grid2{display:grid;grid-template-columns:1fr;gap:10px}
+  @media(min-width:680px){.grid2{grid-template-columns:1fr 1fr}}
+  .decision{border:1px solid var(--line);border-radius:12px;padding:14px;background:#fff}
+  .decision h4{margin:0 0 4px;font-size:13px;font-weight:800}
+  .decision p{margin:0;color:var(--muted);font-size:12px}
+  .ok{color:var(--green-d);font-weight:700}
+  kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#f1f5f9;border:1px solid var(--line);
+      border-bottom-width:2px;border-radius:6px;padding:1px 6px;font-size:11px;color:var(--ink)}
+
+  .legend{margin-top:12px;font-size:12px;color:var(--muted)}
+  .badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;
+         background:#f1d9fc;color:var(--purple-d);margin-left:6px}
+
+  /* ---------- IMAGE GALLERY (admin) ---------- */
+  .img-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+  .img-tile{display:flex;flex-direction:column;gap:6px}
+  .img-tile.is-primary .img-thumb{box-shadow:0 0 0 3px var(--ink)}
+  .img-tile .img-label{font-size:12px;color:var(--muted);font-weight:600}
+  .img-thumb{aspect-ratio:1/1;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .mock-keychain{display:flex;gap:3px;align-items:center;justify-content:center;flex-wrap:wrap;padding:14px}
+  .mock-keychain.big{gap:6px;padding:24px}
+  .mock-ring{width:16px;height:16px;border-radius:999px;border:3px solid #94a3b8}
+  .mock-keychain.big .mock-ring{width:30px;height:30px;border-width:5px}
+  .mock-cap{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px}
+  .mock-keychain.big .mock-cap{width:46px;height:46px;border-radius:12px;font-size:22px;box-shadow:0 4px 10px rgba(0,0,0,.18)}
+  .mock-lifestyle{font-size:12px;color:var(--muted);font-weight:600;text-align:center}
+
+  /* ---------- THUMB STRIP (PDP) ---------- */
+  .thumbstrip{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .thumb{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px;
+         border:2px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;font-size:11px;font-weight:600;color:var(--ink);min-width:64px}
+  .thumb.active{border-color:var(--ink)}
+  .thumb-icon{width:46px;height:46px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;color:#fff;font-weight:800}
+  .hero-display, .hero-preview{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%}
+
+  /* ---------- ADMIN: caption input + curated colour row ---------- */
+  .caption-input{padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:12px;font-weight:500;
+                 width:100%;outline:none;background:#fff}
+  .caption-input:focus{border-color:var(--ink)}
+  .curated-row{display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap}
+  .curated-sw{width:18px;height:18px;border-radius:999px;border:1px solid rgba(0,0,0,.15);display:inline-block}
+  .curated-edit{margin-left:4px;padding:2px 8px;border-radius:6px;border:1px solid var(--line);background:#fff;
+                font-size:11px;font-weight:600;color:var(--muted);cursor:pointer}
+  .curated-edit:hover{color:var(--ink);border-color:var(--ink)}
+
+  /* ---------- ADMIN: pricing tier table ---------- */
+  .tier-controls{display:flex;gap:10px;align-items:center;margin:10px 0;flex-wrap:wrap}
+  .tier-max input{width:64px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;font-weight:700;text-align:center}
+  .tier-fill{padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:#fff;font-weight:600;font-size:12px;cursor:pointer;color:var(--muted)}
+  .tier-fill:hover{color:var(--ink);border-color:var(--ink)}
+  .tier-table{display:grid;grid-template-columns:1fr 1fr;gap:6px;max-width:480px}
+  @media(min-width:680px){.tier-table{grid-template-columns:repeat(4,1fr)}}
+  .tier-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;
+            padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:13px}
+  .tier-row.tier-head{background:#f8fafc;font-weight:700;color:var(--muted);font-size:11px;
+                       text-transform:uppercase;letter-spacing:.06em;justify-content:space-between}
+  .tier-row.tier-head{display:none}
+  .tier-row.tier-active{border-color:var(--ink);box-shadow:0 0 0 3px rgba(11,16,32,.06)}
+  .tier-row input{width:64px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;font-weight:700;text-align:right;font-size:13px}
+  .tier-row input:focus{border-color:var(--ink);outline:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Configurable Product Type — Demo</h1>
+  <p class="lead">For products like the <b>Custom Name Keychain</b> where every order is a one-off print job.
+     Top: how admin builds the product. Middle: how customer buys it. Bottom: how cart handles it.
+     This is a <b>different product type</b> — variants stay untouched.</p>
+
+  <!-- ============ ADMIN: TYPE PICKER ============ -->
+  <div class="card">
+    <h3>Admin · Edit Product</h3>
+    <h2 style="margin-top:0">Step 1 — Product type <span class="badge">First decision</span></h2>
+    <p class="small" style="margin-top:0">Picked once when product is created. Locks the rest of the editor flow.</p>
+
+    <div class="typebar">
+      <div class="typecard" id="typeStocked">
+        <span class="check">✓</span>
+        <span class="pill pill-blue">Stocked</span>
+        <h4>Stocked product</h4>
+        <p>Pre-built items on a shelf — t-shirts, vending toys, fixed colour keychains. <b>Has variants, stock counts, SKUs.</b> (What you have today.)</p>
+      </div>
+      <div class="typecard active" id="typeConfig">
+        <span class="check">✓</span>
+        <span class="pill pill-purple">Made-to-order</span>
+        <h4>Made-to-order product</h4>
+        <p>Customer composes the order — types name, picks colours. <b>Printer fires when paid.</b> No stock count, no variant matrix. (The new one — keychain.)</p>
+      </div>
+    </div>
+    <p class="small" id="typeNote">Made-to-order selected — variant editor is hidden, configurator builder is shown below.</p>
+  </div>
+
+  <!-- ============ ADMIN: DISPLAY IMAGES ============ -->
+  <div class="card">
+    <h3>Admin · Product images</h3>
+    <h2 style="margin-top:0">Step 2 — Upload display images <span class="badge">No image limit · admin captions</span></h2>
+    <p class="small" style="margin-top:0">Upload as many as you want. Each image gets an admin-written caption (alt text + figure label). System auto-compresses to WebP/AVIF and resizes for SEO + page speed.</p>
+
+    <div class="img-gallery">
+      <div class="img-tile is-primary">
+        <div class="img-thumb" style="background:linear-gradient(135deg,#fee2e2,#fecaca);">
+          <div class="mock-keychain">
+            <div class="mock-ring"></div>
+            <div class="mock-cap" style="background:#ef4444;color:#fff">N</div>
+            <div class="mock-cap" style="background:#ef4444;color:#fff">A</div>
+            <div class="mock-cap" style="background:#ef4444;color:#fff">M</div>
+            <div class="mock-cap" style="background:#ef4444;color:#fff">E</div>
+          </div>
+        </div>
+        <input class="caption-input" value="Sample keychain — red base, white letters" />
+        <span class="img-label">★ Primary · used as listing thumbnail + PDP hero</span>
+      </div>
+      <div class="img-tile">
+        <div class="img-thumb" style="background:linear-gradient(135deg,#dbeafe,#bfdbfe);">
+          <div class="mock-lifestyle">📷 Lifestyle shot</div>
+        </div>
+        <input class="caption-input" value="Hanging on a backpack" />
+        <span class="img-label">Lifestyle</span>
+      </div>
+      <div class="img-tile">
+        <div class="img-thumb" style="background:linear-gradient(135deg,#f3e8ff,#e9d5ff);">
+          <div class="mock-lifestyle">📦 Packaging</div>
+        </div>
+        <input class="caption-input" value="Gift-ready packaging" />
+        <span class="img-label">Packaging</span>
+      </div>
+      <div class="img-tile">
+        <div class="img-thumb" style="background:linear-gradient(135deg,#dcfce7,#bbf7d0);">
+          <div class="mock-lifestyle">🔍 Detail</div>
+        </div>
+        <input class="caption-input" value="Close-up of letter detail" />
+        <span class="img-label">Detail shot</span>
+      </div>
+      <div class="img-tile dashed">
+        <div class="img-thumb" style="border:2px dashed var(--line);background:#fafbff">
+          <div style="text-align:center;color:#94a3b8;font-weight:600;font-size:13px">＋ Upload</div>
+        </div>
+        <input class="caption-input" placeholder="Caption (shown under image)" />
+        <span class="img-label">Add another</span>
+      </div>
+    </div>
+    <p class="small" style="margin-top:10px">Drag to reorder · ★ Primary · auto-compressed (Sharp → WebP/AVIF, multi-resolution srcset for fast LCP)</p>
+  </div>
+
+  <!-- ============ ADMIN: CONFIGURATOR BUILDER ============ -->
+  <div class="card">
+    <h3>Admin · Configurator</h3>
+    <h2 style="margin-top:0">Step 3 — Build the inputs customer will fill</h2>
+    <p class="small" style="margin-top:0">Drag to reorder. Each field has a label, a type, and constraints.</p>
+
+    <div id="fieldsList">
+      <!-- field 1: text -->
+      <div class="field">
+        <span class="drag">≡</span>
+        <div class="meta">
+          <div class="top">
+            <span class="pill pill-ink">Text</span>
+            <span class="label">Your name</span>
+            <span class="pill pill-green">Required</span>
+          </div>
+          <span class="desc">max 8 chars · A–Z only · uppercased · profanity check on · drives unit count</span>
+        </div>
+        <div class="icons">
+          <button class="icobtn" title="Edit">✎</button>
+          <button class="icobtn danger" title="Delete">×</button>
+        </div>
+      </div>
+      <!-- field 2: colour — base + chain (one piece) -->
+      <div class="field">
+        <span class="drag">≡</span>
+        <div class="meta">
+          <div class="top">
+            <span class="pill pill-purple">Colour</span>
+            <span class="label">Base + chain colour</span>
+            <span class="pill pill-green">Required</span>
+            <span class="pill pill-ink">5 colours allowed</span>
+          </div>
+          <span class="desc">One piece — base and chain print as same colour. Admin-curated subset.</span>
+          <div class="curated-row">
+            <span class="curated-sw" style="background:#ef4444" title="Red"></span>
+            <span class="curated-sw" style="background:#0B1020" title="Black"></span>
+            <span class="curated-sw" style="background:#f8fafc;border-color:#cbd5e1" title="White"></span>
+            <span class="curated-sw" style="background:#0080ff" title="Blue"></span>
+            <span class="curated-sw" style="background:#03C03C" title="Green"></span>
+            <button class="curated-edit">Edit list</button>
+          </div>
+        </div>
+        <div class="icons">
+          <button class="icobtn" title="Edit">✎</button>
+          <button class="icobtn danger" title="Delete">×</button>
+        </div>
+      </div>
+      <!-- field 3: colour — letters -->
+      <div class="field">
+        <span class="drag">≡</span>
+        <div class="meta">
+          <div class="top">
+            <span class="pill pill-purple">Colour</span>
+            <span class="label">Letter colour</span>
+            <span class="pill pill-green">Required</span>
+            <span class="pill pill-ink">3 colours allowed</span>
+          </div>
+          <span class="desc">High-contrast subset only (legibility matters for letters).</span>
+          <div class="curated-row">
+            <span class="curated-sw" style="background:#f8fafc;border-color:#cbd5e1" title="White"></span>
+            <span class="curated-sw" style="background:#eab308" title="Gold"></span>
+            <span class="curated-sw" style="background:#0B1020" title="Black"></span>
+            <button class="curated-edit">Edit list</button>
+          </div>
+        </div>
+        <div class="icons">
+          <button class="icobtn" title="Edit">✎</button>
+          <button class="icobtn danger" title="Delete">×</button>
+        </div>
+      </div>
+    </div>
+    <p class="small" style="margin-top:8px">Keychain has 2 colour fields for this product. Schema supports as many colour fields as the product needs — admin defines per product.</p>
+
+    <div class="add-field">
+      <button>＋ Add Text field</button>
+      <button>＋ Add Number field</button>
+      <button>＋ Add Colour field</button>
+      <button>＋ Add Select field</button>
+    </div>
+
+    <h3 style="margin-top:24px">Step 4 — Pricing tiers</h3>
+    <p class="small" style="margin-top:0">Admin sets max letter count, then a fixed price for each letter count. Customer's typed name length looks up the matching row — no multiplication, full control.</p>
+
+    <div class="tier-controls">
+      <label class="tier-max">Max letters: <input type="number" value="8" min="1" max="20" /></label>
+      <button class="tier-fill">Auto-fill from MYR 7 base</button>
+    </div>
+
+    <div class="tier-table">
+      <div class="tier-row tier-head"><span>Letters</span><span>Price (MYR)</span></div>
+      <div class="tier-row"><span><b>1</b> letter</span><input type="number" value="7" /></div>
+      <div class="tier-row"><span><b>2</b> letters</span><input type="number" value="9" /></div>
+      <div class="tier-row"><span><b>3</b> letters</span><input type="number" value="12" /></div>
+      <div class="tier-row"><span><b>4</b> letters</span><input type="number" value="15" /></div>
+      <div class="tier-row tier-active"><span><b>5</b> letters</span><input type="number" value="18" /></div>
+      <div class="tier-row"><span><b>6</b> letters</span><input type="number" value="22" /></div>
+      <div class="tier-row"><span><b>7</b> letters</span><input type="number" value="26" /></div>
+      <div class="tier-row"><span><b>8</b> letters</span><input type="number" value="30" /></div>
+    </div>
+    <p class="small" style="margin-top:10px"><b>Customer typed "JACOB" (5 letters)</b> → tier 5 row → <b>MYR 18</b>. No multiplication, just lookup.
+       <kbd>isActive</kbd> on/off only — no stock count, print-on-demand.</p>
+  </div>
+
+  <!-- ============ CUSTOMER PDP ============ -->
+  <div class="card">
+    <h3>Customer · Product page</h3>
+    <h2 style="margin-top:0">Custom Name Keychain</h2>
+    <p class="small" style="margin-top:0">3D-printed name keychain · made to order · ships in 5–7 working days</p>
+
+    <div class="pdp">
+      <!-- left: hero gallery (display image OR live preview) -->
+      <div>
+        <div class="hero" id="heroBox">
+          <!-- Default: admin display image. Switches to live preview once customer types/picks. -->
+          <div id="heroDisplay" class="hero-display">
+            <div class="mock-keychain big">
+              <div class="mock-ring"></div>
+              <div class="mock-cap" style="background:#ef4444;color:#fff">N</div>
+              <div class="mock-cap" style="background:#ef4444;color:#fff">A</div>
+              <div class="mock-cap" style="background:#ef4444;color:#fff">M</div>
+              <div class="mock-cap" style="background:#ef4444;color:#fff">E</div>
+            </div>
+            <p class="small" style="margin-top:14px">Admin's display image (shown before customer configures)</p>
+          </div>
+          <div id="heroPreview" class="hero-preview" style="display:none">
+            <div class="keychain-preview" id="previewRow"></div>
+            <p class="small" style="text-align:center;margin-top:14px">Live preview — your design</p>
+          </div>
+        </div>
+
+        <!-- gallery thumbnails -->
+        <div class="thumbstrip">
+          <button class="thumb active" id="thumbPreview" title="Live preview">
+            <span class="thumb-icon" style="background:linear-gradient(135deg,#0080ff,#03C03C)">★</span>
+            <span>Yours</span>
+          </button>
+          <button class="thumb" id="thumbDisplay" title="Default display">
+            <span class="thumb-icon" style="background:linear-gradient(135deg,#fecaca,#fee2e2)">📷</span>
+            <span>Display</span>
+          </button>
+          <button class="thumb" title="Lifestyle">
+            <span class="thumb-icon" style="background:linear-gradient(135deg,#bfdbfe,#dbeafe)">📷</span>
+            <span>Lifestyle</span>
+          </button>
+          <button class="thumb" title="Packaging">
+            <span class="thumb-icon" style="background:linear-gradient(135deg,#e9d5ff,#f3e8ff)">📦</span>
+            <span>Packaging</span>
+          </button>
+        </div>
+        <p class="small" id="heroNote" style="margin-top:8px">As soon as you type your name, we show your design. Click <b>Display</b> above to flip back.</p>
+      </div>
+
+      <!-- right: form -->
+      <div>
+        <div class="price-tag" id="priceTag">MYR 18</div>
+        <div class="price-meta" id="priceMeta">5 letters → tier price MYR 18</div>
+
+        <div class="axis-label">Your name <span class="meta">A–Z only · max 8</span></div>
+        <input id="nameInput" class="text-input" maxlength="8" value="JACOB" />
+        <div class="charcount" id="charcount"><span><b id="cc">5</b> / 8</span><span id="ccErr"></span></div>
+
+        <div class="axis-label">Base + chain colour <span class="meta">one piece · 5 colours</span></div>
+        <div class="opts" id="baseOpts"></div>
+
+        <div class="axis-label">Letter colour <span class="meta">3 colours</span></div>
+        <div class="opts" id="letterOpts"></div>
+
+        <button class="add" id="addBtn">Add to bag · MYR 40</button>
+        <p class="small" style="margin-top:6px">Letters are uppercased automatically. Profanity is blocked.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ CART ============ -->
+  <div class="card">
+    <h3>Cart · How configurations stack</h3>
+    <h2 style="margin-top:0">Bag</h2>
+    <p class="small" style="margin-top:0">Same configuration = qty bumps on one line. Different configuration = new line, even though it's the same product.</p>
+
+    <div class="cart-row">
+      <div class="cart-thumb">JACOB</div>
+      <div class="cart-meta">
+        <div class="name">Custom Name Keychain</div>
+        <div class="config">"JACOB" (5 letters) · Red base+chain · White letters</div>
+        <div class="qty">
+          <button>−</button><span>2</span><button>＋</button>
+        </div>
+      </div>
+      <div class="cart-price">MYR 36</div>
+    </div>
+
+    <div class="cart-row">
+      <div class="cart-thumb">MIA</div>
+      <div class="cart-meta">
+        <div class="name">Custom Name Keychain</div>
+        <div class="config">"MIA" (3 letters) · Black base+chain · Gold letters</div>
+        <div class="qty">
+          <button>−</button><span>1</span><button>＋</button>
+        </div>
+      </div>
+      <div class="cart-price">MYR 12</div>
+    </div>
+
+    <div class="cart-row">
+      <div class="cart-thumb">SOPHIE</div>
+      <div class="cart-meta">
+        <div class="name">Custom Name Keychain</div>
+        <div class="config">"SOPHIE" (6 letters) · Blue base+chain · White letters</div>
+        <div class="qty">
+          <button>−</button><span>1</span><button>＋</button>
+        </div>
+      </div>
+      <div class="cart-price">MYR 22</div>
+    </div>
+
+    <div class="cart-total"><span>Subtotal</span><span>MYR 70</span></div>
+    <p class="small" style="margin-top:10px">Each cart line carries a <kbd>configurationData</kbd> JSON payload that
+       passes to the order, the printer, the email, and the receipt.</p>
+  </div>
+
+  <!-- ============ DECISIONS LOCKED ============ -->
+  <div class="card">
+    <h3>Locked decisions</h3>
+    <h2 style="margin-top:0">Updated picks after this round</h2>
+    <div class="grid2">
+      <div class="decision"><h4>1 · Field types in v1</h4><p><span class="ok">✓</span> Ship all 4: text · number · colour · select. Future-proof, ~1h extra.</p></div>
+      <div class="decision"><h4>2 · Pricing</h4><p><span class="ok">✓</span> <b>Price tier table</b> — admin sets fixed price per letter count (1=MYR 7, 2=MYR 9, 3=MYR 12 …). Lookup, not multiplication. Admin sets max letter count.</p></div>
+      <div class="decision"><h4>3 · Text validation</h4><p><span class="ok">✓</span> Per-field <code>allowedChars</code> regex + global profanity allowlist (small word list, editable later).</p></div>
+      <div class="decision"><h4>4 · Stock model</h4><p><span class="ok">✓</span> No per-row stock. <code>isActive</code> on/off only. Print-on-demand.</p></div>
+      <div class="decision"><h4>5 · Colour subset</h4><p><span class="ok">✓</span> <b>Admin curates colours per field</b>. Customer only sees the chosen subset, not the full library. Each colour field stores allowed colour ids.</p></div>
+      <div class="decision"><h4>6 · Image gallery</h4><p><span class="ok">✓</span> <b>No image limit.</b> Admin writes caption per image. Server compresses (Sharp → WebP/AVIF + multi-resolution srcset) for fast LCP.</p></div>
+      <div class="decision"><h4>7 · Preview component</h4><p><span class="ok">✓</span> Generic styled-SVG name strip. Colour-aware. PDP swaps display image → live preview when customer types/picks.</p></div>
+      <div class="decision"><h4>8 · Cart dedupe</h4><p><span class="ok">✓</span> Same JSON config → qty bump. Different → new line.</p></div>
+      <div class="decision"><h4>9 · Backwards compat</h4><p><span class="ok">✓</span> All existing products auto-set to <code>productType='stocked'</code>. Variant editor stays default for them.</p></div>
+    </div>
+
+    <h3 style="margin-top:24px">Estimated build size</h3>
+    <ul style="margin:6px 0 0 18px;padding:0;font-size:14px">
+      <li>Schema + migrations — 1 hour</li>
+      <li>Admin configurator builder — 3 hours</li>
+      <li>PDP form + live preview + price meter — 4 hours</li>
+      <li>Cart / order / email — 3 hours</li>
+      <li>Seed keychain product + manual smoke — 1 hour</li>
+      <li><b>Total ≈ 12 hours = 1.5 working days</b></li>
+    </ul>
+    <p class="small" style="margin-top:14px">Run <kbd>/gsd-spec-phase 19 — Configurable Product Type (keychain)</kbd> when ready to start.
+       Phase 20 (variant pivot grid) bumps to Phase 21.</p>
+  </div>
+
+</div>
+
+<script>
+/* ============ ADMIN type radio ============ */
+const tStock = document.getElementById('typeStocked');
+const tConf  = document.getElementById('typeConfig');
+const tNote  = document.getElementById('typeNote');
+function setType(which){
+  tStock.classList.toggle('active', which==='stocked');
+  tConf.classList.toggle('active',  which==='configurable');
+  tNote.textContent = which==='stocked'
+    ? "Stocked selected — variant editor is shown (current default flow). Configurator builder is hidden."
+    : "Configurable selected — variant editor is hidden, configurator builder is shown below.";
+}
+tStock.onclick = ()=>setType('stocked');
+tConf.onclick  = ()=>setType('configurable');
+
+/* ============ CUSTOMER PDP ============ */
+const FULL_PALETTE = [
+  {name:"Red",    hex:"#ef4444"},
+  {name:"Black",  hex:"#0B1020"},
+  {name:"White",  hex:"#f8fafc"},
+  {name:"Pink",   hex:"#ec4899"},
+  {name:"Gold",   hex:"#eab308"},
+  {name:"Silver", hex:"#94a3b8"},
+  {name:"Blue",   hex:"#0080ff"},
+  {name:"Green",  hex:"#03C03C"},
+];
+// Admin-curated subsets (matching the field configs in the admin panel above)
+const BASE_ALLOWED   = ["Red","Black","White","Blue","Green"];        // 5 colours — base+chain (one piece)
+const LETTER_ALLOWED = ["White","Gold","Black"];                       // 3 colours (high-contrast)
+
+// Admin-defined price tier table (lookup, not multiplication)
+const PRICE_TIERS = {1:7, 2:9, 3:12, 4:15, 5:18, 6:22, 7:26, 8:30};
+const MAX_LEN = 8;
+
+let name = "JACOB";
+let baseColor = "Red";       // also drives chain colour (same piece)
+let letterColor = "White";
+
+function paletteHex(n){ return FULL_PALETTE.find(p=>p.name===n)?.hex || "#000"; }
+
+function renderPalette(target, current, allowedNames, setter){
+  const c = document.getElementById(target); c.innerHTML = "";
+  const subset = FULL_PALETTE.filter(p=>allowedNames.includes(p.name));
+  subset.forEach(p=>{
+    const b = document.createElement('button');
+    b.className = 'opt' + (current===p.name?' selected':'');
+    b.innerHTML = `<span class="sw" style="background:${p.hex}"></span>${p.name}`;
+    b.onclick = ()=>{ setter(p.name); renderAll(); };
+    c.appendChild(b);
+  });
+}
+
+function renderPreview(){
+  const row = document.getElementById('previewRow');
+  row.innerHTML = "";
+  // ring on the left — same colour as base (one piece)
+  const ring = document.createElement('div');
+  ring.className = 'ring';
+  ring.style.borderColor = paletteHex(baseColor);
+  row.appendChild(ring);
+  // chars
+  for(const ch of name){
+    const cap = document.createElement('div');
+    cap.className = 'charcap';
+    cap.textContent = ch;
+    cap.style.background = paletteHex(baseColor);
+    cap.style.color = paletteHex(letterColor);
+    if(letterColor==="White") cap.style.textShadow="0 2px 4px rgba(0,0,0,.25)"; else cap.style.textShadow="";
+    row.appendChild(cap);
+  }
+}
+
+function renderPrice(){
+  const len = name.length;
+  const total = PRICE_TIERS[len] ?? 0;
+  document.getElementById('priceTag').textContent = `MYR ${total}`;
+  document.getElementById('priceMeta').textContent = len === 0
+    ? "Type your name to see the price"
+    : `${len} letter${len===1?'':'s'} → tier price MYR ${total}`;
+  const btn = document.getElementById('addBtn');
+  btn.textContent = len === 0 ? "Type your name first" : `Add to bag · MYR ${total}`;
+  btn.disabled = len === 0;
+  document.getElementById('cc').textContent = len;
+}
+
+function renderAll(){
+  renderPalette('baseOpts',   baseColor,   BASE_ALLOWED,   n=>baseColor=n);
+  renderPalette('letterOpts', letterColor, LETTER_ALLOWED, n=>letterColor=n);
+  renderPreview();
+  renderPrice();
+}
+
+/* hero swap — display vs live preview */
+let userTouched = false;
+function setHeroMode(mode){
+  document.getElementById('heroDisplay').style.display = mode==='display' ? 'flex' : 'none';
+  document.getElementById('heroPreview').style.display = mode==='preview' ? 'flex' : 'none';
+  document.getElementById('thumbDisplay').classList.toggle('active', mode==='display');
+  document.getElementById('thumbPreview').classList.toggle('active', mode==='preview');
+  document.getElementById('heroNote').textContent = mode==='preview'
+    ? "Showing your design. Click Display above to see the original sample."
+    : "Showing the original sample. Click Yours above to see your design.";
+}
+document.getElementById('thumbDisplay').onclick = ()=>setHeroMode('display');
+document.getElementById('thumbPreview').onclick = ()=>setHeroMode('preview');
+
+// initial state — show display first; auto-swap to preview once user types or picks a colour
+setHeroMode('display');
+const palettes = ['baseOpts','letterOpts','chainOpts'];
+function autoSwap(){
+  if(!userTouched){ userTouched = true; setHeroMode('preview'); }
+}
+
+document.getElementById('nameInput').addEventListener('input', e=>{
+  let v = e.target.value.toUpperCase().replace(/[^A-Z]/g,'');
+  if(v.length > MAX_LEN) v = v.slice(0, MAX_LEN);
+  name = v;
+  e.target.value = v;
+  document.getElementById('ccErr').textContent =
+    v.length===0 ? "Type your name" : "";
+  renderAll();
+  autoSwap();
+});
+
+// any colour pick also triggers auto-swap
+document.addEventListener('click', e=>{
+  if(e.target.closest('#baseOpts, #letterOpts')) autoSwap();
+});
+
+renderAll();
+</script>
+</body>
+</html>

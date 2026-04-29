@@ -56,6 +56,8 @@ Each variant has:
 
 For full instructions on setting up options and generating variants, see [Options, values, and variants](/admin/guide/products/variants-sizes).
 
+For made-to-order (configurable) products like custom name keychains, see [Made-to-order products](./made-to-order.md) — for print-on-demand items where customers compose their own configuration.
+
 ## Photos
 
 You can upload multiple photos per product. The first photo (index 0) is the thumbnail shown on listing cards. You can drag to reorder them, or choose a different thumbnail.

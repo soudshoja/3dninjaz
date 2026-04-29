@@ -11,14 +11,22 @@ import {
   getActiveProductsByCategorySlug,
   getActiveProductsBySubcategorySlug,
   getActiveCategoryTree,
+  getActiveProductColourChips,
+  getProductIdsByColourSlugs,
   type CatalogProduct,
   type CategoryTreeNode,
 } from "@/lib/catalog";
 import { getWishlistedProductIds } from "@/actions/wishlist";
+// Temporarily disabled: import { ColourFilterSection } from "@/components/store/colour-filter-section";
 
 export const metadata: Metadata = { title: "Shop" };
 
-type SearchParams = Promise<{ category?: string; subcategory?: string }>;
+type SearchParams = Promise<{
+  category?: string;
+  subcategory?: string;
+  // Phase 18 (18-08) — comma-separated colour slugs (D-13 URL grammar)
+  colour?: string;
+}>;
 
 /**
  * Phase 8 (08-01) — storefront shop with 2-level filtering.
@@ -37,11 +45,13 @@ export default async function ShopPage({
 }: {
   searchParams: SearchParams;
 }) {
-  const { category, subcategory } = await searchParams;
+  const { category, subcategory, colour } = await searchParams;
+  const colourSlugs = colour ? colour.split(",").filter(Boolean) : [];
 
-  const [tree, result] = await Promise.all([
+  const [tree, colourChips, result] = await Promise.all([
     getActiveCategoryTree(),
-    resolveProducts(category, subcategory),
+    getActiveProductColourChips(),
+    resolveProducts(category, subcategory, colourSlugs),
   ]);
 
   if (result === "not_found") notFound();
@@ -131,6 +141,11 @@ export default async function ShopPage({
         </nav>
       ) : null}
 
+      {/* Colour filter temporarily hidden — re-enable when filter UX is finalized */}
+      {/* <div className="md:hidden max-w-6xl mx-auto px-6 mt-3">
+        <ColourFilterSection chips={colourChips} />
+      </div> */}
+
       <section className="max-w-6xl mx-auto px-6 mt-6 grid gap-8 md:grid-cols-[240px_1fr]">
         <aside className="hidden md:block">
           <ShopSidebar
@@ -138,6 +153,7 @@ export default async function ShopPage({
             activeCategory={category ?? null}
             activeSubcategory={subcategory ?? null}
           />
+          {/* <ColourFilterSection chips={colourChips} /> */}
         </aside>
 
         <div>
@@ -187,7 +203,9 @@ type ResolvedView = {
 async function resolveProducts(
   categorySlug: string | undefined,
   subcategorySlug: string | undefined,
+  colourSlugs: string[],
 ): Promise<ResolvedView | "not_found"> {
+  let base: ResolvedView | "not_found";
   if (subcategorySlug) {
     // Prefer scoping by category when both are supplied to avoid
     // ambiguity across parents.
@@ -196,7 +214,7 @@ async function resolveProducts(
       categorySlug,
     );
     if (!out.subcategory) return "not_found";
-    return {
+    base = {
       products: out.products,
       headline: out.subcategory.name,
       breadcrumb: [
@@ -210,12 +228,10 @@ async function resolveProducts(
         { label: out.subcategory.name },
       ],
     };
-  }
-
-  if (categorySlug) {
+  } else if (categorySlug) {
     const out = await getActiveProductsByCategorySlug(categorySlug);
     if (!out.category) return "not_found";
-    return {
+    base = {
       products: out.products,
       headline: out.category.name,
       breadcrumb: [
@@ -223,13 +239,26 @@ async function resolveProducts(
         { label: out.category.name },
       ],
     };
+  } else {
+    const all = await getActiveProducts();
+    base = {
+      products: all,
+      headline: "All Drops",
+      breadcrumb: null,
+    };
   }
 
-  const all = await getActiveProducts();
+  // Phase 18 (18-08) — intersect with colour filter when present.
+  // No colour filter: return base as-is.
+  if (colourSlugs.length === 0) return base;
+
+  const allowedIds = await getProductIdsByColourSlugs(colourSlugs);
+  if (allowedIds.size === 0) {
+    return { ...base, products: [] };
+  }
   return {
-    products: all,
-    headline: "All Drops",
-    breadcrumb: null,
+    ...base,
+    products: base.products.filter((p) => allowedIds.has(p.id)),
   };
 }
 

@@ -4,6 +4,7 @@ import { orders, orderItems } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { sendMail } from "@/lib/mailer";
 import { formatOrderNumber } from "@/lib/orders";
+import { ensureOrderItemConfigData } from "@/lib/config-fields";
 
 /**
  * Order confirmation email (HTML + plain-text).
@@ -39,6 +40,7 @@ type OrderWithItems = typeof orders.$inferSelect & {
     productName: string;
     size: string | null;
     variantLabel?: string | null;
+    configurationData?: string | null; // Phase 19 (19-09) — raw LONGTEXT JSON
     quantity: number;
     unitPrice: string;
     lineTotal: string;
@@ -66,19 +68,21 @@ export function renderOrderConfirmationHtml(order: OrderWithItems): string {
   const orderUrl = `${baseUrl()}/orders/${order.id}`;
 
   const itemsHtml = order.items
-    .map(
-      (i) => `
+    .map((i) => {
+      const cfg = ensureOrderItemConfigData(i.configurationData);
+      const summary = cfg?.computedSummary ?? i.variantLabel ?? (i.size ? `Size ${i.size}` : "");
+      return `
       <tr>
         <td style="padding:12px 0;border-bottom:1px solid #eee;">
           <strong>${escapeHtml(i.productName)}</strong><br>
-          <span style="color:#666;font-size:13px;">${escapeHtml(i.variantLabel ?? (i.size ? `Size ${i.size}` : ""))} &middot; Qty ${i.quantity}</span>
+          <span style="color:#666;font-size:13px;">${escapeHtml(summary)} &middot; Qty ${i.quantity}</span>
         </td>
         <td style="padding:12px 0;border-bottom:1px solid #eee;text-align:right;white-space:nowrap;">
           ${formatMYRServer(i.lineTotal)}
         </td>
       </tr>
-    `,
-    )
+    `;
+    })
     .join("");
 
   return `<!doctype html>
@@ -167,8 +171,10 @@ export function renderOrderConfirmationText(order: OrderWithItems): string {
   lines.push("");
   lines.push("Items:");
   for (const i of order.items) {
+    const cfg = ensureOrderItemConfigData(i.configurationData);
+    const summary = cfg?.computedSummary ?? i.variantLabel ?? (i.size ? `Size ${i.size}` : null);
     lines.push(
-      `  - ${i.productName}${i.variantLabel ? ` — ${i.variantLabel}` : i.size ? ` (Size ${i.size})` : ""} x${i.quantity} — ${formatMYRServer(i.lineTotal)}`,
+      `  - ${i.productName}${summary ? ` — ${summary}` : ""} x${i.quantity} — ${formatMYRServer(i.lineTotal)}`,
     );
   }
   lines.push("");
@@ -197,19 +203,21 @@ export function renderOrderConfirmationText(order: OrderWithItems): string {
  */
 function renderItemsTableFragment(order: OrderWithItems): string {
   return order.items
-    .map(
-      (i) => `
+    .map((i) => {
+      const cfg = ensureOrderItemConfigData(i.configurationData);
+      const summary = cfg?.computedSummary ?? i.variantLabel ?? (i.size ? `Size ${i.size}` : "");
+      return `
       <tr>
         <td style="padding:12px 0;border-bottom:1px solid #eee;">
           <strong>${escapeHtml(i.productName)}</strong><br>
-          <span style="color:#666;font-size:13px;">${escapeHtml(i.variantLabel ?? (i.size ? `Size ${i.size}` : ""))} &middot; Qty ${i.quantity}</span>
+          <span style="color:#666;font-size:13px;">${escapeHtml(summary)} &middot; Qty ${i.quantity}</span>
         </td>
         <td style="padding:12px 0;border-bottom:1px solid #eee;text-align:right;white-space:nowrap;">
           ${formatMYRServer(i.lineTotal)}
         </td>
       </tr>
-    `,
-    )
+    `;
+    })
     .join("");
 }
 

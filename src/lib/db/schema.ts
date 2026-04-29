@@ -137,14 +137,27 @@ export const products = mysqlTable("products", {
   slug: varchar("slug", { length: 220 }).notNull().unique(),
   description: text("description").notNull(),
   // Relative URLs served from public/uploads/products/<id>/<file>.
-  // Stored as JSON array of strings (MySQL has no native array type).
-  // Max 10 enforced at app level (raised from 5 post-launch).
-  images: json("images").$type<string[]>().notNull().default([]),
+  // Stored as JSON array of strings OR ImageEntryV2 objects (MySQL has no native array type).
+  // Phase 19 (19-10) — widened from string[] to accept {url, caption?, alt?} objects.
+  // Read sites use ensureImagesV2() which handles both shapes.
+  images: json("images").$type<string[] | Array<{ url: string; caption?: string | null; alt?: string | null }>>().notNull().default([]),
   // Index into `images` that should be used as the storefront card thumbnail.
   // Defaults to 0 so existing rows behave identically. Out-of-range values
   // (image deleted after selection) are coerced back to 0 at the read site.
   thumbnailIndex: int("thumbnail_index").notNull().default(0),
   materialType: varchar("material_type", { length: 64 }),
+  // Phase 19 (19-01) — productType discriminator + tier-pricing columns.
+  // 'stocked' = existing variant flow; 'configurable' = made-to-order with
+  // configurator builder + tier table. All existing rows DEFAULT to 'stocked'
+  // so the variant code path is untouched (D-14 backwards compat).
+  productType: mysqlEnum("productType", ["stocked", "configurable", "keychain", "vending"]).notNull().default("stocked"),
+  // Tier-pricing trio (NULL for stocked products):
+  //   maxUnitCount = highest count the admin wants to price (e.g., 8 for keychain)
+  //   priceTiers   = JSON object {"1":7,"2":9,...} stored as LONGTEXT — round-trip via ensureTiers()
+  //   unitField    = name of the config field whose value-length drives lookup ("name" for keychain)
+  maxUnitCount: int("maxUnitCount"),
+  priceTiers: text("priceTiers"),
+  unitField: varchar("unitField", { length: 64 }),
   estimatedProductionDays: int("estimated_production_days"),
   isActive: boolean("is_active").notNull().default(true), // ADM-04
   isFeatured: boolean("is_featured").notNull().default(false), // D-12
@@ -214,12 +227,48 @@ export const productOptionValues = mysqlTable(
     position: int("position").notNull().default(0),
     // Optional color swatch for visual picker (Color option type)
     swatchHex: varchar("swatch_hex", { length: 7 }),
+    // Phase 18 — link to library colour (NULL = freeform/custom one-off).
+    // Lazy reference; `colors` table is declared at the bottom of this file.
+    // FK enforced at the live DB via scripts/phase18-colours-migrate.cjs
+    // (ON DELETE RESTRICT) for defense-in-depth alongside app-level guard.
+    colorId: varchar("color_id", { length: 36 }).references(() => colors.id, {
+      onDelete: "restrict",
+    }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => ({
     // One value string per option (no "Medium" duplicates)
     optionValueUnique: unique("uq_option_value").on(t.optionId, t.value),
     optionIdx: index("idx_option_values_option").on(t.optionId),
+  }),
+);
+
+// ============================================================================
+// Phase 19 (19-01) — product_config_fields
+// Configurator inputs (text/number/colour/select) for made-to-order products.
+// configJson is stored as LONGTEXT (mysql2 returns string) — parse via
+// ensureConfigJson() per fieldType (D-03). FK cascades on product delete.
+// ============================================================================
+
+export const productConfigFields = mysqlTable(
+  "product_config_fields",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    productId: varchar("productId", { length: 36 })
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    position: int("position").notNull().default(0),
+    fieldType: mysqlEnum("fieldType", ["text", "number", "colour", "select"]).notNull(),
+    label: varchar("label", { length: 80 }).notNull(),
+    helpText: varchar("helpText", { length: 200 }),
+    required: boolean("required").notNull().default(true),
+    locked: boolean("locked").notNull().default(false),
+    configJson: text("configJson"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({
+    productIdx: index("idx_pcf_product").on(t.productId, t.position),
   }),
 );
 
@@ -521,6 +570,9 @@ export const orderItems = mysqlTable("order_items", {
   // Phase 16 — denormalized variant label snapshot ("Small / Red", "Head").
   // NULL for historical orders (pre-phase-16). New orders always populate.
   variantLabel: varchar("variant_label", { length: 200 }),
+  // Phase 19 (19-01) — snapshot of cart-line configurationData JSON.
+  // NULL for stocked-product line items. Read via ensureConfigurationData().
+  configurationData: text("configuration_data"),
   unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
   // Phase 10 (10-01) — snapshot of productVariants.costPrice at order-creation
   // time. Nullable: historical orders (pre-phase 10) + variants whose cost has
@@ -1213,7 +1265,7 @@ function brandedEmailTemplate(
   heading: string,
   body: string,
   cta?: { text: string; url: string },
-  ctaColor: string = "#1E8BFF"
+  ctaColor: string = "#0080ff"
 ): string {
   const ctaHtml = cta
     ? `<tr><td align="center" style="padding:16px 32px 32px">
@@ -1349,7 +1401,7 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         `<p>Hi {{customer_name}},</p>
         <p>We've refunded <strong>{{refund_amount}}</strong> for order <strong>#{{order_number}}</strong>.</p>
         <p style="margin-top:16px">The refund should appear in your account within 3-5 business days.</p>
-        <p>If you have questions, contact us at <a href="mailto:{{support_email}}" style="color:#1E8BFF">{{support_email}}</a></p>`,
+        <p>If you have questions, contact us at <a href="mailto:{{support_email}}" style="color:#0080ff">{{support_email}}</a></p>`,
         { text: "View Order", url: "order_link" }
       ),
       variables: [
@@ -1372,7 +1424,7 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         `<p>Hi {{customer_name}},</p>
         <p>Your order <strong>#{{order_number}}</strong> has been cancelled.</p>
         <p><strong>Reason:</strong> {{cancellation_reason}}</p>
-        <p style="margin-top:16px">If this was unexpected, please contact us at <a href="mailto:{{support_email}}" style="color:#1E8BFF">{{support_email}}</a></p>`,
+        <p style="margin-top:16px">If this was unexpected, please contact us at <a href="mailto:{{support_email}}" style="color:#0080ff">{{support_email}}</a></p>`,
         { text: "Contact Support", url: "support_email" }
       ),
       variables: [
@@ -1413,7 +1465,7 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         "Password updated",
         `<p>Hi {{customer_name}},</p>
         <p>Your password has been successfully changed.</p>
-        <p style="margin-top:16px">If you didn't make this change, please contact us immediately at <a href="mailto:{{support_email}}" style="color:#1E8BFF">{{support_email}}</a></p>`,
+        <p style="margin-top:16px">If you didn't make this change, please contact us immediately at <a href="mailto:{{support_email}}" style="color:#0080ff">{{support_email}}</a></p>`,
         undefined
       ),
       variables: [
@@ -1490,7 +1542,7 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         `<p>Hi {{customer_name}},</p>
         <p>A dispute has been opened on your order <strong>#{{order_number}}</strong>.</p>
         <p><strong>Reason:</strong> {{dispute_reason}}</p>
-        <p style="margin-top:16px">We're investigating and will keep you updated. Contact us at <a href="mailto:{{support_email}}" style="color:#1E8BFF">{{support_email}}</a> if you have additional details.</p>`,
+        <p style="margin-top:16px">We're investigating and will keep you updated. Contact us at <a href="mailto:{{support_email}}" style="color:#0080ff">{{support_email}}</a> if you have additional details.</p>`,
         { text: "View Order", url: "order_link" }
       ),
       variables: [
@@ -1517,7 +1569,7 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         <strong>Amount:</strong> {{dispute_amount}}</p>
         <p style="margin-top:16px">Click below to view details and respond.</p>`,
         { text: "Review Dispute", url: "admin_link" },
-        "#A855F7"
+        "#8A00C2"
       ),
       variables: [
         "customer_name",
@@ -1531,3 +1583,44 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
     },
   ];
 }
+
+// ============================================================================
+// Phase 18 — colors library + product_option_values.color_id FK
+// Admin-curated central colour catalogue (seeded once from Bambu/Polymaker
+// reference HTML). product_option_values.color_id (declared above) is a lazy
+// reference back to colors.id — Drizzle resolves () => colors.id at runtime.
+// Live DB FK constraint added via scripts/phase18-colours-migrate.cjs.
+// ============================================================================
+
+export const colors = mysqlTable(
+  "colors",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    name: varchar("name", { length: 64 }).notNull(),
+    hex: varchar("hex", { length: 7 }).notNull(),
+    // Polymaker old-packaging hex (D-02). NULL for Bambu / new lines.
+    previousHex: varchar("previous_hex", { length: 7 }),
+    brand: mysqlEnum("brand", ["Bambu", "Polymaker", "Other"]).notNull(),
+    // Bambu RFID code or Polymaker SKU; NULL for one-offs / em-dash sources.
+    code: varchar("code", { length: 32 }),
+    // D-04 family split: coarse type (enum) + fine subtype (free string).
+    familyType: mysqlEnum("family_type", [
+      "PLA",
+      "PETG",
+      "TPU",
+      "CF",
+      "Other",
+    ]).notNull(),
+    familySubtype: varchar("family_subtype", { length: 48 }).notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({
+    // MySQL/MariaDB allow multiple (brand, NULL) rows under UNIQUE since
+    // NULL ≠ NULL — exactly the SPEC §1 semantics ("unique when code non-null").
+    brandCodeUnique: unique("uq_colors_brand_code").on(t.brand, t.code),
+    brandIdx: index("idx_colors_brand").on(t.brand),
+    activeIdx: index("idx_colors_active").on(t.isActive),
+  }),
+);
