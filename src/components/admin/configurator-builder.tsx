@@ -44,7 +44,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { ConfigFieldModal } from "@/components/admin/config-field-modal";
+import { ConfigFieldModal, ConfigFieldFormBody } from "@/components/admin/config-field-modal";
 import { TierTableEditor } from "@/components/admin/tier-table-editor";
 import {
   getConfiguratorData,
@@ -97,10 +97,13 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // Modal state
+  // Modal state (non-locked fields)
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingField, setEditingField] = useState<ConfigField | null>(null);
+
+  // Inline drawer state (locked fields)
+  const [expandedFieldId, setExpandedFieldId] = useState<string | null>(null);
 
   // Delete confirm dialog state
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -340,116 +343,170 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
             </Button>
           </div>
         ) : (
-          fields.map((field, index) => (
-            <div
-              key={field.id}
-              className="flex items-center gap-3 rounded-xl border bg-white p-4"
-              style={{ borderColor: field.locked ? "#BFDBFE" : "#E4E4E7" }}
-            >
-              {/* Drag handle (visual) — dimmed for locked fields */}
-              <GripVertical
-                className={`h-4 w-4 shrink-0 ${field.locked ? "text-slate-200 cursor-default" : "text-slate-300 cursor-grab"}`}
-                aria-hidden
-              />
+            fields.map((field, index) => (
+            <div key={field.id}>
+              {/* Field row */}
+              <div
+                className="flex items-center gap-3 rounded-xl border bg-white p-4"
+                style={{
+                  borderColor: field.locked ? "#BFDBFE" : "#E4E4E7",
+                  borderBottomLeftRadius: expandedFieldId === field.id ? 0 : undefined,
+                  borderBottomRightRadius: expandedFieldId === field.id ? 0 : undefined,
+                  borderBottomColor: expandedFieldId === field.id ? "transparent" : undefined,
+                }}
+              >
+                {/* Drag handle (visual) — dimmed for locked fields */}
+                <GripVertical
+                  className={`h-4 w-4 shrink-0 ${field.locked ? "text-slate-200 cursor-default" : "text-slate-300 cursor-grab"}`}
+                  aria-hidden
+                />
 
-              {/* Up/Down reorder — hidden for locked fields */}
-              {field.locked ? (
-                <div className="w-[28px] shrink-0" aria-hidden />
-              ) : (
-                <div className="flex flex-col gap-0.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => moveField(index, "up")}
-                    disabled={index === 0 || pending}
-                    aria-label="Move up"
-                    className="p-1 rounded hover:bg-slate-100 disabled:opacity-30 min-h-[28px]"
-                  >
-                    <ArrowUp className="h-3 w-3" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => moveField(index, "down")}
-                    disabled={index === fields.length - 1 || pending}
-                    aria-label="Move down"
-                    className="p-1 rounded hover:bg-slate-100 disabled:opacity-30 min-h-[28px]"
-                  >
-                    <ArrowDown className="h-3 w-3" />
-                  </button>
-                </div>
-              )}
-
-              {/* Field info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-medium text-sm" style={{ color: BRAND.ink }}>
-                    {field.label}
-                  </span>
-                  <Badge
-                    variant="outline"
-                    className="text-xs capitalize"
-                    style={{
-                      borderColor: TYPE_COLORS[field.fieldType] ?? "#CBD5E1",
-                      color: TYPE_COLORS[field.fieldType] ?? BRAND.ink,
-                    }}
-                  >
-                    {field.fieldType}
-                  </Badge>
-                  {field.locked && (
-                    <Badge
-                      variant="secondary"
-                      className="text-xs"
-                      style={{ backgroundColor: "#DBEAFE", color: "#1D4ED8" }}
+                {/* Up/Down reorder — hidden for locked fields */}
+                {field.locked ? (
+                  <div className="w-[28px] shrink-0" aria-hidden />
+                ) : (
+                  <div className="flex flex-col gap-0.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => moveField(index, "up")}
+                      disabled={index === 0 || pending}
+                      aria-label="Move up"
+                      className="p-1 rounded hover:bg-slate-100 disabled:opacity-30 min-h-[28px]"
                     >
-                      Locked
+                      <ArrowUp className="h-3 w-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveField(index, "down")}
+                      disabled={index === fields.length - 1 || pending}
+                      aria-label="Move down"
+                      className="p-1 rounded hover:bg-slate-100 disabled:opacity-30 min-h-[28px]"
+                    >
+                      <ArrowDown className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Field info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium text-sm" style={{ color: BRAND.ink }}>
+                      {field.label}
+                    </span>
+                    <Badge
+                      variant="outline"
+                      className="text-xs capitalize"
+                      style={{
+                        borderColor: TYPE_COLORS[field.fieldType] ?? "#CBD5E1",
+                        color: TYPE_COLORS[field.fieldType] ?? BRAND.ink,
+                      }}
+                    >
+                      {field.fieldType}
                     </Badge>
+                    {field.locked && (
+                      <Badge
+                        variant="secondary"
+                        className="text-xs"
+                        style={{ backgroundColor: "#DBEAFE", color: "#1D4ED8" }}
+                      >
+                        Locked
+                      </Badge>
+                    )}
+                  </div>
+                  {field.helpText && (
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                      {field.helpText}
+                    </p>
                   )}
                 </div>
-                {field.helpText && (
-                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                    {field.helpText}
-                  </p>
-                )}
-              </div>
 
-              {/* Required toggle (Pattern A optimistic) */}
-              <div className="flex items-center gap-1.5 shrink-0">
-                <span className="text-xs text-muted-foreground hidden sm:inline">Required</span>
-                <Switch
-                  checked={field.required}
-                  onCheckedChange={(v) => toggleRequired(field.id, v)}
-                  disabled={pending}
-                  aria-label={`${field.label} required`}
-                />
-              </div>
+                {/* Required toggle (Pattern A optimistic) */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-xs text-muted-foreground hidden sm:inline">Required</span>
+                  <Switch
+                    checked={field.required}
+                    onCheckedChange={(v) => toggleRequired(field.id, v)}
+                    disabled={pending}
+                    aria-label={`${field.label} required`}
+                  />
+                </div>
 
-              {/* Edit */}
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingField(field);
-                  setEditModalOpen(true);
-                }}
-                disabled={pending}
-                aria-label={`Edit ${field.label}`}
-                className="p-2 rounded-lg hover:bg-slate-100 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-              >
-                <Pencil className="h-4 w-4" />
-              </button>
-
-              {/* Delete — hidden for locked fields */}
-              {!field.locked && (
+                {/* Edit — locked fields use inline drawer, non-locked use modal */}
                 <button
                   type="button"
                   onClick={() => {
-                    setDeletingField(field);
-                    setDeleteConfirmOpen(true);
+                    if (field.locked) {
+                      setExpandedFieldId((prev) =>
+                        prev === field.id ? null : field.id,
+                      );
+                    } else {
+                      setEditingField(field);
+                      setEditModalOpen(true);
+                    }
                   }}
                   disabled={pending}
-                  aria-label={`Delete ${field.label}`}
-                  className="p-2 rounded-lg hover:bg-red-50 text-red-500 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                  aria-label={`Edit ${field.label}`}
+                  aria-expanded={field.locked ? expandedFieldId === field.id : undefined}
+                  className="p-2 rounded-lg hover:bg-slate-100 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                  style={
+                    field.locked && expandedFieldId === field.id
+                      ? { color: BRAND.blue }
+                      : undefined
+                  }
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Pencil className="h-4 w-4" />
                 </button>
+
+                {/* Delete — hidden for locked fields */}
+                {!field.locked && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeletingField(field);
+                      setDeleteConfirmOpen(true);
+                    }}
+                    disabled={pending}
+                    aria-label={`Delete ${field.label}`}
+                    className="p-2 rounded-lg hover:bg-red-50 text-red-500 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
+              {/* Inline drawer — locked fields only, expands below row */}
+              {field.locked && (
+                <div
+                  className="overflow-hidden transition-[max-height] duration-200 ease-out"
+                  style={{
+                    maxHeight: expandedFieldId === field.id ? "600px" : "0px",
+                  }}
+                  aria-hidden={expandedFieldId !== field.id}
+                >
+                  <div
+                    className="rounded-b-xl border border-t-0 bg-white px-5 py-4"
+                    style={{ borderColor: "#BFDBFE", boxShadow: "inset 0 2px 4px rgba(0,0,0,0.04)" }}
+                  >
+                    {expandedFieldId === field.id && (
+                      <ConfigFieldFormBody
+                        productId={product.id}
+                        mode="edit"
+                        initialField={field}
+                        onSaved={async (savedField) => {
+                          setExpandedFieldId(null);
+                          if (savedField && field.locked && field.label === "Base") {
+                            const prevBaseIds =
+                              (field.config as { allowedColorIds?: string[] }).allowedColorIds ?? [];
+                            await handleBaseAutoFill(savedField, prevBaseIds);
+                          } else {
+                            await refetch();
+                          }
+                        }}
+                        onCancel={() => setExpandedFieldId(null)}
+                      />
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           ))

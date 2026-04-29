@@ -49,129 +49,135 @@ export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLengt
   const isSwatch = chars.length === 0;
   const cubeCount = isSwatch ? 1 : chars.length;
 
-  // Fluid cube size: fits maxLength+1 cubes across the available width.
-  // 80px accounts for page padding + ring/loop tab on cube #1.
-  // clamp: min 36px, fluid, max 64px.
-  const cubeSizeExpr = `clamp(36px, calc((100vw - 80px) / ${maxLength + 1}), 64px)`;
+  // Fluid cube size: fits maxLength+1 cubes across the actual container width.
+  // Uses CSS container queries (100cqw) so sizing tracks the card, not the viewport.
+  // Slot denominator: maxLength+1 reserves one slot for the ring/loop tab on cube #1.
+  // Subtract 2px to account for 1px gap × 2 sides.
+  // clamp: min 28px (8 cubes fit in ~280px narrow gallery), max 56px.
+  const cubeSizeExpr = `clamp(28px, calc(100cqw / ${maxLength + 1} - 2px), 56px)`;
 
-  // Letter font scales with cube: ~47% of cube size (30px at 64px).
-  const fontSizeExpr = `calc(${cubeSizeExpr} * 0.47)`;
+  // Letter font scales with cube: ~42% of cube width, leaving room for border + inset face.
+  const fontSizeExpr = `clamp(13px, calc(100cqw / ${maxLength + 1} * 0.42), 26px)`;
 
   return (
-    <div
-      data-keychain-preview
-      aria-label={display ? `Preview shows: ${display}` : "Colour swatch preview"}
-      role="img"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 1,
-        paddingLeft: 26,      // room for side-tab on first cube
-        overflowX: "visible",
-        overflowY: "visible",
-        paddingTop: 12,
-        paddingBottom: 20,    // room for drop shadow
-      }}
-    >
-      {Array.from({ length: cubeCount }, (_, i) => {
-        const ch = isSwatch ? "" : (chars[i] ?? "");
-        const isFirst = i === 0;
+    // Outer wrapper establishes a CSS inline-size containment context so
+    // 100cqw inside refers to this element's width, not the viewport.
+    <div style={{ containerType: "inline-size" }}>
+      <div
+        data-keychain-preview
+        aria-label={display ? `Preview shows: ${display}` : "Colour swatch preview"}
+        role="img"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 1,
+          paddingLeft: 26,      // room for side-tab on first cube
+          overflowX: "visible",
+          overflowY: "visible",
+          paddingTop: 12,
+          paddingBottom: 20,    // room for drop shadow
+        }}
+      >
+        {Array.from({ length: cubeCount }, (_, i) => {
+          const ch = isSwatch ? "" : (chars[i] ?? "");
+          const isFirst = i === 0;
 
-        return (
-          <div
-            key={i}
-            style={{
-              position: "relative",
-              width: cubeSizeExpr,
-              height: cubeSizeExpr,
-              flexShrink: 0,
-              borderRadius: 14,
-              background: baseHex,
-              border: "none",
-              // Body bevel — top highlight, side shadow, bottom drop
-              boxShadow: `inset 3px 3px 5px rgba(255,255,255,0.45),
-                         inset -3px -3px 5px rgba(0,0,0,0.14),
-                         0 4px 0 rgba(0,0,0,0.10),
-                         0 8px 14px rgba(0,0,0,0.10)`,
-            }}
-          >
-            {/* Side-tab (ring/loop) — first cube only, same base colour */}
-            {isFirst && (
-              <div
-                style={{
-                  position: "absolute",
-                  left: -22,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  width: 28,
-                  height: 32,
-                  borderRadius: "14px 0 0 14px",
-                  background: baseHex,
-                  boxShadow: `inset 4px 4px 7px rgba(255,255,255,0.50),
-                               inset -5px -5px 8px rgba(0,0,0,0.16),
-                               0 5px 0 rgba(0,0,0,0.10)`,
-                }}
-              >
-                {/* Loop dot */}
+          return (
+            <div
+              key={i}
+              style={{
+                position: "relative",
+                width: cubeSizeExpr,
+                height: cubeSizeExpr,
+                flexShrink: 0,
+                borderRadius: 14,
+                background: baseHex,
+                border: "none",
+                // Body bevel — top highlight, side shadow, bottom drop
+                boxShadow: `inset 3px 3px 5px rgba(255,255,255,0.45),
+                           inset -3px -3px 5px rgba(0,0,0,0.14),
+                           0 4px 0 rgba(0,0,0,0.10),
+                           0 8px 14px rgba(0,0,0,0.10)`,
+              }}
+            >
+              {/* Side-tab (ring/loop) — first cube only, fixed 28×32 px */}
+              {isFirst && (
                 <div
                   style={{
                     position: "absolute",
-                    left: 5,
+                    left: -22,
                     top: "50%",
                     transform: "translateY(-50%)",
-                    width: 14,
-                    height: 14,
-                    borderRadius: "50%",
-                    background: "#ffffff",
-                    boxShadow: "inset 2px 2px 4px rgba(0,0,0,0.16)",
+                    width: 28,
+                    height: 32,
+                    borderRadius: "14px 0 0 14px",
+                    background: baseHex,
+                    boxShadow: `inset 4px 4px 7px rgba(255,255,255,0.50),
+                                 inset -5px -5px 8px rgba(0,0,0,0.16),
+                                 0 5px 0 rgba(0,0,0,0.10)`,
                   }}
-                />
-              </div>
-            )}
+                >
+                  {/* Loop dot */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: 5,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      width: 14,
+                      height: 14,
+                      borderRadius: "50%",
+                      background: "#ffffff",
+                      boxShadow: "inset 2px 2px 4px rgba(0,0,0,0.16)",
+                    }}
+                  />
+                </div>
+              )}
 
-            {/* Inset clicker face */}
-            <div
-              style={{
-                position: "absolute",
-                inset: 5,
-                borderRadius: 10,
-                background: clickerHex,
-                boxShadow: `inset 2px 2px 4px rgba(255,255,255,0.38),
-                             inset -2px -2px 4px rgba(0,0,0,0.14)`,
-              }}
-            />
-
-            {/* Raised letter glyph — only when there is a character */}
-            {ch && (
+              {/* Inset clicker face */}
               <div
                 style={{
                   position: "absolute",
-                  inset: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: letterHex,
-                  fontSize: fontSizeExpr,
-                  fontWeight: 900,
-                  lineHeight: 1,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.01em",
-                  zIndex: 2,
-                  userSelect: "none",
-                  textShadow: `0 1px 0 rgba(0,0,0,0.08),
-                               0 2px 0 rgba(0,0,0,0.06),
-                               0 3px 0 rgba(0,0,0,0.04),
-                               0 4px 8px rgba(0,0,0,0.18)`,
-                  fontFamily: "Chakra Petch, ui-sans-serif, system-ui, sans-serif",
+                  inset: 5,
+                  borderRadius: 10,
+                  background: clickerHex,
+                  boxShadow: `inset 2px 2px 4px rgba(255,255,255,0.38),
+                               inset -2px -2px 4px rgba(0,0,0,0.14)`,
                 }}
-                aria-hidden="true"
-              >
-                {ch}
-              </div>
-            )}
-          </div>
-        );
-      })}
+              />
+
+              {/* Raised letter glyph — only when there is a character */}
+              {ch && (
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: letterHex,
+                    fontSize: fontSizeExpr,
+                    fontWeight: 900,
+                    lineHeight: 1,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.01em",
+                    zIndex: 2,
+                    userSelect: "none",
+                    textShadow: `0 1px 0 rgba(0,0,0,0.08),
+                                 0 2px 0 rgba(0,0,0,0.06),
+                                 0 3px 0 rgba(0,0,0,0.04),
+                                 0 4px 8px rgba(0,0,0,0.18)`,
+                    fontFamily: "Chakra Petch, ui-sans-serif, system-ui, sans-serif",
+                  }}
+                  aria-hidden="true"
+                >
+                  {ch}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -312,50 +312,55 @@ function SelectConfigForm({
 }
 
 // ---------------------------------------------------------------------------
-// Main modal
+// Shared form body — used by both the modal (non-locked) and the inline
+// drawer (locked fields). Renders without any Dialog wrapper.
 // ---------------------------------------------------------------------------
 
-export function ConfigFieldModal({
-  open,
-  onOpenChange,
+export type ConfigFieldFormBodyProps = {
+  productId: string;
+  mode: "add" | "edit";
+  initialField?: ConfigField;
+  onSaved: (savedField?: ConfigField) => Promise<void> | void;
+  onCancel: () => void;
+};
+
+export function ConfigFieldFormBody({
   productId,
   mode,
   initialField,
   onSaved,
-}: Props) {
+  onCancel,
+}: ConfigFieldFormBodyProps) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // In add mode, user first picks a fieldType; in edit mode it's locked.
   const [fieldType, setFieldType] = useState<FieldType | null>(
-    mode === "edit" ? (initialField?.fieldType ?? null) : null
+    mode === "edit" ? (initialField?.fieldType ?? null) : null,
   );
 
-  // Common fields
   const [label, setLabel] = useState(initialField?.label ?? "");
   const [helpText, setHelpText] = useState(initialField?.helpText ?? "");
   const [required, setRequired] = useState(initialField?.required ?? true);
 
-  // Type-specific config state
   const [textConfig, setTextConfig] = useState<Partial<TextFieldConfig>>(
     initialField?.fieldType === "text"
       ? (initialField.config as TextFieldConfig)
-      : { maxLength: 8, allowedChars: "A-Z", uppercase: true, profanityCheck: false }
+      : { maxLength: 8, allowedChars: "A-Z", uppercase: true, profanityCheck: false },
   );
   const [numberConfig, setNumberConfig] = useState<Partial<NumberFieldConfig>>(
     initialField?.fieldType === "number"
       ? (initialField.config as NumberFieldConfig)
-      : { min: 1, max: 10, step: 1 }
+      : { min: 1, max: 10, step: 1 },
   );
   const [colourConfig, setColourConfig] = useState<Partial<ColourFieldConfig>>(
     initialField?.fieldType === "colour"
       ? (initialField.config as ColourFieldConfig)
-      : { allowedColorIds: [] }
+      : { allowedColorIds: [] },
   );
   const [selectConfig, setSelectConfig] = useState<Partial<SelectFieldConfig>>(
     initialField?.fieldType === "select"
       ? (initialField.config as SelectFieldConfig)
-      : { options: [{ label: "", value: "" }] }
+      : { options: [{ label: "", value: "" }] },
   );
 
   const getConfig = (): AnyFieldConfig | null => {
@@ -370,16 +375,13 @@ export function ConfigFieldModal({
     const config = getConfig();
     if (!config) return "Please select a field type";
     if (!label.trim()) return "Label is required";
-
     const schema =
       fieldType === "text" ? TextFieldConfigSchema
       : fieldType === "number" ? NumberFieldConfigSchema
       : fieldType === "colour" ? ColourFieldConfigSchema
       : fieldType === "select" ? SelectFieldConfigSchema
       : null;
-
     if (!schema) return "Unknown field type";
-
     const result = schema.safeParse(config);
     if (!result.success) {
       return result.error.issues[0]?.message ?? "Invalid configuration";
@@ -394,12 +396,9 @@ export function ConfigFieldModal({
       setError(validationError);
       return;
     }
-
     const config = getConfig()!;
-
     startTransition(async () => {
       let result: { ok: boolean; error?: string };
-
       if (mode === "add") {
         result = await addConfigField(productId, {
           fieldType: fieldType!,
@@ -416,20 +415,14 @@ export function ConfigFieldModal({
           config,
         });
       }
-
       if (!result.ok) {
         setError("error" in result ? (result.error ?? "Save failed") : "Save failed");
         return;
       }
-
-      // Build a synthetic ConfigField for the caller (edit mode only) so the
-      // builder can run auto-fill logic without an extra round-trip.
       let savedField: ConfigField | undefined;
       if (mode === "edit" && initialField) {
         savedField = {
           ...initialField,
-          // Locked fields: label + fieldType are not changed server-side,
-          // but we reflect any palette update so the builder sees the new ids.
           label: initialField.locked ? initialField.label : label.trim(),
           fieldType: fieldType!,
           helpText: helpText.trim() || null,
@@ -437,24 +430,188 @@ export function ConfigFieldModal({
           config: config as ConfigField["config"],
         };
       }
-
-      // Pattern B refetch — caller-driven
       await onSaved(savedField);
-      onOpenChange(false);
     });
   };
 
+  return (
+    <div className="space-y-4">
+      {/* Error banner */}
+      {error && (
+        <div
+          role="alert"
+          className="flex gap-2 items-start rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800"
+        >
+          <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Field type picker (add mode only) */}
+      {mode === "add" && (
+        <div className="space-y-2">
+          <Label>Field type</Label>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {FIELD_TYPES.map((ft) => (
+              <button
+                key={ft.value}
+                type="button"
+                onClick={() => setFieldType(ft.value)}
+                className="rounded-lg border p-3 text-center text-sm font-medium transition-all min-h-[48px]"
+                style={{
+                  border:
+                    fieldType === ft.value
+                      ? `2px solid ${BRAND.green}`
+                      : "1px solid #E4E4E7",
+                  background:
+                    fieldType === ft.value ? `${BRAND.green}0D` : "white",
+                  color: BRAND.ink,
+                }}
+                title={ft.description}
+              >
+                {ft.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Edit mode: locked type badge */}
+      {mode === "edit" && fieldType && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <Label>Field type</Label>
+          <Badge variant="secondary" className="capitalize">
+            {fieldType}
+          </Badge>
+          <span className="text-xs text-muted-foreground">(cannot change)</span>
+          {initialField?.locked && (
+            <Badge
+              variant="secondary"
+              className="text-xs"
+              style={{ backgroundColor: "#DBEAFE", color: "#1D4ED8" }}
+            >
+              Locked
+            </Badge>
+          )}
+        </div>
+      )}
+
+      {/* Common fields */}
+      {fieldType && (
+        <>
+          <div className="space-y-1">
+            <Label htmlFor="fieldLabel">Label *</Label>
+            {mode === "edit" && initialField?.locked ? (
+              <>
+                <Input
+                  id="fieldLabel"
+                  value={label}
+                  readOnly
+                  disabled
+                  className="h-9 bg-slate-50 text-slate-400 cursor-not-allowed"
+                  title="Locked label — fixed for Keyboard Clicker products"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Locked label — fixed for Keyboard Clicker products
+                </p>
+              </>
+            ) : (
+              <Input
+                id="fieldLabel"
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                placeholder="e.g. Your name"
+                className="h-9"
+                maxLength={80}
+              />
+            )}
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="helpText">Help text</Label>
+            <Input
+              id="helpText"
+              value={helpText}
+              onChange={(e) => setHelpText(e.target.value)}
+              placeholder="Optional hint shown to customer"
+              className="h-9"
+              maxLength={200}
+            />
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Switch
+              id="required"
+              checked={required}
+              onCheckedChange={setRequired}
+            />
+            <Label htmlFor="required" className="cursor-pointer">Required</Label>
+          </div>
+
+          {/* Divider */}
+          <div className="border-t pt-3">
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+              {fieldType === "text" ? "Text" : fieldType === "number" ? "Number" : fieldType === "colour" ? "Colour" : "Select"} settings
+            </Label>
+          </div>
+
+          {fieldType === "text" && (
+            <TextConfigForm value={textConfig} onChange={setTextConfig} />
+          )}
+          {fieldType === "number" && (
+            <NumberConfigForm value={numberConfig} onChange={setNumberConfig} />
+          )}
+          {fieldType === "colour" && (
+            <ColourConfigForm
+              productId={productId}
+              value={colourConfig}
+              onChange={setColourConfig}
+            />
+          )}
+          {fieldType === "select" && (
+            <SelectConfigForm value={selectConfig} onChange={setSelectConfig} />
+          )}
+        </>
+      )}
+
+      {/* Footer buttons */}
+      <div className="flex justify-end gap-2 pt-1">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onCancel}
+          disabled={pending}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          onClick={handleSave}
+          disabled={pending || !fieldType}
+          className="min-h-[44px]"
+          style={{ backgroundColor: BRAND.green, color: "white" }}
+        >
+          {pending ? "Saving…" : mode === "add" ? "Add field" : "Save changes"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main modal — wraps ConfigFieldFormBody in a Dialog.
+// Used for non-locked fields (admin-added extras).
+// ---------------------------------------------------------------------------
+
+export function ConfigFieldModal({
+  open,
+  onOpenChange,
+  productId,
+  mode,
+  initialField,
+  onSaved,
+}: Props) {
   const handleOpenChange = (v: boolean) => {
-    if (!v) {
-      // Reset state on close if in add mode
-      if (mode === "add") {
-        setFieldType(null);
-        setLabel("");
-        setHelpText("");
-        setRequired(true);
-      }
-      setError(null);
-    }
     onOpenChange(v);
   };
 
@@ -472,166 +629,16 @@ export function ConfigFieldModal({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Error banner */}
-        {error && (
-          <div
-            role="alert"
-            className="flex gap-2 items-start rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800"
-          >
-            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" aria-hidden />
-            <span>{error}</span>
-          </div>
-        )}
-
-        <div className="space-y-4 py-1">
-          {/* Field type picker (add mode only) */}
-          {mode === "add" && (
-            <div className="space-y-2">
-              <Label>Field type</Label>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {FIELD_TYPES.map((ft) => (
-                  <button
-                    key={ft.value}
-                    type="button"
-                    onClick={() => setFieldType(ft.value)}
-                    className="rounded-lg border p-3 text-center text-sm font-medium transition-all min-h-[48px]"
-                    style={{
-                      border:
-                        fieldType === ft.value
-                          ? `2px solid ${BRAND.green}`
-                          : "1px solid #E4E4E7",
-                      background:
-                        fieldType === ft.value ? `${BRAND.green}0D` : "white",
-                      color: BRAND.ink,
-                    }}
-                    title={ft.description}
-                  >
-                    {ft.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Edit mode: locked type badge */}
-          {mode === "edit" && fieldType && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <Label>Field type</Label>
-              <Badge variant="secondary" className="capitalize">
-                {fieldType}
-              </Badge>
-              <span className="text-xs text-muted-foreground">(cannot change)</span>
-              {initialField?.locked && (
-                <Badge
-                  variant="secondary"
-                  className="text-xs"
-                  style={{ backgroundColor: "#DBEAFE", color: "#1D4ED8" }}
-                >
-                  Locked
-                </Badge>
-              )}
-            </div>
-          )}
-
-          {/* Common fields — shown once a type is selected */}
-          {fieldType && (
-            <>
-              <div className="space-y-1">
-                <Label htmlFor="fieldLabel">Label *</Label>
-                {mode === "edit" && initialField?.locked ? (
-                  <>
-                    <Input
-                      id="fieldLabel"
-                      value={label}
-                      readOnly
-                      disabled
-                      className="h-9 bg-slate-50 text-slate-400 cursor-not-allowed"
-                      title="Locked label — fixed for Keyboard Clicker products"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Locked label — fixed for Keyboard Clicker products
-                    </p>
-                  </>
-                ) : (
-                  <Input
-                    id="fieldLabel"
-                    value={label}
-                    onChange={(e) => setLabel(e.target.value)}
-                    placeholder="e.g. Your name"
-                    className="h-9"
-                    maxLength={80}
-                  />
-                )}
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="helpText">Help text</Label>
-                <Input
-                  id="helpText"
-                  value={helpText}
-                  onChange={(e) => setHelpText(e.target.value)}
-                  placeholder="Optional hint shown to customer"
-                  className="h-9"
-                  maxLength={200}
-                />
-              </div>
-
-              <div className="flex items-center gap-3">
-                <Switch
-                  id="required"
-                  checked={required}
-                  onCheckedChange={setRequired}
-                />
-                <Label htmlFor="required" className="cursor-pointer">Required</Label>
-              </div>
-
-              {/* Divider */}
-              <div className="border-t pt-3">
-                <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-                  {fieldType === "text" ? "Text" : fieldType === "number" ? "Number" : fieldType === "colour" ? "Colour" : "Select"} settings
-                </Label>
-              </div>
-
-              {/* Type-specific forms */}
-              {fieldType === "text" && (
-                <TextConfigForm value={textConfig} onChange={setTextConfig} />
-              )}
-              {fieldType === "number" && (
-                <NumberConfigForm value={numberConfig} onChange={setNumberConfig} />
-              )}
-              {fieldType === "colour" && (
-                <ColourConfigForm
-                  productId={productId}
-                  value={colourConfig}
-                  onChange={setColourConfig}
-                />
-              )}
-              {fieldType === "select" && (
-                <SelectConfigForm value={selectConfig} onChange={setSelectConfig} />
-              )}
-            </>
-          )}
-        </div>
-
-        <DialogFooter className="gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => handleOpenChange(false)}
-            disabled={pending}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            onClick={handleSave}
-            disabled={pending || !fieldType}
-            className="min-h-[44px]"
-            style={{ backgroundColor: BRAND.green, color: "white" }}
-          >
-            {pending ? "Saving…" : mode === "add" ? "Add field" : "Save changes"}
-          </Button>
-        </DialogFooter>
+        <ConfigFieldFormBody
+          productId={productId}
+          mode={mode}
+          initialField={initialField}
+          onSaved={async (savedField) => {
+            await onSaved(savedField);
+            onOpenChange(false);
+          }}
+          onCancel={() => onOpenChange(false)}
+        />
       </DialogContent>
     </Dialog>
   );

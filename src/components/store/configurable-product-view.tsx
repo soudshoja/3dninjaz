@@ -48,6 +48,7 @@ type Props = {
     estimatedProductionDays: number | null;
     category: { name: string; slug: string } | null;
     pictures?: PictureData[];
+    productType?: "stocked" | "configurable" | "keychain";
   };
   fields: PublicConfigField[];
   maxUnitCount: number | null;
@@ -260,7 +261,11 @@ export function ConfigurableProductView({
           clickerHex={clickerHex}
           letterHex={letterHex}
           maxLength={maxLength}
-          placeholder={textFields.length > 0 ? "YOURTEXT" : ""}
+          placeholder={
+            product.productType === "keychain" || textFields.length > 0
+              ? "YOURTEXT"
+              : ""
+          }
         />
       </div>
     </div>

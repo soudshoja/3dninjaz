@@ -5,16 +5,18 @@ import { db } from "@/lib/db";
 import {
   products,
   productVariants,
+  productConfigFields,
   categories,
   subcategories,
 } from "@/lib/db/schema";
-import { eq, desc, inArray } from "drizzle-orm";
+import { eq, desc, inArray, count } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { productSchema, type ProductInput } from "@/lib/validators";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { computeVariantCost } from "@/lib/cost-breakdown";
 import { getStoreSettingsCached } from "@/lib/store-settings";
 import { ensureImagesV2 } from "@/lib/config-fields";
+import { seedKeychainFields } from "@/lib/keychain-fields";
 
 export type ProductActionResult =
   | { success: true; productId?: string }
@@ -192,6 +194,42 @@ export async function createProduct(
     );
   }
 
+  // Phase 19 — auto-seed the 4 locked config fields for keychain products,
+  // then wire up unitField/maxUnitCount/priceTiers so new keychains are
+  // immediately ready for name personalisation + tier pricing.
+  // Wrapped in try/catch so a seeding failure rolls back cleanly: delete the
+  // just-inserted product row and return a form-level error.
+  if (productData.productType === "keychain") {
+    try {
+      await seedKeychainFields(id, { silent: true });
+      // Locate the text+locked row from the seeded fields (avoids AND on
+      // boolean column which can be dialect-sensitive in MariaDB).
+      const allFields = await db
+        .select({ id: productConfigFields.id, fieldType: productConfigFields.fieldType, locked: productConfigFields.locked })
+        .from(productConfigFields)
+        .where(eq(productConfigFields.productId, id));
+      const nameField = allFields.find((f) => f.fieldType === "text" && f.locked);
+      if (nameField) {
+        await db
+          .update(products)
+          .set({
+            unitField: nameField.id,
+            maxUnitCount: 8,
+            priceTiers: JSON.stringify({ 1: 7, 2: 9, 3: 12, 4: 15, 5: 18, 6: 22, 7: 26, 8: 30 }),
+          })
+          .where(eq(products.id, id));
+      }
+    } catch (err) {
+      console.error("[createProduct] seedKeychainFields failed:", err);
+      try {
+        await db.delete(products).where(eq(products.id, id));
+      } catch {
+        // best-effort rollback — ignore secondary error
+      }
+      return { error: { _form: ["Failed to seed keychain fields"] } };
+    }
+  }
+
   revalidatePath("/admin/products");
   revalidatePath("/admin");
   return { success: true, productId: id };
@@ -292,6 +330,41 @@ export async function updateProduct(
         };
       })
     );
+  }
+
+  // Phase 19 — if the admin switches an existing product TO keychain type,
+  // auto-seed the 4 locked fields if none exist yet (idempotent: if fields
+  // already exist we leave them alone). Also wire up unitField/maxUnitCount/
+  // priceTiers so the product is immediately ready without manual setup.
+  if (productData.productType === "keychain") {
+    const [{ value: fieldCount }] = await db
+      .select({ value: count() })
+      .from(productConfigFields)
+      .where(eq(productConfigFields.productId, id));
+    if (fieldCount === 0) {
+      try {
+        await seedKeychainFields(id, { silent: true });
+        // Find the locked text field that was just inserted.
+        const allFields = await db
+          .select({ id: productConfigFields.id, fieldType: productConfigFields.fieldType, locked: productConfigFields.locked })
+          .from(productConfigFields)
+          .where(eq(productConfigFields.productId, id));
+        const nameField = allFields.find((f) => f.fieldType === "text" && f.locked);
+        if (nameField) {
+          await db
+            .update(products)
+            .set({
+              unitField: nameField.id,
+              maxUnitCount: 8,
+              priceTiers: JSON.stringify({ 1: 7, 2: 9, 3: 12, 4: 15, 5: 18, 6: 22, 7: 26, 8: 30 }),
+            })
+            .where(eq(products.id, id));
+        }
+      } catch (err) {
+        console.error("[updateProduct] seedKeychainFields failed:", err);
+        // Non-fatal for update — product row is already saved. Log and continue.
+      }
+    }
   }
 
   revalidatePath("/admin/products");
