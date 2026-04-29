@@ -139,10 +139,19 @@ export function ConfigurableImageGallery({
           >
             {/* Small live preview miniature */}
             <div
-              className="w-14 h-14 flex items-center justify-center overflow-hidden"
+              className="relative w-14 h-14 overflow-hidden"
               aria-hidden="true"
             >
-              <div style={{ transform: "scale(0.2)", transformOrigin: "center center", width: "500%", height: "auto" }}>
+              <div
+                style={{
+                  position: "absolute",
+                  top: "50%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%) scale(0.2)",
+                  transformOrigin: "center center",
+                  width: "500%",
+                }}
+              >
                 {previewSlot}
               </div>
             </div>
