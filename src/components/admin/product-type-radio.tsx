@@ -137,7 +137,7 @@ export function ProductTypeRadio({
           </span>
         </button>
 
-        {/* Card 3: Keychain */}
+        {/* Card 3: Keyboard Clicker (internal enum value: 'keychain') */}
         <button
           type="button"
           role="radio"
@@ -168,10 +168,10 @@ export function ProductTypeRadio({
               className="font-display text-sm font-semibold leading-tight"
               style={{ color: BRAND.ink }}
             >
-              Keychain
+              Keyboard Clicker
             </span>
             <span className="text-xs leading-relaxed" style={{ color: "#52525B" }}>
-              Name + 3 colours (base / clicker / letter), tier pricing per character. Fixed field schema — auto-seeded on creation.
+              Name + 3 colours (base / clicker / letter), tier pricing per character. Pre-seeded fields — fully editable.
             </span>
           </span>
         </button>

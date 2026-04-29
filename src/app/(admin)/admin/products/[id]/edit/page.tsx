@@ -88,7 +88,7 @@ export default async function EditProductPage({
             href={`/admin/products/${id}/configurator`}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px]"
           >
-            Manage Keychain Fields →
+            Manage Keyboard Clicker Fields →
           </a>
         ) : (
           <a

@@ -193,12 +193,10 @@ export function ProductForm({
       }
 
       if (!editing && "productId" in result && result.productId) {
-        // Phase 19 (19-03) — new configurable products go to configurator, stocked to variants
-        // Keychain goes to edit page (fixed schema — no configurator builder needed)
-        if (productType === "configurable") {
+        // Phase 19 (19-03) — new configurable + keychain products go to configurator,
+        // stocked to variants. Keychain is pre-seeded but fully editable.
+        if (productType === "configurable" || productType === "keychain") {
           router.push(`/admin/products/${result.productId}/configurator`);
-        } else if (productType === "keychain") {
-          router.push(`/admin/products/${result.productId}/edit`);
         } else {
           router.push(`/admin/products/${result.productId}/variants`);
         }
@@ -445,17 +443,22 @@ export function ProductForm({
           </CardContent>
         </Card>
       )}
-      {/* Keychain — fixed schema, no configurator builder */}
+      {/* Keyboard Clicker — pre-seeded but editable */}
       {productType === "keychain" && initialData?.id && (
         <Card>
           <CardHeader>
-            <CardTitle>Keychain — Fixed Schema</CardTitle>
+            <CardTitle>Keyboard Clicker — Pre-Seeded Fields</CardTitle>
             <p className="text-sm text-[var(--color-brand-text-muted)]">
-              Keychain products have a fixed field shape: 1 name text field + 3 colour fields (base / clicker / letter). Fields are seeded automatically on creation.
+              Created with 4 starter fields: 1 name text field + 3 colour fields (base / clicker / letter). All fields are fully editable — rename labels, restrict palettes, add or remove fields.
             </p>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">No configurator builder needed — field schema is fixed.</p>
+            <a
+              href={`/admin/products/${initialData.id}/configurator`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
+            >
+              Manage Keyboard Clicker Fields →
+            </a>
           </CardContent>
         </Card>
       )}

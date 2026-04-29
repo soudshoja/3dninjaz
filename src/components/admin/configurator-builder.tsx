@@ -208,34 +208,32 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
             </a>
           </div>
           <h1 className="font-heading text-2xl font-bold" style={{ color: BRAND.ink }}>
-            {isKeychain ? "Keychain fields" : "Configurator"}
+            {isKeychain ? "Keyboard Clicker fields" : "Configurator"}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {isKeychain
-              ? "Field shape is fixed (name + base + clicker + letter). Edit labels, help text, and colour palettes per field."
+              ? "Pre-seeded with name + base + clicker + letter. All fields are fully editable — rename labels, restrict palettes, add or remove fields as needed."
               : "Define the fields customers fill in when ordering this product."}
           </p>
         </div>
-        {!isKeychain && (
-          <Button
-            onClick={() => setAddModalOpen(true)}
-            disabled={pending}
-            className="min-h-[44px] gap-2"
-            style={{ backgroundColor: BRAND.green, color: "white" }}
-          >
-            <Plus className="h-4 w-4" />
-            Add field
-            {fields.length > 0 && (
-              <Badge
-                variant="secondary"
-                className="ml-1 text-xs"
-                style={{ backgroundColor: "rgba(255,255,255,0.2)", color: "white" }}
-              >
-                {fields.length}
-              </Badge>
-            )}
-          </Button>
-        )}
+        <Button
+          onClick={() => setAddModalOpen(true)}
+          disabled={pending}
+          className="min-h-[44px] gap-2"
+          style={{ backgroundColor: BRAND.green, color: "white" }}
+        >
+          <Plus className="h-4 w-4" />
+          Add field
+          {fields.length > 0 && (
+            <Badge
+              variant="secondary"
+              className="ml-1 text-xs"
+              style={{ backgroundColor: "rgba(255,255,255,0.2)", color: "white" }}
+            >
+              {fields.length}
+            </Badge>
+          )}
+        </Button>
       </div>
 
       {/* Error banner */}
@@ -311,37 +309,33 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
               className="flex items-center gap-3 rounded-xl border bg-white p-4"
               style={{ borderColor: "#E4E4E7" }}
             >
-              {/* Drag handle (visual) — hidden for keychain (fixed order) */}
-              {!isKeychain && (
-                <GripVertical
-                  className="h-4 w-4 text-slate-300 shrink-0 cursor-grab"
-                  aria-hidden
-                />
-              )}
+              {/* Drag handle (visual) */}
+              <GripVertical
+                className="h-4 w-4 text-slate-300 shrink-0 cursor-grab"
+                aria-hidden
+              />
 
-              {/* Up/Down reorder — hidden for keychain */}
-              {!isKeychain && (
-                <div className="flex flex-col gap-0.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => moveField(index, "up")}
-                    disabled={index === 0 || pending}
-                    aria-label="Move up"
-                    className="p-1 rounded hover:bg-slate-100 disabled:opacity-30 min-h-[28px]"
-                  >
-                    <ArrowUp className="h-3 w-3" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => moveField(index, "down")}
-                    disabled={index === fields.length - 1 || pending}
-                    aria-label="Move down"
-                    className="p-1 rounded hover:bg-slate-100 disabled:opacity-30 min-h-[28px]"
-                  >
-                    <ArrowDown className="h-3 w-3" />
-                  </button>
-                </div>
-              )}
+              {/* Up/Down reorder */}
+              <div className="flex flex-col gap-0.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => moveField(index, "up")}
+                  disabled={index === 0 || pending}
+                  aria-label="Move up"
+                  className="p-1 rounded hover:bg-slate-100 disabled:opacity-30 min-h-[28px]"
+                >
+                  <ArrowUp className="h-3 w-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveField(index, "down")}
+                  disabled={index === fields.length - 1 || pending}
+                  aria-label="Move down"
+                  className="p-1 rounded hover:bg-slate-100 disabled:opacity-30 min-h-[28px]"
+                >
+                  <ArrowDown className="h-3 w-3" />
+                </button>
+              </div>
 
               {/* Field info */}
               <div className="flex-1 min-w-0">
@@ -392,21 +386,19 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
                 <Pencil className="h-4 w-4" />
               </button>
 
-              {/* Delete — hidden for keychain (fixed shape) */}
-              {!isKeychain && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDeletingField(field);
-                    setDeleteConfirmOpen(true);
-                  }}
-                  disabled={pending}
-                  aria-label={`Delete ${field.label}`}
-                  className="p-2 rounded-lg hover:bg-red-50 text-red-500 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              )}
+              {/* Delete */}
+              <button
+                type="button"
+                onClick={() => {
+                  setDeletingField(field);
+                  setDeleteConfirmOpen(true);
+                }}
+                disabled={pending}
+                aria-label={`Delete ${field.label}`}
+                className="p-2 rounded-lg hover:bg-red-50 text-red-500 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
             </div>
           ))
         )}
