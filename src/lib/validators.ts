@@ -153,11 +153,24 @@ export const productSchema = z.object({
   // Phase 19 (19-03) — product type discriminator. Defaults to 'stocked' for
   // backwards compat with existing forms that don't send this field.
   productType: z
-    .enum(["stocked", "configurable", "keychain", "vending"])
+    .enum(["stocked", "configurable", "keychain", "vending", "simple"])
     .default("stocked"),
   variants: z
     .array(productVariantSchema)
     .default([]),
+  // Quick task 260430-icx — flat price for `simple` productType.
+  // Consumed only when productType === "simple" (Wave 4 Task 4.1 in
+  // src/actions/products.ts wires it into the priceTiers JSON). Other
+  // product types ignore this field. Truly optional in the input — the
+  // action layer enforces non-empty + numeric when productType === "simple".
+  simplePrice: z
+    .union([
+      z.literal(""),
+      z
+        .string()
+        .regex(/^\d+(\.\d{1,2})?$/, "Price must be a valid number with up to 2 decimal places"),
+    ])
+    .optional(),
 });
 
 export type ProductInput = z.infer<typeof productSchema>;

@@ -49,7 +49,7 @@ type Props = {
     estimatedProductionDays: number | null;
     category: { name: string; slug: string } | null;
     pictures?: PictureData[];
-    productType?: "stocked" | "configurable" | "keychain" | "vending";
+    productType?: "stocked" | "configurable" | "keychain" | "vending" | "simple";
   };
   fields: PublicConfigField[];
   maxUnitCount: number | null;
@@ -72,6 +72,9 @@ function buildSummary(
   const parts: string[] = [];
 
   for (const f of fields) {
+    // Quick task 260430-icx — textarea is admin-authored content, never customer
+    // data. Skip in summary even if a stale row somehow ends up on a non-simple PDP.
+    if (f.fieldType === "textarea") continue;
     const v = values[f.id] ?? "";
     if (!v) continue;
     if (f.fieldType === "text") {

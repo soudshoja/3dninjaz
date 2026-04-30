@@ -41,7 +41,20 @@ export default async function EditProductPage({
         ? "This product already has configurator fields — type cannot be changed. Delete all fields first."
         : undefined;
 
-  const productType = (product.productType ?? "stocked") as "stocked" | "configurable" | "keychain" | "vending";
+  // Quick task 260430-icx — `simple` added to type union.
+  const productType = (product.productType ?? "stocked") as
+    | "stocked"
+    | "configurable"
+    | "keychain"
+    | "vending"
+    | "simple";
+
+  // Quick task 260430-icx — derive flat-price string from priceTiers["1"]
+  // for the form's <Input> value when productType === "simple".
+  const simplePriceValue =
+    productType === "simple" && product.priceTiers && typeof product.priceTiers["1"] === "number"
+      ? String(product.priceTiers["1"])
+      : null;
 
   const initialData: ProductFormInitial = {
     id: product.id,
@@ -62,6 +75,7 @@ export default async function EditProductPage({
     // Phase 19 (19-03) — product type + lock state
     productType,
     lockedReason,
+    simplePrice: simplePriceValue,
   };
 
   return (
@@ -105,6 +119,13 @@ export default async function EditProductPage({
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px]"
             >
               Manage Vending Machine Fields →
+            </a>
+          ) : productType === "simple" ? (
+            <a
+              href={`/admin/products/${id}/fields`}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px]"
+            >
+              Manage Fields →
             </a>
           ) : (
             <a

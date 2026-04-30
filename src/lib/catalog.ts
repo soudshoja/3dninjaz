@@ -45,14 +45,17 @@ type SubcategoryRow = typeof subcategories.$inferSelect;
 export type CatalogVariant = VariantRow;
 
 /** Discriminator union for all product types. */
-export type ProductType = "stocked" | "configurable" | "keychain" | "vending";
+export type ProductType = "stocked" | "configurable" | "keychain" | "vending" | "simple";
 
 /**
  * Returns true for product types that use configurationData instead of
  * variantId — used for cart/order partitioning and PDP routing.
+ *
+ * Quick task 260430-icx: `simple` shares the configurable-like cart-line
+ * keying convention (`${productId}::${hash}`) with vending/keychain.
  */
 export function isConfigurableLike(t: ProductType): boolean {
-  return t === "configurable" || t === "keychain" || t === "vending";
+  return t === "configurable" || t === "keychain" || t === "vending" || t === "simple";
 }
 
 export type CatalogProduct = Omit<ProductRow, "images" | "productType" | "priceTiers"> & {

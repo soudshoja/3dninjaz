@@ -64,7 +64,7 @@ type ProductSummary = {
   id: string;
   name: string;
   slug: string;
-  productType: "stocked" | "configurable" | "keychain" | "vending";
+  productType: "stocked" | "configurable" | "keychain" | "vending" | "simple";
   maxUnitCount: number | null;
   priceTiers: Record<string, number>;
   unitField: string | null;
@@ -86,6 +86,8 @@ const TYPE_COLORS: Record<string, string> = {
   number: "#8B5CF6",
   colour: "#EC4899",
   select: "#F59E0B",
+  // Quick task 260430-icx — textarea (rich text) fields.
+  textarea: "#10B981",
 };
 
 // ============================================================================

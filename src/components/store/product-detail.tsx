@@ -12,6 +12,7 @@ import { RatingBadge } from "@/components/store/rating-badge";
 import type { HydratedOption, HydratedVariant } from "@/lib/variants";
 import type { PictureData } from "@/lib/image-manifest";
 import { ConfigurableProductView } from "@/components/store/configurable-product-view";
+import { SimpleProductView } from "@/components/store/simple-product-view";
 import type { PublicConfigField } from "@/lib/configurable-product-data";
 
 type ProductDetailProps = {
@@ -28,7 +29,7 @@ type ProductDetailProps = {
     category: { name: string; slug: string } | null;
     options: HydratedOption[];
     hydratedVariants: HydratedVariant[];
-    productType?: "stocked" | "configurable" | "keychain" | "vending";
+    productType?: "stocked" | "configurable" | "keychain" | "vending" | "simple";
   };
   isWishlistedInitial?: boolean;
   ratingAvg?: number;
@@ -56,6 +57,12 @@ export function ProductDetail({
   variantPictures = {},
   configurableData,
 }: ProductDetailProps) {
+  // Quick task 260430-icx — `simple` PDP renders <SimpleProductView>, NOT
+  // ConfigurableProductView, because textarea fields render as read-only
+  // HTML blocks instead of input widgets.
+  if (product.productType === "simple" && configurableData) {
+    return <SimpleProductView product={{ ...product, pictures }} {...configurableData} isWishlistedInitial={isWishlistedInitial} ratingAvg={ratingAvg} ratingCount={ratingCount} />;
+  }
   if ((product.productType === "configurable" || product.productType === "keychain" || product.productType === "vending") && configurableData) {
     return <ConfigurableProductView product={{ ...product, pictures }} {...configurableData} isWishlistedInitial={isWishlistedInitial} ratingAvg={ratingAvg} ratingCount={ratingCount} />;
   }

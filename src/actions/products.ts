@@ -254,6 +254,31 @@ export async function createProduct(
     }
   }
 
+  // Quick task 260430-icx — `simple` shares vending's flat-price model
+  // (priceTiers={"1":<amount>}, maxUnitCount=1, unitField=null) but does NOT
+  // auto-seed any config fields. Admin curates fields freely from the
+  // /admin/products/<id>/fields editor. simplePrice required for create.
+  if (productData.productType === "simple") {
+    const priceStr = (productData.simplePrice ?? "").trim();
+    if (!priceStr) {
+      try {
+        await db.delete(products).where(eq(products.id, id));
+      } catch {
+        /* best-effort rollback */
+      }
+      return { error: { simplePrice: ["Price is required for simple products"] } };
+    }
+    const priceNum = Number(priceStr);
+    await db
+      .update(products)
+      .set({
+        unitField: null,
+        maxUnitCount: 1,
+        priceTiers: JSON.stringify({ 1: priceNum }),
+      })
+      .where(eq(products.id, id));
+  }
+
   revalidatePath("/admin/products");
   revalidatePath("/admin");
   return { success: true, productId: id };
@@ -412,6 +437,25 @@ export async function updateProduct(
       } catch (err) {
         console.error("[updateProduct] seedVendingFields failed:", err);
       }
+    }
+  }
+
+  // Quick task 260430-icx — `simple` re-writes the tier-pricing trio on every
+  // update so admin price edits propagate. NO auto-seed (unlike vending).
+  // simplePrice empty -> leave existing tier untouched (form may omit field
+  // when user hasn't changed it).
+  if (productData.productType === "simple") {
+    const priceStr = (productData.simplePrice ?? "").trim();
+    if (priceStr) {
+      const priceNum = Number(priceStr);
+      await db
+        .update(products)
+        .set({
+          unitField: null,
+          maxUnitCount: 1,
+          priceTiers: JSON.stringify({ 1: priceNum }),
+        })
+        .where(eq(products.id, id));
     }
   }
 

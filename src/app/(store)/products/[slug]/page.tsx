@@ -47,8 +47,13 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
   ]);
 
   // Phase 19 (19-06) — fetch configurable-product data when productType is configurable-like
+  // Quick task 260430-icx — `simple` shares the configurable-data shape (config fields list)
+  // so the storefront <SimpleProductView> reads from the same payload.
   const configurableData =
-    (product.productType === "configurable" || product.productType === "keychain" || product.productType === "vending")
+    (product.productType === "configurable" ||
+      product.productType === "keychain" ||
+      product.productType === "vending" ||
+      product.productType === "simple")
       ? await getConfigurableProductData(product.id)
       : undefined;
 

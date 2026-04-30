@@ -41,8 +41,11 @@ export type ProductFormInitial = {
   categoryId: string | null;
   subcategoryId: string | null;
   // Phase 19 (19-03) — product type + lock state
-  productType?: "stocked" | "configurable" | "keychain" | "vending";
+  // Quick task 260430-icx — `simple` added.
+  productType?: "stocked" | "configurable" | "keychain" | "vending" | "simple";
   lockedReason?: string;
+  /** Quick task 260430-icx — flat MYR price for `simple` products only. */
+  simplePrice?: string | null;
 };
 
 export type CategoryOption = { id: string; name: string };
@@ -97,8 +100,13 @@ export function ProductForm({
   const [isActive, setIsActive] = useState(initialData?.isActive ?? true);
   const [isFeatured, setIsFeatured] = useState(initialData?.isFeatured ?? false);
   // Phase 19 (19-03) — product type state
-  const [productType, setProductType] = useState<"stocked" | "configurable" | "keychain" | "vending">(
+  // Quick task 260430-icx — `simple` added.
+  const [productType, setProductType] = useState<"stocked" | "configurable" | "keychain" | "vending" | "simple">(
     initialData?.productType ?? "stocked"
+  );
+  // Quick task 260430-icx — flat price for `simple` productType.
+  const [simplePrice, setSimplePrice] = useState<string>(
+    initialData?.simplePrice ?? ""
   );
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -116,6 +124,16 @@ export function ProductForm({
       (!/^\d+$/.test(productionDays) || Number(productionDays) <= 0)
     ) {
       next.productionDays = "Must be a positive whole number";
+    }
+
+    // Quick task 260430-icx — simplePrice required + numeric for `simple` products.
+    if (productType === "simple") {
+      const trimmed = simplePrice.trim();
+      if (!trimmed) {
+        next.simplePrice = "Valid price required (e.g. 19.99)";
+      } else if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) {
+        next.simplePrice = "Price must be a number with up to 2 decimal places";
+      }
     }
 
     setErrors(next);
@@ -161,6 +179,8 @@ export function ProductForm({
       // Phase 19 (19-03) — include productType in every save
       productType,
       variants: [],
+      // Quick task 260430-icx — only include simplePrice when relevant.
+      ...(productType === "simple" ? { simplePrice: simplePrice.trim() } : {}),
     };
 
     startTransition(async () => {
@@ -195,7 +215,11 @@ export function ProductForm({
       if (!editing && "productId" in result && result.productId) {
         // Phase 19 (19-03) — new configurable + keychain products go to configurator,
         // stocked to variants. Keychain is pre-seeded but fully editable.
-        if (productType === "configurable" || productType === "keychain" || productType === "vending") {
+        // Quick task 260430-icx — `simple` redirects to its own /fields editor
+        // (no auto-seed; admin curates fields freely).
+        if (productType === "simple") {
+          router.push(`/admin/products/${result.productId}/fields`);
+        } else if (productType === "configurable" || productType === "keychain" || productType === "vending") {
           router.push(`/admin/products/${result.productId}/configurator`);
         } else {
           router.push(`/admin/products/${result.productId}/variants`);
@@ -462,6 +486,41 @@ export function ProductForm({
           </CardContent>
         </Card>
       )}
+      {/* Quick task 260430-icx — Simple product price + fields link */}
+      {productType === "simple" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Price (MYR)</CardTitle>
+            <p className="text-sm text-[var(--color-brand-text-muted)]">
+              Flat price for this product. Customer-filled fields (if any) do not affect price.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Label htmlFor="simplePrice">Price</Label>
+            <Input
+              id="simplePrice"
+              type="text"
+              inputMode="decimal"
+              value={simplePrice}
+              onChange={(e) => setSimplePrice(e.target.value)}
+              placeholder="e.g. 19.99"
+              className="h-10 max-w-xs"
+            />
+            {errors.simplePrice && (
+              <p className="text-sm text-red-500">{errors.simplePrice}</p>
+            )}
+            {initialData?.id && (
+              <a
+                href={`/admin/products/${initialData.id}/fields`}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
+              >
+                Manage Fields →
+              </a>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Vending Machine — pre-seeded but editable */}
       {productType === "vending" && initialData?.id && (
         <Card>
