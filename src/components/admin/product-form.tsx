@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Save } from "lucide-react";
+import { Save, Check } from "lucide-react";
 import { createProduct, updateProduct } from "@/actions/products";
 import { updateProductType } from "@/actions/configurator";
 import { ProductTypeRadio } from "@/components/admin/product-type-radio";
@@ -160,7 +160,15 @@ export function ProductForm({
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const [pending, startTransition] = useTransition();
+
+  // Auto-hide success indicator after 2.5s.
+  useEffect(() => {
+    if (!saveSuccess) return;
+    const t = setTimeout(() => setSaveSuccess(false), 2500);
+    return () => clearTimeout(t);
+  }, [saveSuccess]);
 
   // Quick task 260430-kmr — autosave draft. The form-state object is the
   // single source of truth bubbled into useProductDraft; on Save success we
@@ -370,10 +378,14 @@ export function ProductForm({
         } else {
           router.push(`/admin/products/${result.productId}/variants`);
         }
+        router.refresh();
       } else {
-        router.push("/admin/products");
+        // Edit flow — stay on the page so admin can keep editing without
+        // bouncing to the products list. Show a transient "Saved" indicator
+        // and refresh server data in place.
+        setSaveSuccess(true);
+        router.refresh();
       }
-      router.refresh();
     });
   }
 
@@ -718,13 +730,22 @@ export function ProductForm({
       )}
 
       <div className="flex flex-wrap items-center justify-end gap-3">
+        {saveSuccess && (
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1 text-sm font-medium text-green-700 ring-1 ring-green-200"
+            role="status"
+          >
+            <Check className="h-4 w-4" />
+            Saved
+          </span>
+        )}
         <Button
           type="button"
           variant="outline"
           onClick={() => router.push("/admin/products")}
           disabled={pending}
         >
-          Cancel
+          {editing ? "Back to Products" : "Cancel"}
         </Button>
         <Button
           type="submit"
