@@ -39,13 +39,30 @@ export function DescriptionDisplay({ html }: Props) {
   const passthrough: Record<string, unknown> = { [dangerProp]: innerHtml };
 
   return (
-    <div className="prose prose-sm max-w-none ql-output text-base leading-relaxed" style={{ color: BRAND.ink }}>
+    <div
+      className="prose prose-sm max-w-none ql-output text-base leading-relaxed"
+      style={{
+        color: BRAND.ink,
+        // Containment: prevent rich-text content from spilling outside the
+        // parent card boundary (long URLs, wide tables, large pre/code blocks).
+        overflowWrap: "anywhere",
+        wordBreak: "break-word",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+      }}
+    >
       <div {...passthrough} />
       {/* Minimal Quill class-hook rendering rules — keep in sync with the
           allowlist in src/lib/rich-text-sanitizer.ts. We do NOT import Quill's
           snow.css because that styles the editor chrome (toolbar etc.); only
           the output formatting classes need rendering rules. */}
       <style jsx>{`
+        :global(.ql-output > div), :global(.ql-output > div *) { max-width: 100%; box-sizing: border-box; }
+        :global(.ql-output img), :global(.ql-output video), :global(.ql-output iframe) {
+          max-width: 100%; height: auto; display: block;
+        }
+        :global(.ql-output pre), :global(.ql-output code) { white-space: pre-wrap; word-break: break-word; overflow-x: auto; }
+        :global(.ql-output table) { display: block; max-width: 100%; overflow-x: auto; }
         :global(.ql-output .ql-align-center) { text-align: center; }
         :global(.ql-output .ql-align-right)  { text-align: right; }
         :global(.ql-output .ql-align-justify){ text-align: justify; }

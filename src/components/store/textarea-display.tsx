@@ -38,7 +38,16 @@ export function TextareaDisplay({ label, helpText, html }: Props) {
   const passthrough: Record<string, unknown> = { [dangerProp]: innerHtml };
 
   return (
-    <div className="flex flex-col gap-2">
+    <div
+      className="flex flex-col gap-2"
+      style={{
+        // Containment: prevent textarea content from spilling outside the parent box.
+        overflowWrap: "anywhere",
+        wordBreak: "break-word",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+      }}
+    >
       {label && (
         <h3
           className="text-sm font-bold uppercase tracking-wide"
