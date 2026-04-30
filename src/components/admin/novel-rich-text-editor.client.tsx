@@ -1,189 +1,117 @@
 "use client";
 
 /**
- * Quick task 260430-icx — Inner Novel/Tiptap editor (client-only).
+ * Quill rich-text editor (client-only).
  *
- * Built on Novel's EditorRoot + EditorContent + EditorBubble primitives,
- * which themselves wrap Tiptap. We use only the bubble menu (no slash
- * command, no AI). Bubble menu actions: bold, italic, underline,
- * strikethrough, h1, h2, h3, bulletList, orderedList.
+ * Word-style fixed toolbar — visible at the top of the editor, all formatting
+ * buttons shown upfront. Customer-friendly UX as requested.
  *
- * Output: emits HTML string via onChange (Tiptap's getHTML()).
+ * Uses react-quill-new (React 19 / Next 15 compatible fork of react-quill).
  *
- * Imported lazily via next/dynamic({ ssr: false }) from the wrapper so
- * Tiptap never touches the SSR boundary (it requires `window`).
+ * Output: HTML string via onChange (Quill's getSemanticHTML fallback to .root.innerHTML).
+ *
+ * Imported lazily via next/dynamic({ ssr: false }) from the wrapper so Quill
+ * never touches the SSR boundary (it requires `document`).
+ *
+ * NB: Filename is preserved (novel-rich-text-editor.client.tsx) so the public
+ * import path / git history continuity stays intact, even though the
+ * implementation switched from Novel/Tiptap to Quill.
  */
 
-import { useEffect, useState, useRef } from "react";
-import {
-  EditorRoot,
-  EditorContent,
-  EditorBubble,
-  EditorBubbleItem,
-  StarterKit,
-  TiptapUnderline,
-} from "novel";
-import type { JSONContent, EditorInstance } from "novel";
-import {
-  Bold,
-  Italic,
-  Underline as UnderlineIcon,
-  Strikethrough,
-  Heading1,
-  Heading2,
-  Heading3,
-  List,
-  ListOrdered,
-} from "lucide-react";
+import "react-quill-new/dist/quill.snow.css";
+import dynamicImport from "next/dynamic";
+import { useMemo } from "react";
+
+const ReactQuill = dynamicImport(() => import("react-quill-new"), {
+  ssr: false,
+  loading: () => (
+    <div
+      className="h-40 rounded-md border bg-muted/30 flex items-center justify-center text-sm text-muted-foreground"
+      aria-busy="true"
+    >
+      Loading editor…
+    </div>
+  ),
+});
 
 type Props = {
   value: string;
   onChange: (html: string) => void;
 };
 
-const BUBBLE_BTN =
-  "flex h-8 w-8 items-center justify-center rounded hover:bg-slate-100 transition-colors text-slate-700";
-
 export function NovelEditorInner({ value, onChange }: Props) {
-  // Tiptap accepts HTML directly as the `content` prop on the underlying editor.
-  // We hold an initialContent in state so that `value` changes from the parent
-  // (e.g. discarding edits) re-mount the editor cleanly.
-  const [initialHtml] = useState(value);
-  const editorRef = useRef<EditorInstance | null>(null);
+  // Word-style ribbon — every option visible up front. Buckets:
+  // - Block/style: header (H1-H3 + body), font family, size
+  // - Inline: bold / italic / underline / strike
+  // - Colour: foreground + background
+  // - Alignment: left / center / right / justify
+  // - Lists: ordered / bullet / indent
+  // - Misc: link, blockquote, clean
+  const modules = useMemo(
+    () => ({
+      toolbar: [
+        [{ header: [1, 2, 3, false] }, { font: [] }, { size: [] }],
+        ["bold", "italic", "underline", "strike"],
+        [{ color: [] }, { background: [] }],
+        [{ align: [] }],
+        [{ list: "ordered" }, { list: "bullet" }, { indent: "-1" }, { indent: "+1" }],
+        ["blockquote", "link"],
+        ["clean"],
+      ],
+    }),
+    [],
+  );
 
-  // Keep the editor in sync if the parent resets the value externally.
-  useEffect(() => {
-    const ed = editorRef.current;
-    if (!ed) return;
-    if (ed.getHTML() !== value) {
-      // Avoid infinite loop: only update when value diverges (e.g. external clear).
-      ed.commands.setContent(value, false);
-    }
-  }, [value]);
+  const formats = [
+    "header",
+    "font",
+    "size",
+    "bold",
+    "italic",
+    "underline",
+    "strike",
+    "color",
+    "background",
+    "align",
+    "list",
+    "indent",
+    "blockquote",
+    "link",
+  ];
 
   return (
-    <EditorRoot>
-      <EditorContent
-        className="min-h-[160px] prose prose-sm max-w-none p-3 focus:outline-none"
-        immediatelyRender={false}
-        initialContent={undefined as unknown as JSONContent}
-        // Pass HTML via the underlying Tiptap editor options:
-        editorProps={{
-          attributes: {
-            class:
-              "prose prose-sm max-w-none focus:outline-none min-h-[140px] [&_p]:my-1",
-          },
-        }}
-        extensions={[StarterKit, TiptapUnderline]}
-        onCreate={({ editor }) => {
-          editorRef.current = editor;
-          if (initialHtml) {
-            editor.commands.setContent(initialHtml, false);
-          }
-        }}
-        onUpdate={({ editor }) => {
-          onChange(editor.getHTML());
-        }}
-      >
-        <EditorBubble
-          tippyOptions={{
-            placement: "top",
-          }}
-          className="flex w-fit items-center gap-0.5 rounded-md border bg-white p-1 shadow-md"
-        >
-          <EditorBubbleItem
-            onSelect={(editor) => editor.chain().focus().toggleBold().run()}
-          >
-            <button type="button" className={BUBBLE_BTN} aria-label="Bold">
-              <Bold className="h-4 w-4" />
-            </button>
-          </EditorBubbleItem>
-          <EditorBubbleItem
-            onSelect={(editor) => editor.chain().focus().toggleItalic().run()}
-          >
-            <button type="button" className={BUBBLE_BTN} aria-label="Italic">
-              <Italic className="h-4 w-4" />
-            </button>
-          </EditorBubbleItem>
-          <EditorBubbleItem
-            onSelect={(editor) => editor.chain().focus().toggleUnderline().run()}
-          >
-            <button
-              type="button"
-              className={BUBBLE_BTN}
-              aria-label="Underline"
-            >
-              <UnderlineIcon className="h-4 w-4" />
-            </button>
-          </EditorBubbleItem>
-          <EditorBubbleItem
-            onSelect={(editor) => editor.chain().focus().toggleStrike().run()}
-          >
-            <button
-              type="button"
-              className={BUBBLE_BTN}
-              aria-label="Strikethrough"
-            >
-              <Strikethrough className="h-4 w-4" />
-            </button>
-          </EditorBubbleItem>
-          <span className="mx-1 h-5 w-px bg-slate-200" aria-hidden />
-          <EditorBubbleItem
-            onSelect={(editor) =>
-              editor.chain().focus().toggleHeading({ level: 1 }).run()
-            }
-          >
-            <button type="button" className={BUBBLE_BTN} aria-label="Heading 1">
-              <Heading1 className="h-4 w-4" />
-            </button>
-          </EditorBubbleItem>
-          <EditorBubbleItem
-            onSelect={(editor) =>
-              editor.chain().focus().toggleHeading({ level: 2 }).run()
-            }
-          >
-            <button type="button" className={BUBBLE_BTN} aria-label="Heading 2">
-              <Heading2 className="h-4 w-4" />
-            </button>
-          </EditorBubbleItem>
-          <EditorBubbleItem
-            onSelect={(editor) =>
-              editor.chain().focus().toggleHeading({ level: 3 }).run()
-            }
-          >
-            <button type="button" className={BUBBLE_BTN} aria-label="Heading 3">
-              <Heading3 className="h-4 w-4" />
-            </button>
-          </EditorBubbleItem>
-          <span className="mx-1 h-5 w-px bg-slate-200" aria-hidden />
-          <EditorBubbleItem
-            onSelect={(editor) =>
-              editor.chain().focus().toggleBulletList().run()
-            }
-          >
-            <button
-              type="button"
-              className={BUBBLE_BTN}
-              aria-label="Bullet list"
-            >
-              <List className="h-4 w-4" />
-            </button>
-          </EditorBubbleItem>
-          <EditorBubbleItem
-            onSelect={(editor) =>
-              editor.chain().focus().toggleOrderedList().run()
-            }
-          >
-            <button
-              type="button"
-              className={BUBBLE_BTN}
-              aria-label="Ordered list"
-            >
-              <ListOrdered className="h-4 w-4" />
-            </button>
-          </EditorBubbleItem>
-        </EditorBubble>
-      </EditorContent>
-    </EditorRoot>
+    <div className="quill-host rounded-md border border-[var(--color-brand-border)] bg-white">
+      <ReactQuill
+        theme="snow"
+        value={value}
+        onChange={onChange}
+        modules={modules}
+        formats={formats}
+        placeholder="Start typing… use the toolbar to format."
+      />
+      <style jsx>{`
+        .quill-host :global(.ql-toolbar) {
+          border-top: 0;
+          border-left: 0;
+          border-right: 0;
+          background: #f8fafc;
+          border-radius: 6px 6px 0 0;
+          padding: 6px 8px;
+        }
+        .quill-host :global(.ql-container) {
+          min-height: 220px;
+          border: 0;
+          font-size: 14px;
+        }
+        .quill-host :global(.ql-editor) {
+          min-height: 220px;
+          padding: 14px 16px;
+        }
+        .quill-host :global(.ql-editor.ql-blank::before) {
+          color: #94a3b8;
+          font-style: normal;
+        }
+      `}</style>
+    </div>
   );
 }
