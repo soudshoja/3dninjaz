@@ -1,6 +1,6 @@
 "use client";
 
-import { Package, Wand2, Link, Boxes, FileText, Check, AlertCircle } from "lucide-react";
+import { Package, Wand2, Link, Boxes, FileText, Check, AlertCircle, Info } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 
 // ============================================================================
@@ -12,16 +12,27 @@ import { BRAND } from "@/lib/brand";
 //
 // Quick task 260430-icx — extended to 5 cards with `Simple` (5th card).
 // Grid widened from lg:grid-cols-4 to lg:grid-cols-5.
+//
+// Type-guard fix — perCardWarnings enables per-card amber warnings for
+// destructive-only transitions (e.g. configurable-like → stocked deletes
+// fields). Non-destructive transitions (configLike ↔ configLike) are always
+// free — no warning shown.
 // ============================================================================
 
+type ProductTypeValue = "stocked" | "configurable" | "keychain" | "vending" | "simple";
+
 type Props = {
-  value: "stocked" | "configurable" | "keychain" | "vending" | "simple";
-  onChange: (
-    v: "stocked" | "configurable" | "keychain" | "vending" | "simple",
-  ) => void;
+  value: ProductTypeValue;
+  onChange: (v: ProductTypeValue) => void;
   /** When true, render disabled state + the explanation message. */
   locked?: boolean;
   lockedReason?: string;
+  /**
+   * Optional info note shown UNDER the radio grid — e.g. "X variants stay in DB".
+   * Per "keep all data and switch" directive: switches never destroy data, so
+   * this is informational only (not a warning, not a blocker).
+   */
+  switchInfo?: string;
 };
 
 function SelectedBadge() {
@@ -41,6 +52,7 @@ export function ProductTypeRadio({
   onChange,
   locked = false,
   lockedReason,
+  switchInfo,
 }: Props) {
   const stockedSelected = value === "stocked";
   const configurableSelected = value === "configurable";
@@ -263,6 +275,16 @@ export function ProductTypeRadio({
           </span>
         </button>
       </div>
+
+      {/* Info note — appears when there's data on the product that won't show
+          under all types (variants for non-stocked, fields for stocked).
+          Switching is always allowed; data is preserved either way. */}
+      {!locked && switchInfo && (
+        <div className="mt-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900 flex gap-2 items-start">
+          <Info className="h-4 w-4 mt-0.5 shrink-0" aria-hidden />
+          <span>{switchInfo}</span>
+        </div>
+      )}
     </div>
   );
 }
