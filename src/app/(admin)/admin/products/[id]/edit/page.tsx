@@ -11,6 +11,7 @@ import {
 import { db } from "@/lib/db";
 import { productVariants, productConfigFields } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
+import { getActiveCustomFontsForLoader } from "@/actions/custom-fonts";
 
 export const metadata: Metadata = {
   title: "Admin · Edit Product",
@@ -26,12 +27,13 @@ export default async function EditProductPage({
   const product = await getProduct(id);
   if (!product) notFound();
 
-  const [categories, subcategories, variantCountRow, fieldCountRow] = await Promise.all([
+  const [categories, subcategories, variantCountRow, fieldCountRow, activeCustomFonts] = await Promise.all([
     getCategories(),
     getAllSubcategories(),
     // Phase 19 (19-03) — detect attached data to drive locked-radio state
     db.select({ c: sql<number>`COUNT(*)` }).from(productVariants).where(eq(productVariants.productId, id)),
     db.select({ c: sql<number>`COUNT(*)` }).from(productConfigFields).where(eq(productConfigFields.productId, id)),
+    getActiveCustomFontsForLoader().catch(() => [] as { familySlug: string; fileUrl: string; displayName: string }[]),
   ]);
 
   const variantCount = Number(variantCountRow[0]?.c ?? 0);
@@ -209,6 +211,7 @@ export default async function EditProductPage({
           categoryId: s.categoryId,
           name: s.name,
         }))}
+        customFonts={activeCustomFonts}
       />
     </div>
   );

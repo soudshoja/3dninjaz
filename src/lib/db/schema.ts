@@ -1624,3 +1624,23 @@ export const colors = mysqlTable(
     activeIdx: index("idx_colors_active").on(t.isActive),
   }),
 );
+
+// ============================================================================
+// Custom Fonts — admin-uploaded .woff2/.woff brand fonts
+//
+// Stored at public/uploads/fonts/<id>/<filename>.
+// familySlug is the CSS class suffix (ql-font-<slug>) and font-family name.
+// isActive toggle lets admin hide a font without deleting it.
+// ============================================================================
+
+export const customFonts = mysqlTable("custom_fonts", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  displayName: varchar("display_name", { length: 64 }).notNull(),
+  familySlug: varchar("family_slug", { length: 32 }).notNull().unique(),
+  fileUrl: varchar("file_url", { length: 255 }).notNull(),
+  mimeType: varchar("mime_type", { length: 64 }).notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
+});
+
+export type CustomFont = typeof customFonts.$inferSelect;

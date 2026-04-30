@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition, useEffect } from "react";
 import Image from "next/image";
-import { UploadCloud, Trash2, Star } from "lucide-react";
+import { UploadCloud, Trash2, Star, Loader2, CheckCircle2 } from "lucide-react";
 import { deleteProductImage } from "@/actions/uploads";
 import { toast } from "sonner";
 
@@ -126,6 +126,9 @@ export function ImageUploader({
   // Background upload tracking (files index >= 1 when multiple files dropped)
   const [bgCount, setBgCount] = useState(0);
   const [bgErrors, setBgErrors] = useState<string[]>([]);
+  // bgFinishedAt: timestamp when the last background upload completed (for success flash)
+  const [bgFinishedAt, setBgFinishedAt] = useState<number | null>(null);
+  const bgCountRef = useRef(0);
   const bucket = productId ?? "new";
   const remaining = Math.max(0, maxImages - images.length);
 
@@ -202,6 +205,7 @@ export function ImageUploader({
     if (rest.length === 0) return;
 
     setBgCount(rest.length);
+    bgCountRef.current = rest.length;
 
     void Promise.allSettled(
       rest.map(async (file) => {
@@ -218,10 +222,25 @@ export function ImageUploader({
         } else {
           setBgErrors((prev) => [...prev, `${file.name}: ${result.error ?? "Upload failed"}`]);
         }
-        setBgCount((c) => Math.max(0, c - 1));
+        setBgCount((c) => {
+          const next = Math.max(0, c - 1);
+          bgCountRef.current = next;
+          if (next === 0) {
+            // Last background upload finished — trigger success flash
+            setBgFinishedAt(Date.now());
+          }
+          return next;
+        });
       }),
     );
   }
+
+  // Clear the success flash after 1500 ms
+  useEffect(() => {
+    if (bgFinishedAt === null) return;
+    const timer = setTimeout(() => setBgFinishedAt(null), 1500);
+    return () => clearTimeout(timer);
+  }, [bgFinishedAt]);
 
   function onInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     const fl = e.target.files;
@@ -281,9 +300,35 @@ export function ImageUploader({
   const atLimit = images.length >= maxImages;
   const isUploading = progress !== null;
   const isBgUploading = bgCount > 0;
+  const showBgSuccess = !isBgUploading && bgFinishedAt !== null;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 relative">
+      {/* Floating background-upload pill — positioned top-right of the uploader card */}
+      {(isBgUploading || showBgSuccess) && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={
+            "absolute -top-3 right-0 z-10 flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold text-white shadow-md transition-colors " +
+            (isBgUploading
+              ? "bg-blue-600"
+              : "bg-green-600")
+          }
+        >
+          {isBgUploading ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              Uploading {bgCount} more in background…
+            </>
+          ) : (
+            <>
+              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+              All uploads complete
+            </>
+          )}
+        </div>
+      )}
       <div
         role="button"
         tabIndex={0}
@@ -381,12 +426,7 @@ export function ImageUploader({
         </p>
       )}
 
-      {/* Background upload chip — non-blocking indicator for files index >= 1 */}
-      {isBgUploading && (
-        <p className="text-xs text-[var(--color-brand-text-muted)]" role="status">
-          Uploading {bgCount} more {bgCount === 1 ? "image" : "images"} in background…
-        </p>
-      )}
+      {/* Background upload indicator is now the floating pill above — no inline chip */}
 
       {/* Per-file background errors — non-blocking, listed inline */}
       {bgErrors.length > 0 && (
