@@ -174,9 +174,9 @@ export function SimpleProductView({
           </a>
         ) : null}
 
-        <div className="grid lg:grid-cols-2 gap-6 lg:gap-12 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-12 items-start">
           {/* LEFT: Gallery */}
-          <div className="lg:sticky lg:top-24">
+          <div className="min-w-0 lg:sticky lg:top-24">
             <div
               className="rounded-3xl overflow-hidden p-4"
               style={{

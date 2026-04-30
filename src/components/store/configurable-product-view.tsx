@@ -324,10 +324,10 @@ export function ConfigurableProductView({
         ) : null}
 
         {/* ── Two-column layout ─────────────────────────────────────────── */}
-        <div className="grid lg:grid-cols-2 gap-6 lg:gap-12 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-12 items-start">
 
           {/* ── LEFT: Gallery card (sticky on desktop) ─────────────────── */}
-          <div className="lg:sticky lg:top-24">
+          <div className="min-w-0 lg:sticky lg:top-24">
             {/* Hero gallery card — Claymorphism: white bg + chunky shadow + thick border */}
             <div
               className="rounded-3xl overflow-hidden"
