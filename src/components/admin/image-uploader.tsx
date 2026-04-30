@@ -98,9 +98,11 @@ export function ImageUploader({
   maxImages = 10,
   thumbnailIndex = 0,
   onThumbnailChange,
+  captions,
+  onCaptionsChange,
 }: {
   images: string[];
-  onImagesChange: (next: string[]) => void;
+  onImagesChange: (next: string[] | ((prev: string[]) => string[])) => void;
   productId?: string;
   maxImages?: number;
   /**
@@ -111,12 +113,19 @@ export function ImageUploader({
   thumbnailIndex?: number;
   /** Fires when the admin picks a different image as the thumbnail. */
   onThumbnailChange?: (index: number) => void;
+  /** Per-image caption strings, index-aligned with `images`. Optional — omit to hide caption inputs. */
+  captions?: string[];
+  /** Fires with the updated captions array when any caption changes. */
+  onCaptionsChange?: (next: string[]) => void;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [pending, startTransition] = useTransition();
   const [progress, setProgress] = useState<UploadProgress | null>(null);
+  // Background upload tracking (files index >= 1 when multiple files dropped)
+  const [bgCount, setBgCount] = useState(0);
+  const [bgErrors, setBgErrors] = useState<string[]>([]);
   const bucket = productId ?? "new";
   const remaining = Math.max(0, maxImages - images.length);
 
@@ -125,76 +134,93 @@ export function ImageUploader({
     if (files.length === 0) return;
 
     setError(null);
-    const total = files.length;
-    const added: string[] = [];
+    setBgErrors([]);
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-
+    // Validate all files upfront so errors surface together.
+    const validFiles: File[] = [];
+    const validationErrors: string[] = [];
+    for (const file of files) {
       if (!ALLOWED_MIME.includes(file.type)) {
-        setError(`Unsupported type: ${file.type}. Use JPEG, PNG, WebP, or HEIC.`);
-        continue;
+        validationErrors.push(`Unsupported type: ${file.type}. Use JPEG, PNG, WebP, or HEIC.`);
+      } else if (file.size > MAX_BYTES) {
+        validationErrors.push(`"${file.name}" exceeds 50 MB.`);
+      } else {
+        validFiles.push(file);
       }
-      if (file.size > MAX_BYTES) {
-        setError(`"${file.name}" exceeds 50 MB.`);
-        continue;
-      }
-
-      // Show initial progress state for this file.
-      setProgress({
-        fileName: file.name,
-        index: i + 1,
-        total,
-        percent: 0,
-        bytesUploaded: 0,
-        bytesTotal: file.size,
-        processing: false,
-      });
-
-      const fd = new FormData();
-      fd.set("file", file);
-      fd.set("productId", bucket);
-
-      const result = await uploadWithProgress(
-        fd,
-        (loaded, t) => {
-          setProgress({
-            fileName: file.name,
-            index: i + 1,
-            total,
-            percent: Math.round((loaded / t) * 100),
-            bytesUploaded: loaded,
-            bytesTotal: t,
-            processing: false,
-          });
-        },
-        () => {
-          // Upload transfer complete — server is now encoding with Sharp.
-          setProgress((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  percent: 100,
-                  bytesUploaded: prev.bytesTotal,
-                  processing: true,
-                }
-              : prev,
-          );
-        },
-      );
-
-      if (result.error) {
-        setError(result.error);
-        setProgress(null);
-        continue;
-      }
-      if (result.url) added.push(result.url);
     }
+    if (validationErrors.length > 0) {
+      setError(validationErrors[0]);
+    }
+    if (validFiles.length === 0) return;
+
+    // ── Foreground: first file with full progress UI ──────────────────────
+    const first = validFiles[0];
+    setProgress({
+      fileName: first.name,
+      index: 1,
+      total: validFiles.length,
+      percent: 0,
+      bytesUploaded: 0,
+      bytesTotal: first.size,
+      processing: false,
+    });
+
+    const firstFd = new FormData();
+    firstFd.set("file", first);
+    firstFd.set("productId", bucket);
+
+    const firstResult = await uploadWithProgress(
+      firstFd,
+      (loaded, t) => {
+        setProgress({
+          fileName: first.name,
+          index: 1,
+          total: validFiles.length,
+          percent: Math.round((loaded / t) * 100),
+          bytesUploaded: loaded,
+          bytesTotal: t,
+          processing: false,
+        });
+      },
+      () => {
+        setProgress((prev) =>
+          prev ? { ...prev, percent: 100, bytesUploaded: prev.bytesTotal, processing: true } : prev,
+        );
+      },
+    );
 
     setProgress(null);
-    if (added.length > 0) {
-      onImagesChange([...images, ...added]);
+
+    if (firstResult.error) {
+      setError(firstResult.error);
+    } else if (firstResult.url) {
+      onImagesChange([...images, firstResult.url]);
     }
+
+    // ── Background: remaining files, fire-and-forget ──────────────────────
+    const rest = validFiles.slice(1);
+    if (rest.length === 0) return;
+
+    setBgCount(rest.length);
+
+    void Promise.allSettled(
+      rest.map(async (file) => {
+        const fd = new FormData();
+        fd.set("file", file);
+        fd.set("productId", bucket);
+
+        // No progress callback for background uploads — non-blocking.
+        const result = await uploadWithProgress(fd, () => {}, () => {});
+
+        if (result.url) {
+          // Functional setter — safe against concurrent state updates.
+          onImagesChange((prev: string[]) => [...prev, result.url!]);
+        } else {
+          setBgErrors((prev) => [...prev, `${file.name}: ${result.error ?? "Upload failed"}`]);
+        }
+        setBgCount((c) => Math.max(0, c - 1));
+      }),
+    );
   }
 
   function onInputChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -254,6 +280,7 @@ export function ImageUploader({
 
   const atLimit = images.length >= maxImages;
   const isUploading = progress !== null;
+  const isBgUploading = bgCount > 0;
 
   return (
     <div className="space-y-3">
@@ -354,73 +381,107 @@ export function ImageUploader({
         </p>
       )}
 
+      {/* Background upload chip — non-blocking indicator for files index >= 1 */}
+      {isBgUploading && (
+        <p className="text-xs text-[var(--color-brand-text-muted)]" role="status">
+          Uploading {bgCount} more {bgCount === 1 ? "image" : "images"} in background…
+        </p>
+      )}
+
+      {/* Per-file background errors — non-blocking, listed inline */}
+      {bgErrors.length > 0 && (
+        <ul className="space-y-0.5" role="alert">
+          {bgErrors.map((msg) => (
+            <li key={msg} className="text-xs text-red-500">
+              {msg}
+            </li>
+          ))}
+        </ul>
+      )}
+
       {images.length > 0 && (
         <div className="grid grid-cols-4 gap-3 sm:grid-cols-5">
           {images.map((url, idx) => {
             const isThumb = idx === thumbnailIndex;
             return (
-              <div
-                key={url}
-                className={
-                  "group relative aspect-square overflow-hidden rounded-md border bg-white " +
-                  (isThumb
-                    ? "border-[var(--color-brand-cta)] ring-2 ring-[var(--color-brand-cta)]/40"
-                    : "border-[var(--color-brand-border)]")
-                }
-              >
-                <Image
-                  src={url}
-                  alt="Product image"
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 640px) 25vw, 120px"
-                />
-                {/* Thumbnail picker — only mounted when the parent provided
-                    onThumbnailChange so we can be reused (cart line photos
-                    etc.) without forcing a thumb concept. The button is
-                    always visible (not hover-only) on touch devices. */}
-                {onThumbnailChange ? (
+              <div key={url} className="flex flex-col gap-1">
+                <div
+                  className={
+                    "group relative aspect-square overflow-hidden rounded-md border bg-white " +
+                    (isThumb
+                      ? "border-[var(--color-brand-cta)] ring-2 ring-[var(--color-brand-cta)]/40"
+                      : "border-[var(--color-brand-border)]")
+                  }
+                >
+                  <Image
+                    src={url}
+                    alt="Product image"
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 640px) 25vw, 120px"
+                  />
+                  {/* Thumbnail picker — only mounted when the parent provided
+                      onThumbnailChange so we can be reused (cart line photos
+                      etc.) without forcing a thumb concept. The button is
+                      always visible (not hover-only) on touch devices. */}
+                  {onThumbnailChange ? (
+                    <button
+                      type="button"
+                      onClick={() => onThumbnailChange(idx)}
+                      disabled={pending}
+                      aria-label={
+                        isThumb
+                          ? "Current storefront thumbnail"
+                          : "Use as storefront thumbnail"
+                      }
+                      aria-pressed={isThumb}
+                      title={
+                        isThumb
+                          ? "Storefront thumbnail"
+                          : "Use as storefront thumbnail"
+                      }
+                      className={
+                        "absolute left-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold shadow-sm transition-colors " +
+                        (isThumb
+                          ? "bg-[var(--color-brand-cta)] text-white"
+                          : "bg-white/90 text-slate-700 hover:bg-white")
+                      }
+                    >
+                      <Star
+                        className={"h-3.5 w-3.5 " + (isThumb ? "fill-current" : "")}
+                      />
+                    </button>
+                  ) : null}
                   <button
                     type="button"
-                    onClick={() => onThumbnailChange(idx)}
+                    onClick={() => handleRemove(url)}
                     disabled={pending}
-                    aria-label={
-                      isThumb
-                        ? "Current storefront thumbnail"
-                        : "Use as storefront thumbnail"
-                    }
-                    aria-pressed={isThumb}
-                    title={
-                      isThumb
-                        ? "Storefront thumbnail"
-                        : "Use as storefront thumbnail"
-                    }
-                    className={
-                      "absolute left-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold shadow-sm transition-colors " +
-                      (isThumb
-                        ? "bg-[var(--color-brand-cta)] text-white"
-                        : "bg-white/90 text-slate-700 hover:bg-white")
-                    }
+                    aria-label="Remove image"
+                    className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-md bg-black/70 text-white transition-colors hover:bg-red-600 disabled:pointer-events-none disabled:opacity-50"
                   >
-                    <Star
-                      className={"h-3.5 w-3.5 " + (isThumb ? "fill-current" : "")}
-                    />
+                    <Trash2 className="h-3.5 w-3.5" />
                   </button>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => handleRemove(url)}
-                  disabled={pending}
-                  aria-label="Remove image"
-                  className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-md bg-black/70 text-white transition-colors hover:bg-red-600 disabled:pointer-events-none disabled:opacity-50"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-                {isThumb ? (
-                  <span className="absolute bottom-1 left-1 rounded-full bg-[var(--color-brand-cta)] px-2 py-0.5 text-[10px] font-bold text-white">
-                    Thumb
-                  </span>
-                ) : null}
+                  {isThumb ? (
+                    <span className="absolute bottom-1 left-1 rounded-full bg-[var(--color-brand-cta)] px-2 py-0.5 text-[10px] font-bold text-white">
+                      Thumb
+                    </span>
+                  ) : null}
+                </div>
+                {/* Inline caption input — only rendered when parent passes captions prop */}
+                {captions !== undefined && onCaptionsChange && (
+                  <input
+                    type="text"
+                    value={captions[idx] ?? ""}
+                    onChange={(e) => {
+                      const next = [...(captions ?? [])];
+                      next[idx] = e.target.value;
+                      onCaptionsChange(next);
+                    }}
+                    placeholder="Caption (optional)"
+                    maxLength={200}
+                    className="h-8 w-full rounded-md border border-[var(--color-brand-border)] bg-background px-2 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--color-brand-blue)]"
+                  />
+                )}
               </div>
             );
           })}

@@ -245,11 +245,15 @@ export function ProductForm({
     }
 
     // Quick task 260430-icx — simplePrice required + numeric for `simple` products.
+    // Edit flow: empty = "no change" (action keeps existing tier). Only validate
+    // when the admin has actually typed something, or on create where it is required.
     if (productType === "simple") {
       const trimmed = simplePrice.trim();
-      if (!trimmed) {
+      if (!trimmed && !editing) {
+        // Create flow — price is required.
         next.simplePrice = "Valid price required (e.g. 19.99)";
-      } else if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) {
+      } else if (trimmed && !/^\d+(\.\d{1,2})?$/.test(trimmed)) {
+        // Any flow — if non-empty, format must be valid.
         next.simplePrice = "Price must be a number with up to 2 decimal places";
       }
     }
@@ -298,7 +302,11 @@ export function ProductForm({
       productType,
       variants: [],
       // Quick task 260430-icx — only include simplePrice when relevant.
-      ...(productType === "simple" ? { simplePrice: simplePrice.trim() } : {}),
+      // Edit flow: omit entirely when field is empty so the action preserves
+      // the existing tier. Create flow: always include (validate() guards above).
+      ...(productType === "simple" && (simplePrice.trim() !== "" || !editing)
+        ? { simplePrice: simplePrice.trim() }
+        : {}),
       // Quick task 260430-kmr — single Save commits inline fields atomically
       // for simple + configurable. Server-side updateProduct fans out to
       // addConfigField/updateConfigField/deleteConfigField/reorderConfigFields.
@@ -510,51 +518,31 @@ export function ProductForm({
         <CardContent className="space-y-4">
           <ImageUploader
             images={images}
-            onImagesChange={(next) => {
-              // Keep captions array in sync: prune removed entries, pad new ones.
-              setCaptions((prev) => {
-                const next2 = next.map((url) => {
-                  const idx = images.indexOf(url);
-                  return idx >= 0 ? (prev[idx] ?? "") : "";
-                });
-                return next2;
+            onImagesChange={(nextOrUpdater) => {
+              // nextOrUpdater may be a plain array (remove / foreground upload)
+              // or a functional updater (background parallel uploads).
+              setImages((prev) => {
+                const next =
+                  typeof nextOrUpdater === "function"
+                    ? nextOrUpdater(prev)
+                    : nextOrUpdater;
+                // Keep captions array in sync: prune removed entries, pad new ones.
+                setCaptions((prevCaptions) =>
+                  next.map((url) => {
+                    const idx = prev.indexOf(url);
+                    return idx >= 0 ? (prevCaptions[idx] ?? "") : "";
+                  }),
+                );
+                return next;
               });
-              setImages(next);
             }}
             productId={initialData?.id}
             maxImages={999}
             thumbnailIndex={thumbnailIndex}
             onThumbnailChange={setThumbnailIndex}
+            captions={captions}
+            onCaptionsChange={setCaptions}
           />
-          {/* Phase 19 (19-10) — caption input per image */}
-          {images.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-[var(--color-brand-text-muted)]">
-                Captions (shown under each image on the product page — optional)
-              </p>
-              {images.map((url, idx) => (
-                <div key={url + idx} className="flex items-center gap-2">
-                  <span className="min-w-[24px] text-xs text-[var(--color-brand-text-muted)]">
-                    {idx + 1}.
-                  </span>
-                  <input
-                    type="text"
-                    value={captions[idx] ?? ""}
-                    onChange={(e) =>
-                      setCaptions((prev) => {
-                        const next = [...prev];
-                        next[idx] = e.target.value;
-                        return next;
-                      })
-                    }
-                    placeholder={`Caption for image ${idx + 1}`}
-                    maxLength={200}
-                    className="h-8 flex-1 rounded-md border border-[var(--color-brand-border)] bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-brand-blue)]"
-                  />
-                </div>
-              ))}
-            </div>
-          )}
           {errors.images && (
             <p className="mt-2 text-sm text-red-500">{errors.images}</p>
           )}

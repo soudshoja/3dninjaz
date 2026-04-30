@@ -74,6 +74,19 @@ export function TextareaDisplay({ label, helpText, html }: Props) {
         :global(.ql-output .ql-size-huge)  { font-size: 2.5em; }
         :global(.ql-output .ql-font-serif) { font-family: Georgia, serif; }
         :global(.ql-output .ql-font-monospace) { font-family: ui-monospace, Menlo, Consolas, monospace; }
+        :global(.ql-output ul) { list-style: disc; padding-left: 1.5em; margin: 0.5em 0; }
+        :global(.ql-output ol) { list-style: decimal; padding-left: 1.5em; margin: 0.5em 0; }
+        :global(.ql-output li) { display: list-item; margin: 0.25em 0; }
+        :global(.ql-output p)  { margin: 0.5em 0; }
+        :global(.ql-output h1) { font-size: 1.6em; font-weight: 700; margin: 0.7em 0 0.4em; }
+        :global(.ql-output h2) { font-size: 1.35em; font-weight: 700; margin: 0.6em 0 0.35em; }
+        :global(.ql-output h3) { font-size: 1.15em; font-weight: 700; margin: 0.5em 0 0.3em; }
+        :global(.ql-output strong) { font-weight: 700; }
+        :global(.ql-output em) { font-style: italic; }
+        :global(.ql-output u) { text-decoration: underline; }
+        :global(.ql-output s) { text-decoration: line-through; }
+        :global(.ql-output blockquote) { border-left: 3px solid #cbd5e1; padding-left: 1em; margin: 0.5em 0; color: #475569; }
+        :global(.ql-output a) { color: #2563eb; text-decoration: underline; }
       `}</style>
     </div>
   );
