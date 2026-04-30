@@ -80,7 +80,7 @@ const FIELD_TYPES: FieldTypeMeta[] = [
 // Type-specific config forms
 // ---------------------------------------------------------------------------
 
-function TextConfigForm({
+export function TextConfigForm({
   value,
   onChange,
 }: {
@@ -136,7 +136,7 @@ function TextConfigForm({
   );
 }
 
-function NumberConfigForm({
+export function NumberConfigForm({
   value,
   onChange,
 }: {
@@ -186,7 +186,7 @@ function NumberConfigForm({
   );
 }
 
-function ColourConfigForm({
+export function ColourConfigForm({
   productId,
   value,
   onChange,
@@ -281,7 +281,7 @@ function ColourConfigForm({
 
 type SelectOption = { label: string; value: string; priceAdd?: number };
 
-function SelectConfigForm({
+export function SelectConfigForm({
   value,
   onChange,
 }: {
