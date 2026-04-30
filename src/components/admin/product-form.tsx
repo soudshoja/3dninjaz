@@ -94,10 +94,13 @@ export function ProductForm({
   initialData,
   categories,
   subcategories,
+  customFonts,
 }: {
   initialData?: ProductFormInitial;
   categories: CategoryOption[];
   subcategories: SubcategoryOption[];
+  /** Custom uploaded fonts to surface in the Quill font picker. */
+  customFonts?: { familySlug: string; displayName: string }[];
 }) {
   const router = useRouter();
   const editing = !!initialData;
@@ -426,6 +429,7 @@ export function ProductForm({
             <NovelRichTextEditor
               value={description}
               onChange={setDescription}
+              customFonts={customFonts}
             />
             {errors.description && (
               <p className="text-sm text-red-500">{errors.description}</p>

@@ -4,6 +4,7 @@ import { SiteFooter } from "@/components/store/site-footer";
 import { CartDrawer } from "@/components/store/cart-drawer";
 import { BRAND } from "@/lib/brand";
 import { getActiveCategoryTree } from "@/lib/catalog";
+import { FontFaceLoader } from "@/components/store/font-face-loader";
 
 /**
  * Customer-facing route-group layout. Lightened (2026-04-20): mostly-white
@@ -31,6 +32,7 @@ export default async function StoreLayout({ children }: { children: ReactNode })
       style={{ backgroundColor: "#FFFFFF", color: BRAND.ink }}
       className="min-h-screen flex flex-col"
     >
+      <FontFaceLoader />
       <SiteNav categoryTree={categoryTree} />
       <main className="flex-1">{children}</main>
       <SiteFooter />

@@ -72,8 +72,15 @@ export function TextareaDisplay({ label, helpText, html }: Props) {
         :global(.ql-output .ql-size-small) { font-size: 0.75em; }
         :global(.ql-output .ql-size-large) { font-size: 1.5em; }
         :global(.ql-output .ql-size-huge)  { font-size: 2.5em; }
-        :global(.ql-output .ql-font-serif) { font-family: Georgia, serif; }
-        :global(.ql-output .ql-font-monospace) { font-family: ui-monospace, Menlo, Consolas, monospace; }
+        :global(.ql-output .ql-font-serif)     { font-family: Georgia, "Times New Roman", Times, serif; }
+        :global(.ql-output .ql-font-monospace)  { font-family: ui-monospace, Menlo, Consolas, "Liberation Mono", monospace; }
+        :global(.ql-output .ql-font-arial)      { font-family: Arial, Helvetica, sans-serif; }
+        :global(.ql-output .ql-font-times)      { font-family: "Times New Roman", Times, serif; }
+        :global(.ql-output .ql-font-georgia)    { font-family: Georgia, "Times New Roman", serif; }
+        :global(.ql-output .ql-font-courier)    { font-family: "Courier New", Courier, ui-monospace, monospace; }
+        :global(.ql-output .ql-font-verdana)    { font-family: Verdana, Geneva, sans-serif; }
+        :global(.ql-output .ql-font-tahoma)     { font-family: Tahoma, "Lucida Sans Unicode", sans-serif; }
+        :global(.ql-output .ql-font-comic)      { font-family: "Comic Sans MS", "Comic Sans", cursive; }
         :global(.ql-output ul) { list-style: disc; padding-left: 1.5em; margin: 0.5em 0; }
         :global(.ql-output ol) { list-style: decimal; padding-left: 1.5em; margin: 0.5em 0; }
         :global(.ql-output li) { display: list-item; margin: 0.25em 0; }

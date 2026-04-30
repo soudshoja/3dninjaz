@@ -9,6 +9,7 @@ import { SignOutButton } from "@/components/admin/sign-out-button";
 import { getPendingReviewCount } from "@/actions/admin-reviews";
 // Phase 7 (07-07) — recon drift sidebar badge.
 import { getReconDriftBadgeCount } from "@/actions/admin-recon";
+import { FontFaceLoader } from "@/components/store/font-face-loader";
 
 async function currentAdminPath(): Promise<string> {
   // Next passes the originally-requested URL on the `x-url` / `referer` set
@@ -44,6 +45,7 @@ const MOBILE_CHIPS = [
   { href: "/admin/recon", label: "Reconciliation" },
   { href: "/admin/users", label: "Customers" },
   { href: "/admin/coupons", label: "Coupons" },
+  { href: "/admin/fonts", label: "Fonts" },
   { href: "/admin/reviews", label: "Reviews" },
   { href: "/admin/shipping", label: "Shipping" },
   { href: "/admin/shipping/delyva", label: "Delyva" },
@@ -90,6 +92,8 @@ export default async function AdminLayout({
   const reconDriftCount = await getReconDriftBadgeCount();
 
   return (
+    <>
+      <FontFaceLoader />
     <div className="flex min-h-screen bg-gray-50 overflow-x-hidden">
       <aside className="hidden w-64 flex-col border-r border-[var(--color-brand-border)] bg-white p-6 md:flex">
         <Link href="/admin" className="flex items-center gap-2">
@@ -198,5 +202,6 @@ export default async function AdminLayout({
         <main className="flex-1 p-3 sm:p-6 md:p-8 min-w-0 overflow-x-hidden">{children}</main>
       </div>
     </div>
+    </>
   );
 }

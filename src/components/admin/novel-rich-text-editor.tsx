@@ -20,6 +20,8 @@ import dynamic from "next/dynamic";
 type WrapperProps = {
   value: string;
   onChange: (html: string) => void;
+  /** Custom uploaded fonts to include in the font picker. */
+  customFonts?: { familySlug: string; displayName: string }[];
 };
 
 const QuillEditorInner = dynamic(
@@ -37,6 +39,6 @@ const QuillEditorInner = dynamic(
   },
 );
 
-export function NovelRichTextEditor({ value, onChange }: WrapperProps) {
-  return <QuillEditorInner value={value} onChange={onChange} />;
+export function NovelRichTextEditor({ value, onChange, customFonts }: WrapperProps) {
+  return <QuillEditorInner value={value} onChange={onChange} customFonts={customFonts} />;
 }
