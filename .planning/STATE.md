@@ -45,7 +45,7 @@ Phase: 19 (Made-to-Order Product Type) — COMPLETE + post-shipment hotfix sweep
 Plans: 11/11 shipped + 5 hotfix commits applied (e5b55bd → c118ae6) addressing pre-existing Phase 7 upload bug, 50MB cap lift, XHR progress UI, server log monitor
 Next Phase: 20 (User & Role Management) — backlog, awaiting /gsd-spec-phase 20
 Status: c118ae6 on dev. CI auto-deploying. Server-side log monitor LIVE (1-min cron WhatsApp alerts to +96599800027). Awaiting human smoke on app.3dninjaz.com
-Last activity: 2026-04-27
+Last activity: 2026-04-30 — Completed quick task 260430-icx: simple productType + textarea field type
 
 Progress: [██████████] 100% (code) | Pre-launch admin actions pending
 
@@ -191,6 +191,7 @@ Recent decisions affecting current work:
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260429-nuu | Fix stale RSC cache in configurator — revalidatePath PDP on color/option field changes | 2026-04-29 | 2056a11 | [260429-nuu-fix-stale-rsc-cache-in-configurator-reva](./quick/260429-nuu-fix-stale-rsc-cache-in-configurator-reva/) |
+| 260430-icx | New productType `simple` + new field type `textarea` (Novel rich text) — 5th admin radio card, /fields editor, server-sanitized HTML rendering on PDP | 2026-04-30 | e02fd3b | [260430-icx-build-new-producttype-simple-new-field-t](./quick/260430-icx-build-new-producttype-simple-new-field-t/) |
 
 ### Roadmap Evolution
 
