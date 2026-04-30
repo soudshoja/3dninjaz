@@ -84,9 +84,9 @@ export function CartLineRow({
             Out of stock
           </p>
         ) : null}
-        <div className="mt-3 flex items-center gap-3">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <div
-            className="inline-flex items-center rounded-full border-2 overflow-hidden bg-white"
+            className="inline-flex items-center rounded-full border-2 overflow-hidden bg-white shrink-0"
             style={{ borderColor: BRAND.ink }}
           >
             <button
@@ -117,7 +117,7 @@ export function CartLineRow({
             type="button"
             onClick={() => remove(key)}
             aria-label={`Remove ${item.productName} from bag`}
-            className="min-h-[48px] px-3 inline-flex items-center gap-1 text-sm font-semibold hover:underline text-zinc-900"
+            className="min-h-[44px] px-3 inline-flex items-center gap-1 text-sm font-semibold hover:underline text-zinc-900"
           >
             <Trash2 className="h-4 w-4" aria-hidden />
             <span className={variant === "full" ? "" : "hidden sm:inline"}>

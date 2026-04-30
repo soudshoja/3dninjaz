@@ -149,7 +149,7 @@ export function ConfigurableImageGallery({
 
       {/* ── Thumbstrip ── */}
       <ul
-        className="flex gap-3 overflow-x-auto -mx-2 px-2"
+        className="flex gap-3 overflow-x-auto"
         aria-label="Product image thumbnails"
         style={{ scrollbarWidth: "none" }}
       >
