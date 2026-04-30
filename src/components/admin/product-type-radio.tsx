@@ -1,6 +1,6 @@
 "use client";
 
-import { Package, Wand2, Link, Boxes, Check, AlertCircle } from "lucide-react";
+import { Package, Wand2, Link, Boxes, FileText, Check, AlertCircle } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 
 // ============================================================================
@@ -9,11 +9,16 @@ import { BRAND } from "@/lib/brand";
 // Vending Machine at the top of the product form. Locked state shows a yellow
 // info banner and disables all cards (used when a product already has variants
 // or config fields).
+//
+// Quick task 260430-icx — extended to 5 cards with `Simple` (5th card).
+// Grid widened from lg:grid-cols-4 to lg:grid-cols-5.
 // ============================================================================
 
 type Props = {
-  value: "stocked" | "configurable" | "keychain" | "vending";
-  onChange: (v: "stocked" | "configurable" | "keychain" | "vending") => void;
+  value: "stocked" | "configurable" | "keychain" | "vending" | "simple";
+  onChange: (
+    v: "stocked" | "configurable" | "keychain" | "vending" | "simple",
+  ) => void;
   /** When true, render disabled state + the explanation message. */
   locked?: boolean;
   lockedReason?: string;
@@ -41,6 +46,7 @@ export function ProductTypeRadio({
   const configurableSelected = value === "configurable";
   const keychainSelected = value === "keychain";
   const vendingSelected = value === "vending";
+  const simpleSelected = value === "simple";
 
   return (
     <div>
@@ -55,11 +61,12 @@ export function ProductTypeRadio({
         </div>
       )}
 
-      {/* Radio group — four cards (md:grid-cols-2 lg:grid-cols-4; 1-col mobile) */}
+      {/* Radio group — five cards (md:grid-cols-2 lg:grid-cols-5; 1-col mobile)
+          Quick task 260430-icx — widened to 5 cards. */}
       <div
         role="radiogroup"
         aria-label="Product type"
-        className="grid gap-3 md:grid-cols-2 lg:grid-cols-4"
+        className="grid gap-3 md:grid-cols-2 lg:grid-cols-5"
       >
         {/* Card 1: Stocked */}
         <button
@@ -213,6 +220,45 @@ export function ProductTypeRadio({
             </span>
             <span className="text-xs leading-relaxed" style={{ color: "#52525B" }}>
               2 colours (primary / secondary), flat price. Pre-seeded fields — admin sets allowed colours from the gallery.
+            </span>
+          </span>
+        </button>
+
+        {/* Card 5: Simple — quick task 260430-icx */}
+        <button
+          type="button"
+          role="radio"
+          aria-checked={simpleSelected}
+          disabled={locked}
+          onClick={() => { if (!locked) onChange("simple"); }}
+          className="relative flex items-start gap-3 rounded-xl p-4 text-left transition-all outline-none focus-visible:ring-2 focus-visible:ring-offset-2 min-h-[48px]"
+          style={{
+            border: simpleSelected ? `2px solid ${BRAND.green}` : "1px solid #E4E4E7",
+            background: simpleSelected ? `${BRAND.green}0D` : "white",
+            cursor: locked ? "not-allowed" : "pointer",
+            opacity: locked ? 0.6 : 1,
+          }}
+        >
+          {simpleSelected && <SelectedBadge />}
+          <span
+            className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+            style={{
+              backgroundColor: simpleSelected ? BRAND.green : "#F4F4F5",
+              color: simpleSelected ? "white" : BRAND.ink,
+            }}
+            aria-hidden
+          >
+            <FileText className="h-5 w-5" />
+          </span>
+          <span className="flex flex-col gap-0.5">
+            <span
+              className="font-display text-sm font-semibold leading-tight"
+              style={{ color: BRAND.ink }}
+            >
+              Simple
+            </span>
+            <span className="text-xs leading-relaxed" style={{ color: "#52525B" }}>
+              Flat price. Add free-form fields (text/number/colour/select/rich-text). No auto-seeded fields — fully admin-curated.
             </span>
           </span>
         </button>

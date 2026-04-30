@@ -37,7 +37,7 @@ export type HydratedCartItem = {
   inStock: boolean;
   available: boolean;
   // Phase 19 (19-08): discriminator + configuration payload
-  productType: "stocked" | "configurable" | "keychain" | "vending";
+  productType: "stocked" | "configurable" | "keychain" | "vending" | "simple";
   configurationData?: ConfigurationData;
   /** Stable store key for increment/decrement/remove calls.
    *  Stocked: same as variantId. Configurable: `${productId}::${hash}`. */
@@ -198,7 +198,9 @@ export async function hydrateCartItems(
           ? "keychain"
           : row.productType === "vending"
             ? "vending"
-            : "configurable") as "configurable" | "keychain" | "vending",
+            : row.productType === "simple"
+              ? "simple"
+              : "configurable") as "configurable" | "keychain" | "vending" | "simple",
         configurationData: item.configurationData,
         storeKey: item.key,   // `${productId}::${hash}` — used by CartLineRow qty controls
       });
@@ -213,7 +215,7 @@ export async function hydrateCartItems(
     results.filter((r) => r.productType === "stocked").map((r) => [r.variantId, r])
   );
   const configurableResultByProductId = new Map<string, HydratedCartItem[]>();
-  for (const r of results.filter((r) => r.productType === "configurable" || r.productType === "keychain" || r.productType === "vending")) {
+  for (const r of results.filter((r) => r.productType === "configurable" || r.productType === "keychain" || r.productType === "vending" || r.productType === "simple")) {
     const bucket = configurableResultByProductId.get(r.productId) ?? [];
     bucket.push(r);
     configurableResultByProductId.set(r.productId, bucket);

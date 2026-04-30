@@ -27,13 +27,17 @@ import {
   NumberFieldConfigSchema,
   ColourFieldConfigSchema,
   SelectFieldConfigSchema,
+  TextareaFieldConfigSchema,
   type FieldType,
   type AnyFieldConfig,
   type TextFieldConfig,
   type NumberFieldConfig,
   type ColourFieldConfig,
   type SelectFieldConfig,
+  type TextareaFieldConfig,
 } from "@/lib/config-fields";
+// Quick task 260430-icx — Novel rich-text editor for `textarea` field config.
+import { NovelRichTextEditor } from "@/components/admin/novel-rich-text-editor";
 import { BRAND } from "@/lib/brand";
 
 // ============================================================================
@@ -61,6 +65,8 @@ const FIELD_TYPES: { value: FieldType; label: string; description: string }[] = 
   { value: "number", label: "Number", description: "Customer picks a numeric value" },
   { value: "colour", label: "Colour", description: "Customer picks from a colour palette" },
   { value: "select", label: "Select", description: "Customer picks from a dropdown list" },
+  // Quick task 260430-icx — admin-authored content block (read-only on PDP).
+  { value: "textarea", label: "Rich Text", description: "Admin-authored content block (read-only on PDP)" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -399,12 +405,19 @@ export function ConfigFieldFormBody({
       ? (initialField.config as SelectFieldConfig)
       : { options: [{ label: "", value: "" }] },
   );
+  // Quick task 260430-icx — textarea (rich text) state.
+  const [textareaConfig, setTextareaConfig] = useState<Partial<TextareaFieldConfig>>(
+    initialField?.fieldType === "textarea"
+      ? (initialField.config as TextareaFieldConfig)
+      : { html: "" },
+  );
 
   const getConfig = (): AnyFieldConfig | null => {
     if (fieldType === "text") return textConfig as AnyFieldConfig;
     if (fieldType === "number") return numberConfig as AnyFieldConfig;
     if (fieldType === "colour") return colourConfig as AnyFieldConfig;
     if (fieldType === "select") return selectConfig as AnyFieldConfig;
+    if (fieldType === "textarea") return textareaConfig as AnyFieldConfig;
     return null;
   };
 
@@ -417,6 +430,7 @@ export function ConfigFieldFormBody({
       : fieldType === "number" ? NumberFieldConfigSchema
       : fieldType === "colour" ? ColourFieldConfigSchema
       : fieldType === "select" ? SelectFieldConfigSchema
+      : fieldType === "textarea" ? TextareaFieldConfigSchema
       : null;
     if (!schema) return "Unknown field type";
     const result = schema.safeParse(config);
@@ -488,7 +502,7 @@ export function ConfigFieldFormBody({
       {mode === "add" && (
         <div className="space-y-2">
           <Label>Field type</Label>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
             {FIELD_TYPES.map((ft) => (
               <button
                 key={ft.value}
@@ -588,7 +602,16 @@ export function ConfigFieldFormBody({
           {/* Divider */}
           <div className="border-t pt-3">
             <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-              {fieldType === "text" ? "Text" : fieldType === "number" ? "Number" : fieldType === "colour" ? "Colour" : "Select"} settings
+              {fieldType === "text"
+                ? "Text"
+                : fieldType === "number"
+                ? "Number"
+                : fieldType === "colour"
+                ? "Colour"
+                : fieldType === "select"
+                ? "Select"
+                : "Rich Text"}{" "}
+              settings
             </Label>
           </div>
 
@@ -607,6 +630,13 @@ export function ConfigFieldFormBody({
           )}
           {fieldType === "select" && (
             <SelectConfigForm value={selectConfig} onChange={setSelectConfig} />
+          )}
+          {/* Quick task 260430-icx — Novel rich-text editor for textarea fields. */}
+          {fieldType === "textarea" && (
+            <NovelRichTextEditor
+              value={textareaConfig.html ?? ""}
+              onChange={(html) => setTextareaConfig({ html })}
+            />
           )}
         </>
       )}

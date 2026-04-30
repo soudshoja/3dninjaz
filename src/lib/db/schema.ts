@@ -150,7 +150,7 @@ export const products = mysqlTable("products", {
   // 'stocked' = existing variant flow; 'configurable' = made-to-order with
   // configurator builder + tier table. All existing rows DEFAULT to 'stocked'
   // so the variant code path is untouched (D-14 backwards compat).
-  productType: mysqlEnum("productType", ["stocked", "configurable", "keychain", "vending"]).notNull().default("stocked"),
+  productType: mysqlEnum("productType", ["stocked", "configurable", "keychain", "vending", "simple"]).notNull().default("stocked"),
   // Tier-pricing trio (NULL for stocked products):
   //   maxUnitCount = highest count the admin wants to price (e.g., 8 for keychain)
   //   priceTiers   = JSON object {"1":7,"2":9,...} stored as LONGTEXT — round-trip via ensureTiers()
@@ -258,7 +258,7 @@ export const productConfigFields = mysqlTable(
       .notNull()
       .references(() => products.id, { onDelete: "cascade" }),
     position: int("position").notNull().default(0),
-    fieldType: mysqlEnum("fieldType", ["text", "number", "colour", "select"]).notNull(),
+    fieldType: mysqlEnum("fieldType", ["text", "number", "colour", "select", "textarea"]).notNull(),
     label: varchar("label", { length: 80 }).notNull(),
     helpText: varchar("helpText", { length: 200 }),
     required: boolean("required").notNull().default(true),

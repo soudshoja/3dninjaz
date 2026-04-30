@@ -79,6 +79,8 @@ export async function getConfigurableProductData(productId: string): Promise<{
           ? { min: 0, max: 100, step: 1 }
           : r.fieldType === "select"
           ? { options: [] }
+          : r.fieldType === "textarea"
+          ? { html: "" }
           : { maxLength: 20, allowedChars: "A-Z", uppercase: true, profanityCheck: false };
       }
 

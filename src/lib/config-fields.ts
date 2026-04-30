@@ -22,7 +22,7 @@ import { z } from "zod";
 // Types
 // ============================================================================
 
-export type FieldType = "text" | "number" | "colour" | "select";
+export type FieldType = "text" | "number" | "colour" | "select" | "textarea";
 
 /** D-03 — text field config */
 export type TextFieldConfig = {
@@ -49,11 +49,25 @@ export type SelectFieldConfig = {
   options: Array<{ label: string; value: string; priceAdd?: number }>;
 };
 
+/**
+ * Quick task 260430-icx — textarea (rich text) field config.
+ *
+ * Admin-authored content rendered read-only on the storefront PDP. Never
+ * accepts customer input — it's a description block, not a form field.
+ * The `html` string is sanitised at the server boundary via
+ * src/lib/rich-text-sanitizer.ts on every save path (defence-in-depth).
+ */
+export type TextareaFieldConfig = {
+  /** Sanitised HTML; admin source-of-truth (allowlisted by sanitize-html). */
+  html: string;
+};
+
 export type AnyFieldConfig =
   | TextFieldConfig
   | NumberFieldConfig
   | ColourFieldConfig
-  | SelectFieldConfig;
+  | SelectFieldConfig
+  | TextareaFieldConfig;
 
 /** D-05 — backwards-compat image entry (old shape = plain string, new = object) */
 export type ImageEntryV2 = {
@@ -111,12 +125,22 @@ export const SelectFieldConfigSchema: z.ZodType<SelectFieldConfig> = z.object({
     .min(1),
 });
 
+/**
+ * Quick task 260430-icx — textarea config Zod schema.
+ * Generous 50_000-char cap to prevent runaway DB rows (LONGTEXT can
+ * hold up to 4GB but the PDP UI shouldn't render essays).
+ */
+export const TextareaFieldConfigSchema: z.ZodType<TextareaFieldConfig> = z.object({
+  html: z.string().max(50_000),
+});
+
 // Internal map for dispatch
 const schemaByFieldType: Record<FieldType, z.ZodType<AnyFieldConfig>> = {
   text: TextFieldConfigSchema,
   number: NumberFieldConfigSchema,
   colour: ColourFieldConfigSchema,
   select: SelectFieldConfigSchema,
+  textarea: TextareaFieldConfigSchema,
 };
 
 // ============================================================================

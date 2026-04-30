@@ -17,9 +17,14 @@ import {
   NumberFieldConfigSchema,
   ColourFieldConfigSchema,
   SelectFieldConfigSchema,
+  TextareaFieldConfigSchema,
   type FieldType,
   type AnyFieldConfig,
+  type TextareaFieldConfig,
 } from "@/lib/config-fields";
+// Quick task 260430-icx — textarea sanitisation at the action layer.
+// Server-only import; importing into a client module fails at build time.
+import { sanitizeRichText } from "@/lib/rich-text-sanitizer";
 
 // ============================================================================
 // Types
@@ -53,7 +58,23 @@ function pickSchemaByFieldType(t: FieldType) {
       return ColourFieldConfigSchema;
     case "select":
       return SelectFieldConfigSchema;
+    case "textarea":
+      return TextareaFieldConfigSchema;
   }
+}
+
+/**
+ * Quick task 260430-icx — defence-in-depth sanitisation for textarea config.
+ * Mutates the html field of a TextareaFieldConfig through sanitize-html
+ * (server-only). Idempotent: passing already-sanitised HTML returns the same
+ * string. Caller should re-run on every save (admin add + admin update).
+ */
+function sanitizeTextareaConfig(cfg: AnyFieldConfig): AnyFieldConfig {
+  const t = cfg as Partial<TextareaFieldConfig>;
+  if (typeof t.html === "string") {
+    return { html: sanitizeRichText(t.html) } satisfies TextareaFieldConfig;
+  }
+  return cfg;
 }
 
 function hydrateConfigField(r: typeof productConfigFields.$inferSelect): ConfigField {
@@ -82,7 +103,7 @@ function hydrateConfigField(r: typeof productConfigFields.$inferSelect): ConfigF
  */
 export async function updateProductType(
   productId: string,
-  newType: "stocked" | "configurable" | "keychain" | "vending",
+  newType: "stocked" | "configurable" | "keychain" | "vending" | "simple",
 ): Promise<
   | { ok: true }
   | { ok: false; error: "Cannot change product type with attached variants" }
@@ -152,7 +173,7 @@ export async function getConfiguratorData(productId: string): Promise<{
     id: string;
     name: string;
     slug: string;
-    productType: "stocked" | "configurable" | "keychain" | "vending";
+    productType: "stocked" | "configurable" | "keychain" | "vending" | "simple";
     maxUnitCount: number | null;
     priceTiers: Record<string, number>;
     unitField: string | null;
@@ -216,7 +237,12 @@ export async function addConfigField(
   await requireAdmin();
 
   const schema = pickSchemaByFieldType(input.fieldType);
-  const parsed = schema.safeParse(input.config);
+  // Quick task 260430-icx — sanitise textarea HTML BEFORE schema validation
+  // so the persisted shape matches the schema's max-length cap (sanitisation
+  // can shorten the string by stripping tags).
+  const incomingConfig =
+    input.fieldType === "textarea" ? sanitizeTextareaConfig(input.config) : input.config;
+  const parsed = schema.safeParse(incomingConfig);
   if (!parsed.success) {
     return {
       ok: false as const,
@@ -289,8 +315,12 @@ export async function updateConfigField(
   // Re-validate config if provided
   let configJsonString: string | undefined;
   if (patch.config !== undefined) {
-    const schema = pickSchemaByFieldType(existing.fieldType as FieldType);
-    const parsed = schema.safeParse(patch.config);
+    const fieldType = existing.fieldType as FieldType;
+    const schema = pickSchemaByFieldType(fieldType);
+    // Quick task 260430-icx — re-sanitise textarea HTML on every update.
+    const incomingConfig =
+      fieldType === "textarea" ? sanitizeTextareaConfig(patch.config) : patch.config;
+    const parsed = schema.safeParse(incomingConfig);
     if (!parsed.success) {
       return {
         ok: false as const,

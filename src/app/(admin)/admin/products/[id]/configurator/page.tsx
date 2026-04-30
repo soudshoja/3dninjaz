@@ -27,20 +27,28 @@ export default async function ConfiguratorPage({ params }: { params: Params }) {
     notFound();
   }
 
-  // Guard: this page is for configurable + keychain products.
-  // Keychain uses the same builder but with a locked field shape (no add/remove/reorder).
+  // Guard: this page is for configurable + keychain + vending products.
+  // Quick task 260430-icx — `simple` has its own /fields editor at
+  // /admin/products/<id>/fields. Stocked has /variants. Block both here.
   if (data.product.productType !== "configurable" && data.product.productType !== "keychain" && data.product.productType !== "vending") {
+    const isSimple = data.product.productType === "simple";
     return (
       <div className="p-6 space-y-3">
-        <h1 className="text-xl font-bold">This product is stocked, not made-to-order</h1>
+        <h1 className="text-xl font-bold">
+          {isSimple
+            ? "Use the Simple-product fields editor"
+            : "This product is stocked, not made-to-order"}
+        </h1>
         <p className="text-sm text-muted-foreground">
-          The configurator is only available for Made-to-Order, Keychain, and Vending products.
+          {isSimple
+            ? "Simple products manage fields at /admin/products/<id>/fields."
+            : "The configurator is only available for Made-to-Order, Keychain, and Vending products."}
         </p>
         <a
-          href={`/admin/products/${id}/variants`}
+          href={isSimple ? `/admin/products/${id}/fields` : `/admin/products/${id}/variants`}
           className="inline-flex items-center gap-1.5 rounded-lg border px-4 py-2 text-sm font-medium hover:bg-slate-50 transition-colors"
         >
-          Manage variants instead →
+          {isSimple ? "Manage Simple Fields →" : "Manage variants instead →"}
         </a>
       </div>
     );
