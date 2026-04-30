@@ -134,6 +134,10 @@ jobs:
       DELYVA_CUSTOMER_ID: ${{ secrets.DELYVA_CUSTOMER_ID }}
       DELYVA_API_SECRET: ${{ secrets.DELYVA_API_SECRET }}
       DELYVA_WEBHOOK_SHARED_SECRET: ${{ secrets.DELYVA_WEBHOOK_SHARED_SECRET }}
+      # Stable Server Action IDs across builds — without this, every deploy
+      # rotates the action hash salt and any open browser tab loses its
+      # `updateProduct`/etc. references ("Failed to find Server Action").
+      NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${{ secrets.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY }}
       # Note: do NOT set NODE_ENV=production at job scope — it makes
       # `npm ci` skip devDependencies (including typescript), which
       # next.config.ts loading requires. Next.js sets NODE_ENV=production
