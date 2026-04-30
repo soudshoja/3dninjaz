@@ -56,6 +56,39 @@ export default async function EditProductPage({
       ? String(product.priceTiers["1"])
       : null;
 
+  // Header price chip — visible regardless of product type so admin sees
+  // the configured price at a glance without opening variants/configurator.
+  const headerPriceLabel = (() => {
+    if (productType === "stocked") {
+      const prices = (product.variants ?? [])
+        .map((v: { price: string }) => Number.parseFloat(v.price))
+        .filter((n: number) => Number.isFinite(n))
+        .sort((a: number, b: number) => a - b);
+      if (prices.length === 0) return null;
+      const min = prices[0];
+      const max = prices[prices.length - 1];
+      return min === max ? `MYR ${min.toFixed(2)}` : `MYR ${min.toFixed(2)} – ${max.toFixed(2)}`;
+    }
+    let tiers: Record<string, number> = {};
+    if (product.priceTiers && typeof product.priceTiers === "object") {
+      tiers = product.priceTiers as Record<string, number>;
+    } else if (typeof product.priceTiers === "string") {
+      try {
+        const parsed = JSON.parse(product.priceTiers);
+        if (parsed && typeof parsed === "object") tiers = parsed;
+      } catch {
+        /* ignore */
+      }
+    }
+    const tierValues = Object.values(tiers).filter(
+      (v): v is number => typeof v === "number" && Number.isFinite(v),
+    );
+    if (tierValues.length === 0) return null;
+    const min = Math.min(...tierValues);
+    const max = Math.max(...tierValues);
+    return min === max ? `MYR ${min.toFixed(2)}` : `MYR ${min.toFixed(2)} – ${max.toFixed(2)}`;
+  })();
+
   const initialData: ProductFormInitial = {
     id: product.id,
     name: product.name,
@@ -85,9 +118,31 @@ export default async function EditProductPage({
           <h1 className="font-heading text-3xl text-[var(--color-brand-text-primary)]">
             Edit Product
           </h1>
-          <p className="text-sm text-[var(--color-brand-text-muted)]">
-            {product.name}
-          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <p className="text-sm text-[var(--color-brand-text-muted)]">
+              {product.name}
+            </p>
+            {headerPriceLabel ? (
+              <span
+                className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-bold text-emerald-700 border border-emerald-200"
+                title={`Configured price (productType: ${productType})`}
+              >
+                {headerPriceLabel}
+              </span>
+            ) : (
+              <span
+                className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-800 border border-amber-200"
+                title="No price configured yet — set one before publishing"
+              >
+                No price set
+              </span>
+            )}
+            <span
+              className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600 border border-slate-200"
+            >
+              {productType}
+            </span>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <a

@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, Plus, Trash2 } from "lucide-react";
+import { AlertCircle, Plus, Trash2, Type, Hash, Palette, ListChecks, FileText } from "lucide-react";
 import { ColourPickerDialog, type ColourPickerRow } from "@/components/admin/colour-picker-dialog";
 import { getActiveColoursForPicker } from "@/actions/admin-colours";
 import {
@@ -60,13 +60,20 @@ type Props = {
   onSaved: (savedField?: ConfigField) => Promise<void> | void;
 };
 
-const FIELD_TYPES: { value: FieldType; label: string; description: string }[] = [
-  { value: "text", label: "Text", description: "Customer types a name or phrase" },
-  { value: "number", label: "Number", description: "Customer picks a numeric value" },
-  { value: "colour", label: "Colour", description: "Customer picks from a colour palette" },
-  { value: "select", label: "Select", description: "Customer picks from a dropdown list" },
+type FieldTypeMeta = {
+  value: FieldType;
+  label: string;
+  description: string;
+  Icon: typeof Type;
+};
+
+const FIELD_TYPES: FieldTypeMeta[] = [
+  { value: "text",     label: "Text",      description: "Short typed input",       Icon: Type },
+  { value: "number",   label: "Number",    description: "Numeric value",           Icon: Hash },
+  { value: "colour",   label: "Colour",    description: "Pick from palette",       Icon: Palette },
+  { value: "select",   label: "Select",    description: "Choose from a list",      Icon: ListChecks },
   // Quick task 260430-icx — admin-authored content block (read-only on PDP).
-  { value: "textarea", label: "Rich Text", description: "Admin-authored content block (read-only on PDP)" },
+  { value: "textarea", label: "Rich Text", description: "Admin description block", Icon: FileText },
 ];
 
 // ---------------------------------------------------------------------------
@@ -498,31 +505,40 @@ export function ConfigFieldFormBody({
         </div>
       )}
 
-      {/* Field type picker (add mode only) */}
+      {/* Field type picker (add mode only) — icon cards, 2 cols mobile / 5 cols desktop */}
       {mode === "add" && (
         <div className="space-y-2">
-          <Label>Field type</Label>
+          <Label className="text-xs uppercase tracking-wide text-slate-500">
+            1. Choose field type
+          </Label>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-            {FIELD_TYPES.map((ft) => (
-              <button
-                key={ft.value}
-                type="button"
-                onClick={() => setFieldType(ft.value)}
-                className="rounded-lg border p-3 text-center text-sm font-medium transition-all min-h-[48px]"
-                style={{
-                  border:
-                    fieldType === ft.value
-                      ? `2px solid ${BRAND.green}`
-                      : "1px solid #E4E4E7",
-                  background:
-                    fieldType === ft.value ? `${BRAND.green}0D` : "white",
-                  color: BRAND.ink,
-                }}
-                title={ft.description}
-              >
-                {ft.label}
-              </button>
-            ))}
+            {FIELD_TYPES.map((ft) => {
+              const selected = fieldType === ft.value;
+              return (
+                <button
+                  key={ft.value}
+                  type="button"
+                  onClick={() => setFieldType(ft.value)}
+                  className="group relative flex flex-col items-center justify-center gap-1.5 rounded-lg border p-3 text-center transition-all min-h-[88px] hover:bg-slate-50"
+                  style={{
+                    border: selected ? `2px solid ${BRAND.green}` : "1px solid #E4E4E7",
+                    background: selected ? `${BRAND.green}0D` : "white",
+                    color: BRAND.ink,
+                  }}
+                  title={ft.description}
+                >
+                  <ft.Icon
+                    className="h-5 w-5 shrink-0 transition-colors"
+                    style={{ color: selected ? BRAND.green : "#71717A" }}
+                    aria-hidden
+                  />
+                  <span className="text-sm font-semibold leading-none">{ft.label}</span>
+                  <span className="text-[11px] leading-tight text-slate-500">
+                    {ft.description}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -547,9 +563,13 @@ export function ConfigFieldFormBody({
         </div>
       )}
 
-      {/* Common fields */}
+      {/* Common fields — grouped under a "Basics" section card */}
       {fieldType && (
         <>
+          <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-4 space-y-3">
+            <Label className="text-xs uppercase tracking-wide text-slate-500">
+              {mode === "add" ? "2. Basics" : "Basics"}
+            </Label>
           <div className="space-y-1">
             <Label htmlFor="fieldLabel">Label *</Label>
             {mode === "edit" && initialField?.locked ? (
@@ -598,10 +618,12 @@ export function ConfigFieldFormBody({
             />
             <Label htmlFor="required" className="cursor-pointer">Required</Label>
           </div>
+          </div>
 
-          {/* Divider */}
-          <div className="border-t pt-3">
-            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+          {/* Type-specific settings card */}
+          <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
+            <Label className="text-xs uppercase tracking-wide text-slate-500">
+              {mode === "add" ? "3. " : ""}
               {fieldType === "text"
                 ? "Text"
                 : fieldType === "number"
@@ -613,7 +635,6 @@ export function ConfigFieldFormBody({
                 : "Rich Text"}{" "}
               settings
             </Label>
-          </div>
 
           {fieldType === "text" && (
             <TextConfigForm value={textConfig} onChange={setTextConfig} />
@@ -631,13 +652,14 @@ export function ConfigFieldFormBody({
           {fieldType === "select" && (
             <SelectConfigForm value={selectConfig} onChange={setSelectConfig} />
           )}
-          {/* Quick task 260430-icx — Novel rich-text editor for textarea fields. */}
+          {/* Quick task 260430-icx — Quill rich-text editor for textarea fields. */}
           {fieldType === "textarea" && (
             <NovelRichTextEditor
               value={textareaConfig.html ?? ""}
               onChange={(html) => setTextareaConfig({ html })}
             />
           )}
+          </div>
         </>
       )}
 

@@ -53,10 +53,28 @@ export function TextareaDisplay({ label, helpText, html }: Props) {
         </p>
       )}
       <div
-        className="prose prose-sm max-w-none"
+        className="prose prose-sm max-w-none ql-output"
         style={{ color: BRAND.ink }}
         {...passthrough}
       />
+      {/* Minimal Quill class-hook rendering rules — keep in sync with the
+          allowlist in src/lib/rich-text-sanitizer.ts. We do NOT import Quill's
+          snow.css because that styles the editor chrome (toolbar etc.); only
+          the output formatting classes need rendering rules. */}
+      <style jsx>{`
+        :global(.ql-output .ql-align-center) { text-align: center; }
+        :global(.ql-output .ql-align-right)  { text-align: right; }
+        :global(.ql-output .ql-align-justify){ text-align: justify; }
+        :global(.ql-output .ql-indent-1) { padding-left: 3em; }
+        :global(.ql-output .ql-indent-2) { padding-left: 6em; }
+        :global(.ql-output .ql-indent-3) { padding-left: 9em; }
+        :global(.ql-output .ql-indent-4) { padding-left: 12em; }
+        :global(.ql-output .ql-size-small) { font-size: 0.75em; }
+        :global(.ql-output .ql-size-large) { font-size: 1.5em; }
+        :global(.ql-output .ql-size-huge)  { font-size: 2.5em; }
+        :global(.ql-output .ql-font-serif) { font-family: Georgia, serif; }
+        :global(.ql-output .ql-font-monospace) { font-family: ui-monospace, Menlo, Consolas, monospace; }
+      `}</style>
     </div>
   );
 }
