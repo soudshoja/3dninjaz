@@ -4,7 +4,6 @@ import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 import {
   products,
-  productVariants,
   productConfigFields,
 } from "@/lib/db/schema";
 import { eq, asc, and, sql } from "drizzle-orm";
@@ -99,15 +98,16 @@ function hydrateConfigField(r: typeof productConfigFields.$inferSelect): ConfigF
 
 /**
  * Update the productType for a product.
- * Guards against changing type when data of the other type is already attached.
+ *
+ * Per user directive "keep all data and switch": no guards, no data-presence
+ * checks. Existing variants/config fields stay in the DB as orphan data for
+ * the new type — admin can switch back anytime to restore them.
  */
 export async function updateProductType(
   productId: string,
   newType: "stocked" | "configurable" | "keychain" | "vending" | "simple",
 ): Promise<
   | { ok: true }
-  | { ok: false; error: "Cannot change product type with attached variants" }
-  | { ok: false; error: "Cannot change product type with attached config fields" }
   | { ok: false; error: "Product not found" }
 > {
   await requireAdmin(); // FIRST await — CVE-2025-29927
@@ -120,34 +120,6 @@ export async function updateProductType(
 
   if (!row) return { ok: false as const, error: "Product not found" } as const;
   if (row.type === newType) return { ok: true as const }; // no-op fast path
-
-  if (newType === "configurable") {
-    // Going stocked → configurable: must have zero variants
-    const [countRow] = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(productVariants)
-      .where(eq(productVariants.productId, productId))
-      .limit(1);
-    if ((countRow?.count ?? 0) > 0) {
-      return {
-        ok: false as const,
-        error: "Cannot change product type with attached variants",
-      } as const;
-    }
-  } else {
-    // Going configurable → stocked: must have zero config fields
-    const [countRow] = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(productConfigFields)
-      .where(eq(productConfigFields.productId, productId))
-      .limit(1);
-    if ((countRow?.count ?? 0) > 0) {
-      return {
-        ok: false as const,
-        error: "Cannot change product type with attached config fields",
-      } as const;
-    }
-  }
 
   await db
     .update(products)

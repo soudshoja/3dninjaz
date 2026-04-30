@@ -38,20 +38,38 @@ export default async function EditProductPage({
 
   const variantCount = Number(variantCountRow[0]?.c ?? 0);
   const fieldCount = Number(fieldCountRow[0]?.c ?? 0);
-  const lockedReason =
-    variantCount > 0
-      ? "This product already has variants — type cannot be changed. Delete all variants first."
-      : fieldCount > 0
-        ? "This product already has configurator fields — type cannot be changed. Delete all fields first."
-        : undefined;
 
   // Quick task 260430-icx — `simple` added to type union.
+  // Declared before lockedReason so the guard can reference it.
   const productType = (product.productType ?? "stocked") as
     | "stocked"
     | "configurable"
     | "keychain"
     | "vending"
     | "simple";
+
+  // Per user directive "keep all data and switch": ALL transitions allowed,
+  // NO blocking. Existing variants/config fields stay in the DB as orphan data
+  // for the new type — admin can switch back anytime to restore them.
+  const lockedReason: string | undefined = undefined;
+
+  // Informational note shown under the radio grid — explains what happens to
+  // existing variants/config fields if admin switches to a different type.
+  const switchInfo: string | undefined = (() => {
+    if (productType === "stocked" && variantCount > 0) {
+      return `${variantCount} variant${variantCount === 1 ? "" : "s"} on this product. Switching to a non-stocked type keeps them in the database (hidden) — switch back anytime to restore.`;
+    }
+    if (
+      (productType === "configurable" ||
+        productType === "keychain" ||
+        productType === "vending" ||
+        productType === "simple") &&
+      fieldCount > 0
+    ) {
+      return `${fieldCount} config field${fieldCount === 1 ? "" : "s"} on this product. Switching to Stocked keeps them in the database (hidden) — switch back anytime to restore.`;
+    }
+    return undefined;
+  })();
 
   // Quick task 260430-icx — derive flat-price string from priceTiers["1"]
   // for the form's <Input> value when productType === "simple".
@@ -120,6 +138,8 @@ export default async function EditProductPage({
     // Phase 19 (19-03) — product type + lock state
     productType,
     lockedReason,
+    // Informational note about how data is preserved across type switches.
+    switchInfo,
     simplePrice: simplePriceValue,
     // Quick task 260430-kmr — pre-load config fields for inline editor.
     initialFields,

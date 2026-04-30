@@ -50,6 +50,12 @@ export type ProductFormInitial = {
   // Quick task 260430-icx — `simple` added.
   productType?: "stocked" | "configurable" | "keychain" | "vending" | "simple";
   lockedReason?: string;
+  /**
+   * Optional info note shown UNDER the radio grid — e.g. "X variants stay in
+   * DB after switching". Per "keep all data and switch" directive: switches
+   * never destroy data, so this is informational only (never blocks).
+   */
+  switchInfo?: string;
   /** Quick task 260430-icx — flat MYR price for `simple` products only. */
   simplePrice?: string | null;
   /**
@@ -397,6 +403,7 @@ export function ProductForm({
             onChange={setProductType}
             locked={!!initialData?.lockedReason}
             lockedReason={initialData?.lockedReason}
+            switchInfo={initialData?.switchInfo}
           />
         </CardContent>
       </Card>
