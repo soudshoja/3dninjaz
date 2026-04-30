@@ -103,9 +103,9 @@ export default async function ShopPage({
       {tree.length > 0 ? (
         <nav
           aria-label="Filter by category"
-          className="md:hidden max-w-6xl mx-auto px-6 mt-4"
+          className="md:hidden max-w-6xl mx-auto mt-4 overflow-x-clip"
         >
-          <ul className="flex gap-2 overflow-x-auto pb-2 -mx-6 px-6">
+          <ul className="flex gap-2 overflow-x-auto pb-2 px-6">
             <li className="shrink-0">
               <Link
                 href="/shop"
