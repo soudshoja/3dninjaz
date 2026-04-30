@@ -13,6 +13,7 @@ import type { HydratedOption, HydratedVariant } from "@/lib/variants";
 import type { PictureData } from "@/lib/image-manifest";
 import { ConfigurableProductView } from "@/components/store/configurable-product-view";
 import { SimpleProductView } from "@/components/store/simple-product-view";
+import { DescriptionDisplay } from "@/components/store/description-display";
 import type { PublicConfigField } from "@/lib/configurable-product-data";
 
 type ProductDetailProps = {
@@ -21,6 +22,8 @@ type ProductDetailProps = {
     name: string;
     slug: string;
     description: string;
+    /** Quick task 260430-kmr — pre-rendered (sanitised) HTML for description. Empty string when absent. */
+    descriptionHtml?: string;
     images: string[];
     /** Phase 19 (19-10) — optional captions parallel to images[]; for configurable PDP figcaption */
     imageCaptions?: (string | null | undefined)[];
@@ -274,9 +277,13 @@ export function ProductDetail({
                 </div>
               )}
 
-              <p className="text-base leading-relaxed" style={{ color: "#374151" }}>
-                {product.description}
-              </p>
+              {product.descriptionHtml ? (
+                <DescriptionDisplay html={product.descriptionHtml} />
+              ) : (
+                <p className="text-base leading-relaxed" style={{ color: "#374151" }}>
+                  {product.description}
+                </p>
+              )}
             </div>
 
             {/* Variant selector card */}

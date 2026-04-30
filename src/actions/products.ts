@@ -18,6 +18,15 @@ import { getStoreSettingsCached } from "@/lib/store-settings";
 import { ensureImagesV2 } from "@/lib/config-fields";
 import { seedKeychainFields } from "@/lib/keychain-fields";
 import { seedVendingFields } from "@/lib/vending-fields";
+// Quick task 260430-kmr — sanitise description HTML on every save (defence-in-depth).
+import { sanitizeRichText } from "@/lib/rich-text-sanitizer";
+import {
+  addConfigField,
+  updateConfigField,
+  deleteConfigField,
+  reorderConfigFields,
+} from "@/actions/configurator";
+import type { FieldType, AnyFieldConfig } from "@/lib/config-fields";
 
 export type ProductActionResult =
   | { success: true; productId?: string }
@@ -87,6 +96,102 @@ function ensureImagesArray(raw: unknown): string[] {
   return ensureImagesV2(raw).map((e) => e.url);
 }
 
+/**
+ * Quick task 260430-kmr — Single-call fan-out that reconciles the inline
+ * fields[] payload from the unified edit form against the DB. Only invoked
+ * for productType in (simple, configurable). Wraps each helper in a try/catch
+ * so partial failures surface as a single error string but do NOT roll back
+ * the product row update — the diff is idempotent on retry.
+ *
+ * Threat T-260430-kmr-06 (repudiation, accept): no transaction across the
+ * existing helpers. Each helper checks requireAdmin() — caller is also gated
+ * (defence-in-depth).
+ */
+type IncomingField = {
+  id?: string;
+  fieldType: FieldType;
+  label: string;
+  helpText?: string | null;
+  required: boolean;
+  config: unknown;
+};
+
+async function reconcileInlineFields(
+  productId: string,
+  incoming: IncomingField[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  // Fetch existing field IDs once.
+  const existingRows = await db
+    .select({ id: productConfigFields.id })
+    .from(productConfigFields)
+    .where(eq(productConfigFields.productId, productId));
+  const existingIds = new Set(existingRows.map((r) => r.id));
+
+  // Compute diff sets.
+  const incomingIds = new Set(
+    incoming.filter((f) => f.id && existingIds.has(f.id)).map((f) => f.id as string),
+  );
+  const toDelete = [...existingIds].filter((id) => !incomingIds.has(id));
+  const toUpdate = incoming.filter((f) => f.id && existingIds.has(f.id));
+  const toAddIndices = new Set(
+    incoming
+      .map((f, i) => (f.id && existingIds.has(f.id) ? -1 : i))
+      .filter((i) => i >= 0),
+  );
+
+  // Final ordered id list (with newly-created uuids substituted).
+  const finalIdByIndex: (string | null)[] = incoming.map(() => null);
+
+  try {
+    // 1. Deletions
+    for (const id of toDelete) {
+      const result = await deleteConfigField(id);
+      if (!result.ok) return { ok: false, error: `Delete failed: ${result.error}` };
+    }
+
+    // 2. Updates (re-validate config inside helper)
+    for (const f of toUpdate) {
+      const result = await updateConfigField(f.id as string, {
+        label: f.label,
+        helpText: f.helpText ?? null,
+        required: f.required,
+        config: f.config as AnyFieldConfig,
+      });
+      if (!result.ok) return { ok: false, error: `Update failed: ${result.error}` };
+    }
+
+    // 3. Adds — capture new ids for the reorder pass.
+    for (let i = 0; i < incoming.length; i++) {
+      const f = incoming[i];
+      if (toAddIndices.has(i)) {
+        const result = await addConfigField(productId, {
+          fieldType: f.fieldType,
+          label: f.label,
+          helpText: f.helpText ?? undefined,
+          required: f.required,
+          config: f.config as AnyFieldConfig,
+        });
+        if (!result.ok) return { ok: false, error: `Add failed: ${result.error}` };
+        finalIdByIndex[i] = result.field.id;
+      } else if (f.id) {
+        finalIdByIndex[i] = f.id;
+      }
+    }
+
+    // 4. Final reorder pass — only when there are fields to order.
+    const orderedIds = finalIdByIndex.filter((id): id is string => !!id);
+    if (orderedIds.length > 0) {
+      const result = await reorderConfigFields(productId, orderedIds);
+      if (!result.ok) return { ok: false, error: `Reorder failed: ${result.error}` };
+    }
+
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: `Failed to save fields: ${msg}` };
+  }
+}
+
 export async function createProduct(
   data: ProductInput
 ): Promise<ProductActionResult> {
@@ -98,6 +203,11 @@ export async function createProduct(
   }
 
   const { variants, ...productData } = parsed.data;
+
+  // Quick task 260430-kmr — sanitise description HTML at the server boundary.
+  // Idempotent: re-running on already-sanitised text is a no-op. Defence-in-depth
+  // even if a malformed payload bypassed the Quill editor in product-form.tsx.
+  productData.description = sanitizeRichText(productData.description);
 
   // Generate a UUID in app code so we can return it immediately and control
   // filesystem paths (uploads/products/<id>/...). MySQL's UUID() default
@@ -279,6 +389,19 @@ export async function createProduct(
       .where(eq(products.id, id));
   }
 
+  // Quick task 260430-kmr — fan out inline fields[] for simple + configurable.
+  // Out-of-scope for keychain/vending/stocked; their seeders/configurator own it.
+  if (
+    productData.fields &&
+    (productData.productType === "simple" || productData.productType === "configurable")
+  ) {
+    const result = await reconcileInlineFields(id, productData.fields as IncomingField[]);
+    if (!result.ok) {
+      // Product row already inserted; client will see an error and can retry.
+      return { error: { _form: [result.error] } };
+    }
+  }
+
   revalidatePath("/admin/products");
   revalidatePath("/admin");
   return { success: true, productId: id };
@@ -296,6 +419,10 @@ export async function updateProduct(
   }
 
   const { variants, ...productData } = parsed.data;
+
+  // Quick task 260430-kmr — sanitise description HTML at the server boundary
+  // on the update path too (mirrors createProduct).
+  productData.description = sanitizeRichText(productData.description);
 
   const safeThumb = clampThumbnailIndex(
     productData.thumbnailIndex,
@@ -456,6 +583,19 @@ export async function updateProduct(
           priceTiers: JSON.stringify({ 1: priceNum }),
         })
         .where(eq(products.id, id));
+    }
+  }
+
+  // Quick task 260430-kmr — fan out inline fields[] for simple + configurable.
+  // Skips the path entirely for keychain/vending/stocked so their dedicated
+  // surfaces (configurator, variants editor) stay authoritative.
+  if (
+    productData.fields &&
+    (productData.productType === "simple" || productData.productType === "configurable")
+  ) {
+    const result = await reconcileInlineFields(id, productData.fields as IncomingField[]);
+    if (!result.ok) {
+      return { error: { _form: [result.error] } };
     }
   }
 

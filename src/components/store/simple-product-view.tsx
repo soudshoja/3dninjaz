@@ -25,6 +25,7 @@ import { TextareaDisplay } from "@/components/store/textarea-display";
 import { ProductGallery } from "@/components/store/product-gallery";
 import { WishlistButton } from "@/components/store/wishlist-button";
 import { RatingBadge } from "@/components/store/rating-badge";
+import { DescriptionDisplay } from "@/components/store/description-display";
 import type { PublicConfigField } from "@/lib/configurable-product-data";
 import type { PictureData } from "@/lib/image-manifest";
 import type { TextareaFieldConfig } from "@/lib/config-fields";
@@ -39,6 +40,8 @@ type Props = {
     name: string;
     slug: string;
     description: string;
+    /** Quick task 260430-kmr — pre-rendered (sanitised) HTML for description. */
+    descriptionHtml?: string;
     images: string[];
     imageCaptions?: (string | null | undefined)[];
     materialType: string | null;
@@ -256,9 +259,13 @@ export function SimpleProductView({
                 )}
               </div>
 
-              <p className="text-base leading-relaxed" style={{ color: "#374151" }}>
-                {product.description}
-              </p>
+              {product.descriptionHtml ? (
+                <DescriptionDisplay html={product.descriptionHtml} />
+              ) : (
+                <p className="text-base leading-relaxed" style={{ color: "#374151" }}>
+                  {product.description}
+                </p>
+              )}
             </div>
 
             {/* Admin-content blocks (textarea fields) — rendered above inputs so

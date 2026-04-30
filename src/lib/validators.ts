@@ -171,6 +171,23 @@ export const productSchema = z.object({
         .regex(/^\d+(\.\d{1,2})?$/, "Price must be a valid number with up to 2 decimal places"),
     ])
     .optional(),
+  // Quick task 260430-kmr — inline fields payload for simple + configurable
+  // productTypes. Each entry's per-fieldType config validation continues to
+  // happen inside addConfigField/updateConfigField via pickSchemaByFieldType
+  // + Zod parse — we don't duplicate it here (z.unknown() at this layer).
+  // Undefined when productType is keychain/vending/stocked.
+  fields: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        fieldType: z.enum(["text", "number", "colour", "select", "textarea"]),
+        label: z.string().min(1).max(80),
+        helpText: z.string().max(200).nullable().optional(),
+        required: z.boolean(),
+        config: z.unknown(),
+      }),
+    )
+    .optional(),
 });
 
 export type ProductInput = z.infer<typeof productSchema>;

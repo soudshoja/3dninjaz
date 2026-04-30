@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getProduct } from "@/actions/products";
 import { getCategories, getAllSubcategories } from "@/actions/categories";
+// Quick task 260430-kmr — hydrate inline fields server-side for simple + configurable.
+import { getConfiguratorData } from "@/actions/configurator";
 import {
   ProductForm,
   type ProductFormInitial,
@@ -56,6 +58,14 @@ export default async function EditProductPage({
       ? String(product.priceTiers["1"])
       : null;
 
+  // Quick task 260430-kmr — hydrate config fields for simple + configurable
+  // so the inline fields editor renders pre-filled. Other types manage fields
+  // via /configurator (keychain/vending) or /variants (stocked).
+  const initialFields =
+    productType === "simple" || productType === "configurable"
+      ? (await getConfiguratorData(id)).fields
+      : undefined;
+
   // Header price chip — visible regardless of product type so admin sees
   // the configured price at a glance without opening variants/configurator.
   const headerPriceLabel = (() => {
@@ -109,6 +119,8 @@ export default async function EditProductPage({
     productType,
     lockedReason,
     simplePrice: simplePriceValue,
+    // Quick task 260430-kmr — pre-load config fields for inline editor.
+    initialFields,
   };
 
   return (
@@ -176,12 +188,9 @@ export default async function EditProductPage({
               Manage Vending Machine Fields →
             </a>
           ) : productType === "simple" ? (
-            <a
-              href={`/admin/products/${id}/fields`}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px]"
-            >
-              Manage Fields →
-            </a>
+            // Quick task 260430-kmr — Manage Fields → header link removed for
+            // simple. Fields are inline on /edit; admin doesn't need a hop.
+            null
           ) : (
             <a
               href={`/admin/products/${id}/variants`}
