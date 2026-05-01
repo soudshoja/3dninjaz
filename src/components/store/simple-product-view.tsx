@@ -395,8 +395,7 @@ export function SimpleProductView({
                 <span className="font-normal text-zinc-600">{material}</span>
               </p>
               <p className="text-sm leading-relaxed" style={{ color: "#374151" }}>
-                Made-to-order in our Kuala Lumpur workshop. Ships in {leadDays}{" "}
-                business days.
+                Every product is made to order in our Kuala Lumpur Ninja Hideout! We inspect every item before we ship each product straight to your door!
               </p>
             </div>
           </div>

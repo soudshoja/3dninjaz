@@ -159,7 +159,7 @@ export default async function HomePage({
         <h2
           className="font-[var(--font-heading)] text-3xl md:text-5xl mb-6 text-zinc-900"
         >
-          READY TO <span style={{ color: BRAND.purple }}>STRIKE?</span>
+          READY TO <span style={{ color: BRAND.purple }}>SHOP?</span>
         </h2>
         <Link
           href="/shop"

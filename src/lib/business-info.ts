@@ -46,7 +46,7 @@ export const BUSINESS = {
       "3 years after your last sign-in; you can request earlier deletion at any time",
     marketing: "Until you unsubscribe",
   },
-  hours: "Mon-Fri 10:00-18:00 MYT (Malaysia Time)",
+  hours: "Mon-Fri 11 AM – 6 PM MYT (Malaysia Time)",
 } as const;
 
 export type BusinessInfo = typeof BUSINESS;

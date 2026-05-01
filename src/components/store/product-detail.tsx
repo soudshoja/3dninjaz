@@ -428,8 +428,7 @@ export function ProductDetail({
                 Material: <span className="font-normal text-zinc-600">{material}</span>
               </p>
               <p className="text-sm leading-relaxed" style={{ color: "#374151" }}>
-                Every piece is printed to order on our Kuala Lumpur printers, layer by ninja layer.
-                Hand-finished, inspected, then shipped straight to your door.
+                Every product is made to order in our Kuala Lumpur Ninja Hideout! We inspect every item before we ship each product straight to your door!
               </p>
             </div>
 
