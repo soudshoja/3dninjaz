@@ -8,12 +8,13 @@ import {
   products,
   productVariants,
 } from "@/lib/db/schema";
-import { eq, desc, asc, and, inArray, count } from "drizzle-orm";
+import { eq, desc, and, inArray, count } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { colourSchema } from "@/lib/validators";
 import type { ColourAdmin } from "@/lib/colours";
+import { sortByShade } from "@/lib/colour-sort";
 
 // ============================================================================
 // Plan 18-03 admin colour CRUD.
@@ -48,11 +49,11 @@ export type MutateResult =
 
 export async function listColours(): Promise<ColourAdmin[]> {
   await requireAdmin();
-  const rows = await db
-    .select()
-    .from(colors)
-    .orderBy(desc(colors.isActive), asc(colors.brand), asc(colors.name));
-  return rows.map((r) => ({
+  // Active rows first (preserved as a primary sort), then shade-aware order.
+  // We split the rows in two groups so archived colours always sit below
+  // active ones, matching the prior UX contract.
+  const rows = await db.select().from(colors).orderBy(desc(colors.isActive));
+  const mapped: ColourAdmin[] = rows.map((r) => ({
     id: r.id,
     name: r.name,
     hex: r.hex,
@@ -63,6 +64,9 @@ export async function listColours(): Promise<ColourAdmin[]> {
     familySubtype: r.familySubtype,
     isActive: r.isActive,
   }));
+  const active = sortByShade(mapped.filter((r) => r.isActive));
+  const archived = sortByShade(mapped.filter((r) => !r.isActive));
+  return [...active, ...archived];
 }
 
 export async function getColour(id: string): Promise<ColourAdmin | null> {
@@ -468,16 +472,15 @@ export type ColourPickerRow = ColourAdmin; // alias — picker shows full admin 
 /**
  * Fetch the entire active library for the picker.
  * Per D-06 — single call on open. ~100 rows ≈ 30 KB JSON.
- * Sorted brand → name for predictable picker ordering.
+ * Sorted shade-wise (hue family + lightness) so related shades sit together.
  */
 export async function getActiveColoursForPicker(): Promise<ColourPickerRow[]> {
   await requireAdmin();
   const rows = await db
     .select()
     .from(colors)
-    .where(eq(colors.isActive, true))
-    .orderBy(asc(colors.brand), asc(colors.name));
-  return rows.map((r) => ({
+    .where(eq(colors.isActive, true));
+  const mapped: ColourPickerRow[] = rows.map((r) => ({
     id: r.id,
     name: r.name,
     hex: r.hex,
@@ -488,6 +491,7 @@ export async function getActiveColoursForPicker(): Promise<ColourPickerRow[]> {
     familySubtype: r.familySubtype,
     isActive: r.isActive,
   }));
+  return sortByShade(mapped);
 }
 
 export type AttachResult =

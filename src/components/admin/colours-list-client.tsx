@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { BRAND } from "@/lib/brand";
 import { ColourRowActions } from "@/components/admin/colour-row-actions";
 import type { ColourAdmin } from "@/lib/colours";
+import { sortByShade } from "@/lib/colour-sort";
 
 type Props = {
   rows: ColourAdmin[];
@@ -22,36 +23,31 @@ export function ColoursListClient({ rows }: Props) {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return rows
-      .filter((r) => {
-        if (brand !== "All" && r.brand !== brand) return false;
-        if (family !== "All" && r.familyType !== family) return false;
-        if (status === "Active" && !r.isActive) return false;
-        if (status === "Archived" && r.isActive) return false;
-        if (q) {
-          const hay = [
-            r.name,
-            r.familySubtype ?? "",
-            r.code ?? "",
-            r.brand,
-            r.familyType,
-            r.hex,
-          ]
-            .join(" ")
-            .toLowerCase();
-          if (!hay.includes(q)) return false;
-        }
-        return true;
-      })
-      .sort((a, b) => {
-        if (a.brand !== b.brand) return a.brand.localeCompare(b.brand);
-        if (a.familyType !== b.familyType)
-          return a.familyType.localeCompare(b.familyType);
-        const subA = a.familySubtype ?? "";
-        const subB = b.familySubtype ?? "";
-        if (subA !== subB) return subA.localeCompare(subB);
-        return a.name.localeCompare(b.name);
-      });
+    const matches = rows.filter((r) => {
+      if (brand !== "All" && r.brand !== brand) return false;
+      if (family !== "All" && r.familyType !== family) return false;
+      if (status === "Active" && !r.isActive) return false;
+      if (status === "Archived" && r.isActive) return false;
+      if (q) {
+        const hay = [
+          r.name,
+          r.familySubtype ?? "",
+          r.code ?? "",
+          r.brand,
+          r.familyType,
+          r.hex,
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+    // Shade-aware order — active rows first (so archived sit below), then
+    // hue family + lightness within each group.
+    const active = sortByShade(matches.filter((r) => r.isActive));
+    const archived = sortByShade(matches.filter((r) => !r.isActive));
+    return [...active, ...archived];
   }, [rows, query, brand, family, status]);
 
   const activeCount = rows.filter((r) => r.isActive).length;

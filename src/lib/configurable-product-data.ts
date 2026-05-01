@@ -9,6 +9,7 @@ import {
   type AnyFieldConfig,
   type FieldType,
 } from "@/lib/config-fields";
+import { sortByShade } from "@/lib/colour-sort";
 
 // ============================================================================
 // Phase 19 (19-06) — Public-side hydration helper for configurable products.
@@ -123,9 +124,11 @@ export async function getConfigurableProductData(productId: string): Promise<{
   const fields: PublicConfigField[] = parsedFields.map((f) => {
     const { _allowedColorIds, ...rest } = f;
     if (_allowedColorIds) {
-      const resolvedColours = _allowedColorIds
+      const resolved = _allowedColorIds
         .map((id) => colourMap.get(id))
         .filter((c): c is { id: string; name: string; hex: string } => c !== undefined);
+      // Shade-aware order so customer pickers group reds, blues, etc. together.
+      const resolvedColours = sortByShade(resolved);
       return { ...rest, resolvedColours };
     }
     return rest;
