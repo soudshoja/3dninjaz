@@ -63,8 +63,22 @@ export function ProductDetail({
   // Quick task 260430-icx — `simple` PDP renders <SimpleProductView>, NOT
   // ConfigurableProductView, because textarea fields render as read-only
   // HTML blocks instead of input widgets.
+  // Quick task 260501-spv — simple may now hold an optional single-axis
+  // variant set. Forward options + hydratedVariants + variantPictures so
+  // SimpleProductView can render the shared <VariantSelector> when present.
   if (product.productType === "simple" && configurableData) {
-    return <SimpleProductView product={{ ...product, pictures }} {...configurableData} isWishlistedInitial={isWishlistedInitial} ratingAvg={ratingAvg} ratingCount={ratingCount} />;
+    return (
+      <SimpleProductView
+        product={{ ...product, pictures }}
+        {...configurableData}
+        options={product.options}
+        hydratedVariants={product.hydratedVariants}
+        variantPictures={variantPictures}
+        isWishlistedInitial={isWishlistedInitial}
+        ratingAvg={ratingAvg}
+        ratingCount={ratingCount}
+      />
+    );
   }
   if ((product.productType === "configurable" || product.productType === "keychain" || product.productType === "vending") && configurableData) {
     return <ConfigurableProductView product={{ ...product, pictures }} {...configurableData} isWishlistedInitial={isWishlistedInitial} ratingAvg={ratingAvg} ratingCount={ratingCount} />;

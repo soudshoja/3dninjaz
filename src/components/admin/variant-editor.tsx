@@ -88,9 +88,23 @@ interface VariantEditorProps {
   productSlug: string;
   initialOptions: HydratedOption[];
   initialVariants: HydratedVariant[];
+  /**
+   * Quick task 260501-spv — when productType === "simple", cap option count
+   * at 1 (one-axis rule). Stocked retains the 6-axis cap (R8 / 6-slot rule).
+   * Defaulting to "stocked" preserves existing call-site behaviour.
+   */
+  productType?: "stocked" | "simple";
 }
 
-export function VariantEditor({ productId, productSlug, initialOptions, initialVariants }: VariantEditorProps) {
+// Quick task 260501-spv — single source of truth for the option cap.
+// Mirrors the server-side guard in `addProductOption` so the UI never
+// invites a request the server will reject.
+function maxOptionsFor(productType: "stocked" | "simple"): number {
+  return productType === "simple" ? 1 : 6;
+}
+
+export function VariantEditor({ productId, productSlug, initialOptions, initialVariants, productType = "stocked" }: VariantEditorProps) {
+  const maxOptions = maxOptionsFor(productType);
   const [isPending, startTransition] = useTransition();
   const [options, setOptions] = useState<HydratedOption[]>(initialOptions);
   const [variants, setVariants] = useState<HydratedVariant[]>(initialVariants);
@@ -516,10 +530,14 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
         ))}
 
         {/* Add option */}
-        {options.length < 6 && (
+        {options.length < maxOptions && (
           <div className="flex gap-2">
             <Input
-              placeholder="New option name (e.g., Size, Color, Material, Part)"
+              placeholder={
+                productType === "simple"
+                  ? "Option name (e.g., Size or Colour)"
+                  : "New option name (e.g., Size, Color, Material, Part)"
+              }
               value={newOptionName}
               onChange={(e) => setNewOptionName(e.target.value)}
               className="h-9"
@@ -529,6 +547,14 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
               <Plus className="h-4 w-4 mr-1" /> Add Option
             </Button>
           </div>
+        )}
+        {/* Quick task 260501-spv — one-axis rule notice for simple products. */}
+        {productType === "simple" && (
+          <p className="text-xs text-[var(--color-brand-text-muted)]">
+            {options.length >= maxOptions
+              ? "Simple products support one variant option only (e.g. Size OR Colour). Delete the existing option to add a different one."
+              : "Simple products support one variant option only (e.g. Size OR Colour)."}
+          </p>
         )}
       </div>
 

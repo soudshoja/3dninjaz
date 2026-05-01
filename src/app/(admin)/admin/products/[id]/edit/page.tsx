@@ -212,7 +212,15 @@ export default async function EditProductPage({
           ) : productType === "simple" ? (
             // Quick task 260430-kmr — Manage Fields → header link removed for
             // simple. Fields are inline on /edit; admin doesn't need a hop.
-            null
+            // Quick task 260501-spv — simple products may now hold a single
+            // variant axis (Size OR Colour). Surface a Manage Variants link
+            // so admins can opt in without leaving the product edit page.
+            <a
+              href={`/admin/products/${id}/variants`}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px]"
+            >
+              Manage Variants →
+            </a>
           ) : (
             <a
               href={`/admin/products/${id}/variants`}

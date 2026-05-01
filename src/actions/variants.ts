@@ -74,13 +74,31 @@ export async function addProductOption(
   const trimmed = name.trim().slice(0, 64);
   if (!trimmed) return { error: "Option name is required" };
 
+  // Quick task 260501-spv — productType determines the option cap.
+  // Simple products are limited to a single axis (e.g. Size OR Colour).
+  // Stocked products retain the 6-axis cap (R8 / 6-slot rule).
+  // Other types (configurable/keychain/vending) shouldn't reach this action
+  // because /admin/products/<id>/variants is gated to stocked + simple.
+  const [productRow] = await db
+    .select({ productType: products.productType })
+    .from(products)
+    .where(eq(products.id, productId))
+    .limit(1);
+  if (!productRow) return { error: "Product not found" };
+  const isSimple = productRow.productType === "simple";
+  const maxOptions = isSimple ? 1 : 6;
+
   const existing = await db
     .select({ id: productOptions.id, position: productOptions.position })
     .from(productOptions)
     .where(eq(productOptions.productId, productId));
 
-  if (existing.length >= 6) {
-    return { error: "Product supports up to 6 attribute types (e.g., Size, Color, Material, Finish, Part, Style). Add more values to existing options to create more variants." };
+  if (existing.length >= maxOptions) {
+    return {
+      error: isSimple
+        ? "Simple products support one variant option only (e.g. Size OR Colour). Delete the existing option to add a different one."
+        : "Product supports up to 6 attribute types (e.g., Size, Color, Material, Finish, Part, Style). Add more values to existing options to create more variants.",
+    };
   }
 
   // Check for duplicate name
@@ -103,7 +121,13 @@ export async function addProductOption(
     ? Math.max(...existing.map((o) => o.position)) + 1
     : 1;
 
-  if (nextPosition > 6) return { error: "Product supports up to 6 attribute types. Add more values to existing options to create more variants." };
+  if (nextPosition > maxOptions) {
+    return {
+      error: isSimple
+        ? "Simple products support one variant option only (e.g. Size OR Colour). Delete the existing option to add a different one."
+        : "Product supports up to 6 attribute types. Add more values to existing options to create more variants.",
+    };
+  }
 
   const id = randomUUID();
   await db.insert(productOptions).values({

@@ -12,9 +12,19 @@
  *       textarea                   -> <TextareaDisplay> read-only HTML block
  *   - Add-to-bag: configurationData.values contains ONLY customer-filled
  *     inputs. textarea fields are admin content — excluded entirely.
+ *
+ * Quick task 260501-spv — simple products may now ALSO carry an optional
+ * single-axis variant set (e.g. Size OR Colour). When `hydratedVariants`
+ * is non-empty, the view renders the shared <VariantSelector>, switches the
+ * displayed price to the selected variant's effectivePrice, and routes the
+ * cart through the stocked path ({ variantId, quantity }). When variants
+ * are absent the view falls back to the original flat-price flow byte-for-
+ * byte. Customer-input fields are hidden in the variant branch — admins
+ * choosing variants surrender the free-form configurator side of simple.
+ * Admin-content textarea fields still render in both branches.
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import Image from "next/image";
 import { ShoppingBag } from "lucide-react";
 import { BRAND } from "@/lib/brand";
@@ -23,10 +33,12 @@ import { useCartStore } from "@/stores/cart-store";
 import { ConfiguratorForm } from "@/components/store/configurator-form";
 import { TextareaDisplay } from "@/components/store/textarea-display";
 import { ProductGallery } from "@/components/store/product-gallery";
+import { VariantSelector } from "@/components/store/variant-selector";
 import { WishlistButton } from "@/components/store/wishlist-button";
 import { RatingBadge } from "@/components/store/rating-badge";
 import { DescriptionDisplay } from "@/components/store/description-display";
 import type { PublicConfigField } from "@/lib/configurable-product-data";
+import type { HydratedOption, HydratedVariant } from "@/lib/variants";
 import type { PictureData } from "@/lib/image-manifest";
 import type { TextareaFieldConfig } from "@/lib/config-fields";
 
@@ -60,6 +72,16 @@ type Props = {
   isWishlistedInitial?: boolean;
   ratingAvg?: number;
   ratingCount?: number;
+  /**
+   * Quick task 260501-spv — optional single-axis variant set. When non-empty
+   * the SimpleProductView swaps its flat-price flow for a variant-driven
+   * one (selector + variantId-keyed cart). When empty / undefined the
+   * original flat-price flow is preserved byte-for-byte.
+   */
+  options?: HydratedOption[];
+  hydratedVariants?: HydratedVariant[];
+  /** Pre-resolved <picture> sources keyed by variantId — mirrors stocked PDP. */
+  variantPictures?: Record<string, PictureData | null>;
 };
 
 // ============================================================================
@@ -98,8 +120,44 @@ export function SimpleProductView({
   isWishlistedInitial = false,
   ratingAvg = 0,
   ratingCount = 0,
+  options = [],
+  hydratedVariants = [],
+  variantPictures = {},
 }: Props) {
   const [values, setValues] = useState<Record<string, string>>({});
+
+  // Quick task 260501-spv — variant branch toggle. Single source of truth.
+  const hasVariants = hydratedVariants.length > 0;
+
+  // Variant branch state — selected + hovered variant.
+  const [selectedHydrated, setSelectedHydrated] = useState<HydratedVariant | null>(null);
+  const [hoveredHydrated, setHoveredHydrated] = useState<HydratedVariant | null>(null);
+  const [firstMissingOptionName, setFirstMissingOptionName] = useState<string | null>(null);
+
+  const handleVariantChange = useCallback((v: HydratedVariant | null) => {
+    setSelectedHydrated(v);
+  }, []);
+  const handlePreviewChange = useCallback((v: HydratedVariant | null) => {
+    setHoveredHydrated(v);
+  }, []);
+  const handleFirstMissingOptionChange = useCallback((name: string | null) => {
+    setFirstMissingOptionName(name);
+  }, []);
+
+  // Hover wins over click for display (same rule as stocked PDP).
+  const displayedHydrated = hoveredHydrated ?? selectedHydrated;
+
+  // Visible variants — strip OOS-without-preorder rows so we can detect
+  // "all sold out" without leaking hidden rows into the selector.
+  const visibleVariants = useMemo(
+    () =>
+      hydratedVariants.filter((v) => {
+        const oos = !v.inStock || (v.trackStock === true && (v.stock ?? 0) <= 0);
+        return !(oos && v.allowPreorder !== true);
+      }),
+    [hydratedVariants],
+  );
+  const soldOut = hasVariants && visibleVariants.length === 0;
 
   // Flat price: always priceTiers["1"]. Falls back to the smallest key if
   // an admin somehow saved a different shape (defensive).
@@ -112,13 +170,16 @@ export function SimpleProductView({
     return null;
   }, [priceTiers]);
 
-  // Customer-input fields (everything except admin-content textareas)
+  // Customer-input fields (everything except admin-content textareas).
+  // Hidden when variants are in play — variant-with-fields is a hybrid we
+  // don't ship; the cart shape can't carry both. Admins choosing variants
+  // give up the configurator-style customer inputs (textareas still render).
   const inputFields = useMemo(
-    () => fields.filter((f) => f.fieldType !== "textarea"),
-    [fields],
+    () => (hasVariants ? [] : fields.filter((f) => f.fieldType !== "textarea")),
+    [fields, hasVariants],
   );
 
-  // Required customer-input fields filled
+  // Required customer-input fields filled (flat-price branch only).
   const requiredFilled = useMemo(
     () =>
       inputFields
@@ -127,13 +188,47 @@ export function SimpleProductView({
     [inputFields, values],
   );
 
-  const canAdd = flatPrice !== null && requiredFilled;
+  // Pre-order detection mirrors stocked PDP. Only applies in variant branch.
+  const isPreorderSelected =
+    hasVariants &&
+    !!selectedHydrated &&
+    (!selectedHydrated.inStock ||
+      (selectedHydrated.trackStock === true && (selectedHydrated.stock ?? 0) <= 0)) &&
+    selectedHydrated.allowPreorder === true;
+
+  const isPreorderDisplayed =
+    hasVariants &&
+    !!displayedHydrated &&
+    (!displayedHydrated.inStock ||
+      (displayedHydrated.trackStock === true && (displayedHydrated.stock ?? 0) <= 0)) &&
+    displayedHydrated.allowPreorder === true;
+
+  // Effective price: variant branch prefers the displayed variant's
+  // effectivePrice (sale-aware); flat branch keeps flatPrice.
+  const effectivePriceNumber: number | null = hasVariants
+    ? (displayedHydrated ? Number.parseFloat(displayedHydrated.effectivePrice) : null)
+    : flatPrice;
+
+  const canAdd = hasVariants
+    ? !soldOut && !!selectedHydrated
+    : flatPrice !== null && requiredFilled;
 
   const addItem = useCartStore((s) => s.addItem);
   const setDrawerOpen = useCartStore((s) => s.setDrawerOpen);
 
   function handleAddToBag() {
-    if (!canAdd || flatPrice === null) return;
+    if (!canAdd) return;
+
+    if (hasVariants) {
+      if (!selectedHydrated) return;
+      // Stocked-style cart entry — variantId is the sole key. Cart hydration
+      // resolves price + label + image server-side from the variant row.
+      addItem({ variantId: selectedHydrated.id, quantity: 1 });
+      setDrawerOpen(true);
+      return;
+    }
+
+    if (flatPrice === null) return;
 
     // Strip textarea field IDs from values — admin content, not customer data.
     const inputIds = new Set(inputFields.map((f) => f.id));
@@ -154,11 +249,42 @@ export function SimpleProductView({
 
   const material = product.materialType ?? "PLA";
   const leadDays = product.estimatedProductionDays ?? 7;
-  const ctaLabel = canAdd
-    ? `Add to Bag · ${formatMYR(flatPrice!)}`
-    : !requiredFilled
-    ? "Fill in all fields first"
-    : "Enter your details";
+
+  // CTA label — three branches: variant / flat-with-fields / flat-no-fields.
+  const ctaLabel = (() => {
+    if (hasVariants) {
+      if (soldOut) return "Out of stock";
+      if (!selectedHydrated) {
+        return firstMissingOptionName
+          ? `Pick a ${firstMissingOptionName}`
+          : "Pick a variant";
+      }
+      const priceLabel = formatMYR(effectivePriceNumber ?? 0);
+      return isPreorderSelected ? `Pre-order · ${priceLabel}` : `Add to Bag · ${priceLabel}`;
+    }
+    if (canAdd) return `Add to Bag · ${formatMYR(flatPrice!)}`;
+    if (!requiredFilled) return "Fill in all fields first";
+    return "Enter your details";
+  })();
+
+  // Gallery: variant branch swaps in the selected variant's PictureData.
+  const galleryImages = useMemo(() => {
+    if (!hasVariants) return product.images;
+    const variantPic = displayedHydrated ? variantPictures[displayedHydrated.id] ?? null : null;
+    if (variantPic) {
+      return [variantPic.fallbackSrc, ...product.images.filter((i) => i !== variantPic.fallbackSrc)];
+    }
+    return product.images;
+  }, [hasVariants, displayedHydrated, variantPictures, product.images]);
+
+  const galleryPictures = useMemo<PictureData[] | undefined>(() => {
+    if (!hasVariants) return product.pictures;
+    const variantPic = displayedHydrated ? variantPictures[displayedHydrated.id] ?? null : null;
+    if (variantPic && product.pictures) {
+      return [variantPic, ...product.pictures];
+    }
+    return product.pictures;
+  }, [hasVariants, displayedHydrated, variantPictures, product.pictures]);
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: BRAND.cream }}>
@@ -186,8 +312,8 @@ export function SimpleProductView({
               }}
             >
               <ProductGallery
-                images={product.images}
-                pictures={product.pictures}
+                images={galleryImages}
+                pictures={galleryPictures}
                 alt={product.name}
               />
             </div>
@@ -233,8 +359,33 @@ export function SimpleProductView({
                 </div>
               ) : null}
 
-              <div className="mb-4">
-                {flatPrice !== null ? (
+              {/* Quick task 260501-spv — Pre-order badge for variant branch.
+                  Mirrors stocked PDP: shows whenever the displayed variant is
+                  OOS but allows preorder. Hidden in flat-price branch. */}
+              {isPreorderDisplayed && (
+                <div className="mb-3">
+                  <span
+                    className="inline-flex rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider"
+                    style={{ backgroundColor: BRAND.purple, color: "white" }}
+                  >
+                    Pre-order
+                  </span>
+                </div>
+              )}
+
+              {/* Price block — variant branch shows sale strike-through when
+                  the displayed variant is on sale; flat branch is unchanged. */}
+              {hasVariants && displayedHydrated?.isOnSale ? (
+                <div className="flex items-center gap-3 mb-4 flex-wrap">
+                  <span
+                    className="inline-flex rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider"
+                    style={{ backgroundColor: BRAND.purple, color: "white" }}
+                  >
+                    On Sale
+                  </span>
+                  <span className="text-base font-semibold text-zinc-400 line-through">
+                    {formatMYR(Number.parseFloat(displayedHydrated.price))}
+                  </span>
                   <span
                     className="inline-flex self-start items-center rounded-full px-5 py-2 text-2xl font-extrabold tracking-tight"
                     style={{
@@ -243,21 +394,36 @@ export function SimpleProductView({
                       boxShadow: `0 4px 0 ${BRAND.greenDark}`,
                     }}
                   >
-                    {formatMYR(flatPrice)}
+                    {formatMYR(Number.parseFloat(displayedHydrated.effectivePrice))}
                   </span>
-                ) : (
-                  <span
-                    className="inline-flex self-start items-center rounded-full px-5 py-2 text-base font-semibold"
-                    style={{
-                      backgroundColor: "#f1f5f9",
-                      color: "#64748b",
-                      border: "2px solid #e2e8f0",
-                    }}
-                  >
-                    Price unavailable
-                  </span>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div className="mb-4">
+                  {effectivePriceNumber !== null ? (
+                    <span
+                      className="inline-flex self-start items-center rounded-full px-5 py-2 text-2xl font-extrabold tracking-tight"
+                      style={{
+                        backgroundColor: BRAND.green,
+                        color: BRAND.ink,
+                        boxShadow: `0 4px 0 ${BRAND.greenDark}`,
+                      }}
+                    >
+                      {formatMYR(effectivePriceNumber)}
+                    </span>
+                  ) : (
+                    <span
+                      className="inline-flex self-start items-center rounded-full px-5 py-2 text-base font-semibold"
+                      style={{
+                        backgroundColor: "#f1f5f9",
+                        color: "#64748b",
+                        border: "2px solid #e2e8f0",
+                      }}
+                    >
+                      Price unavailable
+                    </span>
+                  )}
+                </div>
+              )}
 
               {product.descriptionHtml ? (
                 <DescriptionDisplay html={product.descriptionHtml} />
@@ -293,7 +459,59 @@ export function SimpleProductView({
                 );
               })}
 
-            {/* Customer input fields — only render if any non-textarea fields exist */}
+            {/* Quick task 260501-spv — variant selector card. Single-axis
+                cap is enforced upstream in the admin editor; the selector
+                itself is the same component stocked PDP uses, so the UX
+                stays identical when admins promote a Simple product to
+                "with variants". */}
+            {hasVariants && (
+              <div
+                className="rounded-3xl p-5 sm:p-6"
+                style={{
+                  background: "#ffffff",
+                  border: `2.5px solid ${BRAND.ink}12`,
+                  boxShadow: `0 6px 0 ${BRAND.ink}0e, 0 16px 32px ${BRAND.ink}0a`,
+                }}
+              >
+                <div className="flex items-center gap-2 mb-5">
+                  <span
+                    className="w-1.5 h-6 rounded-full shrink-0"
+                    style={{ backgroundColor: BRAND.blue }}
+                    aria-hidden="true"
+                  />
+                  <h2
+                    className="font-[var(--font-heading)] text-lg font-bold uppercase tracking-wide"
+                    style={{ color: BRAND.ink }}
+                  >
+                    {options[0]?.name
+                      ? `Choose ${options[0].name}`
+                      : "Choose a variant"}
+                  </h2>
+                </div>
+
+                {soldOut ? (
+                  <div
+                    className="rounded-2xl border-2 px-4 py-3 text-sm font-semibold"
+                    style={{ borderColor: "#cbd5e1", backgroundColor: "#f1f5f9", color: BRAND.ink }}
+                    role="status"
+                  >
+                    Currently sold out. Check back soon!
+                  </div>
+                ) : (
+                  <VariantSelector
+                    options={options}
+                    variants={hydratedVariants}
+                    onVariantChange={handleVariantChange}
+                    onPreviewChange={handlePreviewChange}
+                    onFirstMissingOptionChange={handleFirstMissingOptionChange}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Customer input fields — only render if any non-textarea fields exist
+                AND no variants are present (variants + customer fields is a
+                hybrid we don't ship; the cart can't carry both shapes). */}
             {inputFields.length > 0 && (
               <div
                 className="rounded-3xl p-5 sm:p-6"
