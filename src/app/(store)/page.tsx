@@ -120,7 +120,7 @@ export default async function HomePage({
               {
                 n: "03",
                 t: "Checkout",
-                d: "pay using PayPal safe and secure and shipping across malaysia",
+                d: "Pay using PayPal safe and secure and Shipping across Malaysia",
                 c: BRAND.purple,
                 icon: "/icons/ninja/nav/download@128.png",
               },
