@@ -15,6 +15,7 @@
 import { useMemo, useState, useEffect } from "react";
 import type { HydratedOption, HydratedVariant } from "@/lib/variants";
 import { isVariantAvailable as isVariantAvailableShared } from "@/lib/variant-availability";
+import { sortByShade } from "@/lib/colour-sort";
 
 /** A variant is OOS when admin disabled it (inStock=false) OR it tracks stock
  * and is depleted (trackStock=true AND stock<=0). */
@@ -183,9 +184,22 @@ export function VariantSelector({
       {options.map((option, slotIdx) => {
         const currentValueId = selected[slotIdx];
         // Phase 18 — strip values that have no visible variant.
-        const visibleValues = option.values.filter((v) => visibleValueIds.has(v.id));
-        if (visibleValues.length === 0) return null;
-        const isColorOption = visibleValues.some((v) => v.swatchHex);
+        const filteredValues = option.values.filter((v) => visibleValueIds.has(v.id));
+        if (filteredValues.length === 0) return null;
+        const isColorOption = filteredValues.some((v) => v.swatchHex);
+        // For colour options, sort the swatches by shade (hue family + lightness)
+        // so customers see a coherent rainbow rather than admin-curated order.
+        // Non-colour options keep admin-curated `position` order (e.g. Small →
+        // Medium → Large must stay in size order, not alphabetical).
+        const visibleValues = isColorOption
+          ? sortByShade(
+              filteredValues.map((v) => ({
+                ...v,
+                hex: v.swatchHex ?? "#000000",
+                name: v.value,
+              })),
+            )
+          : filteredValues;
 
         return (
           <div key={option.id}>

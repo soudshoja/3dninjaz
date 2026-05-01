@@ -17,6 +17,7 @@ import {
   type HydratedVariant,
 } from "@/lib/variants";
 import { buildColourSlugMap } from "@/lib/colours";
+import { sortByShade } from "@/lib/colour-sort";
 import { ensureTiers, ensureImagesV2, type ImageEntryV2 } from "@/lib/config-fields";
 
 // ============================================================================
@@ -546,9 +547,11 @@ export async function getActiveProductColourChips(): Promise<ShopColourChip[]> {
   const usedColours = allColours.filter((c) => usedColourIds.has(c.id));
   if (usedColours.length === 0) return [];
   const slugMap = buildColourSlugMap(usedColours);
-  return usedColours
-    .map((c) => ({ slug: slugMap.get(c.id)!, name: c.name, hex: c.hex }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  // Shade-aware order so the /shop colour filter chips group reds, blues, etc.
+  // together (achromatics last) — matches the storefront picker ordering.
+  return sortByShade(
+    usedColours.map((c) => ({ slug: slugMap.get(c.id)!, name: c.name, hex: c.hex })),
+  );
 }
 
 /**
