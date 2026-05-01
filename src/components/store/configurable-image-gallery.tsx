@@ -15,7 +15,7 @@
  * Tap targets ≥ 44px (RESP-01). Mobile thumbstrip is horizontally scrollable.
  */
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import type { PictureData } from "@/lib/image-manifest";
@@ -51,8 +51,17 @@ export function ConfigurableImageGallery({
   const activeDisplayImage = displayImages[activeDisplayIdx] ?? null;
   const activeCaption = imageCaptions?.[activeDisplayIdx] ?? null;
 
+  const stripRef = useRef<HTMLUListElement>(null);
+
   const sizes = "(max-width: 1024px) 100vw, 50vw";
   const thumbSizes = "80px";
+
+  function scrollStrip(dir: "left" | "right") {
+    stripRef.current?.scrollBy({ left: dir === "left" ? -200 : 200, behavior: "smooth" });
+  }
+
+  // Total thumbs = 1 ("Yours") + displayImages.length
+  const totalThumbs = 1 + displayImages.length;
 
   return (
     <div className="flex flex-col gap-4">
@@ -108,36 +117,6 @@ export function ConfigurableImageGallery({
           </div>
         )}
 
-        {displayImages.length > 1 && (
-          <>
-            <button
-              type="button"
-              onClick={() => {
-                const prev = (activeDisplayIdx - 1 + displayImages.length) % displayImages.length;
-                setActiveDisplayIdx(prev);
-                if (showPreview) onTogglePreview(false);
-              }}
-              aria-label="Previous image"
-              className="absolute left-3 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center rounded-full border border-zinc-200 bg-white/90 shadow-md transition hover:bg-white active:scale-95"
-              style={{ width: 44, height: 44, color: BRAND.ink }}
-            >
-              <ChevronLeft size={22} strokeWidth={2.5} />
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const next = (activeDisplayIdx + 1) % displayImages.length;
-                setActiveDisplayIdx(next);
-                if (showPreview) onTogglePreview(false);
-              }}
-              aria-label="Next image"
-              className="absolute right-3 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center rounded-full border border-zinc-200 bg-white/90 shadow-md transition hover:bg-white active:scale-95"
-              style={{ width: 44, height: 44, color: BRAND.ink }}
-            >
-              <ChevronRight size={22} strokeWidth={2.5} />
-            </button>
-          </>
-        )}
       </div>
       {/* Phase 19 (19-10) — figcaption shown under hero when a caption is set */}
       {!showPreview && activeCaption && (
@@ -148,104 +127,131 @@ export function ConfigurableImageGallery({
       </figure>
 
       {/* ── Thumbstrip ── */}
-      <ul
-        className="flex gap-3 overflow-x-auto"
-        aria-label="Product image thumbnails"
-        style={{ scrollbarWidth: "none" }}
-      >
-        {/* "Yours" thumbnail — always first */}
-        <li>
+      {totalThumbs > 1 ? (
+        <div className="relative flex items-center gap-1 -mx-2 px-2">
+          {/* Left scroll arrow */}
           <button
             type="button"
-            onClick={() => onTogglePreview(true)}
-            aria-label="Show your live preview"
-            aria-current={showPreview ? "true" : undefined}
-            className="relative h-20 w-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all duration-200 flex flex-col items-center justify-center gap-1 cursor-pointer"
-            style={{
-              borderColor: showPreview ? BRAND.green : "transparent",
-              backgroundColor: `${BRAND.green}15`,
-              boxShadow: showPreview ? `0 0 0 2px ${BRAND.green}40, 0 3px 0 ${BRAND.greenDark}40` : "0 2px 4px rgba(0,0,0,0.06)",
-              minHeight: 44,
-              minWidth: 44,
-            }}
+            onClick={() => scrollStrip("left")}
+            aria-label="Scroll thumbnails left"
+            className="shrink-0 flex items-center justify-center rounded-full border border-zinc-200 bg-white shadow-sm transition hover:bg-zinc-50 active:scale-95 z-10"
+            style={{ width: 40, height: 40, minWidth: 40, color: BRAND.ink }}
           >
-            {/* Small live preview miniature */}
-            <div
-              className="relative w-14 h-14 overflow-hidden"
-              aria-hidden="true"
-            >
-              <div
-                style={{
-                  position: "absolute",
-                  top: "50%",
-                  left: "50%",
-                  transform: "translate(-50%, -50%) scale(0.2)",
-                  transformOrigin: "center center",
-                  width: "500%",
-                }}
-              >
-                {previewSlot}
-              </div>
-            </div>
-            <span
-              className="absolute bottom-1 text-[9px] font-bold uppercase tracking-wide"
-              style={{ color: showPreview ? BRAND.ink : "#64748b" }}
-            >
-              Name
-            </span>
+            <ChevronLeft size={20} strokeWidth={2.5} />
           </button>
-        </li>
 
-        {/* Display image thumbnails */}
-        {displayImages.map((img, i) => {
-          const tp = pictures?.[i];
-          const isActive = !showPreview && activeDisplayIdx === i;
-          return (
-            <li key={img + i}>
+          <ul
+            ref={stripRef}
+            className="flex gap-3 overflow-x-auto flex-1"
+            aria-label="Product image thumbnails"
+            style={{ scrollbarWidth: "none" }}
+          >
+            {/* "Yours" thumbnail — always first */}
+            <li>
               <button
                 type="button"
-                onClick={() => {
-                  setActiveDisplayIdx(i);
-                  onTogglePreview(false);
-                }}
-                aria-label={`View display image ${i + 1}`}
-                aria-current={isActive ? "true" : undefined}
-                className="relative h-20 w-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer"
+                onClick={() => onTogglePreview(true)}
+                aria-label="Show your live preview"
+                aria-current={showPreview ? "true" : undefined}
+                className="relative h-20 w-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all duration-200 flex flex-col items-center justify-center gap-1 cursor-pointer"
                 style={{
-                  borderColor: isActive ? BRAND.blue : "transparent",
-                  backgroundColor: `${BRAND.blue}10`,
-                  boxShadow: isActive ? `0 0 0 2px ${BRAND.blue}40, 0 3px 0 ${BRAND.blueDark}40` : "0 2px 4px rgba(0,0,0,0.06)",
+                  borderColor: showPreview ? BRAND.green : "transparent",
+                  backgroundColor: `${BRAND.green}15`,
+                  boxShadow: showPreview ? `0 0 0 2px ${BRAND.green}40, 0 3px 0 ${BRAND.greenDark}40` : "0 2px 4px rgba(0,0,0,0.06)",
                   minHeight: 44,
                   minWidth: 44,
                 }}
               >
-                {tp && tp.sources.length > 0 ? (
-                  <picture>
-                    {tp.sources.map((s) => (
-                      <source key={s.type} type={s.type} srcSet={s.srcSet} sizes={thumbSizes} />
-                    ))}
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={tp.fallbackSrc}
-                      alt=""
-                      className="absolute inset-0 h-full w-full object-cover"
-                      loading="lazy"
-                    />
-                  </picture>
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={img}
-                    alt=""
-                    className="absolute inset-0 h-full w-full object-cover"
-                    loading="lazy"
-                  />
-                )}
+                {/* Small live preview miniature */}
+                <div
+                  className="relative w-14 h-14 overflow-hidden"
+                  aria-hidden="true"
+                >
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "50%",
+                      left: "50%",
+                      transform: "translate(-50%, -50%) scale(0.2)",
+                      transformOrigin: "center center",
+                      width: "500%",
+                    }}
+                  >
+                    {previewSlot}
+                  </div>
+                </div>
+                <span
+                  className="absolute bottom-1 text-[9px] font-bold uppercase tracking-wide"
+                  style={{ color: showPreview ? BRAND.ink : "#64748b" }}
+                >
+                  Name
+                </span>
               </button>
             </li>
-          );
-        })}
-      </ul>
+
+            {/* Display image thumbnails */}
+            {displayImages.map((img, i) => {
+              const tp = pictures?.[i];
+              const isActive = !showPreview && activeDisplayIdx === i;
+              return (
+                <li key={img + i}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveDisplayIdx(i);
+                      onTogglePreview(false);
+                    }}
+                    aria-label={`View display image ${i + 1}`}
+                    aria-current={isActive ? "true" : undefined}
+                    className="relative h-20 w-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer"
+                    style={{
+                      borderColor: isActive ? BRAND.blue : "transparent",
+                      backgroundColor: `${BRAND.blue}10`,
+                      boxShadow: isActive ? `0 0 0 2px ${BRAND.blue}40, 0 3px 0 ${BRAND.blueDark}40` : "0 2px 4px rgba(0,0,0,0.06)",
+                      minHeight: 44,
+                      minWidth: 44,
+                    }}
+                  >
+                    {tp && tp.sources.length > 0 ? (
+                      <picture>
+                        {tp.sources.map((s) => (
+                          <source key={s.type} type={s.type} srcSet={s.srcSet} sizes={thumbSizes} />
+                        ))}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={tp.fallbackSrc}
+                          alt=""
+                          className="absolute inset-0 h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      </picture>
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={img}
+                        alt=""
+                        className="absolute inset-0 h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+
+          {/* Right scroll arrow */}
+          <button
+            type="button"
+            onClick={() => scrollStrip("right")}
+            aria-label="Scroll thumbnails right"
+            className="shrink-0 flex items-center justify-center rounded-full border border-zinc-200 bg-white shadow-sm transition hover:bg-zinc-50 active:scale-95 z-10"
+            style={{ width: 40, height: 40, minWidth: 40, color: BRAND.ink }}
+          >
+            <ChevronRight size={20} strokeWidth={2.5} />
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
