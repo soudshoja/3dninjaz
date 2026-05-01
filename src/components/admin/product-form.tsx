@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo, useEffect } from "react";
+import { useState, useTransition, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Save, Check } from "lucide-react";
 import { createProduct, updateProduct } from "@/actions/products";
@@ -110,6 +110,18 @@ export function ProductForm({
 }) {
   const router = useRouter();
   const editing = !!initialData;
+
+  // Pre-generate the product UUID on the client for the create flow so that
+  // image uploads go straight to /uploads/products/<productId>/<imageUuid>
+  // without any intermediate /new/ bucket. The UUID is stable across re-renders
+  // via useRef so multiple images uploaded before Save all share the same
+  // product folder. On the edit path we use initialData.id directly.
+  const preGeneratedId = useRef(
+    typeof crypto !== "undefined" ? crypto.randomUUID() : ""
+  );
+  const effectiveProductId = editing
+    ? initialData!.id
+    : preGeneratedId.current;
 
   const [name, setName] = useState(initialData?.name ?? "");
   const [description, setDescription] = useState(
@@ -345,7 +357,7 @@ export function ProductForm({
 
       const result = editing
         ? await updateProduct(initialData!.id, payload)
-        : await createProduct(payload);
+        : await createProduct(payload, effectiveProductId);
 
       if ("error" in result) {
         if (typeof result.error === "string") {
@@ -559,7 +571,7 @@ export function ProductForm({
                 return next;
               });
             }}
-            productId={initialData?.id}
+            productId={effectiveProductId}
             maxImages={999}
             thumbnailIndex={thumbnailIndex}
             onThumbnailChange={setThumbnailIndex}

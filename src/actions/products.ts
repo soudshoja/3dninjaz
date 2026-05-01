@@ -194,7 +194,20 @@ async function reconcileInlineFields(
 }
 
 export async function createProduct(
-  data: ProductInput
+  data: ProductInput,
+  /**
+   * Optional pre-generated product UUID from the client form.
+   *
+   * When provided (the standard admin-form path), images were uploaded
+   * directly to /uploads/products/<preGeneratedId>/<imageUuid>/ and no
+   * /new/ migration is needed. When omitted (seed scripts, bulk importers,
+   * tests) a fresh UUID is generated server-side.
+   *
+   * Security: the value is sanitised to alphanum+dash before use; the upload
+   * route handler already wrote the files using this same ID so the DB URL
+   * and filesystem path are guaranteed to match.
+   */
+  preGeneratedId?: string,
 ): Promise<ProductActionResult> {
   await requireAdmin();
 
@@ -210,31 +223,42 @@ export async function createProduct(
   // even if a malformed payload bypassed the Quill editor in product-form.tsx.
   productData.description = sanitizeRichText(productData.description);
 
-  // Generate a UUID in app code so we can return it immediately and control
-  // filesystem paths (uploads/products/<id>/...). MySQL's UUID() default
-  // would work, but we'd need a follow-up SELECT to read it back.
-  const id = randomUUID();
+  // Use the client-supplied pre-generated UUID when available (admin-form path).
+  // Fall back to a fresh server-generated UUID for programmatic callers.
+  // Sanitise to alphanum+dash to prevent path traversal regardless of origin.
+  const rawId = preGeneratedId?.trim() ?? "";
+  const id = rawId.length > 0
+    ? rawId.replace(/[^a-zA-Z0-9-]/g, "")
+    : randomUUID();
+
   const baseSlug = slugify(productData.name);
   const slug = `${baseSlug || "product"}-${Date.now().toString(36)}`;
 
-  // Migrate any images that were uploaded under the "new" bucket (before the
-  // product ID was known) to the correct /<productId>/ bucket on disk, and
-  // rewrite the URL array so the DB row always points at the final location.
-  // This must happen before imagesToPersist is constructed so both the legacy
-  // string[] path and the imagesV2 {url,caption,alt} path get correct URLs.
-  if (productData.images && productData.images.length > 0) {
-    productData.images = await migrateNewImages(id, productData.images);
+  // When a pre-generated ID was supplied the images were already uploaded
+  // directly to /uploads/products/<id>/<imageUuid>/ — no migration needed.
+  // Only run migrateNewImages as a defensive pass for the legacy /new/ case
+  // (programmatic callers that haven't adopted pre-generation yet).
+  const hasNewUrls = [
+    ...(productData.images ?? []),
+    ...(productData.imagesV2?.map((e) => e.url) ?? []),
+  ].some((u) => u.includes("/uploads/products/new/"));
+
+  if (hasNewUrls) {
+    if (productData.images && productData.images.length > 0) {
+      productData.images = await migrateNewImages(id, productData.images);
+    }
+    if (productData.imagesV2 && productData.imagesV2.length > 0) {
+      const migratedUrls = await migrateNewImages(
+        id,
+        productData.imagesV2.map((e) => e.url),
+      );
+      productData.imagesV2 = productData.imagesV2.map((e, i) => ({
+        ...e,
+        url: migratedUrls[i] ?? e.url,
+      }));
+    }
   }
-  if (productData.imagesV2 && productData.imagesV2.length > 0) {
-    const migratedUrls = await migrateNewImages(
-      id,
-      productData.imagesV2.map((e) => e.url),
-    );
-    productData.imagesV2 = productData.imagesV2.map((e, i) => ({
-      ...e,
-      url: migratedUrls[i] ?? e.url,
-    }));
-  }
+
   // Defensive check: warn if any URL still references /new/ after migration.
   const allUrls = (productData.imagesV2 ?? productData.images).map((e) =>
     typeof e === "string" ? e : (e as { url: string }).url,
