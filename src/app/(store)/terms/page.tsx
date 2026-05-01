@@ -80,10 +80,18 @@ export default function TermsPage() {
         <div>
           <h2 className="font-heading text-2xl">4. Delivery</h2>
           <p className="mt-2 text-base leading-relaxed">
-            Every piece is printed to order on our {BUSINESS.city} printers,
-            so expect a short lead time before your parcel ships. Typical
-            production and shipping timeframes appear on each product page
-            and in your order confirmation email. We ship within Malaysia.
+            Every piece is made to order in our Ninja Studio, so expect a
+            short lead time before your parcel ships. Typical production and
+            shipping time frames appear on each product page and in your
+            order confirmation email. We ship all over Malaysia. For
+            international orders please{" "}
+            <Link
+              href="/contact"
+              className="text-[#1E8BFF] underline underline-offset-2 hover:opacity-80"
+            >
+              contact us
+            </Link>
+            .
           </p>
         </div>
 
@@ -91,26 +99,10 @@ export default function TermsPage() {
           <h2 className="font-heading text-2xl">
             5. Cancellations and returns
           </h2>
-          <ul className="mt-2 space-y-2 text-base leading-relaxed">
-            <li>
-              <strong>Before production:</strong> contact us as soon as
-              possible and we&rsquo;ll do our best to cancel or amend the
-              order free of charge.
-            </li>
-            <li>
-              <strong>After production starts:</strong> because each item
-              is made to order, cancellations are at our discretion.
-            </li>
-            <li>
-              <strong>Defective or incorrect items:</strong> notify us within
-              14 days of delivery with photos and your order number. We will
-              replace or refund the affected item and cover return shipping.
-            </li>
-            <li>
-              <strong>Change of mind:</strong> return shipping is at your
-              cost; items must be unused and in their original condition.
-            </li>
-          </ul>
+          <p className="mt-2 text-base leading-relaxed">
+            For defective or incorrect items, let us know within 3 working
+            days and we&rsquo;ll make it right.
+          </p>
         </div>
 
         <div>
@@ -124,20 +116,7 @@ export default function TermsPage() {
         </div>
 
         <div>
-          <h2 className="font-heading text-2xl">
-            7. Intellectual property and acceptable use
-          </h2>
-          <p className="mt-2 text-base leading-relaxed">
-            Our product designs, photos, logos, and website content are
-            owned by {BUSINESS.legalName}. You may not copy, resell, or
-            reproduce our designs &mdash; whether digitally or physically
-            &mdash; without our written permission. Purchasing a product
-            gives you the physical item, not the design rights.
-          </p>
-        </div>
-
-        <div>
-          <h2 className="font-heading text-2xl">8. Liability</h2>
+          <h2 className="font-heading text-2xl">7. Liability</h2>
           <p className="mt-2 text-base leading-relaxed">
             Our products are supplied &ldquo;as is&rdquo;. We take care to
             describe items accurately and print them to a good standard, but
@@ -149,7 +128,7 @@ export default function TermsPage() {
         </div>
 
         <div>
-          <h2 className="font-heading text-2xl">9. Governing law</h2>
+          <h2 className="font-heading text-2xl">8. Governing law</h2>
           <p className="mt-2 text-base leading-relaxed">
             These terms are governed by the laws of Malaysia. Any dispute
             will be handled by the courts of Malaysia.
@@ -158,7 +137,7 @@ export default function TermsPage() {
 
         <div>
           <h2 className="font-heading text-2xl">
-            10. Changes to these terms
+            9. Changes to these terms
           </h2>
           <p className="mt-2 text-base leading-relaxed">
             We may update these terms from time to time. The &ldquo;Last
@@ -169,12 +148,12 @@ export default function TermsPage() {
         </div>
 
         <div>
-          <h2 className="font-heading text-2xl">11. Contact</h2>
+          <h2 className="font-heading text-2xl">10. Contact</h2>
           <p className="mt-2 text-base leading-relaxed">
             Questions about these terms?{" "}
             <Link
               href={`mailto:${BUSINESS.contactEmail}`}
-              className="text-[#0080ff] underline underline-offset-2 hover:opacity-80"
+              className="text-[#1E8BFF] underline underline-offset-2 hover:opacity-80"
             >
               {BUSINESS.contactEmail}
             </Link>{" "}
