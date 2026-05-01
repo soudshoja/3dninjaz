@@ -37,14 +37,31 @@ export function ProductGallery({
 }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const stripRef = useRef<HTMLUListElement>(null);
+  const thumbRefs = useRef<(HTMLLIElement | null)[]>([]);
   const hasImages = images.length > 0;
   const activePic = pictures?.[activeIndex];
   const activeImage = hasImages ? images[activeIndex] : null;
   const sizes = "(max-width: 1024px) 100vw, 50vw";
   const thumbSizes = "80px";
 
-  function scrollStrip(dir: "left" | "right") {
-    stripRef.current?.scrollBy({ left: dir === "left" ? -200 : 200, behavior: "smooth" });
+  const atStart = activeIndex === 0;
+  const atEnd = activeIndex === images.length - 1;
+
+  function goTo(dir: "left" | "right") {
+    const newIdx =
+      dir === "left"
+        ? Math.max(0, activeIndex - 1)
+        : Math.min(images.length - 1, activeIndex + 1);
+    if (newIdx === activeIndex) return;
+    setActiveIndex(newIdx);
+    // Defer to next frame so the active thumb's updated styles settle before scroll
+    requestAnimationFrame(() => {
+      thumbRefs.current[newIdx]?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "center",
+      });
+    });
   }
 
   return (
@@ -91,13 +108,22 @@ export function ProductGallery({
       </div>
       {images.length > 1 ? (
         <div className="relative flex items-center gap-1 -mx-2 px-2">
-          {/* Left scroll arrow */}
+          {/* Left arrow — previous image */}
           <button
             type="button"
-            onClick={() => scrollStrip("left")}
-            aria-label="Scroll thumbnails left"
-            className="shrink-0 flex items-center justify-center rounded-full border border-zinc-200 bg-white shadow-sm transition hover:bg-zinc-50 active:scale-95 z-10"
-            style={{ width: 40, height: 40, minWidth: 40, color: BRAND.ink }}
+            onClick={() => goTo("left")}
+            disabled={atStart}
+            aria-disabled={atStart}
+            aria-label="Previous image"
+            className="shrink-0 flex items-center justify-center rounded-full border border-zinc-200 bg-white shadow-sm transition active:scale-95 z-10 enabled:hover:bg-zinc-50"
+            style={{
+              width: 40,
+              height: 40,
+              minWidth: 40,
+              color: BRAND.ink,
+              opacity: atStart ? 0.35 : 1,
+              cursor: atStart ? "not-allowed" : "pointer",
+            }}
           >
             <ChevronLeft size={20} strokeWidth={2.5} />
           </button>
@@ -112,7 +138,12 @@ export function ProductGallery({
             {images.map((img, i) => {
               const tp = pictures?.[i];
               return (
-                <li key={img + i}>
+                <li
+                  key={img + i}
+                  ref={(el) => {
+                    thumbRefs.current[i] = el;
+                  }}
+                >
                   <button
                     type="button"
                     onClick={() => setActiveIndex(i)}
@@ -160,13 +191,22 @@ export function ProductGallery({
             })}
           </ul>
 
-          {/* Right scroll arrow */}
+          {/* Right arrow — next image */}
           <button
             type="button"
-            onClick={() => scrollStrip("right")}
-            aria-label="Scroll thumbnails right"
-            className="shrink-0 flex items-center justify-center rounded-full border border-zinc-200 bg-white shadow-sm transition hover:bg-zinc-50 active:scale-95 z-10"
-            style={{ width: 40, height: 40, minWidth: 40, color: BRAND.ink }}
+            onClick={() => goTo("right")}
+            disabled={atEnd}
+            aria-disabled={atEnd}
+            aria-label="Next image"
+            className="shrink-0 flex items-center justify-center rounded-full border border-zinc-200 bg-white shadow-sm transition active:scale-95 z-10 enabled:hover:bg-zinc-50"
+            style={{
+              width: 40,
+              height: 40,
+              minWidth: 40,
+              color: BRAND.ink,
+              opacity: atEnd ? 0.35 : 1,
+              cursor: atEnd ? "not-allowed" : "pointer",
+            }}
           >
             <ChevronRight size={20} strokeWidth={2.5} />
           </button>

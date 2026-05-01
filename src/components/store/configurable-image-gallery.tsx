@@ -52,16 +52,40 @@ export function ConfigurableImageGallery({
   const activeCaption = imageCaptions?.[activeDisplayIdx] ?? null;
 
   const stripRef = useRef<HTMLUListElement>(null);
+  // Index 0 = "Yours" preview thumb; 1..N = displayImages thumbs
+  const thumbRefs = useRef<(HTMLLIElement | null)[]>([]);
 
   const sizes = "(max-width: 1024px) 100vw, 50vw";
   const thumbSizes = "80px";
 
-  function scrollStrip(dir: "left" | "right") {
-    stripRef.current?.scrollBy({ left: dir === "left" ? -200 : 200, behavior: "smooth" });
-  }
-
   // Total thumbs = 1 ("Yours") + displayImages.length
   const totalThumbs = 1 + displayImages.length;
+
+  // Unified index across the strip: 0 = preview, 1..N = displayImages[i-1]
+  const currentIdx = showPreview ? 0 : activeDisplayIdx + 1;
+  const atStart = currentIdx === 0;
+  const atEnd = currentIdx === totalThumbs - 1;
+
+  function goTo(dir: "left" | "right") {
+    const newIdx =
+      dir === "left"
+        ? Math.max(0, currentIdx - 1)
+        : Math.min(totalThumbs - 1, currentIdx + 1);
+    if (newIdx === currentIdx) return;
+    if (newIdx === 0) {
+      onTogglePreview(true);
+    } else {
+      onTogglePreview(false);
+      setActiveDisplayIdx(newIdx - 1);
+    }
+    requestAnimationFrame(() => {
+      thumbRefs.current[newIdx]?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "center",
+      });
+    });
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -129,13 +153,22 @@ export function ConfigurableImageGallery({
       {/* ── Thumbstrip ── */}
       {totalThumbs > 1 ? (
         <div className="relative flex items-center gap-1 -mx-2 px-2">
-          {/* Left scroll arrow */}
+          {/* Left arrow — previous thumb */}
           <button
             type="button"
-            onClick={() => scrollStrip("left")}
-            aria-label="Scroll thumbnails left"
-            className="shrink-0 flex items-center justify-center rounded-full border border-zinc-200 bg-white shadow-sm transition hover:bg-zinc-50 active:scale-95 z-10"
-            style={{ width: 40, height: 40, minWidth: 40, color: BRAND.ink }}
+            onClick={() => goTo("left")}
+            disabled={atStart}
+            aria-disabled={atStart}
+            aria-label="Previous image"
+            className="shrink-0 flex items-center justify-center rounded-full border border-zinc-200 bg-white shadow-sm transition active:scale-95 z-10 enabled:hover:bg-zinc-50"
+            style={{
+              width: 40,
+              height: 40,
+              minWidth: 40,
+              color: BRAND.ink,
+              opacity: atStart ? 0.35 : 1,
+              cursor: atStart ? "not-allowed" : "pointer",
+            }}
           >
             <ChevronLeft size={20} strokeWidth={2.5} />
           </button>
@@ -147,7 +180,11 @@ export function ConfigurableImageGallery({
             style={{ scrollbarWidth: "none" }}
           >
             {/* "Yours" thumbnail — always first */}
-            <li>
+            <li
+              ref={(el) => {
+                thumbRefs.current[0] = el;
+              }}
+            >
               <button
                 type="button"
                 onClick={() => onTogglePreview(true)}
@@ -194,7 +231,12 @@ export function ConfigurableImageGallery({
               const tp = pictures?.[i];
               const isActive = !showPreview && activeDisplayIdx === i;
               return (
-                <li key={img + i}>
+                <li
+                  key={img + i}
+                  ref={(el) => {
+                    thumbRefs.current[i + 1] = el;
+                  }}
+                >
                   <button
                     type="button"
                     onClick={() => {
@@ -240,13 +282,22 @@ export function ConfigurableImageGallery({
             })}
           </ul>
 
-          {/* Right scroll arrow */}
+          {/* Right arrow — next thumb */}
           <button
             type="button"
-            onClick={() => scrollStrip("right")}
-            aria-label="Scroll thumbnails right"
-            className="shrink-0 flex items-center justify-center rounded-full border border-zinc-200 bg-white shadow-sm transition hover:bg-zinc-50 active:scale-95 z-10"
-            style={{ width: 40, height: 40, minWidth: 40, color: BRAND.ink }}
+            onClick={() => goTo("right")}
+            disabled={atEnd}
+            aria-disabled={atEnd}
+            aria-label="Next image"
+            className="shrink-0 flex items-center justify-center rounded-full border border-zinc-200 bg-white shadow-sm transition active:scale-95 z-10 enabled:hover:bg-zinc-50"
+            style={{
+              width: 40,
+              height: 40,
+              minWidth: 40,
+              color: BRAND.ink,
+              opacity: atEnd ? 0.35 : 1,
+              cursor: atEnd ? "not-allowed" : "pointer",
+            }}
           >
             <ChevronRight size={20} strokeWidth={2.5} />
           </button>
