@@ -68,9 +68,9 @@ export default function TermsPage() {
             3. Ordering and payment
           </h2>
           <p className="mt-2 text-base leading-relaxed">
-            Products are available in three sizes: Small, Medium, and Large.
-            Prices are displayed in MYR (Malaysian Ringgit). Payment is
-            processed by PayPal; we never see or store your card details.
+            Pick a 3D-printed piece, personalise it where available, and check
+            out in seconds. All prices are in MYR (Malaysian Ringgit). Payment
+            is processed by PayPal — we never see or store your card details.
             Your order is confirmed only after PayPal returns a successful
             payment capture; if payment fails, the order is cancelled
             automatically.
