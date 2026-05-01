@@ -256,9 +256,7 @@ export function SimpleProductView({
     if (hasVariants) {
       if (soldOut) return "Out of stock";
       if (!selectedHydrated) {
-        return firstMissingOptionName
-          ? `Pick a ${firstMissingOptionName}`
-          : "Pick a variant";
+        return "Pick a product";
       }
       const priceLabel = formatMYR(effectivePriceNumber ?? 0);
       return isPreorderSelected ? `Pre-order · ${priceLabel}` : `Add to Bag · ${priceLabel}`;
@@ -484,9 +482,7 @@ export function SimpleProductView({
                     className="font-[var(--font-heading)] text-lg font-bold uppercase tracking-wide"
                     style={{ color: BRAND.ink }}
                   >
-                    {options[0]?.name
-                      ? `Choose ${options[0].name}`
-                      : "Choose a variant"}
+                    Products
                   </h2>
                 </div>
 
