@@ -67,9 +67,6 @@ export default async function ContactPage() {
         >
           Get in touch.
         </h1>
-        <p className="mt-3 text-base sm:text-lg text-zinc-600">
-          We reply fastest on WhatsApp.
-        </p>
       </header>
 
       {/* Primary CTA — always visible because WhatsApp is the core channel. */}
@@ -159,7 +156,7 @@ export default async function ContactPage() {
           <dd className="mt-2">
             <a
               href={`mailto:${settings.contactEmail || BUSINESS.contactEmail}`}
-              className="inline-flex min-h-12 items-center font-semibold text-[#0080ff] underline underline-offset-2 hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0080ff] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F7FAF4] rounded-sm"
+              className="inline-flex min-h-12 items-center font-semibold text-[#1E8BFF] underline underline-offset-2 hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1E8BFF] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F7FAF4] rounded-sm"
             >
               {settings.contactEmail || BUSINESS.contactEmail}
             </a>
