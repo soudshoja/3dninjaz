@@ -67,7 +67,7 @@ export function ProductGallery({
   return (
     <div className="flex flex-col gap-4">
       <div
-        className="relative aspect-square rounded-[28px] overflow-hidden shadow-lg"
+        className="relative aspect-[4/5] rounded-[28px] overflow-hidden shadow-lg"
         style={{ backgroundColor: `${BRAND.blue}15` }}
       >
         {activeImage ? (
