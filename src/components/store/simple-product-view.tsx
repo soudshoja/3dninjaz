@@ -37,6 +37,7 @@ import { VariantSelector } from "@/components/store/variant-selector";
 import { WishlistButton } from "@/components/store/wishlist-button";
 import { RatingBadge } from "@/components/store/rating-badge";
 import { DescriptionDisplay } from "@/components/store/description-display";
+import { PdpProductCare, PdpColourNote } from "@/components/store/pdp-info-blocks";
 import type { PublicConfigField } from "@/lib/configurable-product-data";
 import type { HydratedOption, HydratedVariant } from "@/lib/variants";
 import type { PictureData } from "@/lib/image-manifest";
@@ -615,6 +616,8 @@ export function SimpleProductView({
               <p className="text-sm leading-relaxed" style={{ color: "#374151" }}>
                 Every product is made to order in our Kuala Lumpur Ninja Hideout! We inspect every item before we ship each product straight to your door!
               </p>
+              <PdpProductCare />
+              <PdpColourNote />
             </div>
           </div>
         </div>

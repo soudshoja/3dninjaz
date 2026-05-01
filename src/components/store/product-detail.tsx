@@ -14,6 +14,7 @@ import type { PictureData } from "@/lib/image-manifest";
 import { ConfigurableProductView } from "@/components/store/configurable-product-view";
 import { SimpleProductView } from "@/components/store/simple-product-view";
 import { DescriptionDisplay } from "@/components/store/description-display";
+import { PdpProductCare, PdpColourNote } from "@/components/store/pdp-info-blocks";
 import type { PublicConfigField } from "@/lib/configurable-product-data";
 
 type ProductDetailProps = {
@@ -444,6 +445,8 @@ export function ProductDetail({
               <p className="text-sm leading-relaxed" style={{ color: "#374151" }}>
                 Every product is made to order in our Kuala Lumpur Ninja Hideout! We inspect every item before we ship each product straight to your door!
               </p>
+              <PdpProductCare />
+              <PdpColourNote />
             </div>
 
           </div>
