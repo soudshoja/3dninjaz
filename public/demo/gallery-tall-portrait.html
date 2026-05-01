@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex,nofollow" />
+<title>Vending Machine Gallery — tall 4:5 portrait hero concept demo</title>
+<style>
+  /* Brand palette — mirrors src/lib/brand.ts */
+  :root {
+    --blue: #0080ff;       --blue-d: #0061C2;
+    --green: #03C03C;      --green-d: #018A29;
+    --purple: #8A00C2;     --purple-d: #62008C;
+    --ink: #0B1020;
+    --cream: #F7FAF4;
+    --line: #E2E8F0;
+    --muted: #64748B;
+    --soft: #f8fafc;
+    --error: #be123c;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: var(--ink);
+    background: var(--cream);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Nav ─────────────────────────────────────────────────── */
+  .nav {
+    background: #fff;
+    border-bottom: 1px solid var(--line);
+    position: sticky; top: 0; z-index: 50;
+  }
+  .nav-inner {
+    max-width: 72rem;
+    margin: 0 auto;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+  }
+  .brand {
+    display: inline-flex; align-items: center; gap: 10px;
+    text-decoration: none; color: var(--ink);
+    font-weight: 800; font-size: 18px; letter-spacing: 0.04em;
+  }
+  .brand-mark {
+    width: 34px; height: 34px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--green) 0%, var(--blue) 100%);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 16px;
+  }
+  .nav-links { display: flex; gap: 26px; font-size: 14px; font-weight: 600; color: var(--ink); }
+  .nav-links a { color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+  .nav-actions { display: flex; align-items: center; gap: 12px; }
+  .bag-pill {
+    background: var(--ink); color: #fff;
+    padding: 8px 16px; border-radius: 999px;
+    font-weight: 700; font-size: 13px;
+    display: inline-flex; align-items: center; gap: 6px;
+    border: none; cursor: pointer;
+  }
+  .signin { font-size: 14px; color: var(--ink); font-weight: 600; text-decoration: none; }
+  .register-pill {
+    background: var(--green); color: var(--ink);
+    padding: 8px 16px; border-radius: 999px;
+    font-weight: 800; font-size: 13px; cursor: pointer;
+    border: none;
+    box-shadow: 0 3px 0 var(--green-d);
+  }
+  @media (max-width: 720px) {
+    .nav-links { display: none; }
+    .nav-inner { padding: 12px 16px; }
+    .signin { display: none; }
+  }
+
+  /* ── Page shell ─────────────────────────────────────────── */
+  .page { max-width: 72rem; margin: 0 auto; padding: 24px 16px 40px; }
+  @media (min-width: 640px) { .page { padding: 24px 24px 40px; } }
+  @media (min-width: 768px) { .page { padding: 32px 24px 60px; } }
+
+  .demo-banner {
+    background: #fff;
+    border: 2px dashed var(--purple);
+    border-radius: 12px;
+    padding: 9px 14px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .demo-banner b { color: var(--purple-d); }
+
+  .breadcrumb {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-weight: 800;
+    color: var(--blue);
+    text-decoration: none;
+    margin-bottom: 18px;
+    cursor: default;
+  }
+
+  /* ── PDP grid ───────────────────────────────────────────── */
+  .pdp-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+  @media (min-width: 720px) { .pdp-grid { grid-template-columns: 1fr 1fr; gap: 40px; } }
+
+  /* ── LEFT: gallery ──────────────────────────────────────── */
+  .gallery-wrap { position: sticky; top: 88px; }
+  @media (max-width: 719px) { .gallery-wrap { position: static; } }
+
+  .gallery-card {
+    background: #fff;
+    border: 2.5px solid rgba(11, 16, 32, 0.10);
+    border-radius: 28px;
+    overflow: hidden;
+    box-shadow: 0 8px 0 rgba(11, 16, 32, 0.07), 0 20px 40px rgba(11, 16, 32, 0.06);
+  }
+  .gallery-inner { padding: 16px; }
+
+  /* ── Hero — 4:5 portrait aspect ratio ───────────────────── */
+  .hero {
+    position: relative;
+    border-radius: 22px;
+    /* 4:5 portrait: height = width * (5/4) = width * 1.25 */
+    aspect-ratio: 4 / 5;
+    overflow: hidden;
+    background: rgba(0, 128, 255, 0.06);
+  }
+
+  /* Sharp main image — object-cover so less cropping on tall images */
+  .hero-sharp {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  /* ── Thumbstrip ─────────────────────────────────────────── */
+  .thumbs {
+    display: flex;
+    gap: 10px;
+    padding: 14px 4px 4px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line) transparent;
+  }
+  .thumbs::-webkit-scrollbar { height: 4px; }
+  .thumbs::-webkit-scrollbar-track { background: transparent; }
+  .thumbs::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
+
+  .thumb {
+    flex: 0 0 72px;
+    width: 72px;
+    /* 4:5 thumb to match the hero ratio */
+    height: 90px;
+    border-radius: 14px;
+    border: 2.5px solid var(--line);
+    background: #f1f5f9;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    flex-shrink: 0;
+  }
+  .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    pointer-events: none;
+  }
+  .thumb:hover { border-color: var(--blue-d); }
+  .thumb.active {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(0, 128, 255, 0.22);
+  }
+
+  /* ── RIGHT: info column ─────────────────────────────────── */
+  .info-col { padding-top: 4px; }
+
+  .category-badge {
+    display: inline-block;
+    background: rgba(0, 128, 255, 0.10);
+    color: var(--blue-d);
+    border-radius: 999px;
+    padding: 3px 12px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .product-title {
+    font-size: clamp(22px, 3.5vw, 32px);
+    font-weight: 900;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    margin: 0 0 10px;
+  }
+
+  .product-price {
+    font-size: 28px;
+    font-weight: 900;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+  .product-price span {
+    font-size: 15px;
+    color: var(--muted);
+    font-weight: 600;
+    margin-left: 4px;
+  }
+
+  .product-desc {
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 24px;
+    line-height: 1.65;
+  }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink);
+    margin-bottom: 8px;
+  }
+
+  .size-group {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .size-btn {
+    padding: 8px 18px;
+    border-radius: 12px;
+    border: 2px solid var(--line);
+    background: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .size-btn.active {
+    border-color: var(--green);
+    background: rgba(3, 192, 60, 0.07);
+    color: var(--green-d);
+  }
+
+  .add-bag-btn {
+    width: 100%;
+    padding: 16px 24px;
+    border-radius: 16px;
+    border: none;
+    background: var(--blue);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 5px 0 var(--blue-d), 0 12px 28px rgba(0, 128, 255, 0.28);
+    margin-bottom: 12px;
+    transition: transform 0.08s, box-shadow 0.08s;
+  }
+  .add-bag-btn:hover { transform: translateY(2px); box-shadow: 0 3px 0 var(--blue-d), 0 8px 18px rgba(0, 128, 255, 0.22); }
+
+  .trust-row {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .trust-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--green-d);
+    background: rgba(3, 192, 60, 0.09);
+    border: 1.5px solid rgba(3, 192, 60, 0.24);
+    border-radius: 999px;
+    padding: 5px 12px;
+  }
+
+  /* ── Ratio note badge ───────────────────────────────────── */
+  .ratio-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--purple-d);
+    background: rgba(138, 0, 194, 0.08);
+    border: 1.5px solid rgba(138, 0, 194, 0.22);
+    border-radius: 999px;
+    padding: 4px 12px;
+    margin-bottom: 14px;
+  }
+
+  /* ── Footer ─────────────────────────────────────────────── */
+  .footer {
+    background: var(--ink);
+    color: rgba(255,255,255,0.5);
+    text-align: center;
+    font-size: 12px;
+    padding: 24px 16px;
+    margin-top: 60px;
+  }
+  .footer b { color: #fff; }
+</style>
+</head>
+<body>
+
+<!-- ── Nav ─────────────────────────────────────────────────── -->
+<header class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="#">
+      <span class="brand-mark">N</span>
+      3D Ninjaz
+    </a>
+    <nav class="nav-links">
+      <a href="#">Products</a>
+      <a href="#">How it works</a>
+      <a href="#">Custom order</a>
+    </nav>
+    <div class="nav-actions">
+      <a class="signin" href="#">Sign in</a>
+      <button class="bag-pill">Bag (0)</button>
+    </div>
+  </div>
+</header>
+
+<!-- ── Page ─────────────────────────────────────────────────── -->
+<main class="page">
+
+  <!-- Demo banner -->
+  <div class="demo-banner">
+    <b>Concept demo</b> &mdash; TALL 4:5 PORTRAIT gallery (option size 2). Same Vending Machine images. Open the other demos to compare sizes side by side.
+  </div>
+
+  <a class="breadcrumb" href="#">&larr; Vending Machines</a>
+
+  <div class="pdp-grid">
+
+    <!-- ── LEFT: gallery ───────────────────────────────────── -->
+    <div class="gallery-wrap">
+
+      <div class="gallery-card">
+        <div class="gallery-inner">
+
+          <!-- Hero — 4:5 portrait, no navigation arrows -->
+          <div class="hero" id="hero">
+            <img class="hero-sharp" id="heroSharp" alt="Vending Machine Reward Dispenser" />
+          </div>
+
+          <!-- Thumb strip — only image-switching UI -->
+          <div class="thumbs" id="thumbs">
+            <!-- Populated by JS -->
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── RIGHT: info col ─────────────────────────────────── -->
+    <div class="info-col">
+      <div class="category-badge">Vending Machines</div>
+      <h1 class="product-title">Vending Machine Reward Dispenser</h1>
+      <div class="product-price">RM 89.00 <span>per unit</span></div>
+
+      <div class="ratio-note">4:5 portrait hero &mdash; less vertical crop on tall products</div>
+
+      <p class="product-desc">
+        A fully 3D-printed candy &amp; reward vending machine &mdash; perfect for classrooms, bedrooms,
+        or as a unique gift. Insert a coin and out comes the reward. Printed in durable PLA+
+        in your choice of colour. Sizes fit standard M&amp;Ms, Skittles, and small toys.
+        Each unit is made-to-order and ships within 5&ndash;7 business days.
+      </p>
+
+      <div class="section-label">Choose size</div>
+      <div class="size-group" id="sizeGroup">
+        <button class="size-btn" data-size="S">Small</button>
+        <button class="size-btn active" data-size="M">Medium</button>
+        <button class="size-btn" data-size="L">Large</button>
+      </div>
+
+      <button class="add-bag-btn">Add to bag</button>
+
+      <div class="trust-row">
+        <span class="trust-pill">Free shipping over RM 80</span>
+        <span class="trust-pill">Made in Malaysia</span>
+        <span class="trust-pill">5&ndash;7 day dispatch</span>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<!-- ── Footer ───────────────────────────────────────────────── -->
+<footer class="footer">
+  <b>3D Ninjaz</b> &mdash; concept demo &mdash; not the live PDP
+</footer>
+
+<script>
+  // ── Image data (live prod hot-links) ───────────────────────
+  var BASE = 'https://app.3dninjaz.com/uploads/products/d80248b0-5af1-442d-9ba9-9b6ba32e98a7';
+  var images = [
+    { uuid: 'e4b163a5-2c21-441d-ba28-a82a30edce9b', alt: 'Vending Machine — front view' },
+    { uuid: 'daa32ee1-f891-4e36-9dc9-b2af6521f591', alt: 'Vending Machine — side view' },
+    { uuid: 'c6af8298-d4cb-46e8-9e4f-5df5a7178141', alt: 'Vending Machine — detail' },
+    { uuid: '78efb4e0-ab43-4e79-a846-f38bad22ad6e', alt: 'Vending Machine — top view' },
+    { uuid: '3e0891a6-ba26-4e38-a330-3ac3898cf87c', alt: 'Vending Machine — close-up' },
+  ];
+
+  function heroUrl(uuid) {
+    return BASE + '/' + uuid + '/960w.webp';
+  }
+  function thumbUrl(uuid) {
+    return BASE + '/' + uuid + '/800w.webp';
+  }
+
+  // ── Build thumb strip ───────────────────────────────────────
+  var thumbsEl  = document.getElementById('thumbs');
+  var heroSharp = document.getElementById('heroSharp');
+
+  images.forEach(function(img, i) {
+    var thumb = document.createElement('div');
+    thumb.className = 'thumb' + (i === 0 ? ' active' : '');
+    thumb.title = img.alt;
+    var pic = document.createElement('img');
+    pic.src = thumbUrl(img.uuid);
+    pic.alt = img.alt;
+    pic.loading = 'lazy';
+    thumb.appendChild(pic);
+    thumb.addEventListener('click', function() {
+      selectImage(i);
+    });
+    thumbsEl.appendChild(thumb);
+  });
+
+  // ── Set active image ────────────────────────────────────────
+  function selectImage(idx) {
+    heroSharp.src = heroUrl(images[idx].uuid);
+    heroSharp.alt = images[idx].alt;
+    var thumbEls = thumbsEl.querySelectorAll('.thumb');
+    thumbEls.forEach(function(t, i) { t.classList.toggle('active', i === idx); });
+  }
+
+  // Prime the hero with the first image
+  selectImage(0);
+
+  // ── Size selector ───────────────────────────────────────────
+  document.getElementById('sizeGroup').addEventListener('click', function(e) {
+    if (e.target.matches('.size-btn')) {
+      document.querySelectorAll('.size-btn').forEach(function(b) { b.classList.remove('active'); });
+      e.target.classList.add('active');
+    }
+  });
+</script>
+</body>
+</html>
