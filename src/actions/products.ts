@@ -26,6 +26,7 @@ import {
   deleteConfigField,
   reorderConfigFields,
 } from "@/actions/configurator";
+import { migrateNewImages } from "@/lib/storage";
 import type { FieldType, AnyFieldConfig } from "@/lib/config-fields";
 
 export type ProductActionResult =
@@ -215,6 +216,36 @@ export async function createProduct(
   const id = randomUUID();
   const baseSlug = slugify(productData.name);
   const slug = `${baseSlug || "product"}-${Date.now().toString(36)}`;
+
+  // Migrate any images that were uploaded under the "new" bucket (before the
+  // product ID was known) to the correct /<productId>/ bucket on disk, and
+  // rewrite the URL array so the DB row always points at the final location.
+  // This must happen before imagesToPersist is constructed so both the legacy
+  // string[] path and the imagesV2 {url,caption,alt} path get correct URLs.
+  if (productData.images && productData.images.length > 0) {
+    productData.images = await migrateNewImages(id, productData.images);
+  }
+  if (productData.imagesV2 && productData.imagesV2.length > 0) {
+    const migratedUrls = await migrateNewImages(
+      id,
+      productData.imagesV2.map((e) => e.url),
+    );
+    productData.imagesV2 = productData.imagesV2.map((e, i) => ({
+      ...e,
+      url: migratedUrls[i] ?? e.url,
+    }));
+  }
+  // Defensive check: warn if any URL still references /new/ after migration.
+  const allUrls = (productData.imagesV2 ?? productData.images).map((e) =>
+    typeof e === "string" ? e : (e as { url: string }).url,
+  );
+  const unmigrated = allUrls.filter((u) => u.includes("/uploads/products/new/"));
+  if (unmigrated.length > 0) {
+    console.warn(
+      `[createProduct] ${unmigrated.length} image(s) still reference /new/ after migration for product ${id}:`,
+      unmigrated,
+    );
+  }
 
   // Phase 19 (19-10) — if imagesV2 is provided (new shape with captions),
   // persist it directly. Otherwise fall back to the legacy string[].

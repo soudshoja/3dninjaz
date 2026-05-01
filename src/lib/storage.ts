@@ -101,3 +101,77 @@ export async function deleteUpload(publicUrl: string): Promise<void> {
 export function publicUrlFor(bucket: string, filename: string): string {
   return `${PUBLIC_PREFIX}/products/${safeBucket(bucket)}/${filename}`;
 }
+
+/**
+ * Called by createProduct after the product UUID is known.
+ *
+ * During "new product" creation the ImageUploader uploads images with
+ * bucket="new", landing at  /uploads/products/new/<temp-uuid>/.
+ * Once the product ID is generated we must:
+ *   1. Move each /new/<temp-uuid>/ directory to /<productId>/<temp-uuid>/
+ *   2. Rewrite the URL from /uploads/products/new/<uuid> to
+ *      /uploads/products/<productId>/<uuid>
+ *
+ * Only URLs that start with ${PUBLIC_PREFIX}/products/new/ are touched.
+ * URLs already pointing at a productId bucket are returned as-is (idempotent).
+ *
+ * Returns the rewritten URL array. On per-image move errors the original URL
+ * is kept (so the DB is never silently corrupted) and the error is logged.
+ */
+export async function migrateNewImages(
+  productId: string,
+  urls: string[],
+): Promise<string[]> {
+  const safePid = safeBucket(productId);
+  const newPrefix = `${PUBLIC_PREFIX}/products/new/`;
+
+  const result: string[] = [];
+  for (const url of urls) {
+    if (!url.startsWith(newPrefix)) {
+      // Already using the correct bucket or some other URL — leave it.
+      result.push(url);
+      continue;
+    }
+
+    // Extract the temp UUID portion after /new/
+    const tempUuid = url.slice(newPrefix.length).split("/")[0];
+    if (!tempUuid) {
+      result.push(url);
+      continue;
+    }
+
+    const root = path.resolve(path.join(process.cwd(), UPLOADS_DIR));
+    const srcDir = path.join(process.cwd(), UPLOADS_DIR, "products", "new", tempUuid);
+    const destDir = path.join(process.cwd(), UPLOADS_DIR, "products", safePid, tempUuid);
+
+    // Traversal guard.
+    if (
+      !path.resolve(srcDir).startsWith(root) ||
+      !path.resolve(destDir).startsWith(root)
+    ) {
+      result.push(url);
+      continue;
+    }
+
+    try {
+      const stat = await fs.stat(srcDir).catch(() => null);
+      if (!stat || !stat.isDirectory()) {
+        // Source dir missing — keep the original URL so the caller can decide
+        // what to do; do not silently drop the entry.
+        console.warn(`[migrateNewImages] source dir missing: ${srcDir}`);
+        result.push(url);
+        continue;
+      }
+      // Ensure destination parent exists.
+      await fs.mkdir(path.dirname(destDir), { recursive: true });
+      await fs.rename(srcDir, destDir);
+      // Rewrite URL: replace /new/<uuid> with /<productId>/<uuid>
+      result.push(`${PUBLIC_PREFIX}/products/${safePid}/${tempUuid}`);
+    } catch (err) {
+      console.error(`[migrateNewImages] failed to move ${srcDir} → ${destDir}:`, err);
+      // Keep original URL so the admin can see the image is not yet migrated.
+      result.push(url);
+    }
+  }
+  return result;
+}
