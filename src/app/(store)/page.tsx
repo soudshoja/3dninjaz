@@ -28,7 +28,7 @@ export default async function HomePage({
   // During the first deploy window the prod DB may not yet have the column
   // (migration runs before build on the server, but static build caches and
   // CI can race). Fall back to an empty list rather than failing the home
-  // prerender; the SHOP BY SQUAD rail just hides until the query recovers.
+  // prerender; the SHOP BY CATEGORY rail just hides until the query recovers.
   const [featured, categories] = await Promise.all([
     getActiveFeaturedProducts(4).catch((err) => {
       console.warn("[home] getActiveFeaturedProducts failed:", err);
@@ -68,7 +68,7 @@ export default async function HomePage({
               <h2
                 className="font-[var(--font-heading)] text-3xl md:text-5xl tracking-tight text-center text-zinc-900"
               >
-                SHOP BY <span style={{ color: BRAND.purple }}>SQUAD</span>
+                SHOP BY <span style={{ color: BRAND.purple }}>CATEGORY</span>
               </h2>
               <Shuriken className="w-8 h-8" fill={BRAND.green} />
             </div>
