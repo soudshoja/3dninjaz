@@ -14,6 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ProductRowActions } from "./product-row-actions";
+import { LatestDraftBanner } from "@/components/admin/latest-draft-banner";
 
 export const metadata: Metadata = {
   title: "Admin · Products",
@@ -65,6 +66,7 @@ export default async function AdminProductsPage() {
 
   return (
     <div className="space-y-6">
+      <LatestDraftBanner />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-heading text-3xl text-[var(--color-brand-text-primary)]">
