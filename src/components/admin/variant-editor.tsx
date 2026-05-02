@@ -74,7 +74,9 @@ import {
 } from "@/actions/variants";
 import type { HydratedOption, HydratedVariant } from "@/lib/variants";
 import { generateVariantSku } from "@/lib/sku";
-import { ColourPickerDialog } from "@/components/admin/colour-picker-dialog";
+import { ColourPickerDialog, type ColourPickerRow } from "@/components/admin/colour-picker-dialog";
+import { ColourFillConfirmationDialog, type ColourFillPrompt } from "@/components/admin/colour-fill-confirmation-dialog";
+import { attachLibraryColours } from "@/actions/admin-colours";
 
 // Phase 18 Plan 06 — case-insensitive Color/Colour option detection.
 // Mounting the picker is gated on this helper everywhere it appears.
@@ -119,6 +121,9 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
   // open for (null = closed). Guards against multiple Colour options on a
   // single product (rare but defensible).
   const [pickerOptionId, setPickerOptionId] = useState<string | null>(null);
+
+  // Cross-axis colour fill queue — sequential prompt after picker confirm.
+  const [fillQueue, setFillQueue] = useState<ColourFillPrompt[]>([]);
 
   // Phase 17 — bulk edit state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -753,11 +758,60 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
                 .filter((id): id is string => Boolean(id)),
             )
           }
+          onConfirmedWithRows={(attachedRows: ColourPickerRow[]) => {
+            // Build cross-axis fill queue for every OTHER colour option that is
+            // missing one or more of the just-attached colours.
+            const sourceOptionId = pickerOptionId;
+            const prompts: ColourFillPrompt[] = [];
+
+            for (const otherOpt of options) {
+              if (otherOpt.id === sourceOptionId) continue;
+              if (!isColourOption(otherOpt)) continue;
+
+              const alreadyOnTarget = new Set(
+                otherOpt.values
+                  .map((v) => v.colorId)
+                  .filter((id): id is string => Boolean(id)),
+              );
+
+              const toAdd = attachedRows.filter((r) => !alreadyOnTarget.has(r.id));
+              if (toAdd.length === 0) continue;
+
+              const toAddIds = toAdd.map((r) => r.id);
+              const capturedOptId = otherOpt.id;
+              const capturedLabel = otherOpt.name;
+
+              // Each prompt advances the queue via setFillQueue.
+              // We use a functional helper so each closure gets its own index.
+              prompts.push({
+                targetAxisLabel: capturedLabel,
+                coloursToAdd: toAdd.map((r) => ({ id: r.id, name: r.name, hex: r.hex })),
+                onConfirm: async () => {
+                  await attachLibraryColours(capturedOptId, toAddIds);
+                  await refresh();
+                  setFillQueue((q) => q.slice(1));
+                },
+                onSkip: () => {
+                  setFillQueue((q) => q.slice(1));
+                },
+              });
+            }
+
+            if (prompts.length > 0) {
+              setFillQueue(prompts);
+            }
+          }}
           onConfirmed={async () => {
             await refresh();
           }}
         />
       ) : null}
+
+      {/* Cross-axis colour fill sequential prompts */}
+      <ColourFillConfirmationDialog
+        queue={fillQueue}
+        onResolveAll={() => setFillQueue([])}
+      />
     </div>
   );
 }
