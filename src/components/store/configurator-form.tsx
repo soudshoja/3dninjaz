@@ -16,7 +16,7 @@
  *   - Field label and helpText used directly (no overrides).
  */
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import type { PublicConfigField } from "@/lib/configurable-product-data";
@@ -26,6 +26,10 @@ import type {
   ColourFieldConfig,
   SelectFieldConfig,
 } from "@/lib/config-fields";
+import {
+  ColourAutofillDialog,
+  type AutofillPrompt,
+} from "@/components/store/colour-autofill-dialog";
 
 type Props = {
   fields: PublicConfigField[];
@@ -381,6 +385,7 @@ function SelectField({
 
 export function ConfiguratorForm({ fields, values, onChange, onTouch }: Props) {
   const touchedRef = useRef(false);
+  const [autofillQueue, setAutofillQueue] = useState<AutofillPrompt[]>([]);
 
   if (fields.length === 0) {
     return (
@@ -388,6 +393,39 @@ export function ConfiguratorForm({ fields, values, onChange, onTouch }: Props) {
         No configuration fields set up for this product yet.
       </p>
     );
+  }
+
+  function buildAutofillQueue(sourceFieldId: string, pickedColourId: string) {
+    const sourceField = fields.find((f) => f.id === sourceFieldId);
+    if (!sourceField || sourceField.fieldType !== "colour") return;
+    const pickedColour = sourceField.resolvedColours?.find((c) => c.id === pickedColourId);
+    if (!pickedColour) return;
+
+    const prompts: AutofillPrompt[] = [];
+    fields.forEach((targetField) => {
+      if (targetField.id === sourceFieldId) return;
+      if (targetField.fieldType !== "colour") return;
+      const match = targetField.resolvedColours?.find((c) => c.id === pickedColourId);
+      if (!match) return;
+      // Skip if the target field is already set to this colour.
+      if (values[targetField.id] === pickedColourId) return;
+      prompts.push({
+        axisLabel: targetField.label,
+        colourLabel: match.name,
+        swatchHex: match.hex,
+        onConfirm: () => {
+          onChange({ ...values, [targetField.id]: pickedColourId });
+          setAutofillQueue((q) => q.slice(1));
+        },
+        onSkip: () => {
+          setAutofillQueue((q) => q.slice(1));
+        },
+      });
+    });
+
+    if (prompts.length > 0) {
+      setAutofillQueue(prompts);
+    }
   }
 
   return (
@@ -402,6 +440,9 @@ export function ConfiguratorForm({ fields, values, onChange, onTouch }: Props) {
 
         function handleFieldChange(v: string) {
           onChange({ ...values, [field.id]: v });
+          if (field.fieldType === "colour") {
+            buildAutofillQueue(field.id, v);
+          }
         }
 
         return (
@@ -474,6 +515,13 @@ export function ConfiguratorForm({ fields, values, onChange, onTouch }: Props) {
           </div>
         );
       })}
+
+      {autofillQueue.length > 0 && (
+        <ColourAutofillDialog
+          queue={autofillQueue}
+          onResolveAll={() => setAutofillQueue([])}
+        />
+      )}
     </div>
   );
 }
