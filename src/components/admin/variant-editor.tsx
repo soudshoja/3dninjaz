@@ -41,7 +41,7 @@
  * Bottom:        variant matrix table (inline edit: price, sale, stock, SKU, weight, image, default, active)
  */
 
-import { useState, useTransition, useCallback, useRef } from "react";
+import { useState, useTransition, useCallback, useRef, useMemo } from "react";
 import { Pencil, Trash2, Plus, RefreshCw, Star, Upload, X, Palette } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,6 +77,8 @@ import { generateVariantSku } from "@/lib/sku";
 import { ColourPickerDialog, type ColourPickerRow } from "@/components/admin/colour-picker-dialog";
 import { ColourFillConfirmationDialog, type ColourFillPrompt } from "@/components/admin/colour-fill-confirmation-dialog";
 import { attachLibraryColours } from "@/actions/admin-colours";
+import { useProductDraft } from "@/hooks/use-product-draft";
+import { DraftRestoredBanner } from "@/components/admin/draft-restored-banner";
 
 // Phase 18 Plan 06 — case-insensitive Color/Colour option detection.
 // Mounting the picker is gated on this helper everywhere it appears.
@@ -136,17 +138,81 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
     setTimeout(() => setToast(null), 3000);
   }, []);
 
+  // -------------------------------------------------------------------------
+  // Autosave draft — persists live options + variants to localStorage so the
+  // admin can recover from accidental navigation. Scope "variants" keeps the
+  // key separate from the main product-form and configurator drafts.
+  // -------------------------------------------------------------------------
+  const draftValue = useMemo(() => ({ options, variants }), [options, variants]);
+  const draft = useProductDraft(productId, draftValue, { scope: "variants" });
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+
+  function restoreDraft() {
+    const v = draft.restore();
+    if (!v) {
+      setBannerDismissed(true);
+      return;
+    }
+    // Defensive shape validation — options must be Array of objects with id,
+    // name, position, values (array). Variants must be Array of objects with
+    // id, optionValueIds (array), priceMyrCents (number), inStock (boolean).
+    // Drop any malformed entry rather than crashing.
+    if (Array.isArray(v.options)) {
+      const safeOptions = v.options.filter((o: unknown) => {
+        if (!o || typeof o !== "object") return false;
+        const entry = o as Record<string, unknown>;
+        if (typeof entry.id !== "string") return false;
+        if (typeof entry.name !== "string") return false;
+        if (typeof entry.position !== "number") return false;
+        if (!Array.isArray(entry.values)) return false;
+        return true;
+      });
+      if (safeOptions.length !== v.options.length) {
+        console.warn(
+          `[variants autosave] Dropped ${v.options.length - safeOptions.length} malformed option(s) from draft.`,
+        );
+      }
+      setOptions(safeOptions as HydratedOption[]);
+    }
+    if (Array.isArray(v.variants)) {
+      const safeVariants = v.variants.filter((vr: unknown) => {
+        if (!vr || typeof vr !== "object") return false;
+        const entry = vr as Record<string, unknown>;
+        if (typeof entry.id !== "string") return false;
+        if (!Array.isArray(entry.optionValueIds)) return false;
+        if (typeof entry.price !== "string") return false;
+        if (typeof entry.inStock !== "boolean") return false;
+        return true;
+      });
+      if (safeVariants.length !== v.variants.length) {
+        console.warn(
+          `[variants autosave] Dropped ${v.variants.length - safeVariants.length} malformed variant(s) from draft.`,
+        );
+      }
+      setVariants(safeVariants as HydratedVariant[]);
+    }
+    setBannerDismissed(true);
+  }
+
+  function discardDraft() {
+    draft.discard();
+    setBannerDismissed(true);
+  }
+
   // Pattern B: refetch after shape-changing ops
   const refresh = useCallback(async () => {
     const result = await getVariantEditorData(productId);
     if ("data" in result && result.data) {
       setOptions(result.data.options);
       setVariants(result.data.variants);
+      // Successful server sync — clear the autosave draft so the banner
+      // won't reappear after the next mount.
+      draft.discard();
     } else if ("error" in result) {
       showToast("Failed to refresh editor data", "error");
     }
     // NOTE: router.refresh() intentionally removed (AD-06)
-  }, [productId, showToast]);
+  }, [productId, showToast, draft]);
 
   // ---------------------------------------------------------------------------
   // Selection helpers
@@ -395,6 +461,17 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
 
   return (
     <div className="space-y-8">
+      {/* Autosave restore banner — shown when a draft snapshot exists and the
+          admin hasn't already chosen Restore/Discard this session. Restore
+          requires an explicit click; NO auto-hydration on mount. */}
+      {draft.draft && !bannerDismissed && (
+        <DraftRestoredBanner
+          savedAt={draft.draft.savedAt}
+          onRestore={restoreDraft}
+          onDiscard={discardDraft}
+        />
+      )}
+
       {/* Toast */}
       {toast && (
         <div
