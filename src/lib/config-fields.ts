@@ -108,9 +108,10 @@ export const NumberFieldConfigSchema: z.ZodType<NumberFieldConfig> = z.object({
 });
 
 export const ColourFieldConfigSchema: z.ZodType<ColourFieldConfig> = z.object({
-  allowedColorIds: z
-    .array(z.string().min(1))
-    .min(1),
+  // Allow empty palette — admin can save a colour field without selecting colours
+  // yet and configure the palette later. A non-empty palette is only required at
+  // storefront render time (PDP validates before showing the field to customers).
+  allowedColorIds: z.array(z.string().min(1)),
 });
 
 export const SelectFieldConfigSchema: z.ZodType<SelectFieldConfig> = z.object({
