@@ -87,6 +87,16 @@ function isColourOption(opt: { name: string }): boolean {
   return n === "color" || n === "colour";
 }
 
+// Fields that VariantRow owns locally and mirrors up to the parent for
+// autosave. Shape must be serialisable (no Date objects, no functions).
+type RowEditFields = {
+  price: string;
+  salePrice: string;
+  sku: string;
+  weightG: string;
+  showSchedule: boolean;
+};
+
 interface VariantEditorProps {
   productId: string;
   productSlug: string;
@@ -133,6 +143,25 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
   const [bulkValue, setBulkValue] = useState("");
   const [uploadingIds, setUploadingIds] = useState<Set<string>>(new Set());
 
+  // -------------------------------------------------------------------------
+  // Row-level inline edits mirror — captures in-flight price/salePrice/sku/
+  // weightG/showSchedule keystrokes from VariantRow without lifting full row
+  // state. Included in the autosave draftValue so these values survive a
+  // tab-close. On Restore the rowEdits map is passed back down to rows so
+  // they initialise from the restored values instead of the server-snapshot.
+  // -------------------------------------------------------------------------
+  const [rowEdits, setRowEdits] = useState<Record<string, Partial<RowEditFields>>>({});
+
+  const handleRowEdit = useCallback(
+    (variantId: string, edits: Partial<RowEditFields>) => {
+      setRowEdits((prev) => ({
+        ...prev,
+        [variantId]: { ...(prev[variantId] ?? {}), ...edits },
+      }));
+    },
+    [],
+  );
+
   const showToast = useCallback((msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
@@ -143,7 +172,7 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
   // admin can recover from accidental navigation. Scope "variants" keeps the
   // key separate from the main product-form and configurator drafts.
   // -------------------------------------------------------------------------
-  const draftValue = useMemo(() => ({ options, variants }), [options, variants]);
+  const draftValue = useMemo(() => ({ options, variants, rowEdits }), [options, variants, rowEdits]);
   const draft = useProductDraft(productId, draftValue, { scope: "variants" });
   const [bannerDismissed, setBannerDismissed] = useState(false);
 
@@ -191,6 +220,22 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
       }
       setVariants(safeVariants as HydratedVariant[]);
     }
+    // Restore row-level in-flight edits if present.
+    if (v.rowEdits && typeof v.rowEdits === "object" && !Array.isArray(v.rowEdits)) {
+      const safe: Record<string, Partial<RowEditFields>> = {};
+      for (const [id, edits] of Object.entries(v.rowEdits)) {
+        if (!edits || typeof edits !== "object") continue;
+        const e = edits as Record<string, unknown>;
+        const entry: Partial<RowEditFields> = {};
+        if (typeof e.price === "string") entry.price = e.price;
+        if (typeof e.salePrice === "string") entry.salePrice = e.salePrice;
+        if (typeof e.sku === "string") entry.sku = e.sku;
+        if (typeof e.weightG === "string") entry.weightG = e.weightG;
+        if (typeof e.showSchedule === "boolean") entry.showSchedule = e.showSchedule;
+        if (Object.keys(entry).length > 0) safe[id] = entry;
+      }
+      setRowEdits(safe);
+    }
     setBannerDismissed(true);
   }
 
@@ -205,9 +250,10 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
     if ("data" in result && result.data) {
       setOptions(result.data.options);
       setVariants(result.data.variants);
-      // Successful server sync — clear the autosave draft so the banner
-      // won't reappear after the next mount.
+      // Successful server sync — clear the autosave draft and row edits so
+      // the banner won't reappear and stale in-flight edits are dropped.
       draft.discard();
+      setRowEdits({});
     } else if ("error" in result) {
       showToast("Failed to refresh editor data", "error");
     }
@@ -772,6 +818,8 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
                     onRemoveImage={handleRemoveImage}
                     isUploading={uploadingIds.has(v.id)}
                     isPending={isPending}
+                    restoredEdits={rowEdits[v.id]}
+                    onRowEdit={handleRowEdit}
                   />
                 ))}
               </tbody>
@@ -909,6 +957,8 @@ function VariantRow({
   onRemoveImage,
   isUploading,
   isPending,
+  onRowEdit,
+  restoredEdits,
 }: {
   variant: HydratedVariant;
   productSlug: string;
@@ -921,12 +971,14 @@ function VariantRow({
   onRemoveImage: (variantId: string) => void;
   isUploading: boolean;
   isPending: boolean;
+  onRowEdit?: (variantId: string, edits: Partial<RowEditFields>) => void;
+  restoredEdits?: Partial<RowEditFields>;
 }) {
-  const [price, setPrice] = useState(variant.price);
-  const [salePrice, setSalePrice] = useState(variant.salePrice ?? "");
-  const [sku, setSku] = useState(variant.sku ?? "");
-  const [weightG, setWeightG] = useState(variant.weightG !== null ? String(variant.weightG) : "");
-  const [showSchedule, setShowSchedule] = useState(false);
+  const [price, setPrice] = useState(restoredEdits?.price ?? variant.price);
+  const [salePrice, setSalePrice] = useState(restoredEdits?.salePrice ?? (variant.salePrice ?? ""));
+  const [sku, setSku] = useState(restoredEdits?.sku ?? (variant.sku ?? ""));
+  const [weightG, setWeightG] = useState(restoredEdits?.weightG ?? (variant.weightG !== null ? String(variant.weightG) : ""));
+  const [showSchedule, setShowSchedule] = useState(restoredEdits?.showSchedule ?? false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Keep local state in sync when variant prop changes (e.g. after bulk refetch)
@@ -964,7 +1016,10 @@ function VariantRow({
       <td className="px-4 py-3">
         <Input
           value={price}
-          onChange={(e) => setPrice(e.target.value)}
+          onChange={(e) => {
+            setPrice(e.target.value);
+            onRowEdit?.(variant.id, { price: e.target.value });
+          }}
           onBlur={() => {
             if (/^\d+(\.\d{1,2})?$/.test(price) && price !== variant.price) {
               onUpdate(variant.id, "price", price);
@@ -979,7 +1034,10 @@ function VariantRow({
         <div className="flex flex-col gap-1">
           <Input
             value={salePrice}
-            onChange={(e) => setSalePrice(e.target.value)}
+            onChange={(e) => {
+              setSalePrice(e.target.value);
+              onRowEdit?.(variant.id, { salePrice: e.target.value });
+            }}
             onBlur={() => {
               const val = salePrice.trim();
               const current = variant.salePrice ?? "";
@@ -993,7 +1051,11 @@ function VariantRow({
           <button
             type="button"
             className="text-xs text-blue-600 hover:underline text-left"
-            onClick={() => setShowSchedule((s) => !s)}
+            onClick={() => {
+              const next = !showSchedule;
+              setShowSchedule(next);
+              onRowEdit?.(variant.id, { showSchedule: next });
+            }}
           >
             {showSchedule ? "▲ Hide schedule" : "▼ Schedule"}
           </button>
@@ -1092,7 +1154,10 @@ function VariantRow({
             <div className="flex flex-col gap-0.5">
               <Input
                 value={sku}
-                onChange={(e) => setSku(e.target.value)}
+                onChange={(e) => {
+                  setSku(e.target.value);
+                  onRowEdit?.(variant.id, { sku: e.target.value });
+                }}
                 onBlur={() => {
                   if (sku !== (variant.sku ?? "")) {
                     onUpdate(variant.id, "sku", sku || null);
@@ -1107,6 +1172,7 @@ function VariantRow({
                   className="text-xs text-blue-600 hover:underline text-left"
                   onClick={() => {
                     setSku(autoSku);
+                    onRowEdit?.(variant.id, { sku: autoSku });
                     onUpdate(variant.id, "sku", autoSku);
                   }}
                 >
@@ -1123,7 +1189,10 @@ function VariantRow({
         <Input
           type="number"
           value={weightG}
-          onChange={(e) => setWeightG(e.target.value)}
+          onChange={(e) => {
+            setWeightG(e.target.value);
+            onRowEdit?.(variant.id, { weightG: e.target.value });
+          }}
           onBlur={() => {
             const num = weightG.trim() === "" ? null : parseInt(weightG, 10);
             const current = variant.weightG;
