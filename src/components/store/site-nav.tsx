@@ -177,7 +177,7 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
                     className="font-[var(--font-heading)] text-lg"
                     style={{ color: BRAND.ink }}
                   >
-                    SHOP BY SQUAD
+                    SHOP BY CATEGORY
                   </span>
                   <Link
                     href="/shop"
