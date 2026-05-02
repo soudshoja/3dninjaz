@@ -24,7 +24,7 @@
  * happens on the parent's Save click.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Pencil,
   Trash2,
@@ -58,6 +58,9 @@ import {
   ColourConfigForm,
   SelectConfigForm,
 } from "@/components/admin/config-field-modal";
+import { ColourFillConfirmationDialog } from "@/components/admin/colour-fill-confirmation-dialog";
+import type { ColourFillPrompt } from "@/components/admin/colour-fill-confirmation-dialog";
+import { getActiveColoursForPicker } from "@/actions/admin-colours";
 import type { ConfigField } from "@/actions/configurator";
 import type {
   FieldType,
@@ -163,11 +166,38 @@ export function InlineFieldsEditor({
   const [fields, setFieldsLocal] = useState<PendingField[]>(initialFields);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [priceInput, setPriceInput] = useState<string>(initialPrice);
+  const [fillQueue, setFillQueue] = useState<ColourFillPrompt[]>([]);
+  const [colourRows, setColourRows] = useState<Map<string, { id: string; name: string; hex: string }>>(new Map());
+
+  // Hydrate colour catalogue once on mount for swatch metadata in prompts.
+  useEffect(() => {
+    let cancelled = false;
+    getActiveColoursForPicker()
+      .then((rows) => {
+        if (!cancelled)
+          setColourRows(new Map(rows.map((r) => [r.id, { id: r.id, name: r.name, hex: r.hex }])));
+      })
+      .catch(() => { /* fail soft */ });
+    return () => { cancelled = true; };
+  }, []);
 
   // Single source of truth for field mutations: update local + bubble up.
   function commitFields(next: PendingField[]) {
     setFieldsLocal(next);
     onFieldsChange(next);
+  }
+
+  // Internal path: mutate one field without triggering queue building.
+  // Used by onConfirm callbacks to avoid recursion.
+  function commitFieldUpdate(id: string, patch: Partial<PendingField>) {
+    setFieldsLocal((current) => {
+      const next = current.map((f) => {
+        if (f.id !== id) return f;
+        return { ...f, ...patch, __pending: f.__pending === "new" ? "new" : "modified" } satisfies PendingField;
+      });
+      onFieldsChange(next);
+      return next;
+    });
   }
 
   function handlePriceChange(v: string) {
@@ -185,17 +215,56 @@ export function InlineFieldsEditor({
   }
 
   // ── Patch a single field's metadata (label, helpText, required, config) ───
+  // External path: also builds cross-axis colour fill queue when a colour field's
+  // allowedColorIds changes. onConfirm callbacks use commitFieldUpdate directly
+  // (internal path) to avoid recursion.
   function updateField(id: string, patch: Partial<PendingField>) {
     const next = fields.map((f) => {
       if (f.id !== id) return f;
-      const merged: PendingField = {
-        ...f,
-        ...patch,
-        __pending: f.__pending === "new" ? "new" : "modified",
-      };
-      return merged;
+      return { ...f, ...patch, __pending: f.__pending === "new" ? "new" : "modified" } satisfies PendingField;
     });
     commitFields(next);
+
+    // Cross-axis colour fill: only when a colour field's config changes.
+    const changedField = fields.find((f) => f.id === id);
+    if (
+      changedField?.fieldType === "colour" &&
+      patch.config !== undefined &&
+      "allowedColorIds" in (patch.config as ColourFieldConfig)
+    ) {
+      const newIds = (patch.config as ColourFieldConfig).allowedColorIds ?? [];
+      const otherColourFields = fields.filter(
+        (f) => f.fieldType === "colour" && f.id !== id,
+      );
+      const prompts: ColourFillPrompt[] = [];
+      for (const other of otherColourFields) {
+        const otherIds = (other.config as ColourFieldConfig).allowedColorIds ?? [];
+        const coloursToAdd = newIds
+          .filter((cid) => !otherIds.includes(cid))
+          .map((cid) => colourRows.get(cid))
+          .filter((r): r is { id: string; name: string; hex: string } => r !== undefined);
+        if (coloursToAdd.length === 0) continue;
+        const capturedOtherId = other.id;
+        const capturedOtherConfig = other.config as ColourFieldConfig;
+        const capturedColoursToAdd = coloursToAdd;
+        prompts.push({
+          targetAxisLabel: other.label,
+          coloursToAdd: capturedColoursToAdd,
+          onConfirm: () => {
+            const merged = [
+              ...(capturedOtherConfig.allowedColorIds ?? []),
+              ...capturedColoursToAdd.map((c) => c.id),
+            ];
+            commitFieldUpdate(capturedOtherId, {
+              config: { ...capturedOtherConfig, allowedColorIds: merged } satisfies ColourFieldConfig,
+            });
+            setFillQueue((q) => q.slice(1));
+          },
+          onSkip: () => setFillQueue((q) => q.slice(1)),
+        });
+      }
+      if (prompts.length > 0) setFillQueue(prompts);
+    }
   }
 
   // ── Delete ────────────────────────────────────────────────────────────────
@@ -471,6 +540,12 @@ export function InlineFieldsEditor({
           Changes here are not persisted until you click <strong>Save</strong> at the bottom of the page.
         </span>
       </footer>
+
+      {/* Cross-axis colour fill prompt */}
+      <ColourFillConfirmationDialog
+        queue={fillQueue}
+        onResolveAll={() => setFillQueue([])}
+      />
     </section>
   );
 }
