@@ -590,7 +590,10 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
                             // Cross-axis fill prompt for non-Base colour fields
                             if (savedField && savedField.fieldType === "colour") {
                               const newIds = (savedField.config as { allowedColorIds?: string[] }).allowedColorIds ?? [];
-                              const queue = await buildFillQueue(savedField.id, newIds, fields);
+                              // Fetch fresh field list AFTER refetch so buildFillQueue sees current state.
+                              // setFields() in refetch() is async; reading `fields` here would be stale.
+                              const fresh = await getConfiguratorData(product.id);
+                              const queue = await buildFillQueue(savedField.id, newIds, fresh.fields);
                               if (queue.length > 0) setFillQueue(queue);
                             }
                           }
@@ -651,7 +654,10 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
               // Cross-axis fill prompt for non-Base colour fields
               if (savedField && savedField.fieldType === "colour") {
                 const newIds = (savedField.config as { allowedColorIds?: string[] }).allowedColorIds ?? [];
-                const queue = await buildFillQueue(savedField.id, newIds, fields);
+                // Fetch fresh field list AFTER refetch so buildFillQueue sees current state.
+                // setFields() in refetch() is async; reading `fields` here would be stale.
+                const fresh = await getConfiguratorData(product.id);
+                const queue = await buildFillQueue(savedField.id, newIds, fresh.fields);
                 if (queue.length > 0) setFillQueue(queue);
               }
             }

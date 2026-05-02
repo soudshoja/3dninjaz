@@ -317,6 +317,7 @@ export async function updateConfigField(
   }
 
   revalidatePath(`/admin/products/${existing.productId}/configurator`);
+  revalidatePath(`/admin/products/${existing.productId}/edit`);
 
   const [prod] = await db
     .select({ slug: products.slug })
