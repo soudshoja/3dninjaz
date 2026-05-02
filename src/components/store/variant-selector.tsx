@@ -204,7 +204,7 @@ export function VariantSelector({
         return (
           <div key={option.id}>
             <p className="text-xs tracking-[0.2em] font-bold mb-2 text-[var(--color-brand-ink)]">
-              {option.name.toUpperCase()}
+              CHOOSE {option.name.toUpperCase()}
               {currentValueId && (
                 <span className="ml-2 normal-case tracking-normal font-medium text-[var(--color-brand-text-muted)]">
                   : {visibleValues.find((v) => v.id === currentValueId)?.value}
