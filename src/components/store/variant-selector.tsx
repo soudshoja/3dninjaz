@@ -13,10 +13,6 @@
  */
 
 import { useMemo, useState, useEffect } from "react";
-import {
-  ColourAutofillDialog,
-  type AutofillPrompt,
-} from "@/components/store/colour-autofill-dialog";
 import type { HydratedOption, HydratedVariant } from "@/lib/variants";
 import { isVariantAvailable as isVariantAvailableShared } from "@/lib/variant-availability";
 import { sortByShade } from "@/lib/colour-sort";
@@ -132,8 +128,6 @@ export function VariantSelector({
   const [selected, setSelected] = useState<SelectedValues>(defaultSelected);
   // Track which pill is currently being hovered (for the dashed-border preview ring).
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
-  // Cross-axis colour auto-fill queue — cleared once all decisions are made.
-  const [autofillQueue, setAutofillQueue] = useState<AutofillPrompt[]>([]);
 
   // Notify parent on mount and whenever selection changes
   useEffect(() => {
@@ -158,47 +152,6 @@ export function VariantSelector({
       // by picking the first available value for those slots
       return next;
     });
-
-    // Cross-axis colour auto-fill: if the picked slot is a colour option, scan
-    // other colour slots for a value with the same swatchHex and queue prompts.
-    const pickedOption = options[slotIdx];
-    if (!pickedOption) return;
-    const pickedValue = pickedOption.values.find((v) => v.id === valueId);
-    if (!pickedValue?.swatchHex) return;
-    const targetHex = pickedValue.swatchHex.toLowerCase();
-
-    const prompts: AutofillPrompt[] = [];
-
-    options.forEach((opt, targetIdx) => {
-      if (targetIdx === slotIdx) return;
-      const filteredVals = opt.values.filter((v) => visibleValueIds.has(v.id));
-      const isColourSlot = filteredVals.some((v) => v.swatchHex);
-      if (!isColourSlot) return;
-      const match = filteredVals.find((v) => v.swatchHex?.toLowerCase() === targetHex);
-      if (!match) return;
-      // Skip if the target slot is already set to this exact value.
-      if (selected[targetIdx] === match.id) return;
-      prompts.push({
-        axisLabel: opt.name,
-        colourLabel: match.value,
-        swatchHex: match.swatchHex ?? undefined,
-        onConfirm: () => {
-          setSelected((prev) => {
-            const next: SelectedValues = [...prev] as SelectedValues;
-            next[targetIdx] = match.id;
-            return next;
-          });
-          setAutofillQueue((q) => q.slice(1));
-        },
-        onSkip: () => {
-          setAutofillQueue((q) => q.slice(1));
-        },
-      });
-    });
-
-    if (prompts.length > 0) {
-      setAutofillQueue(prompts);
-    }
   };
 
   /** Fix 3 — find the best variant to preview when user hovers a pill/swatch.
@@ -419,13 +372,6 @@ export function VariantSelector({
           </div>
         );
       })}
-
-      {autofillQueue.length > 0 && (
-        <ColourAutofillDialog
-          queue={autofillQueue}
-          onResolveAll={() => setAutofillQueue([])}
-        />
-      )}
     </div>
   );
 }
