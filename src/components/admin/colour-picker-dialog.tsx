@@ -56,6 +56,13 @@ type Props = {
    * Awaited before the dialog closes so variant matrix stays consistent.
    */
   onConfirmed: () => Promise<void> | void;
+  /**
+   * Optional companion to onConfirmed (attach-to-option mode only).
+   * Called with the rows that were just attached, BEFORE onConfirmed fires.
+   * Used by cross-axis colour auto-fill to build a queue without an extra
+   * server round-trip.
+   */
+  onConfirmedWithRows?: (rows: ColourPickerRow[]) => void;
   // ---------------------------------------------------------------------------
   // Phase 19-04 (D-08) — select-multiple mode for configurator builder.
   // Default: "attach-to-option" (Phase 18 behaviour unchanged).
@@ -85,6 +92,7 @@ export function ColourPickerDialog({
   productId: _productId, // see prop docstring — kept for caller symmetry
   alreadyAttachedColourIds,
   onConfirmed,
+  onConfirmedWithRows,
   // Phase 19-04 (D-08) additions — default to existing behaviour
   mode = "attach-to-option",
   preSelectedColourIds,
@@ -161,6 +169,13 @@ export function ColourPickerDialog({
       if (!res.ok) {
         setError(res.error);
         return;
+      }
+      // Fire optional companion callback with the rows that were just attached,
+      // before the parent refetch clears the local rows state. Used by cross-axis
+      // colour auto-fill in variant-editor.tsx.
+      if (onConfirmedWithRows) {
+        const attachedRows = rows.filter((r) => selectedIds.has(r.id));
+        onConfirmedWithRows(attachedRows);
       }
       // Pattern B refetch via parent's hook (Plan 18-06 wires the actual call)
       await onConfirmed();
