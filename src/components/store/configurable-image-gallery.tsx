@@ -12,7 +12,8 @@
  *
  * Parent controls the mode via `showPreview` + `onTogglePreview`.
  *
- * Tap targets ≥ 44px (RESP-01). Mobile thumbstrip is horizontally scrollable.
+ * Tap targets ≥ 44px (RESP-01). Thumbstrip wraps to multiple rows so every
+ * thumb is visible without horizontal scrolling on small viewports.
  */
 
 import { useState, useRef } from "react";
@@ -78,13 +79,6 @@ export function ConfigurableImageGallery({
       onTogglePreview(false);
       setActiveDisplayIdx(newIdx - 1);
     }
-    requestAnimationFrame(() => {
-      thumbRefs.current[newIdx]?.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest",
-        inline: "center",
-      });
-    });
   }
 
   return (
@@ -175,9 +169,8 @@ export function ConfigurableImageGallery({
 
           <ul
             ref={stripRef}
-            className="flex gap-3 overflow-x-auto flex-1"
+            className="flex flex-wrap gap-2 flex-1"
             aria-label="Product image thumbnails"
-            style={{ scrollbarWidth: "none" }}
           >
             {/* "Yours" thumbnail — always first */}
             <li
@@ -190,7 +183,7 @@ export function ConfigurableImageGallery({
                 onClick={() => onTogglePreview(true)}
                 aria-label="Show your live preview"
                 aria-current={showPreview ? "true" : undefined}
-                className="relative h-20 w-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all duration-200 flex flex-col items-center justify-center gap-1 cursor-pointer"
+                className="relative h-20 w-20 rounded-xl overflow-hidden border-2 transition-all duration-200 flex flex-col items-center justify-center gap-1 cursor-pointer"
                 style={{
                   borderColor: showPreview ? BRAND.green : "transparent",
                   backgroundColor: `${BRAND.green}15`,
@@ -245,7 +238,7 @@ export function ConfigurableImageGallery({
                     }}
                     aria-label={`View display image ${i + 1}`}
                     aria-current={isActive ? "true" : undefined}
-                    className="relative h-20 w-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer"
+                    className="relative h-20 w-20 rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer"
                     style={{
                       borderColor: isActive ? BRAND.blue : "transparent",
                       backgroundColor: `${BRAND.blue}10`,

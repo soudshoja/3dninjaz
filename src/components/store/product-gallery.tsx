@@ -54,14 +54,6 @@ export function ProductGallery({
         : Math.min(images.length - 1, activeIndex + 1);
     if (newIdx === activeIndex) return;
     setActiveIndex(newIdx);
-    // Defer to next frame so the active thumb's updated styles settle before scroll
-    requestAnimationFrame(() => {
-      thumbRefs.current[newIdx]?.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest",
-        inline: "center",
-      });
-    });
   }
 
   return (
@@ -128,12 +120,11 @@ export function ProductGallery({
             <ChevronLeft size={20} strokeWidth={2.5} />
           </button>
 
-          {/* Scrollable thumbnail strip */}
+          {/* Wrapping thumbnail grid — every thumb visible, no horizontal scroll */}
           <ul
             ref={stripRef}
-            className="flex gap-3 overflow-x-auto flex-1"
+            className="flex flex-wrap gap-2 flex-1"
             aria-label="Product image thumbnails"
-            style={{ scrollbarWidth: "none" }}
           >
             {images.map((img, i) => {
               const tp = pictures?.[i];
@@ -149,7 +140,7 @@ export function ProductGallery({
                     onClick={() => setActiveIndex(i)}
                     aria-label={`View image ${i + 1} of ${images.length}`}
                     aria-current={i === activeIndex ? "true" : undefined}
-                    className="relative h-20 w-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer min-h-[48px] min-w-[48px]"
+                    className="relative h-20 w-20 rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer min-h-[48px] min-w-[48px]"
                     style={{
                       borderColor: i === activeIndex ? BRAND.blue : "transparent",
                       backgroundColor: `${BRAND.blue}10`,
