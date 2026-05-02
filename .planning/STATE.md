@@ -170,6 +170,8 @@ Recent decisions affecting current work:
   - `git tag v1.0.0 && git push --tags`
 - PayPal Reporting API enablement — contact PayPal support (Q-07-08 NOT_AUTHORIZED).
 - 24h cleanup cron for `public/uploads/imports/` (deferred from 05-05).
+- 2026-05-02 — `.planning/todos/pending/2026-05-02-publish-time-guard-for-empty-colour-palettes.md` — re-add `.min(1)` guard at publish-time after `41ecc00` lifted it for save-time admin UX.
+- 2026-05-02 — `.planning/todos/pending/2026-05-02-customer-side-pdp-draft-autosave.md` — 1s localStorage draft for in-progress configurator-form + variant-selector input on customer PDP (mirror admin `e9edd4b` pattern under separate namespace).
 - `order_cancelled` email send trigger (template exists; admin cancel action not yet built).
 - `review_request` scheduled send 3 days post-delivery (template exists; cron task not built).
 - Auto stock decrement on order capture (Phase 13 deferred item).
