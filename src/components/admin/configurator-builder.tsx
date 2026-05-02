@@ -621,14 +621,48 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
           const knownIds = new Set(fields.map((f) => f.id));
           const fresh = await getConfiguratorData(product.id);
           setFields(fresh.fields);
-          // Find the newly added colour field (if any) and build cross-axis queue.
+          // Find the newly added colour field (if any).
           const newColourField = fresh.fields.find(
             (f) => !knownIds.has(f.id) && f.fieldType === "colour",
           );
           if (newColourField) {
             const newIds = (newColourField.config as { allowedColorIds?: string[] }).allowedColorIds ?? [];
-            const queue = await buildFillQueue(newColourField.id, newIds, fresh.fields);
-            if (queue.length > 0) setFillQueue(queue);
+            if (newIds.length > 0) {
+              // New field has colours → push-direction: offer to add them to other fields.
+              const queue = await buildFillQueue(newColourField.id, newIds, fresh.fields);
+              if (queue.length > 0) setFillQueue(queue);
+            } else {
+              // New field is empty → pull-direction: offer to copy colours FROM each
+              // existing colour field INTO the new one (one prompt per source).
+              const catalogue = await getActiveColoursForPicker().catch(() => []);
+              const rowById = new Map(catalogue.map((r) => [r.id, r]));
+              const prompts: ColourFillPrompt[] = [];
+              for (const other of fresh.fields) {
+                if (other.id === newColourField.id) continue;
+                if (other.fieldType !== "colour") continue;
+                const srcIds = (other.config as { allowedColorIds?: string[] }).allowedColorIds ?? [];
+                if (srcIds.length === 0) continue;
+                const capturedNewId = newColourField.id;
+                const capturedSrcIds = srcIds;
+                const coloursToAdd = srcIds.map((id) => {
+                  const row = rowById.get(id);
+                  return { id, name: row?.name ?? id, hex: row?.hex ?? "#E0E0E0" };
+                });
+                prompts.push({
+                  targetAxisLabel: newColourField.label,
+                  coloursToAdd,
+                  onConfirm: async () => {
+                    await updateConfigField(capturedNewId, {
+                      config: { allowedColorIds: capturedSrcIds },
+                    });
+                    await refetch();
+                    setFillQueue((q) => q.slice(1));
+                  },
+                  onSkip: () => setFillQueue((q) => q.slice(1)),
+                });
+              }
+              if (prompts.length > 0) setFillQueue(prompts);
+            }
           }
         }}
       />

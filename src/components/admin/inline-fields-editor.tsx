@@ -226,14 +226,15 @@ export function InlineFieldsEditor({
     commitFields(next);
 
     // Cross-axis colour fill: only when a colour field's config changes.
-    const changedField = fields.find((f) => f.id === id);
+    // Use `next` (post-commit state) rather than the stale `fields` closure.
+    const changedField = next.find((f) => f.id === id);
     if (
       changedField?.fieldType === "colour" &&
       patch.config !== undefined &&
       "allowedColorIds" in (patch.config as ColourFieldConfig)
     ) {
       const newIds = (patch.config as ColourFieldConfig).allowedColorIds ?? [];
-      const otherColourFields = fields.filter(
+      const otherColourFields = next.filter(
         (f) => f.fieldType === "colour" && f.id !== id,
       );
       const prompts: ColourFillPrompt[] = [];
@@ -296,8 +297,46 @@ export function InlineFieldsEditor({
       updatedAt: now,
       __pending: "new",
     };
-    commitFields([...fields, newField]);
+    const nextFields = [...fields, newField];
+    commitFields(nextFields);
     setExpandedId(newField.id);
+
+    // Auto-prefill: when a new colour field is added with an empty palette,
+    // scan existing colour fields for ones that already have colours and queue
+    // a sequential confirmation prompt offering to copy each into the new field.
+    if (fieldType === "colour") {
+      const sourcesWithColours = fields.filter(
+        (f) =>
+          f.fieldType === "colour" &&
+          ((f.config as ColourFieldConfig).allowedColorIds?.length ?? 0) > 0,
+      );
+      if (sourcesWithColours.length > 0) {
+        const prompts: ColourFillPrompt[] = [];
+        for (const src of sourcesWithColours) {
+          const srcIds = (src.config as ColourFieldConfig).allowedColorIds ?? [];
+          const coloursToAdd = srcIds
+            .map((cid) => colourRows.get(cid))
+            .filter((r): r is { id: string; name: string; hex: string } => r !== undefined);
+          if (coloursToAdd.length === 0) continue;
+          const capturedNewId = newField.id;
+          const capturedIds = srcIds;
+          const capturedColours = coloursToAdd;
+          const prompt: ColourFillPrompt = {
+            targetAxisLabel: newField.label,
+            coloursToAdd: capturedColours,
+            onConfirm: () => {
+              commitFieldUpdate(capturedNewId, {
+                config: { allowedColorIds: capturedIds } satisfies ColourFieldConfig,
+              });
+              setFillQueue((q) => q.slice(1));
+            },
+            onSkip: () => setFillQueue((q) => q.slice(1)),
+          };
+          prompts.push(prompt);
+        }
+        if (prompts.length > 0) setFillQueue(prompts);
+      }
+    }
   }
 
   // ── Toggle accordion ──────────────────────────────────────────────────────
