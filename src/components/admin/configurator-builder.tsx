@@ -21,7 +21,7 @@
  * ============================================================================
  */
 
-import { useState, useTransition, useCallback } from "react";
+import { useState, useTransition, useCallback, useMemo } from "react";
 import {
   GripVertical,
   Pencil,
@@ -57,6 +57,8 @@ import {
 } from "@/actions/configurator";
 import { getActiveColoursForPicker } from "@/actions/admin-colours";
 import { BRAND } from "@/lib/brand";
+import { useProductDraft } from "@/hooks/use-product-draft";
+import { DraftRestoredBanner } from "@/components/admin/draft-restored-banner";
 
 // ============================================================================
 // Types
@@ -102,6 +104,15 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  // -------------------------------------------------------------------------
+  // Autosave draft — persists the live `fields` state to localStorage so the
+  // admin can recover from accidental navigation. Scope "configurator" keeps
+  // the key separate from the main product-form draft.
+  // -------------------------------------------------------------------------
+  const draftValue = useMemo(() => ({ fields }), [fields]);
+  const draft = useProductDraft(product.id, draftValue, { scope: "configurator" });
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+
   // Modal state (non-locked fields)
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -123,12 +134,14 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
   );
 
   // -------------------------------------------------------------------------
-  // Pattern B refetch helper
+  // Pattern B refetch helper — clears the autosave draft after each
+  // successful server sync so the banner won't reappear once data is saved.
   // -------------------------------------------------------------------------
   const refetch = useCallback(async () => {
     const data = await getConfiguratorData(product.id);
     setFields(data.fields);
-  }, [product.id]);
+    draft.discard();
+  }, [product.id, draft]);
 
   // -------------------------------------------------------------------------
   // Reorder: Up/Down buttons → Pattern B
@@ -299,6 +312,44 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
   };
 
   // -------------------------------------------------------------------------
+  // Draft restore / discard handlers
+  // -------------------------------------------------------------------------
+
+  function restoreDraft() {
+    const v = draft.restore();
+    if (!v) {
+      setBannerDismissed(true);
+      return;
+    }
+    // Defensive shape validation — snapshot must have `fields` as an Array and
+    // each entry must have the minimum required shape. Drop malformed entries.
+    if (Array.isArray(v.fields)) {
+      const VALID_FIELD_TYPES = new Set(["text", "number", "colour", "select", "textarea"]);
+      const safe = v.fields.filter((f: unknown) => {
+        if (!f || typeof f !== "object") return false;
+        const entry = f as Record<string, unknown>;
+        if (typeof entry.id !== "string") return false;
+        if (typeof entry.fieldType !== "string" || !VALID_FIELD_TYPES.has(entry.fieldType)) return false;
+        if (typeof entry.label !== "string") return false;
+        if (!entry.config || typeof entry.config !== "object") return false;
+        return true;
+      });
+      if (safe.length !== v.fields.length) {
+        console.warn(
+          `[configurator autosave] Dropped ${v.fields.length - safe.length} malformed field(s) from draft.`,
+        );
+      }
+      setFields(safe as ConfigField[]);
+    }
+    setBannerDismissed(true);
+  }
+
+  function discardDraft() {
+    draft.discard();
+    setBannerDismissed(true);
+  }
+
+  // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
 
@@ -311,6 +362,17 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
 
   return (
     <div className="space-y-6">
+      {/* Autosave restore banner — shown when a draft snapshot exists and the
+          admin hasn't already chosen Restore/Discard this session. Restore
+          requires an explicit click; NO auto-hydration on mount. */}
+      {draft.draft && !bannerDismissed && (
+        <DraftRestoredBanner
+          savedAt={draft.draft.savedAt}
+          onRestore={restoreDraft}
+          onDiscard={discardDraft}
+        />
+      )}
+
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
