@@ -1,0 +1,77 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-05-03T00:50:06.399Z",
+  "phase": null,
+  "phase_name": "post-launch hotfix sweep — admin colour autofill + admin autosave",
+  "phase_dir": null,
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
+  "status": "paused",
+  "completed_tasks": [
+    {"name": "Customer-facing colour auto-fill (wrong target — reverted)", "status": "reverted", "commit": "77901f0"},
+    {"name": "Admin ColourFillConfirmationDialog primitive", "status": "done", "commit": "b6852ca"},
+    {"name": "Admin cross-axis autofill on stocked + configurable family (variant-editor + configurator-builder)", "status": "done", "commit": "a59f7e1"},
+    {"name": "CI typecheck fix (onConfirmedWithRows prop type)", "status": "done", "commit": "98f8ce9"},
+    {"name": "Refresh colour-field state after save (stale closure + revalidatePath /edit)", "status": "done", "commit": "a2f5e8c"},
+    {"name": "Cross-axis autofill in InlineFieldsEditor (/edit + /new)", "status": "done", "commit": "77f4e21"},
+    {"name": "Allow empty colour-field palette on save (removed .min(1))", "status": "done", "commit": "41ecc00"},
+    {"name": "Use fresh state in cross-axis prompt + auto-prefill new colour fields", "status": "done", "commit": "9ddef01"},
+    {"name": "Generalise useProductDraft hook (scope, beforeunload flush, callbacks)", "status": "done", "commit": "6e13be4"},
+    {"name": "Wire autosave into configurator-builder (scope: configurator)", "status": "done", "commit": "6bf4726"},
+    {"name": "Wire autosave into variant-editor (scope: variants)", "status": "done", "commit": "1ff292d"},
+    {"name": "Latest-draft banner on /admin/products", "status": "done", "commit": "d469850"},
+    {"name": "Tier prices + variant-row inline edits in autosave", "status": "done", "commit": "e538626"},
+    {"name": "CHOOSE prefix on variant axis labels", "status": "done", "commit": "55037d6"}
+  ],
+  "remaining_tasks": [
+    {"name": "Diagnose variant data loss on /admin/products/5f52e087.../variants", "status": "in_progress", "blocked_on": "ssh access for direct DB query"},
+    {"name": "Apply description CSS word-break fix (3-line edit ready)", "status": "ready_to_apply", "blocked_on": "user go-ahead"},
+    {"name": "Re-add Zod .min(1) on allowedColorIds at publish-time guard", "status": "queued_todo", "todo_file": ".planning/todos/pending/2026-05-02-publish-time-guard-for-empty-colour-palettes.md"}
+  ],
+  "blockers": [
+    {
+      "description": "Cannot SSH to 152.53.86.223 from current Claude environment (key auth denied). Required to verify whether DB rows for product 5f52e087-6aa6-43a0-a4c8-56a98cdccb68 still exist or were deleted.",
+      "type": "human_action",
+      "workaround": "User said they will arrange SSH access for next session. Alternative: cPanel phpMyAdmin or `mysql` invoked from a server-side shell."
+    }
+  ],
+  "human_actions_pending": [
+    {
+      "action": "Arrange SSH access to 152.53.86.223 (or grant phpMyAdmin / cPanel UAPI credentials).",
+      "context": "Needed to run: SELECT id, optionValueIds, price, inStock FROM productVariants WHERE productId = '5f52e087-6aa6-43a0-a4c8-56a98cdccb68'",
+      "blocking": true
+    },
+    {
+      "action": "Confirm or reject the description-display.tsx CSS fix (delete line 48 overflowWrap:anywhere, optionally drop prose-sm from line 43).",
+      "context": "Customer PDP description breaks mid-word. Diagnosis complete; fix is 3 lines.",
+      "blocking": false
+    },
+    {
+      "action": "Commit the 10 pre-existing brand palette WIP files (brand.ts + 9 dependents).",
+      "context": "Sitting in working tree all session. Brand colour rotation #0080ff/#03C03C/#8A00C2 → #1E8BFF/#39E600/#A855F7. Caveman commit message drafted in session log.",
+      "blocking": false
+    }
+  ],
+  "decisions": [
+    {"decision": "Customer-side autofill = wrong target. Customer PDP picks pre-curated swatches; cross-axis sync is admin-only.", "rationale": "User explicit feedback after attempting customer wiring."},
+    {"decision": "No customer-side draft autosave. Cart persistence is enough; in-progress configurator state is throwaway.", "rationale": "User explicit: 'client only shop dont do anything else as long as what they add stays in the bag'."},
+    {"decision": "Admin autosave covers ALL product surfaces (form / configurator / variants / tiers / variant-rows) × all product types × /new + /edit.", "rationale": "User explicit: 'product type wise store wise and when a new product type or product added auto save should work'."},
+    {"decision": "Banner-only Restore (no auto-hydrate on mount).", "rationale": "Prevented the disappearing-field bug class. Mandatory for every new autosave wiring."},
+    {"decision": "Removed .min(1) on allowedColorIds at save-time; deferred to publish-time guard via TODO.", "rationale": "Admin needs to save in-progress products with empty colour fields. Customer-facing safety belongs on publish gate, not save gate."}
+  ],
+  "uncommitted_files": [
+    "public/errors/502.html",
+    "public/errors/503.html",
+    "public/errors/504.html",
+    "src/app/(store)/privacy/page.tsx",
+    "src/app/demo-v2/page.tsx",
+    "src/app/demo/page.tsx",
+    "src/app/global-error.tsx",
+    "src/components/store/whatsapp-cta.tsx",
+    "src/content/admin-guide/guide/whats-new-april-2026.md",
+    "src/lib/brand.ts"
+  ],
+  "next_action": "1) Verify SSH access. 2) Run variant DB query for product 5f52e087-6aa6-43a0-a4c8-56a98cdccb68. 3) Branch on result per decision tree in .continue-here.md. 4) After variant bug resolved, apply description CSS fix.",
+  "context_notes": "Today was a multi-cycle admin-side feature day. Multiple in-flight bugs from rapid iteration. User got burned by piecemeal scope creep — see memory rule feedback_simple_solutions_first.md. Variant data loss is the urgent open item; description word-break is the easy follow-up."
+}
