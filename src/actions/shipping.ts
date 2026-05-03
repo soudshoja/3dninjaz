@@ -536,12 +536,39 @@ export async function bookShipmentForOrder(
     prodRows.map((p) => [p.id, p]),
   );
 
+  // Batch-fetch per-variant weights (AD-08)
+  const variantIds = [...new Set(items.map((i) => i.variantId))];
+  const variantRows = variantIds.length
+    ? await db
+        .select({ id: productVariants.id, weightG: productVariants.weightG })
+        .from(productVariants)
+        .where(inArray(productVariants.id, variantIds))
+    : [];
+  const variantWeights = new Map<string, number | null>();
+  for (const v of variantRows) {
+    variantWeights.set(v.id, v.weightG ?? null);
+  }
+
   const fallbackWeight = Number(cfg.defaultWeightKg);
   const inventory: InventoryItem[] = items.map((i) => {
     const p = prodById.get(i.productId);
-    const weight = p?.shippingWeightKg
-      ? Number(p.shippingWeightKg)
-      : fallbackWeight;
+    const variantWeightG = variantWeights.get(i.variantId) ?? null;
+    let weight: number;
+    if (variantWeightG !== null) {
+      // Tier 1: per-variant weight_g (grams → kg)
+      weight = variantWeightG / 1000;
+    } else {
+      const productWeightKg = p?.shippingWeightKg
+        ? Number(p.shippingWeightKg)
+        : null;
+      if (productWeightKg !== null) {
+        // Tier 2: product-level shippingWeightKg
+        weight = productWeightKg;
+      } else {
+        // Tier 3: global fallback
+        weight = fallbackWeight;
+      }
+    }
     const dim =
       p?.shippingLengthCm && p?.shippingWidthCm && p?.shippingHeightCm
         ? {
