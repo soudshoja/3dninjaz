@@ -513,10 +513,12 @@ export async function updateProduct(
     })
     .where(eq(products.id, id));
 
-  // Replace variants: delete old, insert new. Simpler and correct than diffing.
-  await db.delete(productVariants).where(eq(productVariants.productId, id));
-
+  // Only replace variants if variants are actually provided in the payload.
+  // The edit form passes variants: [] which should NOT delete existing variants.
   if (variants.length > 0) {
+    // Delete old variants before inserting new ones.
+    await db.delete(productVariants).where(eq(productVariants.productId, id));
+
     // Phase 14 — fetch store rates once for cost computation.
     const storeSettings = await getStoreSettingsCached();
     const storeRates = {
