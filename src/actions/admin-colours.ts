@@ -216,37 +216,30 @@ export async function reactivateColour(id: string): Promise<MutateResult> {
   return { ok: true, id };
 }
 
+export async function toggleMyColour(id: string): Promise<MutateResult> {
+  await requireAdmin();
+  try {
+    // Read current value first to toggle
+    const [r] = await db.select().from(colors).where(eq(colors.id, id)).limit(1);
+    if (!r) {
+      return { ok: false, error: "Colour not found." };
+    }
+    const newValue = !r.isMyColour;
+    await db.update(colors).set({ isMyColour: newValue }).where(eq(colors.id, id));
+    revalidatePath("/admin/colours");
+    return { ok: true, id };
+  } catch (err: unknown) {
+    console.error("[admin-colours] toggleMyColour failed:", err);
+    return { ok: false, error: "Unable to update colour." };
+  }
+}
+
 // ============================================================================
 // Phase 20-xx — toggle "My Colour" status
 // ============================================================================
 
-export async function toggleMyColour(
-  id: string,
-): Promise<MutateResult> {
-  await requireAdmin();
-  try {
-    // First get current state
-    const [row] = await db
-      .select({ isMyColour: colors.isMyColour })
-      .from(colors)
-      .where(eq(colors.id, id))
-      .limit(1);
-    if (!row) {
-      return { ok: false, error: "Colour not found." };
-    }
-    // Toggle the value
-    await db
-      .update(colors)
-      .set({ isMyColour: !row.isMyColour })
-      .where(eq(colors.id, id));
-    revalidatePath("/admin/colours");
-    revalidatePath("/shop");
-    return { ok: true, id };
-  } catch (err: unknown) {
-    console.error("[admin-colours] toggleMyColour failed:", err);
-    return { ok: false, error: "Unable to update My Colour status." };
-  }
-}
+// Old toggleMyColour (kept for backwards compatibility)
+// New version uses isMyColour field
 
 // ============================================================================
 // Plan 18-04 — hard-delete (with IN_USE guard) + cascade rename mechanics.
@@ -518,6 +511,31 @@ export async function getActiveColoursForPicker(): Promise<ColourPickerRow[]> {
     .select()
     .from(colors)
     .where(eq(colors.isActive, true));
+  const mapped: ColourPickerRow[] = rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    hex: r.hex,
+    previousHex: r.previousHex ?? null,
+    brand: r.brand,
+    code: r.code ?? null,
+    familyType: r.familyType,
+    familySubtype: r.familySubtype,
+    isMyColour: r.isMyColour,
+    isActive: r.isActive,
+  }));
+  return sortByShade(mapped);
+}
+
+/**
+ * Fetch only colours where isMyColour = true.
+ * Used to offer admins a "Load My Colours" prompt when opening the picker.
+ */
+export async function getMyColoursForPicker(): Promise<ColourPickerRow[]> {
+  await requireAdmin();
+  const rows = await db
+    .select()
+    .from(colors)
+    .where(and(eq(colors.isActive, true), eq(colors.isMyColour, true)));
   const mapped: ColourPickerRow[] = rows.map((r) => ({
     id: r.id,
     name: r.name,

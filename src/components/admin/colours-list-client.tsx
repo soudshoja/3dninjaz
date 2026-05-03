@@ -136,15 +136,33 @@ export function ColoursListClient({ rows }: Props) {
               </option>
             ))}
           </select>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="my-colour-filter"
+              checked={myColour === "My Colours"}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  setMyColour("My Colours");
+                } else {
+                  setMyColour("All");
+                }
+              }}
+              className="h-5 w-5 rounded border-gray-300 text-[#8A00C2] focus:ring-[#8A00C2]"
+            />
+            <label htmlFor="my-colour-filter" className="text-sm font-semibold select-none">
+              My Colour
+            </label>
+          </div>
           <select
-            value={myColour}
+            value={myColour === "My Colours" ? "My Colours" : myColour === "Other" ? "Other" : "All"}
             onChange={(e) =>
               setMyColour(e.target.value as (typeof MY_COLOURS)[number])
             }
             className="rounded-xl border-2 px-3 py-2 text-sm min-h-[44px]"
             style={{ borderColor: `${BRAND.ink}33` }}
           >
-            <option value="All">My Colour: All</option>
+            <option value="All">All</option>
             <option value="My Colours">My Colours only</option>
             <option value="Other">Not my colour</option>
           </select>
@@ -247,11 +265,19 @@ export function ColoursListClient({ rows }: Props) {
                       <td className="p-3 font-mono text-xs text-slate-600">
                         {c.code ?? "—"}
                       </td>
-                      <td className="p-3">
-                        <span
-                          className={`inline-block w-3 h-3 rounded-full ${c.isMyColour ? 'bg-[#8A00C2]' : 'bg-transparent'}`}
-                          aria-label={c.isMyColour ? "My colour" : "Not my colour"}
-                          title={c.isMyColour ? "My colour" : "Not my colour"}
+                      <td className="p-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={c.isMyColour}
+                          onChange={async () => {
+                            const res = await toggleMyColour(c.id);
+                            if (res.ok) {
+                              // Refresh to sync with server state
+                              window.location.reload();
+                            }
+                          }}
+                          className="h-4 w-4 rounded border-gray-300 text-[#8A00C2] focus:ring-[#8A00C2]"
+                          title={c.isMyColour ? "Click to remove from My Colours" : "Click to add to My Colours"}
                         />
                       </td>
                       <td className="p-3">
