@@ -62,6 +62,7 @@ export async function listColours(): Promise<ColourAdmin[]> {
     code: r.code ?? null,
     familyType: r.familyType,
     familySubtype: r.familySubtype,
+    isMyColour: r.isMyColour,
     isActive: r.isActive,
   }));
   const active = sortByShade(mapped.filter((r) => r.isActive));
@@ -82,6 +83,7 @@ export async function getColour(id: string): Promise<ColourAdmin | null> {
     code: r.code ?? null,
     familyType: r.familyType,
     familySubtype: r.familySubtype,
+    isMyColour: r.isMyColour,
     isActive: r.isActive,
   };
 }
@@ -94,6 +96,7 @@ function parseColourForm(formData: FormData) {
   const previousHexRaw = String(formData.get("previousHex") ?? "").trim();
   const codeRaw = String(formData.get("code") ?? "").trim();
   const familySubtypeRaw = String(formData.get("familySubtype") ?? "").trim();
+  const isMyColourRaw = formData.get("isMyColour");
   const isActiveRaw = formData.get("isActive");
   return colourSchema.safeParse({
     name: String(formData.get("name") ?? "").trim(),
@@ -104,6 +107,7 @@ function parseColourForm(formData: FormData) {
     familySubtype: familySubtypeRaw === "" ? null : familySubtypeRaw,
     code: codeRaw === "" ? null : codeRaw,
     // checkbox: present (=on/true) when checked, absent when not
+    isMyColour: isMyColourRaw === "on" || isMyColourRaw === "true",
     isActive: isActiveRaw === "on" || isActiveRaw === "true",
   });
 }
@@ -132,6 +136,7 @@ export async function createColour(
       code: data.code ?? null,
       familyType: data.familyType,
       familySubtype: data.familySubtype ?? "",
+      isMyColour: data.isMyColour ?? false,
       isActive: data.isActive ?? true,
     });
   } catch (err: unknown) {
@@ -174,6 +179,7 @@ export async function updateColour(
         code: data.code ?? null,
         familyType: data.familyType,
         familySubtype: data.familySubtype ?? "",
+        isMyColour: data.isMyColour ?? false,
         isActive: data.isActive ?? true,
       })
       .where(eq(colors.id, id));
@@ -208,6 +214,38 @@ export async function reactivateColour(id: string): Promise<MutateResult> {
   revalidatePath("/admin/colours");
   revalidatePath("/shop");
   return { ok: true, id };
+}
+
+// ============================================================================
+// Phase 20-xx — toggle "My Colour" status
+// ============================================================================
+
+export async function toggleMyColour(
+  id: string,
+): Promise<MutateResult> {
+  await requireAdmin();
+  try {
+    // First get current state
+    const [row] = await db
+      .select({ isMyColour: colors.isMyColour })
+      .from(colors)
+      .where(eq(colors.id, id))
+      .limit(1);
+    if (!row) {
+      return { ok: false, error: "Colour not found." };
+    }
+    // Toggle the value
+    await db
+      .update(colors)
+      .set({ isMyColour: !row.isMyColour })
+      .where(eq(colors.id, id));
+    revalidatePath("/admin/colours");
+    revalidatePath("/shop");
+    return { ok: true, id };
+  } catch (err: unknown) {
+    console.error("[admin-colours] toggleMyColour failed:", err);
+    return { ok: false, error: "Unable to update My Colour status." };
+  }
 }
 
 // ============================================================================
@@ -489,6 +527,7 @@ export async function getActiveColoursForPicker(): Promise<ColourPickerRow[]> {
     code: r.code ?? null,
     familyType: r.familyType,
     familySubtype: r.familySubtype,
+    isMyColour: r.isMyColour,
     isActive: r.isActive,
   }));
   return sortByShade(mapped);

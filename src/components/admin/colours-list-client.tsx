@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { BRAND } from "@/lib/brand";
 import { ColourRowActions } from "@/components/admin/colour-row-actions";
+import { toggleMyColour } from "@/actions/admin-colours";
 import type { ColourAdmin } from "@/lib/colours";
 import { sortByShade } from "@/lib/colour-sort";
 
@@ -14,12 +15,14 @@ type Props = {
 const BRANDS = ["All", "Bambu", "Polymaker", "Other"] as const;
 const FAMILIES = ["All", "PLA", "PETG", "TPU", "CF", "Other"] as const;
 const STATUSES = ["All", "Active", "Archived"] as const;
+const MY_COLOURS = ["All", "My Colours", "Other"] as const;
 
 export function ColoursListClient({ rows }: Props) {
   const [query, setQuery] = useState("");
   const [brand, setBrand] = useState<(typeof BRANDS)[number]>("All");
   const [family, setFamily] = useState<(typeof FAMILIES)[number]>("All");
   const [status, setStatus] = useState<(typeof STATUSES)[number]>("All");
+  const [myColour, setMyColour] = useState<(typeof MY_COLOURS)[number]>("All");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -28,6 +31,8 @@ export function ColoursListClient({ rows }: Props) {
       if (family !== "All" && r.familyType !== family) return false;
       if (status === "Active" && !r.isActive) return false;
       if (status === "Archived" && r.isActive) return false;
+      if (myColour === "My Colours" && !r.isMyColour) return false;
+      if (myColour === "Other" && r.isMyColour) return false;
       if (q) {
         const hay = [
           r.name,
@@ -48,7 +53,7 @@ export function ColoursListClient({ rows }: Props) {
     const active = sortByShade(matches.filter((r) => r.isActive));
     const archived = sortByShade(matches.filter((r) => !r.isActive));
     return [...active, ...archived];
-  }, [rows, query, brand, family, status]);
+  }, [rows, query, brand, family, status, myColour]);
 
   const activeCount = rows.filter((r) => r.isActive).length;
 
@@ -78,7 +83,7 @@ export function ColoursListClient({ rows }: Props) {
 
         {/* Filter bar */}
         <div
-          className="mb-4 grid gap-3 rounded-2xl p-4 md:grid-cols-[1fr_auto_auto_auto_auto]"
+          className="mb-4 grid gap-3 rounded-2xl p-4 md:grid-cols-[1fr_auto_auto_auto_auto_auto]"
           style={{ backgroundColor: "#ffffff" }}
         >
           <input
@@ -131,7 +136,19 @@ export function ColoursListClient({ rows }: Props) {
               </option>
             ))}
           </select>
-          {(query || brand !== "All" || family !== "All" || status !== "All") && (
+          <select
+            value={myColour}
+            onChange={(e) =>
+              setMyColour(e.target.value as (typeof MY_COLOURS)[number])
+            }
+            className="rounded-xl border-2 px-3 py-2 text-sm min-h-[44px]"
+            style={{ borderColor: `${BRAND.ink}33` }}
+          >
+            <option value="All">My Colour: All</option>
+            <option value="My Colours">My Colours only</option>
+            <option value="Other">Not my colour</option>
+          </select>
+          {(query || brand !== "All" || family !== "All" || status !== "All" || myColour !== "All") && (
             <button
               type="button"
               onClick={() => {
@@ -139,6 +156,7 @@ export function ColoursListClient({ rows }: Props) {
                 setBrand("All");
                 setFamily("All");
                 setStatus("All");
+                setMyColour("All");
               }}
               className="rounded-xl border-2 px-4 py-2 text-sm font-semibold min-h-[44px]"
               style={{ borderColor: `${BRAND.ink}33`, color: BRAND.ink }}
@@ -176,6 +194,7 @@ export function ColoursListClient({ rows }: Props) {
                     <th className="p-3 whitespace-nowrap">Brand</th>
                     <th className="p-3 whitespace-nowrap">Family</th>
                     <th className="p-3 whitespace-nowrap">Code</th>
+                    <th className="p-3 whitespace-nowrap">My Colour</th>
                     <th className="p-3 whitespace-nowrap">Status</th>
                     <th className="p-3 text-right whitespace-nowrap">
                       Actions
@@ -229,6 +248,13 @@ export function ColoursListClient({ rows }: Props) {
                         {c.code ?? "—"}
                       </td>
                       <td className="p-3">
+                        <span
+                          className={`inline-block w-3 h-3 rounded-full ${c.isMyColour ? 'bg-[#8A00C2]' : 'bg-transparent'}`}
+                          aria-label={c.isMyColour ? "My colour" : "Not my colour"}
+                          title={c.isMyColour ? "My colour" : "Not my colour"}
+                        />
+                      </td>
+                      <td className="p-3">
                         {c.isActive ? (
                           <span
                             className="inline-flex items-center rounded-full px-3 py-1 text-xs font-bold text-white"
@@ -251,6 +277,7 @@ export function ColoursListClient({ rows }: Props) {
                             id: c.id,
                             name: c.name,
                             isActive: c.isActive,
+                            isMyColour: c.isMyColour,
                           }}
                         />
                       </td>
