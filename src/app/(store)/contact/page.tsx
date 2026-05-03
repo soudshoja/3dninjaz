@@ -98,7 +98,7 @@ export default async function ContactPage() {
                 height={40}
                 className="h-10 w-10 object-contain"
               />
-              <span className="text-sm font-semibold break-all">
+              <span className="text-sm font-semibold break-words">
                 {settings.contactEmail}
               </span>
             </a>

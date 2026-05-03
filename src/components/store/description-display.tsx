@@ -61,7 +61,7 @@ export function DescriptionDisplay({ html }: Props) {
         :global(.ql-output img), :global(.ql-output video), :global(.ql-output iframe) {
           max-width: 100%; height: auto; display: block;
         }
-        :global(.ql-output pre), :global(.ql-output code) { white-space: pre-wrap; word-break: break-word; overflow-x: auto; }
+        :global(.ql-output pre), :global(.ql-output code) { white-space: pre-wrap; overflow-wrap: break-word; overflow-x: auto; }
         :global(.ql-output table) { display: block; max-width: 100%; overflow-x: auto; }
         :global(.ql-output .ql-align-center) { text-align: center; }
         :global(.ql-output .ql-align-right)  { text-align: right; }

@@ -107,7 +107,7 @@ export function renderOrderConfirmationHtml(order: OrderWithItems): string {
       ${order.paypalCaptureId ? `
       <tr>
         <td style="padding:8px 0;color:#666;">Payment reference</td>
-        <td style="padding:8px 0;text-align:right;font-family:monospace;word-break:break-all;">${escapeHtml(order.paypalCaptureId)}</td>
+        <td style="padding:8px 0;text-align:right;font-family:monospace;word-break:break-word;">${escapeHtml(order.paypalCaptureId)}</td>
       </tr>` : ""}
     </table>
 

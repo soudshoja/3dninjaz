@@ -107,11 +107,11 @@ export default async function AdminOrderDetailPage({
             <p className="text-slate-600 mt-1">
               Placed {new Date(row.createdAt).toLocaleString("en-MY")}
             </p>
-            <p className="text-xs text-slate-500 font-mono mt-1 break-all">{row.id}</p>
+            <p className="text-xs text-slate-500 font-mono mt-1 break-words">{row.id}</p>
             {row.paypalCaptureId ? (
               <p className="text-xs text-slate-600 mt-2">
                 Payment reference:{" "}
-                <span className="font-mono break-all">{row.paypalCaptureId}</span>
+                <span className="font-mono break-words">{row.paypalCaptureId}</span>
               </p>
             ) : null}
           </div>
@@ -125,11 +125,11 @@ export default async function AdminOrderDetailPage({
           >
             <h2 className="font-[var(--font-heading)] text-xl mb-3">Customer</h2>
             <p className="font-semibold">{row.user?.name ?? row.shippingName}</p>
-            <p className="text-slate-700 break-all">
+            <p className="text-slate-700 break-words">
               {row.user?.email ?? row.customerEmail}
             </p>
             {row.user ? (
-              <p className="text-xs text-slate-500 font-mono mt-2 break-all">
+              <p className="text-xs text-slate-500 font-mono mt-2 break-words">
                 user id: {row.user.id}
               </p>
             ) : (
@@ -367,12 +367,12 @@ export default async function AdminOrderDetailPage({
             <h2 className="font-[var(--font-heading)] text-xl mb-3">Update status</h2>
             <AdminOrderStatusForm orderId={row.id} current={row.status} />
             {row.paypalOrderId ? (
-              <p className="text-xs text-slate-500 mt-3 font-mono break-all">
+              <p className="text-xs text-slate-500 mt-3 font-mono break-words">
                 PayPal order ID: {row.paypalOrderId}
               </p>
             ) : null}
             {row.paypalCaptureId ? (
-              <p className="text-xs text-slate-500 mt-1 font-mono break-all">
+              <p className="text-xs text-slate-500 mt-1 font-mono break-words">
                 PayPal capture ID: {row.paypalCaptureId}
               </p>
             ) : null}

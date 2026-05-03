@@ -313,7 +313,7 @@ function InfoLine({
   return (
     <div>
       <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-      <p className={mono ? "font-mono break-all" : "break-words"}>
+      <p className={mono ? "font-mono break-words" : "break-words"}>
         {value ?? <span className="text-slate-400">—</span>}
       </p>
     </div>

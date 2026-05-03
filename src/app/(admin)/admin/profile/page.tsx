@@ -54,7 +54,7 @@ export default async function AdminProfilePage() {
           <dl className="grid gap-1 text-sm mb-4">
             <div className="flex justify-between gap-3">
               <dt className="text-slate-600">Email</dt>
-              <dd className="break-all">{session.user.email}</dd>
+              <dd className="break-words">{session.user.email}</dd>
             </div>
             <div className="flex justify-between gap-3">
               <dt className="text-slate-600">Role</dt>

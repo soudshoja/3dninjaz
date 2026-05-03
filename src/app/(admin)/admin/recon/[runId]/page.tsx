@@ -118,7 +118,7 @@ export default async function AdminReconDetailPage({
                       key={i}
                       className="rounded-md border border-[var(--color-brand-border)] p-3 text-sm"
                     >
-                      <code className="text-xs break-all">
+                      <code className="text-xs break-words">
                         {JSON.stringify(d)}
                       </code>
                       {d.localOrderId ? (

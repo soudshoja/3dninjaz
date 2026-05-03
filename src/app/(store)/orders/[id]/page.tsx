@@ -135,7 +135,7 @@ export default async function OrderDetailPage({
         {row.paypalCaptureId ? (
           <p className="mb-4 text-xs text-slate-600">
             Payment reference:{" "}
-            <span className="font-mono break-all">{row.paypalCaptureId}</span>
+            <span className="font-mono break-words">{row.paypalCaptureId}</span>
           </p>
         ) : null}
 

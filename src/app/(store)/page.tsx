@@ -2,14 +2,10 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { BRAND } from "@/lib/brand";
-import { Shuriken } from "@/components/brand/shuriken";
 import { Hero } from "@/components/store/hero";
 import { FeaturedRail } from "@/components/store/featured-rail";
 import { Logo } from "@/components/brand/logo";
-import {
-  getActiveFeaturedProducts,
-  getActiveCategories,
-} from "@/lib/catalog";
+import { getActiveFeaturedProducts } from "@/lib/catalog";
 
 export const metadata: Metadata = {
   // Omit title so the root layout's default ("3D Ninjaz — 3D Printed
@@ -24,23 +20,10 @@ export default async function HomePage({
 }: {
   searchParams?: Promise<{ closed?: string }>;
 }) {
-  // Phase 8 — getActiveCategories now ORDER BYs the new position column.
-  // During the first deploy window the prod DB may not yet have the column
-  // (migration runs before build on the server, but static build caches and
-  // CI can race). Fall back to an empty list rather than failing the home
-  // prerender; the SHOP BY CATEGORY rail just hides until the query recovers.
-  const [featured, categories] = await Promise.all([
-    getActiveFeaturedProducts(4).catch((err) => {
-      console.warn("[home] getActiveFeaturedProducts failed:", err);
-      return [];
-    }),
-    getActiveCategories().catch((err) => {
-      console.warn("[home] getActiveCategories failed:", err);
-      return [];
-    }),
-  ]);
-
-  const accents = [BRAND.blue, BRAND.green, BRAND.purple] as const;
+  const featured = await getActiveFeaturedProducts(4).catch((err) => {
+    console.warn("[home] getActiveFeaturedProducts failed:", err);
+    return [];
+  });
   const sp = searchParams ? await searchParams : {};
   const closed = sp.closed === "1";
 
@@ -58,36 +41,6 @@ export default async function HomePage({
       ) : null}
       <Hero />
       <FeaturedRail products={featured} />
-
-      {/* Category preview */}
-      {categories.length > 0 ? (
-        <section className="py-16 md:py-24 bg-white">
-          <div className="max-w-5xl mx-auto px-6">
-            <div className="flex items-center justify-center gap-4 mb-10">
-              <Shuriken className="w-8 h-8" fill={BRAND.blue} />
-              <h2
-                className="font-[var(--font-heading)] text-3xl md:text-5xl tracking-tight text-center text-zinc-900"
-              >
-                SHOP BY <span style={{ color: BRAND.purple }}>CATEGORY</span>
-              </h2>
-              <Shuriken className="w-8 h-8" fill={BRAND.green} />
-            </div>
-            <ul className="flex flex-col gap-5 items-center">
-              {categories.slice(0, 6).map((c, i) => (
-                <li key={c.id} className="w-full md:w-[min(640px,90%)]">
-                  <Link
-                    href={`/shop?category=${encodeURIComponent(c.slug)}`}
-                    className="block rounded-full px-8 py-5 text-center font-[var(--font-heading)] text-2xl md:text-4xl text-white shadow-[0_6px_0_rgba(11,16,32,0.12)] hover:translate-y-[3px] hover:shadow-[0_3px_0_rgba(11,16,32,0.12)] transition min-h-[60px]"
-                    style={{ backgroundColor: accents[i % accents.length] }}
-                  >
-                    {c.name}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-      ) : null}
 
       {/* How it works */}
       <section

@@ -107,7 +107,7 @@ export function PaymentLinkCard({
         <div className="rounded-xl border border-[var(--color-brand-border)] bg-white p-3 md:p-4 space-y-3">
           <div>
             <p className="text-xs font-medium text-slate-500 mb-1">Active link</p>
-            <code className="block break-all rounded-md bg-slate-50 p-2 text-xs md:text-sm font-mono">
+            <code className="block break-words rounded-md bg-slate-50 p-2 text-xs md:text-sm font-mono">
               {active.url}
             </code>
             <p className="mt-2 text-xs text-slate-500">
@@ -188,7 +188,7 @@ export function PaymentLinkCard({
                 key={l.id}
                 className="flex items-center justify-between gap-2 rounded-md bg-slate-50 p-2"
               >
-                <span className="font-mono break-all">{l.token.slice(0, 12)}...</span>
+                <span className="font-mono break-words">{l.token.slice(0, 12)}...</span>
                 <span className="text-slate-500">
                   {l.usedAt
                     ? `paid ${l.usedAt.toLocaleDateString("en-MY")}`

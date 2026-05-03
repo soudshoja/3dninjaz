@@ -41,7 +41,7 @@ export default async function AdminDisputeDetailPage({
         </nav>
 
         <header className="mb-6">
-          <h1 className="font-[var(--font-heading)] text-2xl md:text-3xl break-all">
+          <h1 className="font-[var(--font-heading)] text-2xl md:text-3xl break-words">
             Dispute {detail.cached.disputeId}
           </h1>
         </header>

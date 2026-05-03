@@ -104,7 +104,7 @@ export function OrderTrackingTimeline({ view, dense }: Props) {
             <p className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">
               Tracking
             </p>
-            <p className="font-mono text-sm md:text-base break-all text-zinc-900">
+            <p className="font-mono text-sm md:text-base break-words text-zinc-900">
               {view.consignmentNo ?? view.trackingNo}
             </p>
           </div>
