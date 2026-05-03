@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { BRAND } from "@/lib/brand";
@@ -66,7 +66,20 @@ function BagContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeItems.length]);
 
-  const subtotal = hydrated.reduce(
+  // Merge live store quantities into hydrated data so +/- buttons reflect
+  // instantly without server round-trip.
+  const displayItems = useMemo(
+    () =>
+      hydrated.map((h) => {
+        const match = storeItems.find(
+          (si) => si.key === (h.storeKey ?? h.variantId),
+        );
+        return match ? { ...h, quantity: match.quantity } : h;
+      }),
+    [hydrated, storeItems],
+  );
+
+  const subtotal = displayItems.reduce(
     (sum, i) => sum + parseFloat(i.unitPrice) * i.quantity,
     0,
   );
@@ -109,7 +122,7 @@ function BagContent() {
       ) : (
         <div className="grid lg:grid-cols-[1fr_320px] gap-8">
           <ul className="flex flex-col gap-4">
-            {hydrated.map((i) => (
+            {displayItems.map((i) => (
               <li key={i.storeKey ?? i.variantId}>
                 <CartLineRow item={i} variant="full" />
               </li>

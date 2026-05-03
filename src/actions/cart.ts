@@ -23,7 +23,7 @@ import { inArray } from "drizzle-orm";
 import { composeVariantLabel } from "@/lib/variants";
 import { isConfigurableCartItem } from "@/stores/cart-store";
 import type { CartItem } from "@/stores/cart-store";
-import type { ConfigurationData } from "@/lib/config-fields";
+import type { ConfigurationData, ImageEntryV2 } from "@/lib/config-fields";
 
 export type HydratedCartItem = {
   variantId: string;
@@ -44,17 +44,43 @@ export type HydratedCartItem = {
   storeKey: string;
 };
 
-function ensureImagesArray(raw: unknown): string[] {
-  if (Array.isArray(raw)) return raw.filter((v): v is string => typeof v === "string");
-  if (typeof raw === "string" && raw.trim()) {
+function ensureImagesV2(raw: unknown): ImageEntryV2[] {
+  if (raw === null || raw === undefined) return [];
+
+  let arr: unknown = raw;
+  if (typeof raw === "string") {
+    if (raw.trim() === "") return [];
     try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed.filter((v): v is string => typeof v === "string");
+      arr = JSON.parse(raw);
     } catch {
       return [];
     }
   }
-  return [];
+
+  if (!Array.isArray(arr)) return [];
+
+  const result: ImageEntryV2[] = [];
+  for (const entry of arr) {
+    if (typeof entry === "string" && entry.trim() !== "") {
+      result.push({ url: entry });
+    } else if (
+      typeof entry === "object" &&
+      entry !== null &&
+      typeof (entry as Record<string, unknown>).url === "string" &&
+      ((entry as Record<string, unknown>).url as string).trim() !== ""
+    ) {
+      const e = entry as Record<string, unknown>;
+      const img: ImageEntryV2 = { url: e.url as string };
+      if (typeof e.caption === "string") img.caption = e.caption;
+      if (typeof e.alt === "string") img.alt = e.alt;
+      result.push(img);
+    }
+  }
+  return result;
+}
+
+function extractImageUrls(raw: unknown): string[] {
+  return ensureImagesV2(raw).map((i) => i.url);
 }
 
 export async function hydrateCartItems(
@@ -139,7 +165,7 @@ export async function hydrateCartItems(
       const legacyOOS = v.trackStock !== true && v.inStock === false;
       const available = (!trackedOOS || allowPreorder) && !legacyOOS;
 
-      const images = ensureImagesArray(product.images);
+      const images = extractImageUrls(product.images);
       const productImage =
         v.imageUrl ?? (images.length > 0 ? images[product.thumbnailIndex ?? 0] ?? images[0] ?? null : null);
 
@@ -180,7 +206,7 @@ export async function hydrateCartItems(
       const row = productById.get(item.productId);
       if (!row) continue; // product deleted — omit
 
-      const images = ensureImagesArray(row.images);
+      const images = extractImageUrls(row.images);
       const productImage = images.length > 0 ? images[row.thumbnailIndex ?? 0] ?? images[0] ?? null : null;
 
       results.push({
