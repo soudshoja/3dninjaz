@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   attachLibraryColours,
   getActiveColoursForPicker,
+  getMyColoursForPicker,
   type ColourPickerRow,
 } from "@/actions/admin-colours";
 
@@ -21,6 +22,16 @@ export type { ColourPickerRow };
 import { BRAND } from "@/lib/brand";
 
 // ---------------------------------------------------------------------------
+// Phase 20-xx — My Colours prompt type
+// ---------------------------------------------------------------------------
+export type MyColoursPrompt = {
+  /** Array of My Colour rows (isMyColour = true) */
+  myColours: ColourPickerRow[];
+  /** Called when admin clicks "Yes, load them" */
+  onConfirm: (colourIds: string[]) => Promise<void> | void;
+  /** Called when admin clicks "Skip" */
+  onSkip: () => void;
+};
 // Plan 18-05 — library picker modal (Surface 3 in 18-UI-SPEC.md).
 //
 // Mounts via shadcn Dialog (D-05 — max-w-720px, admin-only desktop-primary).
@@ -80,6 +91,11 @@ type Props = {
   preSelectedColourIds?: string[];
   /** Called on Confirm when mode="select-multiple" */
   onSelectMultiple?: (selectedIds: string[], selectedRows: ColourPickerRow[]) => void;
+  // ---------------------------------------------------------------------------
+  // Phase 20-xx — My Colours prompt (D-14).
+  // ---------------------------------------------------------------------------
+  /** If provided, shows "Load My Colours?" prompt before opening picker */
+  myColoursPrompt?: MyColoursPrompt;
 };
 
 type Brand = "All" | "Bambu" | "Polymaker" | "Other";
@@ -97,6 +113,8 @@ export function ColourPickerDialog({
   mode = "attach-to-option",
   preSelectedColourIds,
   onSelectMultiple,
+  // Phase 20-xx (D-14) — My Colours prompt
+  myColoursPrompt,
 }: Props) {
   const [pending, startTransition] = useTransition();
   const [loading, setLoading] = useState(false);

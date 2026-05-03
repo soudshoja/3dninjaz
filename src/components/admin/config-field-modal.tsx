@@ -15,8 +15,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, Plus, Trash2, Type, Hash, Palette, ListChecks, FileText } from "lucide-react";
-import { ColourPickerDialog, type ColourPickerRow } from "@/components/admin/colour-picker-dialog";
-import { getActiveColoursForPicker } from "@/actions/admin-colours";
+import { ColourPickerDialog, type ColourPickerRow, type MyColoursPrompt } from "@/components/admin/colour-picker-dialog";
+import { getActiveColoursForPicker, getMyColoursForPicker } from "@/actions/admin-colours";
 import {
   addConfigField,
   updateConfigField,
@@ -197,19 +197,44 @@ export function ColourConfigForm({
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [knownRows, setKnownRows] = useState<ColourPickerRow[]>([]);
+  const [myColoursPrompt, setMyColoursPrompt] = useState<MyColoursPrompt | null>(null);
+  const [hasMyColours, setHasMyColours] = useState(false);
   const ids = value.allowedColorIds ?? [];
 
-  // Hydrate swatches on mount so the chips show the actual colour, not a
-  // truncated UUID. Without this, the picker has to be opened once before
-  // selected colours render correctly.
+  // Fetch My Colours on mount to check if prompt should be shown
   useEffect(() => {
     let cancelled = false;
-    getActiveColoursForPicker()
+    getMyColoursForPicker()
       .then((rows) => {
-        if (!cancelled) setKnownRows(rows);
+        if (!cancelled && rows.length > 0) {
+          setHasMyColours(true);
+          setMyColoursPrompt({
+            myColours: rows,
+            onConfirm: async (colourIds: string[]) => {
+              // Pre-select My Colours and also add to the picker's selection
+              const newIds = Array.from(new Set([...ids, ...colourIds]));
+              setKnownRows((prev) => {
+                // Merge with known rows to ensure swatches show correctly
+                const allRows = [...prev];
+                // Add My Colours if not already present
+                for (const c of rows) {
+                  if (!allRows.find((r) => r.id === c.id)) {
+                    allRows.push(c);
+                  }
+                }
+                return allRows;
+              });
+              onChange({ ...value, allowedColorIds: newIds });
+            },
+            onSkip: () => {
+              setMyColoursPrompt(null);
+            },
+          });
+        }
       })
       .catch(() => {
-        // Fail soft — chips fall back to truncated UUID, picker still works.
+        // Fail soft — no My Colours available
+        if (!cancelled) setHasMyColours(false);
       });
     return () => {
       cancelled = true;
@@ -274,6 +299,7 @@ export function ColourConfigForm({
           setPickerOpen(false);
         }}
         onConfirmed={() => {}}
+        myColoursPrompt={myColoursPrompt || undefined}
       />
     </div>
   );

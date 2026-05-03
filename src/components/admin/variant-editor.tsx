@@ -41,7 +41,7 @@
  * Bottom:        variant matrix table (inline edit: price, sale, stock, SKU, weight, image, default, active)
  */
 
-import { useState, useTransition, useCallback, useRef, useMemo } from "react";
+import { useState, useTransition, useCallback, useRef, useMemo, useEffect } from "react";
 import { Pencil, Trash2, Plus, RefreshCw, Star, Upload, X, Palette } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,9 +74,9 @@ import {
 } from "@/actions/variants";
 import type { HydratedOption, HydratedVariant } from "@/lib/variants";
 import { generateVariantSku } from "@/lib/sku";
-import { ColourPickerDialog, type ColourPickerRow } from "@/components/admin/colour-picker-dialog";
+import { ColourPickerDialog, type ColourPickerRow, type MyColoursPrompt } from "@/components/admin/colour-picker-dialog";
 import { ColourFillConfirmationDialog, type ColourFillPrompt } from "@/components/admin/colour-fill-confirmation-dialog";
-import { attachLibraryColours } from "@/actions/admin-colours";
+import { attachLibraryColours, getMyColoursForPicker } from "@/actions/admin-colours";
 import { useProductDraft } from "@/hooks/use-product-draft";
 import { DraftRestoredBanner } from "@/components/admin/draft-restored-banner";
 
@@ -133,6 +133,9 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
   // open for (null = closed). Guards against multiple Colour options on a
   // single product (rare but defensible).
   const [pickerOptionId, setPickerOptionId] = useState<string | null>(null);
+
+  // Phase 20-xx — My Colours prompt state for the picker
+  const [myColoursPrompt, setMyColoursPrompt] = useState<MyColoursPrompt | null>(null);
 
   // Cross-axis colour fill queue — sequential prompt after picker confirm.
   const [fillQueue, setFillQueue] = useState<ColourFillPrompt[]>([]);
@@ -259,6 +262,48 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
     }
     // NOTE: router.refresh() intentionally removed (AD-06)
   }, [productId, showToast, draft]);
+
+  // ---------------------------------------------------------------------------
+  // My Colours prompt - fetches after refresh is defined
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!pickerOptionId) {
+      setMyColoursPrompt(null);
+      return;
+    }
+    let cancelled = false;
+    getMyColoursForPicker()
+      .then((rows) => {
+        if (!cancelled && rows.length > 0) {
+          setMyColoursPrompt({
+            myColours: rows,
+            onConfirm: async (colourIds: string[]) => {
+              // Merge My Colours with existing attached colours
+              const currentOption = options.find((o) => o.id === pickerOptionId);
+              const currentAttachedIds = new Set(
+                (currentOption?.values ?? [])
+                  .map((v) => v.colorId)
+                  .filter((id): id is string => Boolean(id)),
+              );
+              const mergedIds = Array.from(new Set([...Array.from(currentAttachedIds), ...colourIds]));
+              await attachLibraryColours(pickerOptionId, mergedIds);
+              await refresh();
+            },
+            onSkip: () => {
+              setMyColoursPrompt(null);
+            },
+          });
+        } else if (!cancelled) {
+          setMyColoursPrompt(null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setMyColoursPrompt(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pickerOptionId, options, refresh]);
 
   // ---------------------------------------------------------------------------
   // Selection helpers
@@ -883,6 +928,7 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
                 .filter((id): id is string => Boolean(id)),
             )
           }
+          myColoursPrompt={myColoursPrompt || undefined}
           onConfirmedWithRows={(attachedRows: ColourPickerRow[]) => {
             // Build cross-axis fill queue for every OTHER colour option that is
             // missing one or more of the just-attached colours.
