@@ -17,7 +17,8 @@ const FAMILIES = ["All", "PLA", "PETG", "TPU", "CF", "Other"] as const;
 const STATUSES = ["All", "Active", "Archived"] as const;
 const MY_COLOURS = ["All", "My Colours", "Other"] as const;
 
-export function ColoursListClient({ rows }: Props) {
+export function ColoursListClient({ rows: initialRows }: Props) {
+  const [rows, setRows] = useState(initialRows);
   const [query, setQuery] = useState("");
   const [brand, setBrand] = useState<(typeof BRANDS)[number]>("All");
   const [family, setFamily] = useState<(typeof FAMILIES)[number]>("All");
@@ -270,10 +271,24 @@ export function ColoursListClient({ rows }: Props) {
                           type="checkbox"
                           checked={c.isMyColour}
                           onChange={async () => {
+                            // Optimistic update — no page reload
+                            setRows((prev) =>
+                              prev.map((r) =>
+                                r.id === c.id
+                                  ? { ...r, isMyColour: !r.isMyColour }
+                                  : r,
+                              ),
+                            );
                             const res = await toggleMyColour(c.id);
-                            if (res.ok) {
-                              // Refresh to sync with server state
-                              window.location.reload();
+                            if (!res.ok) {
+                              // Revert on failure
+                              setRows((prev) =>
+                                prev.map((r) =>
+                                  r.id === c.id
+                                    ? { ...r, isMyColour: !r.isMyColour }
+                                    : r,
+                                ),
+                              );
                             }
                           }}
                           className="h-4 w-4 rounded border-gray-300 text-[#8A00C2] focus:ring-[#8A00C2]"
