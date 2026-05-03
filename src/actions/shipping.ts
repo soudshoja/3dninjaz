@@ -12,6 +12,7 @@ import {
   shippingConfig,
   shippingServiceCatalog,
   products,
+  productVariants,
 } from "@/lib/db/schema";
 import { requireAdmin, getSessionUser } from "@/lib/auth-helpers";
 import { delyvaApi, DelyvaError, parseQuoteServices, getDelyvaWebhookSecret } from "@/lib/delyva";
@@ -436,14 +437,41 @@ async function sumOrderWeight(
       weight: products.shippingWeightKg,
     })
     .from(products);
-  const weights = new Map<string, number>();
+  const productWeights = new Map<string, number>();
   for (const p of prodRows) {
-    if (p.weight) weights.set(p.id, Number(p.weight));
+    if (p.weight) productWeights.set(p.id, Number(p.weight));
+  }
+
+  // Batch-fetch per-variant weights (AD-08)
+  const variantIds = Array.from(new Set(items.map((i) => i.variantId)));
+  const variantRows = variantIds.length
+    ? await db
+        .select({ id: productVariants.id, weightG: productVariants.weightG })
+        .from(productVariants)
+        .where(inArray(productVariants.id, variantIds))
+    : [];
+  const variantWeights = new Map<string, number | null>();
+  for (const v of variantRows) {
+    variantWeights.set(v.id, v.weightG ?? null);
   }
 
   let total = 0;
   for (const i of items) {
-    const w = weights.get(i.productId) ?? fallbackKg;
+    const variantWeightG = variantWeights.get(i.variantId) ?? null;
+    let w: number;
+    if (variantWeightG !== null) {
+      // Tier 1: per-variant weight_g (grams → kg)
+      w = variantWeightG / 1000;
+    } else {
+      const productWeightKg = productWeights.get(i.productId) ?? null;
+      if (productWeightKg !== null) {
+        // Tier 2: product-level shippingWeightKg
+        w = productWeightKg;
+      } else {
+        // Tier 3: global fallback
+        w = fallbackKg;
+      }
+    }
     total += w * i.quantity;
   }
   return total;

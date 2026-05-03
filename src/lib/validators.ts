@@ -819,6 +819,8 @@ export const colourSchema = z.object({
     .optional()
     .or(z.literal(""))
     .nullable(),
+  // Phase 20-xx — admin-marked "My Colour"
+  isMyColour: z.boolean().default(false),
   isActive: z.boolean().default(true),
 });
 export type ColourInput = z.infer<typeof colourSchema>;

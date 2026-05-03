@@ -1612,6 +1612,8 @@ export const colors = mysqlTable(
       "Other",
     ]).notNull(),
     familySubtype: varchar("family_subtype", { length: 48 }).notNull(),
+    // Phase 20-xx — admin-marked "My Colour" (considered by admin for their use)
+    isMyColour: boolean("is_my_colour").notNull().default(false),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
@@ -1622,6 +1624,7 @@ export const colors = mysqlTable(
     brandCodeUnique: unique("uq_colors_brand_code").on(t.brand, t.code),
     brandIdx: index("idx_colors_brand").on(t.brand),
     activeIdx: index("idx_colors_active").on(t.isActive),
+    myColourIdx: index("idx_colors_my_colour").on(t.isMyColour),
   }),
 );
 
