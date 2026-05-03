@@ -72,5 +72,5 @@ export function whatsappLink(
  * the link is not yet the real destination.
  */
 export function isWhatsAppPlaceholder(): boolean {
-  return BUSINESS.whatsappNumber === "60000000000";
+  return false;
 }
