@@ -26,7 +26,6 @@ function usable(v: string | null | undefined): v is string {
 
 export default async function ContactPage() {
   const settings = await getSiteSettings();
-  const hasEmail = !!settings.contactEmail;
   const hasPhone = usable(settings.contactPhone);
   const hasWhatsApp =
     !!settings.whatsappNumber && settings.whatsappNumber !== "60000000000";
@@ -80,29 +79,11 @@ export default async function ContactPage() {
       </div>
 
       {/* Quick-contact tiles — each conditional on settings. */}
-      {(hasEmail || hasPhone || hasWhatsApp) && (
+      {(hasPhone || hasWhatsApp) && (
         <div
           className="mt-8 grid gap-3 sm:grid-cols-3"
           aria-label="Quick contact"
         >
-          {hasEmail && (
-            <a
-              href={`mailto:${settings.contactEmail}`}
-              className="flex items-center gap-3 rounded-2xl border p-4 hover:bg-white min-h-[56px]"
-              style={{ borderColor: "#E4E4E7", backgroundColor: "#FAFAFA" }}
-            >
-              <Image
-                src="/icons/ninja/emoji/contact@128.png"
-                alt=""
-                width={40}
-                height={40}
-                className="h-10 w-10 object-contain"
-              />
-              <span className="text-sm font-semibold break-words">
-                {settings.contactEmail}
-              </span>
-            </a>
-          )}
           {hasPhone && (
             <a
               href={`tel:${settings.contactPhone.replace(/[^\d+]/g, "")}`}

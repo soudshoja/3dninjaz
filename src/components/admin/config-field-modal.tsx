@@ -210,22 +210,6 @@ export function ColourConfigForm({
           setHasMyColours(true);
           setMyColoursPrompt({
             myColours: rows,
-            onConfirm: async (colourIds: string[]) => {
-              // Pre-select My Colours and also add to the picker's selection
-              const newIds = Array.from(new Set([...ids, ...colourIds]));
-              setKnownRows((prev) => {
-                // Merge with known rows to ensure swatches show correctly
-                const allRows = [...prev];
-                // Add My Colours if not already present
-                for (const c of rows) {
-                  if (!allRows.find((r) => r.id === c.id)) {
-                    allRows.push(c);
-                  }
-                }
-                return allRows;
-              });
-              onChange({ ...value, allowedColorIds: newIds });
-            },
             onSkip: () => {
               setMyColoursPrompt(null);
             },

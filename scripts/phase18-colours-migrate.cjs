@@ -117,18 +117,50 @@ async function run() {
           \`code\`            VARCHAR(32) NULL,
           \`family_type\`     ENUM('PLA','PETG','TPU','CF','Other') NOT NULL,
           \`family_subtype\`  VARCHAR(48) NOT NULL,
+          \`is_my_colour\`    TINYINT(1) NOT NULL DEFAULT 0,
           \`is_active\`       TINYINT(1) NOT NULL DEFAULT 1,
           \`created_at\`      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
           \`updated_at\`      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           PRIMARY KEY (\`id\`),
           UNIQUE KEY \`uq_colors_brand_code\` (\`brand\`, \`code\`),
           KEY \`idx_colors_brand\`  (\`brand\`),
-          KEY \`idx_colors_active\` (\`is_active\`)
+          KEY \`idx_colors_active\` (\`is_active\`),
+          KEY \`idx_colors_my_colour\` (\`is_my_colour\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci
       `);
       console.log("colors -> created");
     } else {
       console.log("colors -> exists, skipping");
+    }
+
+    // ----------------------------------------------------------------- //
+    // 1b. is_my_colour — added in Phase 20-xx; existing tables that were
+    //     created before the schema update need this column backfilled.
+    // ----------------------------------------------------------------- //
+    await addColumnIfMissing(
+      conn,
+      dbName,
+      "colors",
+      "is_my_colour",
+      "`is_my_colour` TINYINT(1) NOT NULL DEFAULT 0 AFTER `family_subtype`",
+    );
+    // Create the index for is_my_colour if it does not already exist.
+    if (!(await indexExists(conn, dbName, "colors", "idx_colors_my_colour"))) {
+      try {
+        await conn.query(
+          "ALTER TABLE `colors` ADD KEY `idx_colors_my_colour` (`is_my_colour`)",
+        );
+        console.log("colors.idx_colors_my_colour -> added");
+      } catch (err) {
+        const msg = String(err && err.message ? err.message : "");
+        if (msg.includes("Duplicate") || msg.includes("ER_DUP_KEYNAME")) {
+          console.log("colors.idx_colors_my_colour -> already exists, skipping");
+        } else {
+          throw err;
+        }
+      }
+    } else {
+      console.log("colors.idx_colors_my_colour -> exists, skipping");
     }
 
     // ----------------------------------------------------------------- //

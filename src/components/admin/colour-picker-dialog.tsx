@@ -27,8 +27,6 @@ import { BRAND } from "@/lib/brand";
 export type MyColoursPrompt = {
   /** Array of My Colour rows (isMyColour = true) */
   myColours: ColourPickerRow[];
-  /** Called when admin clicks "Yes, load them" */
-  onConfirm: (colourIds: string[]) => Promise<void> | void;
   /** Called when admin clicks "Skip" */
   onSkip: () => void;
 };
@@ -124,12 +122,16 @@ export function ColourPickerDialog({
   const [brand, setBrand] = useState<Brand>("All");
   const [family, setFamily] = useState<FamilyType>("All");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Phase 20-xx — My Colours prompt action tracker.
+  // null = no prompt yet; "prompt" = show the prompt; "yes" = pre-selected My Colours; "skip" = normal picker
+  const [myColoursAction, setMyColoursAction] = useState<"prompt" | "yes" | "skip" | null>(null);
 
   // Single fetch on open (D-06). Reset state every time we re-open.
   useEffect(() => {
     if (!open) return;
     setLoading(true);
     setError(null);
+    setMyColoursAction(null);
     // Phase 19-04: seed pre-selected ids in select-multiple mode
     setSelectedIds(
       mode === "select-multiple" && preSelectedColourIds
@@ -146,17 +148,49 @@ export function ColourPickerDialog({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Phase 20-xx — Show My Colours prompt when data arrives after open.
+  // The parent (variant-editor / config-field-modal) fetches My Colours
+  // asynchronously and passes them as a prop. When they arrive and the
+  // admin hasn't already decided, show the prompt.
+  useEffect(() => {
+    if (!open || myColoursAction !== null) return;
+    if (myColoursPrompt && myColoursPrompt.myColours.length > 0) {
+      setMyColoursAction("prompt");
+    }
+  }, [open, myColoursAction, myColoursPrompt]);
+
   // Client-side filter (D-06). Brand + Family selects intersect with search.
+  // Phase 20-xx: When admin accepted the My Colours prompt, restrict candidates
+  // to My Colours only — admin can still search/filter within that subset.
   const filtered = useMemo(() => {
+    let candidates = rows;
+    if (myColoursAction === "yes" && myColoursPrompt) {
+      const myIds = new Set(myColoursPrompt.myColours.map((c) => c.id));
+      candidates = candidates.filter((r) => myIds.has(r.id));
+    }
     const q = search.trim().toLowerCase();
-    return rows.filter((r) => {
+    return candidates.filter((r) => {
       if (brand !== "All" && r.brand !== brand) return false;
       if (family !== "All" && r.familyType !== family) return false;
       if (!q) return true;
       const hay = `${r.name} ${r.brand} ${r.familySubtype} ${r.code ?? ""}`.toLowerCase();
       return hay.includes(q);
     });
-  }, [rows, search, brand, family]);
+  }, [rows, search, brand, family, myColoursAction, myColoursPrompt]);
+
+  // Phase 20-xx — My Colours prompt handlers
+  const handleLoadMyColours = () => {
+    if (!myColoursPrompt) return;
+    // Pre-select all My Colours so admin can uncheck any they don't want
+    setSelectedIds(new Set(myColoursPrompt.myColours.map((c) => c.id)));
+    // Restrict the picker to show only My Colours
+    setMyColoursAction("yes");
+  };
+
+  const handleSkipMyColours = () => {
+    setMyColoursAction("skip");
+    myColoursPrompt?.onSkip();
+  };
 
   const toggle = (id: string) => {
     setSelectedIds((prev) => {
@@ -215,6 +249,40 @@ export function ColourPickerDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {/* Phase 20-xx — My Colours prompt. Shown BEFORE the picker when
+            My Colours exist. Admin can load them (pre-selected) or skip. */}
+        {myColoursAction === "prompt" && myColoursPrompt && myColoursPrompt.myColours.length > 0 ? (
+          <div className="py-8 text-center space-y-4">
+            <p className="text-lg font-bold" style={{ color: BRAND.ink }}>
+              Load your My Colours?
+            </p>
+            <p className="text-sm" style={{ color: "#4B5563" }}>
+              {myColoursPrompt.myColours.length} colour
+              {myColoursPrompt.myColours.length === 1 ? "" : "s"} will be
+              pre-selected. You can uncheck any you don&apos;t want before
+              confirming.
+            </p>
+            <div className="flex justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={handleSkipMyColours}
+                className="rounded-full px-6 py-3 font-semibold border-2 min-h-[48px] text-sm"
+                style={{ borderColor: `${BRAND.ink}33`, color: BRAND.ink }}
+              >
+                Skip
+              </button>
+              <button
+                type="button"
+                onClick={handleLoadMyColours}
+                className="rounded-full px-6 py-3 font-bold text-white min-h-[48px] text-sm"
+                style={{ backgroundColor: BRAND.ink }}
+              >
+                Yes, load them
+              </button>
+            </div>
+          </div>
+        ) : (
+        <>
         {/* Search + filters */}
         <div className="space-y-3 py-2">
           <div className="relative">
@@ -467,6 +535,8 @@ export function ColourPickerDialog({
             </button>
           </div>
         </DialogFooter>
+        </>
+      )}
       </DialogContent>
     </Dialog>
   );

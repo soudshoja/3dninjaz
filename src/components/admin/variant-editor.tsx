@@ -277,18 +277,6 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
         if (!cancelled && rows.length > 0) {
           setMyColoursPrompt({
             myColours: rows,
-            onConfirm: async (colourIds: string[]) => {
-              // Merge My Colours with existing attached colours
-              const currentOption = options.find((o) => o.id === pickerOptionId);
-              const currentAttachedIds = new Set(
-                (currentOption?.values ?? [])
-                  .map((v) => v.colorId)
-                  .filter((id): id is string => Boolean(id)),
-              );
-              const mergedIds = Array.from(new Set([...Array.from(currentAttachedIds), ...colourIds]));
-              await attachLibraryColours(pickerOptionId, mergedIds);
-              await refresh();
-            },
             onSkip: () => {
               setMyColoursPrompt(null);
             },

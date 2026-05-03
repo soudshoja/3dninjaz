@@ -29,9 +29,8 @@ export const BUSINESS = {
   contactEmail: "info@3dninjaz.com",
   // Data-protection officer / PDPA data-request inbox. D-04.
   dpoEmail: "info@3dninjaz.com",
-  // TODO: Q4-01 / D-01 — replace before public launch (Plan 04-04 hard blocker).
-  whatsappNumber: "60000000000",
-  whatsappNumberDisplay: "+60 00 000 0000",
+  whatsappNumber: "60167203048",
+  whatsappNumberDisplay: "+60 16 720 3048",
   socials: {
     // TODO: D-05 — replace `#` with real Instagram URL once handle confirmed.
     instagram: "#",
