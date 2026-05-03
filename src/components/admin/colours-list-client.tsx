@@ -149,7 +149,7 @@ export function ColoursListClient({ rows: initialRows }: Props) {
                   setMyColour("All");
                 }
               }}
-              className="h-5 w-5 rounded border-gray-300 text-[#8A00C2] focus:ring-[#8A00C2]"
+              className="h-5 w-5 rounded border-gray-300 text-[#A855F7] focus:ring-[#A855F7]"
             />
             <label htmlFor="my-colour-filter" className="text-sm font-semibold select-none">
               My Colour
@@ -291,7 +291,7 @@ export function ColoursListClient({ rows: initialRows }: Props) {
                               );
                             }
                           }}
-                          className="h-4 w-4 rounded border-gray-300 text-[#8A00C2] focus:ring-[#8A00C2]"
+                          className="h-4 w-4 rounded border-gray-300 text-[#A855F7] focus:ring-[#A855F7]"
                           title={c.isMyColour ? "Click to remove from My Colours" : "Click to add to My Colours"}
                         />
                       </td>
