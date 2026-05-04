@@ -45,8 +45,9 @@ export function DescriptionDisplay({ html }: Props) {
         color: BRAND.ink,
         // Containment: prevent rich-text content from spilling outside the
         // parent card boundary (long URLs, wide tables, large pre/code blocks).
-        overflowWrap: "anywhere",
-        wordBreak: "break-word",
+        overflowWrap: "break-word",
+        wordBreak: "normal",
+        hyphens: "auto",
         maxWidth: "100%",
         boxSizing: "border-box",
       }}
