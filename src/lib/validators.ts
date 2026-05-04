@@ -237,13 +237,15 @@ export const orderStatusEnum = z.enum([
 export type OrderStatus = z.infer<typeof orderStatusEnum>;
 
 /**
- * Malaysian phone regex. Accepts:
- *   - optional +60 or leading 0 prefix
- *   - 9-11 digit body split by spaces or dashes for copy-paste robustness
+ * Malaysian phone regex — permissive allowlist rather than structural parser.
+ * Accepts any combination of digits, +, spaces, hyphens, and parentheses
+ * between 7 and 20 characters long. This covers all common MY formats:
+ *   012-3456789  |  +60 12-3456789  |  +6012-3456789  |  03-12345678
+ *   +60-3-1234-5678  |  (03) 1234 5678  |  011-12345678
  *
  * Caller should strip non-digits before storing so search/compare is stable.
  */
-const MY_PHONE = /^(\+?60|0)?[\s-]?\d{2,3}[\s-]?\d{3,4}[\s-]?\d{3,4}$/;
+const MY_PHONE = /^[+\d\s\-()]{7,20}$/;
 
 export const orderAddressSchema = z.object({
   recipientName: z.string().min(2, "Name is required").max(200),
