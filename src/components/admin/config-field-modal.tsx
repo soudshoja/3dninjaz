@@ -300,20 +300,18 @@ type SelectOption = {
   imageUrl?: string;
 };
 
-// Internal per-option image uploader (needs fieldId from the saved field).
-// When fieldId is undefined (new field not yet saved), shows a visually distinct
-// disabled drop-zone with a "Save field first" tooltip so the gate is unmissable.
+// Internal per-option image button — 40×40 square.
+// Locked (no fieldId): grey camera icon with lock-icon overlay and tooltip.
+// Empty (fieldId present): camera icon button, click opens file picker.
+// Filled: thumbnail, hover reveals X remove button.
 function SelectOptionImageCell({
   opt,
   fieldId,
   onImageUrl,
-  onSaveFieldFirst,
 }: {
   opt: SelectOption;
   fieldId: string | undefined;
   onImageUrl: (url: string | undefined) => void;
-  /** Called when the user clicks "Save field" inside the disabled state. */
-  onSaveFieldFirst?: () => void;
 }) {
   const [uploading, setUploading] = useState(false);
   const inputRef = useState(() => {
@@ -356,93 +354,87 @@ function SelectOptionImageCell({
     if (result.ok) onImageUrl(undefined);
   };
 
-  // ── Unsaved field: visually gated drop-zone ──────────────────────────────
+  const SIZE = 40;
+
+  // ── Unsaved field: locked camera button ──────────────────────────────────
   if (!fieldId) {
     return (
-      <div className="flex flex-col items-center gap-1">
-        <div
-          className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-zinc-200 transition-colors duration-150"
-          style={{ width: 56, height: 56, background: "#F7FAF4", opacity: 0.7 }}
-          title="Save the field first to enable image upload"
+      <div
+        className="relative flex items-center justify-center rounded border border-zinc-200 bg-zinc-50 shrink-0"
+        style={{ width: SIZE, height: SIZE }}
+        title="Save field first to enable image upload"
+        aria-label="Image upload locked — save field first"
+      >
+        <Camera className="h-4 w-4 text-zinc-300" aria-hidden />
+        {/* small lock overlay */}
+        <span
+          className="absolute bottom-0.5 right-0.5 flex items-center justify-center rounded-full bg-zinc-200"
+          style={{ width: 14, height: 14 }}
+          aria-hidden
         >
-          <Camera className="h-4 w-4 text-zinc-400" aria-hidden />
-          <span className="text-[9px] text-zinc-400 mt-0.5 leading-none">Upload</span>
-        </div>
-        {onSaveFieldFirst && (
-          <button
-            type="button"
-            onClick={onSaveFieldFirst}
-            className="text-[10px] font-medium underline underline-offset-2 transition-colors duration-150 cursor-pointer"
-            style={{ color: BRAND.blue }}
-            title="Save the field to enable image upload"
-          >
-            Save field
-          </button>
-        )}
-        {!onSaveFieldFirst && (
-          <span className="text-[9px] text-zinc-400 leading-none text-center">
-            Save first
-          </span>
-        )}
+          <svg width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden>
+            <rect x="1.5" y="4.5" width="7" height="5" rx="1" fill="#71717A" />
+            <path d="M3 4.5V3a2 2 0 0 1 4 0v1.5" stroke="#71717A" strokeWidth="1.2" strokeLinecap="round" />
+          </svg>
+        </span>
       </div>
     );
   }
 
-  // ── Has image: thumbnail + remove ────────────────────────────────────────
+  // ── Has image: thumbnail + hover-X ───────────────────────────────────────
   if (opt.imageUrl) {
     return (
-      <div className="relative flex flex-col items-center gap-0.5">
-        <div className="relative rounded-lg overflow-hidden border border-zinc-200" style={{ width: 56, height: 56 }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={
-              opt.imageUrl.endsWith("/")
-                ? opt.imageUrl + "400w.jpg"
-                : opt.imageUrl.includes("/uploads/")
-                  ? opt.imageUrl + "/400w.jpg"
-                  : opt.imageUrl
-            }
-            alt={opt.label}
-            className="h-full w-full object-cover cursor-pointer hover:opacity-80 transition-opacity duration-150"
-            onClick={triggerPicker}
-            title="Click to replace image"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-          />
-          <button
-            type="button"
-            onClick={handleRemove}
-            className="absolute top-0.5 right-0.5 flex items-center justify-center rounded-full bg-white/90 hover:bg-red-50 border border-zinc-200 transition-colors duration-150"
-            style={{ width: 18, height: 18 }}
-            aria-label="Remove image"
-          >
-            <X className="h-2.5 w-2.5 text-red-500" />
-          </button>
-        </div>
-        <span className="text-[9px] text-zinc-400 leading-none">Replace</span>
+      <div
+        className="group relative rounded border border-zinc-200 overflow-hidden shrink-0 cursor-pointer"
+        style={{ width: SIZE, height: SIZE }}
+        onClick={triggerPicker}
+        title="Click to replace image"
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") triggerPicker(); }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={
+            opt.imageUrl.endsWith("/")
+              ? opt.imageUrl + "400w.jpg"
+              : opt.imageUrl.includes("/uploads/")
+                ? opt.imageUrl + "/400w.jpg"
+                : opt.imageUrl
+          }
+          alt={opt.label}
+          className="h-full w-full object-cover"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+        />
+        {/* Remove button revealed on hover */}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); handleRemove(); }}
+          className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+          aria-label="Remove image"
+          title="Remove image"
+        >
+          <X className="h-3.5 w-3.5 text-white" />
+        </button>
       </div>
     );
   }
 
-  // ── Empty: clickable drop-zone ────────────────────────────────────────────
+  // ── Empty: compact camera button ─────────────────────────────────────────
   return (
     <button
       type="button"
       onClick={triggerPicker}
       disabled={uploading}
-      className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed transition-colors duration-150 disabled:opacity-50 cursor-pointer hover:border-blue-400 hover:bg-blue-50/40"
-      style={{ width: 56, height: 56, borderColor: BRAND.blue + "66" }}
-      aria-label="Upload image"
+      className="flex items-center justify-center rounded border border-zinc-200 bg-zinc-50 hover:border-zinc-400 hover:bg-zinc-100 transition-colors duration-150 disabled:opacity-50 shrink-0"
+      style={{ width: SIZE, height: SIZE }}
+      aria-label="Upload option image"
       title="Upload option image"
     >
       {uploading ? (
         <span className="text-[10px] text-zinc-400">…</span>
       ) : (
-        <>
-          <Camera className="h-4 w-4 mb-0.5" style={{ color: BRAND.blue }} aria-hidden />
-          <span className="text-[9px] font-medium leading-none" style={{ color: BRAND.blue }}>
-            Upload
-          </span>
-        </>
+        <Camera className="h-4 w-4 text-zinc-400" aria-hidden />
       )}
     </button>
   );
@@ -452,13 +444,12 @@ export function SelectConfigForm({
   value,
   onChange,
   fieldId,
-  onSaveFieldFirst,
 }: {
   value: Partial<SelectFieldConfig>;
   onChange: (v: Partial<SelectFieldConfig>) => void;
   /** fieldId is only available in edit mode (field already saved). Used for image upload. */
   fieldId?: string;
-  /** Passed down so the image cell can surface a "Save field" CTA when fieldId is missing. */
+  /** @deprecated no longer used — kept for call-site compat */
   onSaveFieldFirst?: () => void;
 }) {
   const options: SelectOption[] = value.options ?? [];
@@ -476,141 +467,113 @@ export function SelectConfigForm({
     onChange({ ...value, options: options.filter((_, i) => i !== index) });
   };
 
-  // Shared label style
-  const lbl = "block text-[10px] font-semibold uppercase tracking-wide text-zinc-500 mb-1";
-
   return (
-    <div className="space-y-3">
-      <div className="space-y-2">
-        {options.map((opt, i) => (
-          <div
-            key={i}
-            className="rounded-2xl border border-zinc-200 bg-white p-3 transition-colors duration-150"
-          >
-            {/* ── Row: sm+ 6-col grid; mobile stacked ── */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-3">
-
-              {/* Label + Value — span 2 cols on sm */}
-              <div className="flex gap-2 flex-1 min-w-0 sm:basis-0 sm:grow-[2]">
-                <div className="flex-1 min-w-0">
-                  <label className={lbl} htmlFor={`opt-label-${i}`}>Label</label>
-                  <Input
-                    id={`opt-label-${i}`}
-                    placeholder="Display name"
-                    value={opt.label}
-                    onChange={(e) =>
-                      updateOption(i, {
-                        label: e.target.value,
-                        value: e.target.value.toLowerCase().replace(/\s+/g, "-"),
-                      })
-                    }
-                    className="h-10 rounded-lg border-zinc-200 focus:ring-2 transition-colors duration-150"
-                    style={{ ["--tw-ring-color" as string]: BRAND.blue + "55" }}
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <label className={lbl} htmlFor={`opt-value-${i}`}>Value</label>
-                  <Input
-                    id={`opt-value-${i}`}
-                    placeholder="slug-key"
-                    value={opt.value}
-                    onChange={(e) => updateOption(i, { value: e.target.value })}
-                    className="h-10 rounded-lg border-zinc-200 font-mono text-xs focus:ring-2 transition-colors duration-150"
-                    style={{ ["--tw-ring-color" as string]: BRAND.blue + "55" }}
-                  />
-                </div>
-              </div>
-
-              {/* Price / +Add / SKU — 2-col on mobile, 3 equal cols on sm */}
-              <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-3 sm:basis-0 sm:grow-[3]">
-                <div className="min-w-0">
-                  <label className={lbl} htmlFor={`opt-price-${i}`}>Price (RM)</label>
-                  <Input
-                    id={`opt-price-${i}`}
-                    placeholder="—"
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    value={opt.price ?? ""}
-                    onChange={(e) =>
-                      updateOption(i, {
-                        price: e.target.value === "" ? undefined : Number(e.target.value),
-                      })
-                    }
-                    className="h-10 rounded-lg border-zinc-200 focus:ring-2 transition-colors duration-150"
-                    style={{ ["--tw-ring-color" as string]: BRAND.blue + "55" }}
-                    title="Override price — replaces the tier price when this option is selected"
-                  />
-                </div>
-                <div className="min-w-0">
-                  <label className={lbl} htmlFor={`opt-priceadd-${i}`}>+Add (RM)</label>
-                  <Input
-                    id={`opt-priceadd-${i}`}
-                    placeholder="—"
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    value={opt.priceAdd ?? ""}
-                    onChange={(e) =>
-                      updateOption(i, {
-                        priceAdd: e.target.value === "" ? undefined : Number(e.target.value),
-                      })
-                    }
-                    className="h-10 rounded-lg border-zinc-200 focus:ring-2 transition-colors duration-150"
-                    style={{ ["--tw-ring-color" as string]: BRAND.blue + "55" }}
-                    title="Additive price shown in the dropdown label (+RM X)"
-                  />
-                </div>
-                <div className="min-w-0 col-span-2 sm:col-span-1">
-                  <label className={lbl} htmlFor={`opt-sku-${i}`}>SKU</label>
-                  <Input
-                    id={`opt-sku-${i}`}
-                    placeholder="SKU-001"
-                    value={opt.sku ?? ""}
-                    onChange={(e) =>
-                      updateOption(i, { sku: e.target.value || undefined })
-                    }
-                    className="h-10 rounded-lg border-zinc-200 font-mono text-xs focus:ring-2 transition-colors duration-150"
-                    style={{ ["--tw-ring-color" as string]: BRAND.blue + "55" }}
-                    title="SKU for this option value (for order fulfilment)"
-                  />
-                </div>
-              </div>
-
-              {/* Image + Delete — side by side, right-aligned */}
-              <div className="flex items-end gap-2 shrink-0">
-                <div>
-                  <span className={lbl}>Image</span>
-                  <SelectOptionImageCell
-                    opt={opt}
-                    fieldId={fieldId}
-                    onImageUrl={(url) => updateOption(i, { imageUrl: url })}
-                    onSaveFieldFirst={onSaveFieldFirst}
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeOption(i)}
-                  className="flex items-center justify-center rounded-lg border border-zinc-200 text-red-400 hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors duration-150 disabled:opacity-30"
-                  style={{ width: 40, height: 40 }}
-                  aria-label="Remove option"
-                  disabled={options.length <= 1}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
+    <div className="space-y-1">
+      {/* Column header row */}
+      <div className="flex items-center gap-2 pb-1">
+        <span className="flex-1 min-w-0 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Label / Value</span>
+        <span className="w-20 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Price RM</span>
+        <span className="w-20 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">+Add RM</span>
+        <span className="w-24 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">SKU</span>
+        {/* image + delete placeholders */}
+        <span className="w-10" />
+        <span className="w-8" />
       </div>
+
+      {options.map((opt, i) => (
+        <div
+          key={i}
+          className="flex flex-wrap items-center gap-2 py-2 border-b border-zinc-100 last:border-b-0"
+        >
+          {/* Label input — flex-1, auto-fills slug into value */}
+          <Input
+            placeholder="Label"
+            value={opt.label}
+            onChange={(e) =>
+              updateOption(i, {
+                label: e.target.value,
+                value: e.target.value.toLowerCase().replace(/\s+/g, "-"),
+              })
+            }
+            className="h-9 flex-1 min-w-[120px]"
+            title="Display label for this option"
+            aria-label={`Option ${i + 1} label`}
+          />
+
+          {/* Price override */}
+          <Input
+            placeholder="—"
+            type="number"
+            min={0}
+            step={0.01}
+            value={opt.price ?? ""}
+            onChange={(e) =>
+              updateOption(i, {
+                price: e.target.value === "" ? undefined : Number(e.target.value),
+              })
+            }
+            className="h-9 w-20"
+            title="Override price — replaces the tier price when this option is selected"
+            aria-label={`Option ${i + 1} price override (RM)`}
+          />
+
+          {/* Additive price */}
+          <Input
+            placeholder="—"
+            type="number"
+            min={0}
+            step={0.01}
+            value={opt.priceAdd ?? ""}
+            onChange={(e) =>
+              updateOption(i, {
+                priceAdd: e.target.value === "" ? undefined : Number(e.target.value),
+              })
+            }
+            className="h-9 w-20"
+            title="Additive price shown in the dropdown label (+RM X)"
+            aria-label={`Option ${i + 1} price add (RM)`}
+          />
+
+          {/* SKU */}
+          <Input
+            placeholder="SKU-001"
+            value={opt.sku ?? ""}
+            onChange={(e) =>
+              updateOption(i, { sku: e.target.value || undefined })
+            }
+            className="h-9 w-24 font-mono text-xs"
+            title="SKU for this option (for order fulfilment)"
+            aria-label={`Option ${i + 1} SKU`}
+          />
+
+          {/* Image — 40×40 button */}
+          <SelectOptionImageCell
+            opt={opt}
+            fieldId={fieldId}
+            onImageUrl={(url) => updateOption(i, { imageUrl: url })}
+          />
+
+          {/* Delete */}
+          <button
+            type="button"
+            onClick={() => removeOption(i)}
+            className="flex items-center justify-center rounded text-zinc-400 hover:text-red-500 transition-colors duration-150 disabled:opacity-30 shrink-0"
+            style={{ width: 28, height: 36 }}
+            aria-label="Remove option"
+            disabled={options.length <= 1}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ))}
 
       <button
         type="button"
         onClick={addOption}
-        className="flex items-center gap-1.5 text-sm font-medium rounded-lg border px-3 py-2 hover:bg-slate-50 transition-colors duration-150 min-h-[40px]"
+        className="mt-2 flex items-center gap-1.5 text-sm font-medium rounded border px-3 py-1.5 hover:bg-slate-50 transition-colors duration-150"
         style={{ borderColor: BRAND.green, color: BRAND.green }}
       >
-        <Plus className="h-4 w-4" />
+        <Plus className="h-3.5 w-3.5" />
         Add option
       </button>
 
@@ -618,12 +581,12 @@ export function SelectConfigForm({
         <p className="text-xs text-red-500">At least one option is required</p>
       )}
 
-      <p className="text-xs text-zinc-400">
-        <strong>Price (RM)</strong> overrides the product tier price for this option.{" "}
-        <strong>+Add</strong> is cosmetic only (shown in the dropdown label).{" "}
+      <p className="text-xs text-zinc-400 pt-1">
+        <strong>Price RM</strong> overrides the tier price.{" "}
+        <strong>+Add</strong> is cosmetic (shown in dropdown label).{" "}
         {!fieldId && (
           <span className="text-amber-600 font-medium">
-            Save this field once to unlock image upload per option.
+            Save this field once to unlock image upload.
           </span>
         )}
       </p>
