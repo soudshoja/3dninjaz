@@ -47,6 +47,7 @@ export default async function CheckoutPage() {
           defaultName={user.name ?? ""}
           defaultEmail={user.email}
           savedAddresses={savedAddresses}
+          userId={user.id}
         />
       </div>
     </main>

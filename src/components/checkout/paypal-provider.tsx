@@ -18,6 +18,7 @@ import {
 } from "./shipping-rate-picker";
 import type { SavedAddress } from "@/actions/addresses";
 import type { AppliedCoupon } from "@/components/store/coupon-apply";
+import { clearDraft } from "@/stores/checkout-draft-store";
 
 /**
  * Client-side checkout island (D3-04). Wraps everything in PayPalScriptProvider
@@ -39,10 +40,13 @@ export function CheckoutIsland({
   defaultName,
   defaultEmail: _defaultEmail,
   savedAddresses,
+  userId,
 }: {
   defaultName: string;
   defaultEmail: string;
   savedAddresses?: SavedAddress[];
+  /** Logged-in user id — forwarded to AddressForm for draft persistence. */
+  userId: string;
 }) {
   const router = useRouter();
   const storeItems = useCartStore((s) => s.items);
@@ -106,6 +110,8 @@ export function CheckoutIsland({
     // D3-10: clear the bag BEFORE navigating so the confirmation page renders
     // with an empty bag drawer.
     useCartStore.getState().clear();
+    // Clear the address draft — order is complete, no need to restore.
+    clearDraft(userId);
     router.push(redirectTo);
   };
 
@@ -127,6 +133,7 @@ export function CheckoutIsland({
             defaultName={defaultName}
             onValidChange={setAddress}
             savedAddresses={savedAddresses}
+            userId={userId}
           />
 
           {/* Phase 9b — shipping-rate picker. Renders only once the address is
