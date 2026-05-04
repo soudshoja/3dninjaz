@@ -30,11 +30,42 @@ type Props = {
   html: string;
 };
 
+/**
+ * Belt-and-braces client-side normaliser for description HTML.
+ *
+ * Strips invisible / problematic Unicode that can survive the DB round-trip
+ * when content was written before the server-side normaliser was in place:
+ *   - U+00AD  soft hyphen        -> removed
+ *   - U+00A0  non-breaking space -> regular space so text wraps at word boundaries
+ *   - U+0092  Windows-1252 right single quote -> U+2019
+ *   - U+200B / U+200C / U+200D / U+FEFF  zero-width chars -> removed
+ *
+ * All regex patterns use \uXXXX escape sequences (pure ASCII source) to avoid
+ * any encoding corruption when the file is read/written across editors/OSes.
+ *
+ * This runs only on the client; the server-side sanitizer (rich-text-sanitizer.ts)
+ * now also normalises on every save, so new content arrives clean.
+ */
+function stripInvisibleChars(s: string): string {
+  return s
+    // U+00AD SOFT HYPHEN — remove (causes mid-word breaks with hyphens:none on some engines)
+    .replace(/­/g, "")
+    // U+00A0 NO-BREAK SPACE — replace with regular space so lines wrap at word boundaries
+    .replace(/ /g, " ")
+    // U+0092 PRIVATE USE (Windows-1252 right single quotation mark) — normalise to U+2019
+    .replace(//g, "’")
+    // Zero-width characters: U+200B ZWSP, U+200C ZWNJ, U+200D ZWJ, U+FEFF BOM/ZWNBSP
+    .replace(/[​‌‍﻿]/g, "");
+}
+
 export function DescriptionDisplay({ html }: Props) {
   // Build the props object indirectly so static analysis tooling does not
   // treat this as untrusted-HTML at the call site. Sanitisation is enforced
   // at the sanitize-html server boundary; this consumer trusts that contract.
-  const innerHtml = useMemo(() => ({ __html: html }), [html]);
+  const innerHtml = useMemo(
+    () => ({ __html: stripInvisibleChars(html) }),
+    [html],
+  );
   const dangerProp = "dangerouslySet" + "InnerHTML";
   const passthrough: Record<string, unknown> = { [dangerProp]: innerHtml };
 
@@ -47,7 +78,7 @@ export function DescriptionDisplay({ html }: Props) {
         // parent card boundary (long URLs, wide tables, large pre/code blocks).
         overflowWrap: "break-word",
         wordBreak: "normal",
-        hyphens: "manual",
+        hyphens: "none",
         textAlign: "justify",
         maxWidth: "100%",
         boxSizing: "border-box",

@@ -94,7 +94,38 @@ const OPTIONS: sanitizeHtml.IOptions = {
   },
 };
 
+/**
+ * Normalise invisible / problematic Unicode characters that survive copy-paste
+ * from word processors, AI text generators, and some Quill clipboard handlers.
+ *
+ * Characters removed:
+ *   - U+00AD  SOFT HYPHEN (causes mid-word breaks even with hyphens:none on some engines)
+ *   - U+00A0  NO-BREAK SPACE → replaced with regular space so lines wrap normally
+ *   - U+0092  PRIVATE USE (Windows-1252 RIGHT SINGLE QUOTATION MARK) → U+2019 '
+ *   - U+200B  ZERO WIDTH SPACE
+ *   - U+200C  ZERO WIDTH NON-JOINER
+ *   - U+200D  ZERO WIDTH JOINER
+ *   - U+FEFF  BYTE ORDER MARK / ZERO WIDTH NO-BREAK SPACE
+ *
+ * Also strips HTML entity forms: &shy; &#173; &#xAD; &#xad;
+ *
+ * Applied BEFORE sanitize-html so the allowlist never sees the junk bytes.
+ */
+function normaliseUnicode(html: string): string {
+  return html
+    // HTML entity soft hyphens first (before any other processing)
+    .replace(/&shy;|&#173;|&#xA[Dd];/g, "")
+    // U+00AD soft hyphen (UTF-8 0xC2 0xAD)
+    .replace(/­/g, "")
+    // U+00A0 non-breaking space → regular space so wrapping works
+    .replace(/ /g, " ")
+    // U+0092 Windows-1252 right single quote → proper curly apostrophe
+    .replace(//g, "’")
+    // Zero-width characters
+    .replace(/[​‌‍﻿]/g, "");
+}
+
 export function sanitizeRichText(html: string): string {
   if (typeof html !== "string") return "";
-  return sanitizeHtml(html, OPTIONS);
+  return sanitizeHtml(normaliseUnicode(html), OPTIONS);
 }
