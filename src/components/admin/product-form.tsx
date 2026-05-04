@@ -171,6 +171,7 @@ export function ProductForm({
   );
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -295,10 +296,15 @@ export function ProductForm({
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitError(null);
+    setSubmitAttempted(true);
 
     const problem = validate();
     if (problem) {
       setSubmitError(problem);
+      // Scroll to the error summary banner
+      setTimeout(() => {
+        document.getElementById("form-error-summary")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 50);
       return;
     }
 
@@ -401,6 +407,17 @@ export function ProductForm({
     });
   }
 
+  // Build ordered list of error entries for the summary banner.
+  const errorEntries = Object.entries(errors).filter(([, msg]) => !!msg);
+  // Map field keys to anchor ids and human labels for the summary banner.
+  const fieldMeta: Record<string, { label: string; anchorId: string }> = {
+    name: { label: "Product Name", anchorId: "field-name" },
+    description: { label: "Description", anchorId: "field-description" },
+    productionDays: { label: "Estimated Production Days", anchorId: "field-productionDays" },
+    simplePrice: { label: "Price", anchorId: "field-simplePrice" },
+    images: { label: "Images", anchorId: "field-images" },
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Quick task 260430-kmr — autosave restore banner. Renders only when a
@@ -412,6 +429,45 @@ export function ProductForm({
           onRestore={restoreDraft}
           onDiscard={discardDraft}
         />
+      )}
+
+      {/* Red error summary banner — shown after first submit attempt when errors exist */}
+      {submitAttempted && errorEntries.length > 0 && (
+        <div
+          id="form-error-summary"
+          role="alert"
+          className="rounded-lg border border-red-300 bg-red-50 p-4"
+        >
+          <p className="mb-2 text-sm font-semibold text-red-700">
+            Please fix {errorEntries.length} error{errorEntries.length !== 1 ? "s" : ""} before saving:
+          </p>
+          <ul className="list-disc space-y-1 pl-5">
+            {errorEntries.map(([key, msg]) => {
+              const meta = fieldMeta[key];
+              return (
+                <li key={key} className="text-sm text-red-600">
+                  {meta ? (
+                    <button
+                      type="button"
+                      className="underline hover:no-underline text-left"
+                      onClick={() => {
+                        const el = document.getElementById(meta.anchorId);
+                        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                        el?.focus();
+                      }}
+                    >
+                      {meta.label}
+                    </button>
+                  ) : (
+                    <span className="font-medium">{key}</span>
+                  )}
+                  {": "}
+                  {msg}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
       {/* Phase 19 (19-03) — Product type radio: must be first child of form */}
       <Card>
@@ -438,32 +494,51 @@ export function ProductForm({
           <CardTitle>Basic Info</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Product Name</Label>
+          <div id="field-name" className="space-y-2">
+            <Label
+              htmlFor="name"
+              className={errors.name ? "text-red-600" : ""}
+            >
+              Product Name
+              <span className="ml-0.5 text-red-500" aria-hidden="true"> *</span>
+            </Label>
             <Input
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
               maxLength={100}
-              className="h-10"
+              aria-invalid={!!errors.name}
+              className={
+                errors.name
+                  ? "h-10 border-red-500 ring-2 ring-red-500/30 focus-visible:ring-red-500/40"
+                  : "h-10"
+              }
             />
             {errors.name && (
-              <p className="text-sm text-red-500">{errors.name}</p>
+              <p className="text-sm text-red-600" role="alert">{errors.name}</p>
             )}
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
+          <div id="field-description" className="space-y-2">
+            <Label
+              htmlFor="description"
+              className={errors.description ? "text-red-600" : ""}
+            >
+              Description
+              <span className="ml-0.5 text-red-500" aria-hidden="true"> *</span>
+            </Label>
             {/* Quick task 260430-kmr — Quill rich-text editor for description on
                 ALL product types. Output is HTML; sanitised server-side via
                 sanitizeRichText() in src/actions/products.ts on every save. */}
-            <NovelRichTextEditor
-              value={description}
-              onChange={setDescription}
-              customFonts={customFonts}
-            />
+            <div className={errors.description ? "rounded-md ring-2 ring-red-500/30" : ""}>
+              <NovelRichTextEditor
+                value={description}
+                onChange={setDescription}
+                customFonts={customFonts}
+              />
+            </div>
             {errors.description && (
-              <p className="text-sm text-red-500">{errors.description}</p>
+              <p className="text-sm text-red-600" role="alert">{errors.description}</p>
             )}
           </div>
           <div className="grid gap-4 md:grid-cols-2">
@@ -551,35 +626,37 @@ export function ProductForm({
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <ImageUploader
-            images={images}
-            onImagesChange={(nextOrUpdater) => {
-              // nextOrUpdater may be a plain array (remove / foreground upload)
-              // or a functional updater (background parallel uploads).
-              setImages((prev) => {
-                const next =
-                  typeof nextOrUpdater === "function"
-                    ? nextOrUpdater(prev)
-                    : nextOrUpdater;
-                // Keep captions array in sync: prune removed entries, pad new ones.
-                setCaptions((prevCaptions) =>
-                  next.map((url) => {
-                    const idx = prev.indexOf(url);
-                    return idx >= 0 ? (prevCaptions[idx] ?? "") : "";
-                  }),
-                );
-                return next;
-              });
-            }}
-            productId={effectiveProductId}
-            maxImages={999}
-            thumbnailIndex={thumbnailIndex}
-            onThumbnailChange={setThumbnailIndex}
-            captions={captions}
-            onCaptionsChange={setCaptions}
-          />
+          <div id="field-images">
+            <ImageUploader
+              images={images}
+              onImagesChange={(nextOrUpdater) => {
+                // nextOrUpdater may be a plain array (remove / foreground upload)
+                // or a functional updater (background parallel uploads).
+                setImages((prev) => {
+                  const next =
+                    typeof nextOrUpdater === "function"
+                      ? nextOrUpdater(prev)
+                      : nextOrUpdater;
+                  // Keep captions array in sync: prune removed entries, pad new ones.
+                  setCaptions((prevCaptions) =>
+                    next.map((url) => {
+                      const idx = prev.indexOf(url);
+                      return idx >= 0 ? (prevCaptions[idx] ?? "") : "";
+                    }),
+                  );
+                  return next;
+                });
+              }}
+              productId={effectiveProductId}
+              maxImages={999}
+              thumbnailIndex={thumbnailIndex}
+              onThumbnailChange={setThumbnailIndex}
+              captions={captions}
+              onCaptionsChange={setCaptions}
+            />
+          </div>
           {errors.images && (
-            <p className="mt-2 text-sm text-red-500">{errors.images}</p>
+            <p className="mt-2 text-sm text-red-600" role="alert">{errors.images}</p>
           )}
         </CardContent>
       </Card>
@@ -631,7 +708,7 @@ export function ProductForm({
       {/* Surface the simple-product price validation error inline (the editor
           owns the input but errors flow through the form's errors map). */}
       {productType === "simple" && errors.simplePrice && (
-        <p className="text-sm text-red-500" role="alert">
+        <p id="field-simplePrice" className="text-sm text-red-600" role="alert">
           {errors.simplePrice}
         </p>
       )}
@@ -690,8 +767,13 @@ export function ProductForm({
               className="h-10"
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="productionDays">Estimated Production Days</Label>
+          <div id="field-productionDays" className="space-y-2">
+            <Label
+              htmlFor="productionDays"
+              className={errors.productionDays ? "text-red-600" : ""}
+            >
+              Estimated Production Days
+            </Label>
             <Input
               id="productionDays"
               type="text"
@@ -699,10 +781,15 @@ export function ProductForm({
               value={productionDays}
               onChange={(e) => setProductionDays(e.target.value)}
               placeholder="e.g. 3"
-              className="h-10"
+              aria-invalid={!!errors.productionDays}
+              className={
+                errors.productionDays
+                  ? "h-10 border-red-500 ring-2 ring-red-500/30 focus-visible:ring-red-500/40"
+                  : "h-10"
+              }
             />
             {errors.productionDays && (
-              <p className="text-sm text-red-500">{errors.productionDays}</p>
+              <p className="text-sm text-red-600" role="alert">{errors.productionDays}</p>
             )}
           </div>
         </CardContent>
@@ -735,8 +822,8 @@ export function ProductForm({
         </CardContent>
       </Card>
 
-      {submitError && (
-        <p className="text-sm text-red-500" role="alert">
+      {submitError && !errorEntries.length && (
+        <p className="text-sm text-red-600" role="alert">
           {submitError}
         </p>
       )}
@@ -762,16 +849,22 @@ export function ProductForm({
         <Button
           type="submit"
           disabled={pending}
-          className="h-10 gap-2 bg-[var(--color-brand-cta)] px-5 text-white hover:bg-[var(--color-brand-cta)]/90"
+          className={
+            submitAttempted && errorEntries.length > 0
+              ? "h-10 gap-2 bg-red-600 px-5 text-white hover:bg-red-700"
+              : "h-10 gap-2 bg-[var(--color-brand-cta)] px-5 text-white hover:bg-[var(--color-brand-cta)]/90"
+          }
         >
           <Save className="h-4 w-4" />
           {pending
             ? editing
               ? "Updating..."
               : "Creating..."
-            : editing
-              ? "Update Product"
-              : "Create Product"}
+            : submitAttempted && errorEntries.length > 0
+              ? "Fix errors first"
+              : editing
+                ? "Update Product"
+                : "Create Product"}
         </Button>
       </div>
     </form>

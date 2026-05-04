@@ -81,9 +81,15 @@ export default async function EditProductPage({
   // Quick task 260430-kmr — hydrate config fields for simple + configurable
   // so the inline fields editor renders pre-filled. Other types manage fields
   // via /configurator (keychain/vending) or /variants (stocked).
+  // Wrapped in try/catch mirroring the getActiveCustomFontsForLoader pattern:
+  // getConfiguratorData calls requireAdmin() internally; if the session is
+  // transiently unavailable during RSC render the page must still load (the
+  // fields editor simply starts empty and the admin can still save basic info).
   const initialFields =
     productType === "simple" || productType === "configurable"
-      ? (await getConfiguratorData(id)).fields
+      ? await getConfiguratorData(id)
+          .then((d) => d.fields)
+          .catch(() => [] as import("@/actions/configurator").ConfigField[])
       : undefined;
 
   // Header price chip — visible regardless of product type so admin sees
