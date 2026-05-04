@@ -52,28 +52,28 @@ export default async function HomePage({
           <h2
             className="font-[var(--font-heading)] text-3xl md:text-5xl text-center mb-12 text-zinc-900"
           >
-            3 STEPS. <span style={{ color: BRAND.green }}>NO JUTSU REQUIRED.</span>
+            3 STEPS. <span style={{ color: BRAND.green }}>NO NINJA SKILLS NEEDED.</span>
           </h2>
           <ol className="grid md:grid-cols-3 gap-6">
             {[
               {
                 n: "01",
                 t: "Browse",
-                d: "Scroll and checkout all our latest products",
+                d: "Explore our collection of unique 3D printed products.",
                 c: BRAND.blue,
                 icon: "/icons/ninja/nav/shop@128.png",
               },
               {
                 n: "02",
                 t: "Select",
-                d: "choose your favourite products or customise and add to cart",
+                d: "Pick your favourite, choose a size, and add it to your bag.",
                 c: BRAND.green,
                 icon: "/icons/ninja/emoji/tip@128.png",
               },
               {
                 n: "03",
                 t: "Checkout",
-                d: "Pay using PayPal safe and Secure payment method available. Shipping across Malaysia",
+                d: "Pay securely with PayPal. We ship across Malaysia.",
                 c: BRAND.purple,
                 icon: "/icons/ninja/nav/download@128.png",
               },
