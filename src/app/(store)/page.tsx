@@ -66,7 +66,7 @@ export default async function HomePage({
               {
                 n: "02",
                 t: "Select",
-                d: "Pick your favourite, choose a size, and add it to your bag.",
+                d: "Pick your favourite, choose your options, and add it to your bag.",
                 c: BRAND.green,
                 icon: "/icons/ninja/emoji/tip@128.png",
               },
