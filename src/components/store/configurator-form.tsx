@@ -19,6 +19,7 @@
 import { useRef } from "react";
 import { Check } from "lucide-react";
 import { BRAND } from "@/lib/brand";
+import { VariantOptionPicker } from "@/components/store/variant-option-picker";
 import type { PublicConfigField } from "@/lib/configurable-product-data";
 import type {
   TextFieldConfig,
@@ -331,8 +332,7 @@ function SelectField({
 }) {
   const cfg = field.config as SelectFieldConfig;
 
-  function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const v = e.currentTarget.value;
+  function handleChange(v: string) {
     onChange(v);
     if (!touched.current && v) {
       touched.current = true;
@@ -340,57 +340,15 @@ function SelectField({
     }
   }
 
-  // Find the currently selected option to surface its image (if any).
-  const selectedOpt = value ? cfg.options.find((o) => o.value === value) : undefined;
-  const selectedImageUrl = selectedOpt?.imageUrl ?? null;
-  // Resolve a displayable src from the base URL (writeUpload returns a directory base URL).
-  const imageSrc = selectedImageUrl
-    ? selectedImageUrl.endsWith("/")
-      ? selectedImageUrl + "400w.jpg"
-      : selectedImageUrl + "/400w.jpg"
-    : null;
-
   return (
     <div className="flex flex-col gap-1.5">
-      <select
+      <VariantOptionPicker
+        options={cfg.options}
         value={value}
         onChange={handleChange}
-        className="w-full px-5 py-4 rounded-2xl text-base font-semibold outline-none transition-all duration-200 cursor-pointer appearance-none"
-        style={{
-          minHeight: 56,
-          background: "#fff",
-          border: `2.5px solid ${value ? BRAND.blue : "#d1d5db"}`,
-          color: value ? BRAND.ink : "#9ca3af",
-          boxShadow: value ? `0 0 0 3px ${BRAND.blue}20, 0 4px 0 ${BRAND.blueDark}30` : `0 2px 0 #d1d5db40`,
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
-          backgroundRepeat: "no-repeat",
-          backgroundPosition: "right 16px center",
-          paddingRight: 44,
-        }}
-        aria-label={field.label}
-        aria-required={field.required}
-      >
-        <option value="">Select {field.label.toLowerCase()}…</option>
-        {cfg.options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-            {opt.priceAdd ? ` (+RM ${opt.priceAdd.toFixed(2)})` : ""}
-          </option>
-        ))}
-      </select>
-      {/* Per-option image preview — shown when the selected option has an imageUrl */}
-      {imageSrc && (
-        <div className="mt-1 rounded-xl overflow-hidden border border-slate-200" style={{ maxWidth: 200 }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={imageSrc}
-            alt={selectedOpt?.label ?? field.label}
-            className="w-full object-cover"
-            style={{ maxHeight: 160 }}
-            onError={(e) => { (e.currentTarget as HTMLImageElement).parentElement!.style.display = "none"; }}
-          />
-        </div>
-      )}
+        label={field.label}
+        placeholder={`Select ${field.label.toLowerCase()}…`}
+      />
       {field.helpText ? (
         <p className="text-xs px-1" style={{ color: "#6b7280" }}>{field.helpText}</p>
       ) : null}
