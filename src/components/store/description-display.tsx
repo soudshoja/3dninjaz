@@ -47,7 +47,7 @@ export function DescriptionDisplay({ html }: Props) {
         // parent card boundary (long URLs, wide tables, large pre/code blocks).
         overflowWrap: "break-word",
         wordBreak: "normal",
-        hyphens: "auto",
+        hyphens: "manual",
         maxWidth: "100%",
         boxSizing: "border-box",
       }}
