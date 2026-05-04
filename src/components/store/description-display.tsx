@@ -48,6 +48,7 @@ export function DescriptionDisplay({ html }: Props) {
         overflowWrap: "break-word",
         wordBreak: "normal",
         hyphens: "manual",
+        textAlign: "justify",
         maxWidth: "100%",
         boxSizing: "border-box",
       }}
