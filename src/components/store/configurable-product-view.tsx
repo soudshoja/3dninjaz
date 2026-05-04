@@ -22,7 +22,7 @@ import Image from "next/image";
 import { ShoppingBag, Heart } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
-import { lookupTierPrice } from "@/lib/config-fields";
+import { lookupTierPrice, type SelectFieldConfig } from "@/lib/config-fields";
 import { useCartStore } from "@/stores/cart-store";
 import { ConfiguratorForm } from "@/components/store/configurator-form";
 import { ConfigurableImageGallery } from "@/components/store/configurable-image-gallery";
@@ -183,7 +183,26 @@ export function ConfigurableProductView({
 
   const unitFieldValue = unitFieldId ? (values[unitFieldId] ?? "") : "";
 
+  // If any select field has a selected option with a `price` override, use it
+  // as the effective price (last one wins if multiple selects have overrides).
+  const selectPriceOverride: number | null = useMemo(() => {
+    const selectFields = fields.filter((f) => f.fieldType === "select");
+    let override: number | null = null;
+    for (const f of selectFields) {
+      const selectedValue = values[f.id];
+      if (!selectedValue) continue;
+      const cfg = f.config as SelectFieldConfig;
+      const opt = cfg.options.find((o) => o.value === selectedValue);
+      if (opt?.price !== undefined && opt.price >= 0) {
+        override = opt.price;
+      }
+    }
+    return override;
+  }, [fields, values]);
+
   const currentPrice: number | null = useMemo(() => {
+    // Per-option price override takes precedence over tier pricing.
+    if (selectPriceOverride !== null) return selectPriceOverride;
     if (unitField && unitFieldId) {
       return lookupTierPrice(priceTiers, unitFieldValue);
     }
@@ -192,7 +211,7 @@ export function ConfigurableProductView({
       return priceTiers[String(minKey)];
     }
     return null;
-  }, [priceTiers, unitField, unitFieldId, unitFieldValue]);
+  }, [priceTiers, unitField, unitFieldId, unitFieldValue, selectPriceOverride]);
 
   const outOfTable =
     unitField !== null &&

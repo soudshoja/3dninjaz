@@ -340,6 +340,16 @@ function SelectField({
     }
   }
 
+  // Find the currently selected option to surface its image (if any).
+  const selectedOpt = value ? cfg.options.find((o) => o.value === value) : undefined;
+  const selectedImageUrl = selectedOpt?.imageUrl ?? null;
+  // Resolve a displayable src from the base URL (writeUpload returns a directory base URL).
+  const imageSrc = selectedImageUrl
+    ? selectedImageUrl.endsWith("/")
+      ? selectedImageUrl + "400w.jpg"
+      : selectedImageUrl + "/400w.jpg"
+    : null;
+
   return (
     <div className="flex flex-col gap-1.5">
       <select
@@ -368,6 +378,19 @@ function SelectField({
           </option>
         ))}
       </select>
+      {/* Per-option image preview — shown when the selected option has an imageUrl */}
+      {imageSrc && (
+        <div className="mt-1 rounded-xl overflow-hidden border border-slate-200" style={{ maxWidth: 200 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={imageSrc}
+            alt={selectedOpt?.label ?? field.label}
+            className="w-full object-cover"
+            style={{ maxHeight: 160 }}
+            onError={(e) => { (e.currentTarget as HTMLImageElement).parentElement!.style.display = "none"; }}
+          />
+        </div>
+      )}
       {field.helpText ? (
         <p className="text-xs px-1" style={{ color: "#6b7280" }}>{field.helpText}</p>
       ) : null}

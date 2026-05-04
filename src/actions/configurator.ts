@@ -20,10 +20,12 @@ import {
   type FieldType,
   type AnyFieldConfig,
   type TextareaFieldConfig,
+  type SelectFieldConfig,
 } from "@/lib/config-fields";
 // Quick task 260430-icx — textarea sanitisation at the action layer.
 // Server-only import; importing into a client module fails at build time.
 import { sanitizeRichText } from "@/lib/rich-text-sanitizer";
+import { writeUpload, deleteUpload } from "@/lib/storage";
 
 // ============================================================================
 // Types
@@ -507,6 +509,133 @@ export async function saveTierTable(
 
   revalidatePath(`/admin/products/${productId}/configurator`);
   if (prod) revalidatePath(`/products/${prod.slug}`);
+
+  return { ok: true as const };
+}
+
+// ============================================================================
+// Per-option image upload for Select fields
+// ============================================================================
+
+/**
+ * Upload an image for a specific option value inside a Select config field.
+ *
+ * Reads the field's configJson, finds the option by `optionValue`, writes the
+ * image via the standard writeUpload pipeline (bucket = productId), persists
+ * the new imageUrl into the option, and saves back via updateConfigField.
+ *
+ * Old image is best-effort deleted from disk after DB update succeeds.
+ * Pattern A — caller should optimistically update local state and roll back
+ * on error (same pattern as uploadVariantImage in src/actions/variants.ts).
+ */
+export async function uploadSelectOptionImage(
+  fieldId: string,
+  optionValue: string,
+  formData: FormData,
+): Promise<{ ok: true; imageUrl: string } | { ok: false; error: string }> {
+  await requireAdmin();
+
+  const file = formData.get("file");
+  if (!(file instanceof File)) return { ok: false as const, error: "No file provided" };
+
+  // Fetch field row
+  const [row] = await db
+    .select()
+    .from(productConfigFields)
+    .where(eq(productConfigFields.id, fieldId))
+    .limit(1);
+  if (!row) return { ok: false as const, error: "Field not found" };
+  if (row.fieldType !== "select") return { ok: false as const, error: "Field is not a select type" };
+
+  // Fetch productId for the upload bucket and PDP revalidation
+  const productId = row.productId;
+
+  // Parse current config
+  let cfg: SelectFieldConfig;
+  try {
+    cfg = ensureConfigJson("select", row.configJson) as SelectFieldConfig;
+  } catch {
+    return { ok: false as const, error: "Failed to parse field config" };
+  }
+
+  const optIndex = cfg.options.findIndex((o) => o.value === optionValue);
+  if (optIndex === -1) return { ok: false as const, error: `Option "${optionValue}" not found` };
+
+  const oldImageUrl = cfg.options[optIndex].imageUrl ?? null;
+
+  // Write the new image
+  let newUrl: string;
+  try {
+    newUrl = await writeUpload(productId, file);
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : "Upload failed" };
+  }
+
+  // Patch the option in config
+  const updatedOptions = cfg.options.map((o, i) =>
+    i === optIndex ? { ...o, imageUrl: newUrl } : o,
+  );
+  const updatedConfig: SelectFieldConfig = { options: updatedOptions };
+
+  // Persist via updateConfigField (re-validates + saves configJson)
+  const saveResult = await updateConfigField(fieldId, { config: updatedConfig });
+  if (!saveResult.ok) {
+    // Rollback the newly written file
+    await deleteUpload(newUrl).catch(() => {});
+    return { ok: false as const, error: saveResult.error };
+  }
+
+  // Best-effort delete old image
+  if (oldImageUrl) {
+    await deleteUpload(oldImageUrl).catch(() => {});
+  }
+
+  return { ok: true as const, imageUrl: newUrl };
+}
+
+/**
+ * Remove the image from a specific option value inside a Select config field.
+ * Best-effort deletes the file from disk; always clears imageUrl from config.
+ */
+export async function removeSelectOptionImage(
+  fieldId: string,
+  optionValue: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
+
+  const [row] = await db
+    .select()
+    .from(productConfigFields)
+    .where(eq(productConfigFields.id, fieldId))
+    .limit(1);
+  if (!row) return { ok: false as const, error: "Field not found" };
+  if (row.fieldType !== "select") return { ok: false as const, error: "Field is not a select type" };
+
+  let cfg: SelectFieldConfig;
+  try {
+    cfg = ensureConfigJson("select", row.configJson) as SelectFieldConfig;
+  } catch {
+    return { ok: false as const, error: "Failed to parse field config" };
+  }
+
+  const optIndex = cfg.options.findIndex((o) => o.value === optionValue);
+  if (optIndex === -1) return { ok: false as const, error: `Option "${optionValue}" not found` };
+
+  const oldImageUrl = cfg.options[optIndex].imageUrl ?? null;
+
+  const updatedOptions = cfg.options.map((o, i) => {
+    if (i !== optIndex) return o;
+    const { imageUrl: _dropped, ...rest } = o;
+    return rest;
+  });
+  const updatedConfig: SelectFieldConfig = { options: updatedOptions };
+
+  const saveResult = await updateConfigField(fieldId, { config: updatedConfig });
+  if (!saveResult.ok) return { ok: false as const, error: saveResult.error };
+
+  if (oldImageUrl) {
+    await deleteUpload(oldImageUrl).catch(() => {});
+  }
 
   return { ok: true as const };
 }

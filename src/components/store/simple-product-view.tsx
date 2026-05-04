@@ -41,7 +41,7 @@ import { PdpProductCare, PdpColourNote } from "@/components/store/pdp-info-block
 import type { PublicConfigField } from "@/lib/configurable-product-data";
 import type { HydratedOption, HydratedVariant } from "@/lib/variants";
 import type { PictureData } from "@/lib/image-manifest";
-import type { TextareaFieldConfig } from "@/lib/config-fields";
+import type { TextareaFieldConfig, SelectFieldConfig } from "@/lib/config-fields";
 
 // ============================================================================
 // Types
@@ -160,16 +160,36 @@ export function SimpleProductView({
   );
   const soldOut = hasVariants && visibleVariants.length === 0;
 
+  // If any select field has a selected option with a `price` override, use it
+  // as the effective price (last one wins if multiple selects have overrides).
+  const selectPriceOverride: number | null = useMemo(() => {
+    if (hasVariants) return null; // variant branch uses variant pricing
+    const selectFields = fields.filter((f) => f.fieldType === "select");
+    let override: number | null = null;
+    for (const f of selectFields) {
+      const selectedValue = values[f.id];
+      if (!selectedValue) continue;
+      const cfg = f.config as SelectFieldConfig;
+      const opt = cfg.options.find((o) => o.value === selectedValue);
+      if (opt?.price !== undefined && opt.price >= 0) {
+        override = opt.price;
+      }
+    }
+    return override;
+  }, [fields, values, hasVariants]);
+
   // Flat price: always priceTiers["1"]. Falls back to the smallest key if
   // an admin somehow saved a different shape (defensive).
+  // Per-option price override from a select field takes precedence.
   const flatPrice: number | null = useMemo(() => {
+    if (selectPriceOverride !== null) return selectPriceOverride;
     if (typeof priceTiers["1"] === "number") return priceTiers["1"];
     const minKey = Object.keys(priceTiers).map(Number).sort((a, b) => a - b)[0];
     if (minKey !== undefined && typeof priceTiers[String(minKey)] === "number") {
       return priceTiers[String(minKey)];
     }
     return null;
-  }, [priceTiers]);
+  }, [priceTiers, selectPriceOverride]);
 
   // Customer-input fields (everything except admin-content textareas).
   // Hidden when variants are in play — variant-with-fields is a hybrid we

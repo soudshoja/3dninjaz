@@ -46,7 +46,18 @@ export type ColourFieldConfig = {
 
 /** D-03 — select field config */
 export type SelectFieldConfig = {
-  options: Array<{ label: string; value: string; priceAdd?: number }>;
+  options: Array<{
+    label: string;
+    value: string;
+    /** Additive price (cosmetic display only). Prefer `price` for a true override. */
+    priceAdd?: number;
+    /** Per-option price override — replaces the tier/flat price when this option is selected. */
+    price?: number;
+    /** Admin-assigned SKU for this option value (for order fulfilment tracking). */
+    sku?: string;
+    /** Public URL of the option image (from writeUpload pipeline). */
+    imageUrl?: string;
+  }>;
 };
 
 /**
@@ -121,6 +132,9 @@ export const SelectFieldConfigSchema: z.ZodType<SelectFieldConfig> = z.object({
         label: z.string().min(1),
         value: z.string().min(1),
         priceAdd: z.number().optional(),
+        price: z.number().nonnegative().optional(),
+        sku: z.string().optional(),
+        imageUrl: z.string().optional(),
       }),
     )
     .min(1),

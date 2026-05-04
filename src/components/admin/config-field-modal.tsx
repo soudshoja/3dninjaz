@@ -14,12 +14,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, Plus, Trash2, Type, Hash, Palette, ListChecks, FileText } from "lucide-react";
+import { AlertCircle, Plus, Trash2, Type, Hash, Palette, ListChecks, FileText, ImagePlus, X } from "lucide-react";
 import { ColourPickerDialog, type ColourPickerRow, type MyColoursPrompt } from "@/components/admin/colour-picker-dialog";
 import { getActiveColoursForPicker, getMyColoursForPicker } from "@/actions/admin-colours";
 import {
   addConfigField,
   updateConfigField,
+  uploadSelectOptionImage,
+  removeSelectOptionImage,
   type ConfigField,
 } from "@/actions/configurator";
 import {
@@ -289,14 +291,125 @@ export function ColourConfigForm({
   );
 }
 
-type SelectOption = { label: string; value: string; priceAdd?: number };
+type SelectOption = {
+  label: string;
+  value: string;
+  priceAdd?: number;
+  price?: number;
+  sku?: string;
+  imageUrl?: string;
+};
+
+// Internal per-option image uploader (needs fieldId from the saved field).
+// When fieldId is undefined (new field not yet saved), image upload is disabled.
+function SelectOptionImageCell({
+  opt,
+  fieldId,
+  onImageUrl,
+}: {
+  opt: SelectOption;
+  fieldId: string | undefined;
+  onImageUrl: (url: string | undefined) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const inputRef = useState(() => {
+    if (typeof document === "undefined") return null;
+    const el = document.createElement("input");
+    el.type = "file";
+    el.accept = "image/*";
+    return el;
+  })[0];
+
+  // wire the hidden input's change event once
+  useEffect(() => {
+    if (!inputRef) return;
+    const handler = async () => {
+      const file = inputRef.files?.[0];
+      if (!file || !fieldId) return;
+      setUploading(true);
+      const fd = new FormData();
+      fd.append("file", file);
+      const result = await uploadSelectOptionImage(fieldId, opt.value, fd);
+      setUploading(false);
+      if (result.ok) {
+        onImageUrl(result.imageUrl);
+      }
+      // reset so same file can be re-selected
+      inputRef.value = "";
+    };
+    inputRef.addEventListener("change", handler);
+    return () => inputRef.removeEventListener("change", handler);
+  }, [inputRef, fieldId, opt.value, onImageUrl]);
+
+  const triggerPicker = () => {
+    if (!fieldId || uploading) return;
+    inputRef?.click();
+  };
+
+  const handleRemove = async () => {
+    if (!fieldId) return;
+    const result = await removeSelectOptionImage(fieldId, opt.value);
+    if (result.ok) onImageUrl(undefined);
+  };
+
+  if (!fieldId) {
+    return (
+      <span className="text-[10px] text-slate-400 italic whitespace-nowrap">
+        Save field first
+      </span>
+    );
+  }
+
+  if (opt.imageUrl) {
+    return (
+      <div className="flex items-center gap-1">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={opt.imageUrl.endsWith("/")
+            ? opt.imageUrl + "400w.jpg"
+            : opt.imageUrl.includes("/uploads/")
+              ? opt.imageUrl + "/400w.jpg"
+              : opt.imageUrl}
+          alt={opt.label}
+          className="h-8 w-8 rounded object-cover border border-slate-200"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+        />
+        <button
+          type="button"
+          onClick={handleRemove}
+          className="p-0.5 text-red-400 hover:text-red-600 rounded"
+          aria-label="Remove image"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={triggerPicker}
+      disabled={uploading}
+      className="flex items-center gap-1 text-xs rounded border px-2 py-1 hover:bg-slate-50 transition-colors disabled:opacity-50 whitespace-nowrap"
+      style={{ borderColor: BRAND.blue, color: BRAND.blue }}
+      aria-label="Upload image"
+    >
+      <ImagePlus className="h-3 w-3" />
+      {uploading ? "…" : "Image"}
+    </button>
+  );
+}
 
 export function SelectConfigForm({
   value,
   onChange,
+  fieldId,
 }: {
   value: Partial<SelectFieldConfig>;
   onChange: (v: Partial<SelectFieldConfig>) => void;
+  /** fieldId is only available in edit mode (field already saved). Used for image upload. */
+  fieldId?: string;
 }) {
   const options: SelectOption[] = value.options ?? [];
 
@@ -315,23 +428,56 @@ export function SelectConfigForm({
 
   return (
     <div className="space-y-3">
+      {/* Column header hints */}
+      <div className="grid grid-cols-[1fr_100px_80px_80px_60px_auto_auto] gap-2 px-0.5">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Label</span>
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Value</span>
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Price (RM)</span>
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">+Add (RM)</span>
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">SKU</span>
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Image</span>
+        <span />
+      </div>
       <div className="space-y-2">
         {options.map((opt, i) => (
-          <div key={i} className="flex items-center gap-2">
+          <div key={i} className="grid grid-cols-[1fr_100px_80px_80px_60px_auto_auto] items-center gap-2">
+            {/* Label */}
             <Input
               placeholder="Label"
               value={opt.label}
-              onChange={(e) => updateOption(i, { label: e.target.value, value: e.target.value.toLowerCase().replace(/\s+/g, "-") })}
-              className="h-8 flex-1"
+              onChange={(e) =>
+                updateOption(i, {
+                  label: e.target.value,
+                  value: e.target.value.toLowerCase().replace(/\s+/g, "-"),
+                })
+              }
+              className="h-8"
             />
+            {/* Value (slug key) */}
             <Input
-              placeholder="Value"
+              placeholder="value"
               value={opt.value}
               onChange={(e) => updateOption(i, { value: e.target.value })}
-              className="h-8 w-28"
+              className="h-8"
             />
+            {/* Price override */}
             <Input
-              placeholder="Price add"
+              placeholder="—"
+              type="number"
+              min={0}
+              step={0.01}
+              value={opt.price ?? ""}
+              onChange={(e) =>
+                updateOption(i, {
+                  price: e.target.value === "" ? undefined : Number(e.target.value),
+                })
+              }
+              className="h-8"
+              title="Override price — replaces the tier price when this option is selected"
+            />
+            {/* Price add (additive, cosmetic) */}
+            <Input
+              placeholder="—"
               type="number"
               min={0}
               step={0.01}
@@ -341,8 +487,26 @@ export function SelectConfigForm({
                   priceAdd: e.target.value === "" ? undefined : Number(e.target.value),
                 })
               }
-              className="h-8 w-24"
+              className="h-8"
+              title="Additive price shown in the dropdown label (+RM X)"
             />
+            {/* SKU */}
+            <Input
+              placeholder="SKU"
+              value={opt.sku ?? ""}
+              onChange={(e) =>
+                updateOption(i, { sku: e.target.value || undefined })
+              }
+              className="h-8 font-mono text-xs"
+              title="SKU for this option value (for order fulfilment)"
+            />
+            {/* Image upload */}
+            <SelectOptionImageCell
+              opt={opt}
+              fieldId={fieldId}
+              onImageUrl={(url) => updateOption(i, { imageUrl: url })}
+            />
+            {/* Remove row */}
             <button
               type="button"
               onClick={() => removeOption(i)}
@@ -367,6 +531,11 @@ export function SelectConfigForm({
       {options.length === 0 && (
         <p className="text-xs text-red-500">At least one option is required</p>
       )}
+      <p className="text-xs text-slate-400">
+        <strong>Price (RM)</strong> overrides the product tier price for this option.{" "}
+        <strong>+Add</strong> is cosmetic only (shown in the dropdown label).{" "}
+        Image upload requires saving the field first.
+      </p>
     </div>
   );
 }
@@ -660,7 +829,11 @@ export function ConfigFieldFormBody({
             />
           )}
           {fieldType === "select" && (
-            <SelectConfigForm value={selectConfig} onChange={setSelectConfig} />
+            <SelectConfigForm
+              value={selectConfig}
+              onChange={setSelectConfig}
+              fieldId={mode === "edit" ? initialField?.id : undefined}
+            />
           )}
           {/* Quick task 260430-icx — Quill rich-text editor for textarea fields. */}
           {fieldType === "textarea" && (
