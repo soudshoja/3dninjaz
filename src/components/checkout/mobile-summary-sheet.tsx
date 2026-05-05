@@ -102,6 +102,10 @@ export function MobileSummarySheet({
           </div>
 
           <DrawerFooter>
+            {/* Pay eyebrow — mirrors desktop right-column hierarchy */}
+            <p className="text-[11px] uppercase tracking-wider text-zinc-500 font-medium px-1 mb-1">
+              Pay
+            </p>
             <PayPalButton
               address={address}
               items={items}

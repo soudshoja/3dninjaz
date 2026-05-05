@@ -133,19 +133,19 @@ export function WhatsAppBankTransferButton({
   }
 
   return (
-    <div className="mt-4">
-      {/* Divider */}
+    <div className="mt-3">
+      {/* "or" pill divider */}
       <div className="flex items-center gap-3 my-4">
-        <div className="flex-1 h-px bg-black/10" />
-        <span className="text-xs text-slate-500 whitespace-nowrap">
-          Or pay via direct bank transfer
+        <div className="flex-1 h-px bg-zinc-200" />
+        <span className="text-[11px] uppercase tracking-wider text-zinc-400 font-medium whitespace-nowrap px-1">
+          or
         </span>
-        <div className="flex-1 h-px bg-black/10" />
+        <div className="flex-1 h-px bg-zinc-200" />
       </div>
 
       {/* Explanatory copy */}
       <p className="text-xs text-slate-500 text-center mb-3">
-        Click below to message us on WhatsApp. Send the screenshot of your transfer and we&apos;ll confirm your order.
+        Message us on WhatsApp — send your transfer screenshot and we&apos;ll confirm your order.
       </p>
 
       {/* WhatsApp CTA */}

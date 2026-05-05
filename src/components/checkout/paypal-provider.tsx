@@ -147,48 +147,56 @@ export function CheckoutIsland({
             />
           </div>
 
-          {/* PayPal button area — desktop only; mobile uses the sticky sheet */}
-          <div className="hidden md:block mt-8">
-            <PayPalButton
-              address={address}
-              items={items}
-              appliedCouponCode={appliedCoupon?.code ?? null}
-              shipping={shipping}
-              onPaid={handlePaid}
-            />
-            <WhatsAppBankTransferButton
-              items={items}
-              subtotal={subtotal}
-              shipping={shipping}
-              address={address}
-              customerName={defaultName}
-              customerEmail={defaultEmail}
-              disabled={items.length === 0}
-            />
-          </div>
         </section>
 
+        {/* Desktop order summary + pay section — right column */}
         <aside
           aria-labelledby="summary-heading"
           className="order-2 hidden md:block"
         >
           <div
-            className="sticky top-6 rounded-2xl p-5"
+            className="sticky top-6 rounded-2xl border border-black/8 shadow-sm overflow-hidden"
             style={{ backgroundColor: "#ffffff" }}
           >
-            <h2
-              id="summary-heading"
-              className="font-[var(--font-heading)] text-2xl mb-3"
-            >
-              Your order
-            </h2>
-            <CheckoutSummary
-              items={items}
-              subtotal={subtotal}
-              appliedCoupon={appliedCoupon}
-              onCouponChange={setAppliedCoupon}
-              shipping={shipping}
-            />
+            {/* Order summary */}
+            <div className="p-5 pb-4">
+              <h2
+                id="summary-heading"
+                className="font-[var(--font-heading)] text-2xl mb-3"
+              >
+                Your order
+              </h2>
+              <CheckoutSummary
+                items={items}
+                subtotal={subtotal}
+                appliedCoupon={appliedCoupon}
+                onCouponChange={setAppliedCoupon}
+                shipping={shipping}
+              />
+            </div>
+
+            {/* Pay section — divider + eyebrow + buttons */}
+            <div className="border-t border-black/10 px-5 pt-4 pb-5">
+              <p className="text-[11px] uppercase tracking-wider text-zinc-500 mb-3 font-medium">
+                Pay
+              </p>
+              <PayPalButton
+                address={address}
+                items={items}
+                appliedCouponCode={appliedCoupon?.code ?? null}
+                shipping={shipping}
+                onPaid={handlePaid}
+              />
+              <WhatsAppBankTransferButton
+                items={items}
+                subtotal={subtotal}
+                shipping={shipping}
+                address={address}
+                customerName={defaultName}
+                customerEmail={defaultEmail}
+                disabled={items.length === 0}
+              />
+            </div>
           </div>
         </aside>
 
