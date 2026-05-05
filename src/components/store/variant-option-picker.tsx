@@ -45,7 +45,6 @@ import { formatMYR } from "@/lib/format";
 export interface PickerOption {
   label: string;
   value: string;
-  priceAdd?: number;
   /** Per-option price override — replaces base price when selected. */
   price?: number;
   /** SKU shown as faded sub-line in the row. */
@@ -170,21 +169,6 @@ function PricePill({
             {formatMYR(diffFromBase!)}
           </span>
         )}
-      </span>
-    );
-  }
-  // Additive display (cosmetic, no price override).
-  if (opt.priceAdd && opt.priceAdd !== 0) {
-    return (
-      <span
-        className="ml-auto shrink-0 font-semibold text-xs rounded-full px-2.5 py-1 tabular-nums"
-        style={{
-          backgroundColor: `${BRAND.green}22`,
-          color: BRAND.greenDark,
-          border: `1.5px solid ${BRAND.green}50`,
-        }}
-      >
-        +{formatMYR(opt.priceAdd)}
       </span>
     );
   }

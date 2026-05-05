@@ -294,7 +294,6 @@ export function ColourConfigForm({
 type SelectOption = {
   label: string;
   value: string;
-  priceAdd?: number;
   price?: number;
   sku?: string;
   imageUrl?: string;
@@ -470,22 +469,21 @@ export function SelectConfigForm({
   return (
     <div className="space-y-1">
       {/* Column header row */}
-      <div className="flex items-center gap-2 pb-1">
-        <span className="flex-1 min-w-0 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Label / Value</span>
-        <span className="w-20 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Price RM</span>
-        <span className="w-20 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">+Add RM</span>
-        <span className="w-24 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">SKU</span>
+      <div className="grid grid-cols-[minmax(0,1fr)_96px_96px_40px_28px] items-center gap-2 px-3 py-2 text-[10px] uppercase tracking-wide text-zinc-500">
+        <span>Label / Value</span>
+        <span>Price RM</span>
+        <span>SKU</span>
         {/* image + delete placeholders */}
-        <span className="w-10" />
-        <span className="w-8" />
+        <span />
+        <span />
       </div>
 
       {options.map((opt, i) => (
         <div
           key={i}
-          className="flex flex-wrap items-center gap-2 py-2 border-b border-zinc-100 last:border-b-0"
+          className="grid grid-cols-[minmax(0,1fr)_96px_96px_40px_28px] items-center gap-2 py-2 border-b border-zinc-100 last:border-b-0"
         >
-          {/* Label input — flex-1, auto-fills slug into value */}
+          {/* Label input — grid column 1 */}
           <Input
             placeholder="Label"
             value={opt.label}
@@ -495,7 +493,7 @@ export function SelectConfigForm({
                 value: e.target.value.toLowerCase().replace(/\s+/g, "-"),
               })
             }
-            className="h-9 flex-1 min-w-[120px]"
+            className="h-9"
             title="Display label for this option"
             aria-label={`Option ${i + 1} label`}
           />
@@ -512,26 +510,9 @@ export function SelectConfigForm({
                 price: e.target.value === "" ? undefined : Number(e.target.value),
               })
             }
-            className="h-9 w-20"
+            className="h-9"
             title="Override price — replaces the tier price when this option is selected"
             aria-label={`Option ${i + 1} price override (RM)`}
-          />
-
-          {/* Additive price */}
-          <Input
-            placeholder="—"
-            type="number"
-            min={0}
-            step={0.01}
-            value={opt.priceAdd ?? ""}
-            onChange={(e) =>
-              updateOption(i, {
-                priceAdd: e.target.value === "" ? undefined : Number(e.target.value),
-              })
-            }
-            className="h-9 w-20"
-            title="Additive price shown in the dropdown label (+RM X)"
-            aria-label={`Option ${i + 1} price add (RM)`}
           />
 
           {/* SKU */}
@@ -541,7 +522,7 @@ export function SelectConfigForm({
             onChange={(e) =>
               updateOption(i, { sku: e.target.value || undefined })
             }
-            className="h-9 w-24 font-mono text-xs"
+            className="h-9 font-mono text-xs"
             title="SKU for this option (for order fulfilment)"
             aria-label={`Option ${i + 1} SKU`}
           />
@@ -557,8 +538,7 @@ export function SelectConfigForm({
           <button
             type="button"
             onClick={() => removeOption(i)}
-            className="flex items-center justify-center rounded text-zinc-400 hover:text-red-500 transition-colors duration-150 disabled:opacity-30 shrink-0"
-            style={{ width: 28, height: 36 }}
+            className="flex items-center justify-center rounded text-zinc-400 hover:text-red-500 transition-colors duration-150 disabled:opacity-30 shrink-0 h-9"
             aria-label="Remove option"
             disabled={options.length <= 1}
           >
@@ -583,7 +563,6 @@ export function SelectConfigForm({
 
       <p className="text-xs text-zinc-400 pt-1">
         <strong>Price RM</strong> overrides the tier price.{" "}
-        <strong>+Add</strong> is cosmetic (shown in dropdown label).{" "}
         {!fieldId && (
           <span className="text-amber-600 font-medium">
             Save this field once to unlock image upload.
