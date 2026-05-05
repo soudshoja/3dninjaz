@@ -83,6 +83,8 @@ type Props = {
   hydratedVariants?: HydratedVariant[];
   /** Pre-resolved <picture> sources keyed by variantId — mirrors stocked PDP. */
   variantPictures?: Record<string, PictureData | null>;
+  /** Bug 3 — when true, hide the flat-rate base-price pill until a select option resolves the price. */
+  hideBasePrice?: boolean;
 };
 
 // ============================================================================
@@ -124,6 +126,7 @@ export function SimpleProductView({
   options = [],
   hydratedVariants = [],
   variantPictures = {},
+  hideBasePrice = false,
 }: Props) {
   const [values, setValues] = useState<Record<string, string>>({});
 
@@ -399,7 +402,9 @@ export function SimpleProductView({
               )}
 
               {/* Price block — variant branch shows sale strike-through when
-                  the displayed variant is on sale; flat branch is unchanged. */}
+                  the displayed variant is on sale; flat branch is unchanged.
+                  Bug 3: when hideBasePrice=true and no select override is active,
+                  show "Select an option to see price" instead of the flat price. */}
               {hasVariants && displayedHydrated?.isOnSale ? (
                 <div className="flex items-center gap-3 mb-4 flex-wrap">
                   <span
@@ -424,7 +429,20 @@ export function SimpleProductView({
                 </div>
               ) : (
                 <div className="mb-4">
-                  {effectivePriceNumber !== null ? (
+                  {/* When hideBasePrice is active and no per-option override has resolved yet,
+                      hide the flat price and prompt customer to pick an option. */}
+                  {!hasVariants && hideBasePrice && selectPriceOverride === null ? (
+                    <span
+                      className="inline-flex self-start items-center rounded-full px-5 py-2 text-base font-semibold"
+                      style={{
+                        backgroundColor: "#f1f5f9",
+                        color: "#64748b",
+                        border: "2px solid #e2e8f0",
+                      }}
+                    >
+                      Select an option to see price
+                    </span>
+                  ) : effectivePriceNumber !== null ? (
                     <span
                       className="inline-flex self-start items-center rounded-full px-5 py-2 text-2xl font-extrabold tracking-tight"
                       style={{

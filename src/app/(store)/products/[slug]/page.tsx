@@ -96,6 +96,8 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
           hydratedVariants,
           // Phase 19 (19-06) — product type discriminator
           productType: product.productType,
+          // Bug 3 — pass hide-base-price flag to view components
+          hideBasePrice: product.hideBasePrice ?? false,
         }}
         isWishlistedInitial={wished}
         ratingAvg={reviewsSummary.avgRating}

@@ -179,6 +179,10 @@ export const products = mysqlTable("products", {
   shippingLengthCm: int("shipping_length_cm"),
   shippingWidthCm: int("shipping_width_cm"),
   shippingHeightCm: int("shipping_height_cm"),
+  // Bug 3 — hide the flat-rate price pill on the storefront PDP when a
+  // product uses multi-option Select fields whose prices determine cost.
+  // Default FALSE = existing behaviour (always show the top price pill).
+  hideBasePrice: boolean("hide_base_price").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at")
     .notNull()

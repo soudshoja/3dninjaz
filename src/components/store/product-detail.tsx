@@ -34,6 +34,8 @@ type ProductDetailProps = {
     options: HydratedOption[];
     hydratedVariants: HydratedVariant[];
     productType?: "stocked" | "configurable" | "keychain" | "vending" | "simple";
+    /** Bug 3 — when true, hide the flat-rate base-price pill on simple/configurable PDPs. */
+    hideBasePrice?: boolean;
   };
   isWishlistedInitial?: boolean;
   ratingAvg?: number;
@@ -78,11 +80,12 @@ export function ProductDetail({
         isWishlistedInitial={isWishlistedInitial}
         ratingAvg={ratingAvg}
         ratingCount={ratingCount}
+        hideBasePrice={product.hideBasePrice}
       />
     );
   }
   if ((product.productType === "configurable" || product.productType === "keychain" || product.productType === "vending") && configurableData) {
-    return <ConfigurableProductView product={{ ...product, pictures }} {...configurableData} isWishlistedInitial={isWishlistedInitial} ratingAvg={ratingAvg} ratingCount={ratingCount} />;
+    return <ConfigurableProductView product={{ ...product, pictures }} {...configurableData} isWishlistedInitial={isWishlistedInitial} ratingAvg={ratingAvg} ratingCount={ratingCount} hideBasePrice={product.hideBasePrice} />;
   }
   const [selectedHydrated, setSelectedHydrated] = useState<HydratedVariant | null>(null);
   // Bug fix: track first missing option name for the Add-to-bag button label.

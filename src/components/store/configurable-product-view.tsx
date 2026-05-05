@@ -62,6 +62,8 @@ type Props = {
   isWishlistedInitial?: boolean;
   ratingAvg?: number;
   ratingCount?: number;
+  /** Bug 3 — when true, hide the base-price pill until a select option resolves the price. */
+  hideBasePrice?: boolean;
 };
 
 // ============================================================================
@@ -106,10 +108,15 @@ function PricePill({
   outOfTable,
   maxUnitCount,
   currentPrice,
+  hideBasePrice = false,
+  selectPriceOverride,
 }: {
   outOfTable: boolean;
   maxUnitCount: number | null;
   currentPrice: number | null;
+  /** Bug 3 — suppress base price until a select option resolves it. */
+  hideBasePrice?: boolean;
+  selectPriceOverride: number | null;
 }) {
   if (outOfTable) {
     return (
@@ -118,6 +125,18 @@ function PricePill({
         style={{ backgroundColor: "#fff1f2", color: "#be123c", border: "2px solid #fecdd3" }}
       >
         Max {maxUnitCount} characters
+      </span>
+    );
+  }
+  // Bug 3: hide flat base price pill when admin toggled hideBasePrice and no
+  // per-option select override has resolved yet.
+  if (hideBasePrice && selectPriceOverride === null) {
+    return (
+      <span
+        className="inline-flex self-start items-center rounded-full px-5 py-2 text-base font-semibold"
+        style={{ backgroundColor: "#f1f5f9", color: "#64748b", border: "2px solid #e2e8f0" }}
+      >
+        Select an option to see price
       </span>
     );
   }
@@ -158,6 +177,7 @@ export function ConfigurableProductView({
   isWishlistedInitial = false,
   ratingAvg = 0,
   ratingCount = 0,
+  hideBasePrice = false,
 }: Props) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState(false);
@@ -445,6 +465,8 @@ export function ConfigurableProductView({
                   outOfTable={outOfTable}
                   maxUnitCount={maxUnitCount}
                   currentPrice={currentPrice}
+                  hideBasePrice={hideBasePrice}
+                  selectPriceOverride={selectPriceOverride}
                 />
               </div>
 

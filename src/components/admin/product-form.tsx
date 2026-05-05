@@ -72,6 +72,8 @@ export type ProductFormInitial = {
    */
   initialOptions?: HydratedOption[];
   initialVariants?: HydratedVariant[];
+  /** Bug 3 — when true, hides the flat-rate base-price pill on the storefront PDP. */
+  hideBasePrice?: boolean;
 };
 
 export type CategoryOption = { id: string; name: string };
@@ -164,6 +166,8 @@ export function ProductForm({
   );
   const [isActive, setIsActive] = useState(initialData?.isActive ?? true);
   const [isFeatured, setIsFeatured] = useState(initialData?.isFeatured ?? false);
+  // Bug 3 — hide flat-rate price pill on storefront PDP.
+  const [hideBasePrice, setHideBasePrice] = useState(initialData?.hideBasePrice ?? false);
   // Phase 19 (19-03) — product type state
   // Quick task 260430-icx — `simple` added.
   const [productType, setProductType] = useState<"stocked" | "configurable" | "keychain" | "vending" | "simple">(
@@ -213,6 +217,7 @@ export function ProductForm({
       productType,
       simplePrice,
       fields,
+      hideBasePrice,
     }),
     [
       name,
@@ -229,6 +234,7 @@ export function ProductForm({
       productType,
       simplePrice,
       fields,
+      hideBasePrice,
     ],
   );
 
@@ -260,6 +266,7 @@ export function ProductForm({
     }
     if (typeof v.simplePrice === "string") setSimplePrice(v.simplePrice);
     if (Array.isArray(v.fields)) setFields(v.fields as PendingField[]);
+    if (typeof v.hideBasePrice === "boolean") setHideBasePrice(v.hideBasePrice);
     setBannerDismissed(true);
   }
 
@@ -347,6 +354,8 @@ export function ProductForm({
       // Phase 19 (19-03) — include productType in every save
       productType,
       variants: [],
+      // Bug 3 — hide flat-rate price pill on storefront PDP.
+      hideBasePrice,
       // Quick task 260430-icx — only include simplePrice when relevant.
       // Edit flow: omit entirely when field is empty so the action preserves
       // the existing tier. Create flow: always include (validate() guards above).
@@ -356,7 +365,19 @@ export function ProductForm({
       // Quick task 260430-kmr — single Save commits inline fields atomically
       // for simple + configurable. Server-side updateProduct fans out to
       // addConfigField/updateConfigField/deleteConfigField/reorderConfigFields.
-      ...((productType === "simple" || productType === "configurable")
+      //
+      // Bug fix (Bug 1): when the admin switches type in the same session
+      // (stocked → simple) WITHOUT a page reload, initialData.initialFields is
+      // undefined (it was server-rendered for a different type). In that case
+      // fields[] starts empty and reconcileInlineFields would DELETE every
+      // existing config field that's already in the DB. Guard: only send the
+      // fields payload when the page was loaded in the target type, i.e.
+      // initialData.productType === productType OR initialData.initialFields
+      // was explicitly provided (truthy). For pure in-session switches, skip
+      // reconciliation — the fields survive the type change and will be
+      // editable on the next page load when the edit page re-hydrates them.
+      ...((productType === "simple" || productType === "configurable") &&
+        (initialData?.initialFields !== undefined || !editing)
         ? { fields: fields.map(stripPendingFlag) }
         : {}),
     };
@@ -833,6 +854,20 @@ export function ProductForm({
             </div>
             <Switch checked={isFeatured} onCheckedChange={setIsFeatured} />
           </label>
+          {/* Bug 3 — only relevant when product has Select fields with per-option
+              prices. Hides the top flat-rate price pill on the PDP so customers
+              see only the resolved per-selection price. */}
+          {(productType === "simple" || productType === "configurable") && (
+            <label className="flex items-center justify-between rounded-md border border-[var(--color-brand-border)] p-3">
+              <div>
+                <p className="text-sm font-medium">Hide flat-rate price</p>
+                <p className="text-xs text-[var(--color-brand-text-muted)]">
+                  When using Select fields with per-option prices, hide the base price pill at the top of the product page. Customers will see only the price resolved from their selection.
+                </p>
+              </div>
+              <Switch checked={hideBasePrice} onCheckedChange={setHideBasePrice} />
+            </label>
+          )}
         </CardContent>
       </Card>
 

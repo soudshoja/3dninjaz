@@ -143,16 +143,15 @@ function OptionThumb({
 /** Price pill — shown right-aligned in each row. */
 function PricePill({
   opt,
-  basePrice,
 }: {
   opt: PickerOption;
+  /** @deprecated basePrice no longer used — price is an absolute override, not additive */
   basePrice?: number;
 }) {
   // Show override pill when the option has a `price` field.
+  // `price` is an absolute override (replaces base), so display only the
+  // resolved price — never a delta formula like "30+5".
   if (opt.price !== undefined && opt.price >= 0) {
-    const diffFromBase =
-      basePrice !== undefined ? opt.price - basePrice : null;
-    const showDiff = diffFromBase !== null && Math.abs(diffFromBase) > 0.005;
     return (
       <span
         className="ml-auto shrink-0 font-bold text-xs rounded-full px-2.5 py-1 tabular-nums"
@@ -163,12 +162,6 @@ function PricePill({
         }}
       >
         {formatMYR(opt.price)}
-        {showDiff && (
-          <span className="font-medium opacity-70 ml-0.5">
-            {diffFromBase! > 0 ? "+" : ""}
-            {formatMYR(diffFromBase!)}
-          </span>
-        )}
       </span>
     );
   }

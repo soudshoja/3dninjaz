@@ -310,6 +310,8 @@ export async function createProduct(
     subcategoryId: productData.subcategoryId || null,
     // Phase 19 (19-03) — persist product type chosen at creation
     productType: productData.productType ?? "stocked",
+    // Bug 3 — hide flat-rate price pill on storefront PDP.
+    hideBasePrice: productData.hideBasePrice ?? false,
   });
 
   if (variants.length > 0) {
@@ -510,6 +512,8 @@ export async function updateProduct(
       subcategoryId: productData.subcategoryId || null,
       // Phase 19 (19-03) — persist product type (additive, no variant logic change)
       productType: productData.productType ?? "stocked",
+      // Bug 3 — hide flat-rate price pill on storefront PDP.
+      hideBasePrice: productData.hideBasePrice ?? false,
     })
     .where(eq(products.id, id));
 

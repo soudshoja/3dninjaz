@@ -163,6 +163,8 @@ export default async function EditProductPage({
     // Inline variants — pre-hydrated options + variants for stocked/simple.
     initialOptions: inlineVariantsData?.options ?? undefined,
     initialVariants: inlineVariantsData?.variants ?? undefined,
+    // Bug 3 — pass through hide-base-price flag.
+    hideBasePrice: product.hideBasePrice ?? false,
   };
 
   return (
