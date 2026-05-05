@@ -155,7 +155,7 @@ export function WhatsAppBankTransferButton({
         disabled={isDisabled}
         aria-label="Pay via WhatsApp direct bank transfer"
         className="w-full flex items-center justify-center gap-2 rounded-full py-3 px-6 font-bold text-sm text-black shadow-[0_4px_0_rgba(0,0,0,0.25)] active:translate-y-[1px] active:shadow-[0_2px_0_rgba(0,0,0,0.25)] transition disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
-        style={{ backgroundColor: "#39E600" }}
+        style={{ backgroundColor: "#25D366" }}
       >
         <WhatsAppIcon className="h-5 w-5 shrink-0" />
         Pay via WhatsApp

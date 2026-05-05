@@ -95,7 +95,7 @@ export type ConfigurationData = {
    * order detail without a DB lookup. Optional for backwards compat with cart
    * items created before this field was added.
    */
-  baseClickerColor?: string;      // hex e.g. "#39E600"
+  baseClickerColor?: string;      // hex e.g. "#25D366"
   baseClickerColorName?: string;  // display name e.g. "Neon Green"
 };
 

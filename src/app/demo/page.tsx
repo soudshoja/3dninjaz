@@ -2,9 +2,9 @@ import Image from "next/image";
 import Link from "next/link";
 
 const BRAND = {
-  blue: "#1E8BFF",
-  green: "#39E600",
-  purple: "#A855F7",
+  blue: "#1877F2",
+  green: "#25D366",
+  purple: "#7360F2",
   ink: "#0B1020",
   cream: "#F7FAF4",
 };
