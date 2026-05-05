@@ -13,9 +13,13 @@
  * Parent controls the mode via `showPreview` + `onTogglePreview`.
  *
  * Tap targets ≥ 44px (RESP-01). Mobile thumbstrip is horizontally scrollable.
+ *
+ * Mobile: scroll-snap carousel — finger-swipe left/right. Dot indicators below
+ * the images track the active slide. Arrows + thumbnail strip are desktop-only
+ * (hidden md:flex). Respects prefers-reduced-motion.
  */
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import type { PictureData } from "@/lib/image-manifest";
@@ -47,24 +51,91 @@ export function ConfigurableImageGallery({
   // Which display image is active (index into displayImages)
   const [activeDisplayIdx, setActiveDisplayIdx] = useState(0);
 
-  const activePic = pictures?.[activeDisplayIdx];
-  const activeDisplayImage = displayImages[activeDisplayIdx] ?? null;
   const activeCaption = imageCaptions?.[activeDisplayIdx] ?? null;
 
   const stripRef = useRef<HTMLUListElement>(null);
   // Index 0 = "Yours" preview thumb; 1..N = displayImages thumbs
   const thumbRefs = useRef<(HTMLLIElement | null)[]>([]);
+  // Scroll-snap carousel ref (mobile)
+  const slideContainerRef = useRef<HTMLDivElement>(null);
+  // True when user prefers reduced motion
+  const prefersReducedMotion = useRef(false);
 
   const sizes = "(max-width: 1024px) 100vw, 50vw";
   const thumbSizes = "80px";
 
-  // Total thumbs = 1 ("Yours") + displayImages.length
+  // Total slides = 1 ("Yours" preview) + displayImages.length
   const totalThumbs = 1 + displayImages.length;
 
   // Unified index across the strip: 0 = preview, 1..N = displayImages[i-1]
   const currentIdx = showPreview ? 0 : activeDisplayIdx + 1;
   const atStart = currentIdx === 0;
   const atEnd = currentIdx === totalThumbs - 1;
+
+  // Pick up prefers-reduced-motion on mount (client-only)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      prefersReducedMotion.current = window.matchMedia(
+        "(prefers-reduced-motion: reduce)"
+      ).matches;
+    }
+  }, []);
+
+  // When displayImages array reference changes (variant swap), reset carousel
+  useEffect(() => {
+    if (slideContainerRef.current) {
+      slideContainerRef.current.scrollTo({ left: 0, behavior: "instant" });
+    }
+    setActiveDisplayIdx(0);
+    onTogglePreview(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayImages]);
+
+  // Helper: scroll carousel to a unified index (0 = preview, 1..N = display images)
+  function scrollToSlide(idx: number, behavior: ScrollBehavior = prefersReducedMotion.current ? "instant" : "smooth") {
+    const container = slideContainerRef.current;
+    if (!container) return;
+    container.scrollTo({ left: idx * container.offsetWidth, behavior });
+  }
+
+  // Sync parent state from scroll position (fires after touch swipe settles)
+  const handleScroll = useCallback(() => {
+    const container = slideContainerRef.current;
+    if (!container) return;
+    const slideWidth = container.offsetWidth;
+    if (slideWidth === 0) return;
+    const idx = Math.round(container.scrollLeft / slideWidth);
+    // Update parent + local state to match swipe destination
+    if (idx === 0) {
+      onTogglePreview(true);
+    } else {
+      const displayIdx = idx - 1;
+      onTogglePreview(false);
+      setActiveDisplayIdx(displayIdx);
+      requestAnimationFrame(() => {
+        thumbRefs.current[idx]?.scrollIntoView({
+          behavior: prefersReducedMotion.current ? "instant" : "smooth",
+          block: "nearest",
+          inline: "center",
+        });
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onTogglePreview]);
+
+  // Sync carousel scroll position when parent changes showPreview / activeDisplayIdx
+  // (e.g. user taps a thumbnail on desktop, or the "Yours" thumb)
+  useEffect(() => {
+    const container = slideContainerRef.current;
+    if (!container) return;
+    const targetIdx = showPreview ? 0 : activeDisplayIdx + 1;
+    const slideWidth = container.offsetWidth;
+    const currentScrollIdx = slideWidth > 0 ? Math.round(container.scrollLeft / slideWidth) : 0;
+    if (currentScrollIdx !== targetIdx) {
+      scrollToSlide(targetIdx);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showPreview, activeDisplayIdx]);
 
   function goTo(dir: "left" | "right") {
     const newIdx =
@@ -78,81 +149,127 @@ export function ConfigurableImageGallery({
       onTogglePreview(false);
       setActiveDisplayIdx(newIdx - 1);
     }
+    scrollToSlide(newIdx);
     requestAnimationFrame(() => {
       thumbRefs.current[newIdx]?.scrollIntoView({
-        behavior: "smooth",
+        behavior: prefersReducedMotion.current ? "instant" : "smooth",
         block: "nearest",
         inline: "center",
       });
     });
   }
 
+  function goToIndex(idx: number) {
+    if (idx === 0) {
+      onTogglePreview(true);
+    } else {
+      onTogglePreview(false);
+      setActiveDisplayIdx(idx - 1);
+    }
+    scrollToSlide(idx);
+  }
+
   return (
     <div className="flex flex-col gap-4">
-      {/* ── Hero area ── */}
+      {/* ── Slide container (mobile: scroll-snap carousel; desktop: single hero) ── */}
       <figure className="flex flex-col gap-1">
-      <div
-        className="relative aspect-[4/5] rounded-[28px] flex items-center justify-center"
-        style={{
-          backgroundColor: `${BRAND.blue}10`,
-          boxShadow: `inset 0 2px 8px ${BRAND.ink}08`,
-          containerType: "inline-size",
-          /* overflow-hidden only when showing images so the image fills the
-             rounded square; in preview mode we allow the ring tab to overflow
-             slightly left without clipping. */
-          overflow: showPreview ? "visible" : "hidden",
-        }}
-      >
-        {showPreview ? (
-          /* Live preview mode — previewSlot uses 100cqw which resolves to this
-             container's width, so cubes auto-size to fit the hero square. */
-          <div className="w-full h-full flex items-center justify-center">
-            {previewSlot}
-          </div>
-        ) : activeDisplayImage ? (
-          /* Display image mode — with srcset if available */
-          activePic && activePic.sources.length > 0 ? (
-            <picture className="absolute inset-0">
-              {activePic.sources.map((s) => (
-                <source key={s.type} type={s.type} srcSet={s.srcSet} sizes={sizes} />
-              ))}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={activePic.fallbackSrc}
-                alt={activeCaption ?? "Product display"}
-                className="absolute inset-0 h-full w-full object-cover"
-                loading="eager"
-                fetchPriority="high"
-              />
-            </picture>
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={activeDisplayImage}
-              alt={activeCaption ?? "Product display"}
-              className="absolute inset-0 h-full w-full object-cover"
-              loading="eager"
-              fetchPriority="high"
-            />
-          )
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-sm font-medium text-zinc-400">
-            No image available
-          </div>
-        )}
+        <div
+          className="relative rounded-[28px] overflow-hidden"
+          style={{
+            backgroundColor: `${BRAND.blue}10`,
+            boxShadow: `inset 0 2px 8px ${BRAND.ink}08`,
+          }}
+        >
+          <div
+            ref={slideContainerRef}
+            onScroll={handleScroll}
+            className="flex overflow-x-auto snap-x snap-mandatory"
+            style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
+            aria-label="Product images"
+            role="region"
+          >
+            {/* Slide 0: Live preview */}
+            <div
+              className="shrink-0 w-full snap-start aspect-[4/5] relative flex items-center justify-center"
+              style={{ containerType: "inline-size" }}
+              aria-hidden={currentIdx !== 0}
+            >
+              <div className="w-full h-full flex items-center justify-center">
+                {previewSlot}
+              </div>
+            </div>
 
-      </div>
-      {/* Phase 19 (19-10) — figcaption shown under hero when a caption is set */}
-      {!showPreview && activeCaption && (
-        <figcaption className="text-xs text-slate-500 text-center mt-1 px-2">
-          {activeCaption}
-        </figcaption>
-      )}
+            {/* Slides 1..N: Display images */}
+            {displayImages.map((img, i) => {
+              const pic = pictures?.[i];
+              const caption = imageCaptions?.[i] ?? null;
+              return (
+                <div
+                  key={img + i}
+                  className="shrink-0 w-full snap-start aspect-[4/5] relative"
+                  aria-hidden={currentIdx !== i + 1}
+                >
+                  {pic && pic.sources.length > 0 ? (
+                    <picture className="absolute inset-0">
+                      {pic.sources.map((s) => (
+                        <source key={s.type} type={s.type} srcSet={s.srcSet} sizes={sizes} />
+                      ))}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={pic.fallbackSrc}
+                        alt={caption ?? "Product display"}
+                        className="absolute inset-0 h-full w-full object-cover"
+                        loading={i === 0 ? "eager" : "lazy"}
+                        fetchPriority={i === 0 ? "high" : undefined}
+                      />
+                    </picture>
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={img}
+                      alt={caption ?? "Product display"}
+                      className="absolute inset-0 h-full w-full object-cover"
+                      loading={i === 0 ? "eager" : "lazy"}
+                      fetchPriority={i === 0 ? "high" : undefined}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Phase 19 (19-10) — figcaption shown under hero when a caption is set (desktop) */}
+        {!showPreview && activeCaption && (
+          <figcaption className="hidden md:block text-xs text-slate-500 text-center mt-1 px-2">
+            {activeCaption}
+          </figcaption>
+        )}
       </figure>
 
-      {/* ── Thumbstrip ── */}
+      {/* ── Dot indicators (mobile only, multi-slide only) ── */}
       {totalThumbs > 1 ? (
-        <div className="relative flex items-center gap-1 -mx-2 px-2">
+        <div className="flex md:hidden justify-center gap-1.5" aria-hidden="true">
+          {Array.from({ length: totalThumbs }, (_, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => goToIndex(i)}
+              aria-label={i === 0 ? "Go to your preview" : `Go to display image ${i}`}
+              className="rounded-full transition-all duration-200"
+              style={{
+                width: i === currentIdx ? 20 : 6,
+                height: 6,
+                backgroundColor: i === currentIdx ? BRAND.blue : `${BRAND.ink}30`,
+              }}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      {/* ── Thumbstrip (desktop only) ── */}
+      {totalThumbs > 1 ? (
+        <div className="hidden md:flex items-center gap-1 -mx-2 px-2">
           {/* Left arrow — previous thumb */}
           <button
             type="button"
