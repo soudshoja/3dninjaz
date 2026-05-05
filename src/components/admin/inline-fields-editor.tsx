@@ -61,7 +61,7 @@ import {
 import { ColourFillConfirmationDialog } from "@/components/admin/colour-fill-confirmation-dialog";
 import type { ColourFillPrompt } from "@/components/admin/colour-fill-confirmation-dialog";
 import { getActiveColoursForPicker } from "@/actions/admin-colours";
-import type { ConfigField } from "@/actions/configurator";
+import { addConfigField, type ConfigField } from "@/actions/configurator";
 import type {
   FieldType,
   AnyFieldConfig,
@@ -568,6 +568,27 @@ export function InlineFieldsEditor({
                     }
                     onRequiredChange={(v) => updateField(field.id, { required: v })}
                     onConfigChange={(c) => patchConfig(field, c)}
+                    onSaveSelectFieldFirst={
+                      // Only wire for new (tmp-) select fields on an existing product.
+                      field.id.startsWith("tmp-") && field.fieldType === "select" && productId
+                        ? async () => {
+                            // Save the field to DB now so we get a real id for image upload.
+                            const result = await addConfigField(productId, {
+                              fieldType: field.fieldType,
+                              label: field.label || "Select",
+                              helpText: field.helpText ?? undefined,
+                              required: field.required,
+                              config: field.config,
+                            });
+                            if (!result.ok) return null;
+                            const realId = result.field.id;
+                            // Promote the tmp field to a real id in local state so the
+                            // parent Save button won't try to re-insert it.
+                            commitFieldUpdate(field.id, { id: realId, __pending: "untouched" } as Partial<PendingField>);
+                            return { fieldId: realId };
+                          }
+                        : undefined
+                    }
                   />
                 )}
               </li>
@@ -605,6 +626,7 @@ function ExpandedFieldBody({
   onHelpTextChange,
   onRequiredChange,
   onConfigChange,
+  onSaveSelectFieldFirst,
 }: {
   field: PendingField;
   productId: string;
@@ -613,6 +635,11 @@ function ExpandedFieldBody({
   onHelpTextChange: (v: string) => void;
   onRequiredChange: (v: boolean) => void;
   onConfigChange: (c: AnyFieldConfig) => void;
+  /**
+   * For new select fields (tmp- id): auto-saves the field to the DB so image
+   * upload can proceed. Returns the real fieldId, or null on failure.
+   */
+  onSaveSelectFieldFirst?: () => Promise<{ fieldId: string } | null>;
 }) {
   return (
     <div className="mt-3 space-y-4 rounded-lg border bg-slate-50/40 p-4" style={{ borderColor: "#E4E4E7" }}>
@@ -691,7 +718,10 @@ function ExpandedFieldBody({
           <SelectConfigForm
             value={field.config as SelectFieldConfig}
             onChange={(v) => onConfigChange(v as SelectFieldConfig)}
+            productId={productId}
             productSlug={productSlug}
+            fieldId={field.id.startsWith("tmp-") ? undefined : field.id}
+            onSaveFieldFirst={field.id.startsWith("tmp-") ? onSaveSelectFieldFirst : undefined}
           />
         )}
         {field.fieldType === "textarea" && (

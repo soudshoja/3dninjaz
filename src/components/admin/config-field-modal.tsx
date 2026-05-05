@@ -14,8 +14,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, Plus, Trash2, Type, Hash, Palette, ListChecks, FileText, ImagePlus, Camera, X, Loader2 } from "lucide-react";
+import { AlertCircle, Plus, Trash2, Type, Hash, Palette, ListChecks, FileText, ImagePlus, Camera, X, Loader2, Images } from "lucide-react";
 import { ColourPickerDialog, type ColourPickerRow, type MyColoursPrompt } from "@/components/admin/colour-picker-dialog";
+import { ProductImageGalleryPicker } from "@/components/admin/product-image-gallery-picker";
 import { getActiveColoursForPicker, getMyColoursForPicker } from "@/actions/admin-colours";
 import {
   addConfigField,
@@ -309,16 +310,20 @@ type SelectOption = {
 function SelectOptionImageCell({
   opt,
   fieldId: fieldIdProp,
+  productId,
   onImageUrl,
   onSaveFieldFirst,
 }: {
   opt: SelectOption;
   fieldId: string | undefined;
+  /** Product id — used by the gallery picker to list existing product images. */
+  productId: string;
   onImageUrl: (url: string | undefined) => void;
   /** Auto-save the parent field and return its new id. Used when fieldId is absent. */
   onSaveFieldFirst?: () => Promise<{ fieldId: string } | null>;
 }) {
   const [uploading, setUploading] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
   // Track the resolved fieldId locally so that after an auto-save the upload
   // can proceed with the newly returned id even before the parent re-renders.
   const resolvedFieldIdRef = useState<string | undefined>(fieldIdProp)[0];
@@ -377,6 +382,19 @@ function SelectOptionImageCell({
     inputRef?.click();
   };
 
+  const triggerGallery = async () => {
+    if (uploading) return;
+    // Auto-save first if needed (same flow as camera upload).
+    if (!fieldIdRef.current && onSaveFieldFirst) {
+      setUploading(true);
+      const saved = await onSaveFieldFirst();
+      setUploading(false);
+      if (!saved?.fieldId) return;
+      fieldIdRef.current = saved.fieldId;
+    }
+    setGalleryOpen(true);
+  };
+
   const handleRemove = async () => {
     const id = fieldIdRef.current;
     if (!id) return;
@@ -385,88 +403,132 @@ function SelectOptionImageCell({
   };
 
   const SIZE = 40;
+  const ICON_BTN_SIZE = 40;
 
   // ── Fallback: locked camera when no fieldId AND no auto-save callback ────
   if (!fieldIdProp && !onSaveFieldFirst) {
     return (
-      <div
-        className="relative flex items-center justify-center rounded border border-zinc-200 bg-zinc-50 shrink-0"
-        style={{ width: SIZE, height: SIZE }}
-        title="Save field first to enable image upload"
-        aria-label="Image upload locked — save field first"
-      >
-        <Camera className="h-4 w-4 text-zinc-300" aria-hidden />
-        {/* small lock overlay */}
-        <span
-          className="absolute bottom-0.5 right-0.5 flex items-center justify-center rounded-full bg-zinc-200"
-          style={{ width: 14, height: 14 }}
-          aria-hidden
+      <div className="flex items-center gap-1 shrink-0">
+        <div
+          className="relative flex items-center justify-center rounded border border-zinc-200 bg-zinc-50"
+          style={{ width: SIZE, height: SIZE }}
+          title="Save field first to enable image upload"
+          aria-label="Image upload locked — save field first"
         >
-          <svg width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden>
-            <rect x="1.5" y="4.5" width="7" height="5" rx="1" fill="#71717A" />
-            <path d="M3 4.5V3a2 2 0 0 1 4 0v1.5" stroke="#71717A" strokeWidth="1.2" strokeLinecap="round" />
-          </svg>
-        </span>
+          <Camera className="h-4 w-4 text-zinc-300" aria-hidden />
+          {/* small lock overlay */}
+          <span
+            className="absolute bottom-0.5 right-0.5 flex items-center justify-center rounded-full bg-zinc-200"
+            style={{ width: 14, height: 14 }}
+            aria-hidden
+          >
+            <svg width="8" height="8" viewBox="0 0 10 10" fill="none" aria-hidden>
+              <rect x="1.5" y="4.5" width="7" height="5" rx="1" fill="#71717A" />
+              <path d="M3 4.5V3a2 2 0 0 1 4 0v1.5" stroke="#71717A" strokeWidth="1.2" strokeLinecap="round" />
+            </svg>
+          </span>
+        </div>
       </div>
     );
   }
 
-  // ── Has image: thumbnail + hover-X ───────────────────────────────────────
+  // ── Has image: thumbnail + hover-X + gallery button ──────────────────────
   if (opt.imageUrl) {
     return (
-      <div
-        className="group relative rounded border border-zinc-200 overflow-hidden shrink-0 cursor-pointer"
-        style={{ width: SIZE, height: SIZE }}
-        onClick={triggerPicker}
-        title="Click to replace image"
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") triggerPicker(); }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={
-            opt.imageUrl.endsWith("/")
-              ? opt.imageUrl + "400w.jpg"
-              : opt.imageUrl.includes("/uploads/")
-                ? opt.imageUrl + "/400w.jpg"
-                : opt.imageUrl
-          }
-          alt={opt.label}
-          className="h-full w-full object-cover"
-          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-        />
-        {/* Remove button revealed on hover */}
+      <div className="flex items-center gap-1 shrink-0">
+        <div
+          className="group relative rounded border border-zinc-200 overflow-hidden cursor-pointer"
+          style={{ width: SIZE, height: SIZE }}
+          onClick={triggerPicker}
+          title="Click to replace image"
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") triggerPicker(); }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={
+              opt.imageUrl.endsWith("/")
+                ? opt.imageUrl + "400w.jpg"
+                : opt.imageUrl.includes("/uploads/")
+                  ? opt.imageUrl + "/400w.jpg"
+                  : opt.imageUrl
+            }
+            alt={opt.label}
+            className="h-full w-full object-cover"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+          />
+          {/* Remove button revealed on hover */}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); handleRemove(); }}
+            className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+            aria-label="Remove image"
+            title="Remove image"
+          >
+            <X className="h-3.5 w-3.5 text-white" />
+          </button>
+        </div>
+        {/* Gallery picker button */}
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); handleRemove(); }}
-          className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-          aria-label="Remove image"
-          title="Remove image"
+          onClick={triggerGallery}
+          disabled={uploading}
+          className="flex items-center justify-center rounded border border-zinc-200 bg-zinc-50 hover:border-zinc-400 hover:bg-zinc-100 transition-colors duration-150 disabled:opacity-50"
+          style={{ width: ICON_BTN_SIZE, height: ICON_BTN_SIZE }}
+          aria-label="Pick from product gallery"
+          title="Pick from product gallery"
         >
-          <X className="h-3.5 w-3.5 text-white" />
+          <Images className="h-4 w-4 text-zinc-400" aria-hidden />
         </button>
+        <ProductImageGalleryPicker
+          open={galleryOpen}
+          onOpenChange={setGalleryOpen}
+          productId={productId}
+          onSelect={(url) => onImageUrl(url)}
+        />
       </div>
     );
   }
 
-  // ── Empty / pending save: camera button (spinner during save+upload) ─────
+  // ── Empty / pending save: camera + gallery buttons ───────────────────────
   return (
-    <button
-      type="button"
-      onClick={triggerPicker}
-      disabled={uploading}
-      className="flex items-center justify-center rounded border border-zinc-200 bg-zinc-50 hover:border-zinc-400 hover:bg-zinc-100 transition-colors duration-150 disabled:opacity-50 shrink-0"
-      style={{ width: SIZE, height: SIZE }}
-      aria-label={fieldIdProp ? "Upload option image" : "Upload option image (field will be saved first)"}
-      title={fieldIdProp ? "Upload option image" : "Upload option image (saves field first)"}
-    >
-      {uploading ? (
-        <Loader2 className="h-3.5 w-3.5 text-zinc-400 animate-spin" aria-hidden />
-      ) : (
-        <Camera className="h-4 w-4 text-zinc-400" aria-hidden />
-      )}
-    </button>
+    <div className="flex items-center gap-1 shrink-0">
+      {/* Camera — upload new */}
+      <button
+        type="button"
+        onClick={triggerPicker}
+        disabled={uploading}
+        className="flex items-center justify-center rounded border border-zinc-200 bg-zinc-50 hover:border-zinc-400 hover:bg-zinc-100 transition-colors duration-150 disabled:opacity-50"
+        style={{ width: SIZE, height: SIZE }}
+        aria-label={fieldIdProp ? "Upload option image" : "Upload option image (field will be saved first)"}
+        title={fieldIdProp ? "Upload option image" : "Upload option image (saves field first)"}
+      >
+        {uploading ? (
+          <Loader2 className="h-3.5 w-3.5 text-zinc-400 animate-spin" aria-hidden />
+        ) : (
+          <Camera className="h-4 w-4 text-zinc-400" aria-hidden />
+        )}
+      </button>
+      {/* Gallery — pick existing */}
+      <button
+        type="button"
+        onClick={triggerGallery}
+        disabled={uploading}
+        className="flex items-center justify-center rounded border border-zinc-200 bg-zinc-50 hover:border-zinc-400 hover:bg-zinc-100 transition-colors duration-150 disabled:opacity-50"
+        style={{ width: SIZE, height: SIZE }}
+        aria-label="Pick from product gallery"
+        title="Pick from product gallery"
+      >
+        <Images className="h-4 w-4 text-zinc-400" aria-hidden />
+      </button>
+      <ProductImageGalleryPicker
+        open={galleryOpen}
+        onOpenChange={setGalleryOpen}
+        productId={productId}
+        onSelect={(url) => onImageUrl(url)}
+      />
+    </div>
   );
 }
 
@@ -474,6 +536,7 @@ export function SelectConfigForm({
   value,
   onChange,
   fieldId,
+  productId,
   productSlug,
   onSaveFieldFirst,
 }: {
@@ -481,6 +544,8 @@ export function SelectConfigForm({
   onChange: (v: Partial<SelectFieldConfig>) => void;
   /** fieldId is only available in edit mode (field already saved). Used for image upload. */
   fieldId?: string;
+  /** Product id — passed to the gallery picker so it can list existing product images. */
+  productId?: string;
   /** Product slug — used to auto-generate SKU when admin types an option label. */
   productSlug?: string;
   /** Auto-save the parent field and return its new id. Used for image upload in add mode. */
@@ -519,7 +584,7 @@ export function SelectConfigForm({
   return (
     <div className="space-y-1">
       {/* Column header row */}
-      <div className="grid grid-cols-[minmax(0,1fr)_96px_96px_40px_28px] items-center gap-2 px-3 py-2 text-[10px] uppercase tracking-wide text-zinc-500">
+      <div className="grid grid-cols-[minmax(0,1fr)_96px_96px_auto_28px] items-center gap-2 px-3 py-2 text-[10px] uppercase tracking-wide text-zinc-500">
         <span>Label / Value</span>
         <span>Price RM</span>
         <span>SKU</span>
@@ -531,7 +596,7 @@ export function SelectConfigForm({
       {options.map((opt, i) => (
         <div
           key={i}
-          className="grid grid-cols-[minmax(0,1fr)_96px_96px_40px_28px] items-center gap-2 py-2 border-b border-zinc-100 last:border-b-0"
+          className="grid grid-cols-[minmax(0,1fr)_96px_96px_auto_28px] items-center gap-2 py-2 border-b border-zinc-100 last:border-b-0"
         >
           {/* Label input — grid column 1 */}
           <Input
@@ -577,10 +642,11 @@ export function SelectConfigForm({
             aria-label={`Option ${i + 1} SKU`}
           />
 
-          {/* Image — 40×40 button */}
+          {/* Image — camera + gallery buttons */}
           <SelectOptionImageCell
             opt={opt}
             fieldId={fieldId}
+            productId={productId ?? "new"}
             onImageUrl={(url) => updateOption(i, { imageUrl: url })}
             onSaveFieldFirst={onSaveFieldFirst}
           />
@@ -951,6 +1017,7 @@ export function ConfigFieldFormBody({
               value={selectConfig}
               onChange={setSelectConfig}
               fieldId={mode === "edit" ? initialField?.id : undefined}
+              productId={productId}
               productSlug={productSlug}
               onSaveFieldFirst={mode === "add" ? saveAndGetFieldId : undefined}
             />

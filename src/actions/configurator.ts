@@ -1,6 +1,8 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
+import { promises as fsPromises } from "node:fs";
+import path from "node:path";
 import { db } from "@/lib/db";
 import {
   products,
@@ -591,6 +593,69 @@ export async function uploadSelectOptionImage(
   }
 
   return { ok: true as const, imageUrl: newUrl };
+}
+
+/**
+ * List all images already uploaded to a product's upload bucket.
+ * Used by the gallery picker so admins can re-use existing product images
+ * for Select option thumbnails without creating duplicate files.
+ *
+ * Returns subdirectory entries (each upload is a directory of variants).
+ * Filters to directories that contain a 400w.jpg (i.e. successfully processed).
+ */
+export async function listProductImages(
+  productId: string,
+): Promise<{ url: string; name: string }[]> {
+  await requireAdmin();
+
+  const UPLOADS_DIR = process.env.UPLOADS_DIR ?? "./public/uploads";
+  const PUBLIC_PREFIX = process.env.UPLOADS_PUBLIC_PREFIX ?? "/uploads";
+
+  // Sanitise productId — must be UUID-like (alphanum + dash).
+  const safePid = productId.replace(/[^a-zA-Z0-9-]/g, "");
+  if (!safePid) return [];
+
+  const bucketDir = path.join(process.cwd(), UPLOADS_DIR, "products", safePid);
+  const root = path.resolve(path.join(process.cwd(), UPLOADS_DIR));
+
+  // Path-traversal guard.
+  if (!path.resolve(bucketDir).startsWith(root)) return [];
+
+  let entries: string[];
+  try {
+    entries = await fsPromises.readdir(bucketDir);
+  } catch {
+    // Bucket dir doesn't exist yet — no images uploaded.
+    return [];
+  }
+
+  const result: { url: string; name: string }[] = [];
+
+  for (const entry of entries) {
+    const entryPath = path.join(bucketDir, entry);
+    let stat: Awaited<ReturnType<typeof fsPromises.stat>> | null = null;
+    try {
+      stat = await fsPromises.stat(entryPath);
+    } catch {
+      continue;
+    }
+    if (!stat.isDirectory()) continue;
+
+    // Confirm at least one image rendition exists (400w.jpg is always written).
+    const marker = path.join(entryPath, "400w.jpg");
+    try {
+      await fsPromises.access(marker);
+    } catch {
+      continue;
+    }
+
+    result.push({
+      url: `${PUBLIC_PREFIX}/products/${safePid}/${entry}`,
+      name: entry,
+    });
+  }
+
+  return result;
 }
 
 /**
