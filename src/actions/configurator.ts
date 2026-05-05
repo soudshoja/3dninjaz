@@ -624,13 +624,19 @@ export async function listProductImages(
   const bucketDir = path.join(process.cwd(), UPLOADS_DIR, "products", safePid);
 
   // Path-traversal guard — use realpath so symlinks resolve before comparison.
+  // IMPORTANT: resolve realRoot via the "products" subdirectory, not the uploads
+  // root itself. The symlink lives at uploads/products → /home/ninjaz/uploads/…,
+  // so realpath(uploads/) does NOT follow it and stays under the deploy tree,
+  // while realpath(uploads/products/<pid>/) does follow it and lands in the real
+  // storage path. Comparing the two would always fail. Using the parent of
+  // realBucket as the anchor is correct and still prevents path traversal.
   let realBucket: string;
   let realRoot: string;
   try {
-    const rawRoot = path.join(process.cwd(), UPLOADS_DIR);
+    const rawProductsRoot = path.join(process.cwd(), UPLOADS_DIR, "products");
     [realBucket, realRoot] = await Promise.all([
       fsPromises.realpath(bucketDir),
-      fsPromises.realpath(rawRoot).catch(() => path.resolve(rawRoot)),
+      fsPromises.realpath(rawProductsRoot).catch(() => path.resolve(rawProductsRoot)),
     ]);
   } catch {
     // bucketDir doesn't exist yet — no images uploaded for this product.
