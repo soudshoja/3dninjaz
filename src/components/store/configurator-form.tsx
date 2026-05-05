@@ -33,6 +33,13 @@ type Props = {
   values: Record<string, string>;
   onChange: (values: Record<string, string>) => void;
   onTouch: () => void;
+  /**
+   * Base price (MYR) — passed to SelectField so VariantOptionPicker can show
+   * per-option price override pills relative to the current base price.
+   * Optional: omit when no base price is known yet (e.g. tier-based products
+   * where no unit value has been entered).
+   */
+  basePrice?: number;
 };
 
 // ============================================================================
@@ -323,12 +330,14 @@ function SelectField({
   onChange,
   onTouch,
   touched,
+  basePrice,
 }: {
   field: PublicConfigField;
   value: string;
   onChange: (v: string) => void;
   onTouch: () => void;
   touched: React.MutableRefObject<boolean>;
+  basePrice?: number;
 }) {
   const cfg = field.config as SelectFieldConfig;
 
@@ -348,6 +357,7 @@ function SelectField({
         onChange={handleChange}
         label={field.label}
         placeholder={`Select ${field.label.toLowerCase()}…`}
+        basePrice={basePrice}
       />
       {field.helpText ? (
         <p className="text-xs px-1" style={{ color: "#6b7280" }}>{field.helpText}</p>
@@ -360,7 +370,7 @@ function SelectField({
 // ConfiguratorForm — main export
 // ============================================================================
 
-export function ConfiguratorForm({ fields, values, onChange, onTouch }: Props) {
+export function ConfiguratorForm({ fields, values, onChange, onTouch, basePrice }: Props) {
   const touchedRef = useRef(false);
 
   if (fields.length === 0) {
@@ -443,6 +453,7 @@ export function ConfiguratorForm({ fields, values, onChange, onTouch }: Props) {
                 onChange={handleFieldChange}
                 onTouch={onTouch}
                 touched={touchedRef}
+                basePrice={basePrice}
               />
             )}
 

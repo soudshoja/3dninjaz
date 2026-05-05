@@ -200,9 +200,9 @@ export function ConfigurableProductView({
     return override;
   }, [fields, values]);
 
-  const currentPrice: number | null = useMemo(() => {
-    // Per-option price override takes precedence over tier pricing.
-    if (selectPriceOverride !== null) return selectPriceOverride;
+  // Base price before any per-option select override — used as the reference
+  // price for VariantOptionPicker's diff pill (so customers see "+RM X / -RM X").
+  const basePriceBeforeOverride: number | null = useMemo(() => {
     if (unitField && unitFieldId) {
       return lookupTierPrice(priceTiers, unitFieldValue);
     }
@@ -211,7 +211,13 @@ export function ConfigurableProductView({
       return priceTiers[String(minKey)];
     }
     return null;
-  }, [priceTiers, unitField, unitFieldId, unitFieldValue, selectPriceOverride]);
+  }, [priceTiers, unitField, unitFieldId, unitFieldValue]);
+
+  const currentPrice: number | null = useMemo(() => {
+    // Per-option price override takes precedence over tier pricing.
+    if (selectPriceOverride !== null) return selectPriceOverride;
+    return basePriceBeforeOverride;
+  }, [basePriceBeforeOverride, selectPriceOverride]);
 
   const outOfTable =
     unitField !== null &&
@@ -480,6 +486,7 @@ export function ConfigurableProductView({
                 values={values}
                 onChange={setValues}
                 onTouch={handleTouch}
+                basePrice={basePriceBeforeOverride ?? undefined}
               />
             </div>
 

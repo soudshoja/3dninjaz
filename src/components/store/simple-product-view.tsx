@@ -178,18 +178,24 @@ export function SimpleProductView({
     return override;
   }, [fields, values, hasVariants]);
 
-  // Flat price: always priceTiers["1"]. Falls back to the smallest key if
-  // an admin somehow saved a different shape (defensive).
-  // Per-option price override from a select field takes precedence.
-  const flatPrice: number | null = useMemo(() => {
-    if (selectPriceOverride !== null) return selectPriceOverride;
+  // Base flat price before any per-option select override — used as the
+  // reference price for VariantOptionPicker's diff pill.
+  const baseFlatPrice: number | null = useMemo(() => {
     if (typeof priceTiers["1"] === "number") return priceTiers["1"];
     const minKey = Object.keys(priceTiers).map(Number).sort((a, b) => a - b)[0];
     if (minKey !== undefined && typeof priceTiers[String(minKey)] === "number") {
       return priceTiers[String(minKey)];
     }
     return null;
-  }, [priceTiers, selectPriceOverride]);
+  }, [priceTiers]);
+
+  // Flat price: always priceTiers["1"]. Falls back to the smallest key if
+  // an admin somehow saved a different shape (defensive).
+  // Per-option price override from a select field takes precedence.
+  const flatPrice: number | null = useMemo(() => {
+    if (selectPriceOverride !== null) return selectPriceOverride;
+    return baseFlatPrice;
+  }, [baseFlatPrice, selectPriceOverride]);
 
   // Customer-input fields (everything except admin-content textareas).
   // Hidden when variants are in play — variant-with-fields is a hybrid we
@@ -558,6 +564,7 @@ export function SimpleProductView({
                   onTouch={() => {
                     /* simple products have no live preview — no-op */
                   }}
+                  basePrice={baseFlatPrice ?? undefined}
                 />
               </div>
             )}
