@@ -53,7 +53,7 @@ function findLatestDraft(): DraftInfo | null {
         : "(unsaved product)";
     let url: string;
     if (scope === "configurator") url = `/admin/products/${productId}/configurator`;
-    else if (scope === "variants") url = `/admin/products/${productId}/variants`;
+    else if (scope === "variants") url = `/admin/products/${productId}/edit#variants`;
     else if (productId === "new") url = "/admin/products/new";
     else url = `/admin/products/${productId}/edit`;
     return { name, url, savedAt: best.savedAt };

@@ -83,7 +83,7 @@ export function ProductRowActions({
             <Edit className="mr-2 h-4 w-4" />
             Edit
           </DropdownMenuItem>
-          <DropdownMenuItem render={<Link href={`/admin/products/${id}/variants`} />}>
+          <DropdownMenuItem render={<Link href={`/admin/products/${id}/edit#variants`} />}>
             <Layers className="mr-2 h-4 w-4" />
             Variants
           </DropdownMenuItem>

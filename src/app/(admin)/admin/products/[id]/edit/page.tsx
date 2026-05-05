@@ -12,6 +12,7 @@ import { db } from "@/lib/db";
 import { productVariants, productConfigFields } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { getActiveCustomFontsForLoader } from "@/actions/custom-fonts";
+import { hydrateProductVariants } from "@/lib/variants";
 
 export const metadata: Metadata = {
   title: "Admin · Edit Product",
@@ -35,6 +36,16 @@ export default async function EditProductPage({
     db.select({ c: sql<number>`COUNT(*)` }).from(productConfigFields).where(eq(productConfigFields.productId, id)),
     getActiveCustomFontsForLoader().catch(() => [] as { familySlug: string; fileUrl: string; displayName: string }[]),
   ]);
+
+  // Inline variants — hydrate for stocked + simple so ProductForm renders
+  // the VariantEditor directly without a separate page hop.
+  // productType is derived below; we re-derive it inline here so we can use it
+  // before the full const declaration further down.
+  const _pt = (product.productType ?? "stocked") as string;
+  const inlineVariantsData =
+    _pt === "stocked" || _pt === "simple"
+      ? await hydrateProductVariants(id).catch(() => ({ options: [], variants: [] }))
+      : null;
 
   const variantCount = Number(variantCountRow[0]?.c ?? 0);
   const fieldCount = Number(fieldCountRow[0]?.c ?? 0);
@@ -149,6 +160,9 @@ export default async function EditProductPage({
     simplePrice: simplePriceValue,
     // Quick task 260430-kmr — pre-load config fields for inline editor.
     initialFields,
+    // Inline variants — pre-hydrated options + variants for stocked/simple.
+    initialOptions: inlineVariantsData?.options ?? undefined,
+    initialVariants: inlineVariantsData?.variants ?? undefined,
   };
 
   return (
@@ -193,7 +207,8 @@ export default async function EditProductPage({
           >
             View product ↗
           </a>
-          {/* Phase 19 (19-03) — swap Manage Variants for Manage Configurator on configurable products */}
+          {/* Configurator link — only for configurable / keychain / vending.
+              Stocked + simple now manage variants inline on this page (#variants). */}
           {productType === "configurable" ? (
             <a
               href={`/admin/products/${id}/configurator`}
@@ -215,26 +230,7 @@ export default async function EditProductPage({
             >
               Manage Vending Machine Fields →
             </a>
-          ) : productType === "simple" ? (
-            // Quick task 260430-kmr — Manage Fields → header link removed for
-            // simple. Fields are inline on /edit; admin doesn't need a hop.
-            // Quick task 260501-spv — simple products may now hold a single
-            // variant axis (Size OR Colour). Surface a Manage Variants link
-            // so admins can opt in without leaving the product edit page.
-            <a
-              href={`/admin/products/${id}/variants`}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px]"
-            >
-              Manage Variants →
-            </a>
-          ) : (
-            <a
-              href={`/admin/products/${id}/variants`}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--color-brand-blue)] text-white text-sm font-medium hover:opacity-90 transition-opacity min-h-[44px]"
-            >
-              Manage Variants →
-            </a>
-          )}
+          ) : null}
         </div>
       </div>
       <ProductForm
@@ -246,6 +242,7 @@ export default async function EditProductPage({
           name: s.name,
         }))}
         customFonts={activeCustomFonts}
+        productSlug={product.slug}
       />
     </div>
   );

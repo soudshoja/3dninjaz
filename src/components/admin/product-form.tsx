@@ -31,6 +31,8 @@ import { InlineFieldsEditor, type PendingField } from "@/components/admin/inline
 import { DraftRestoredBanner } from "@/components/admin/draft-restored-banner";
 import { useProductDraft } from "@/hooks/use-product-draft";
 import type { ConfigField } from "@/actions/configurator";
+import { VariantEditor } from "@/components/admin/variant-editor";
+import type { HydratedOption, HydratedVariant } from "@/lib/variants";
 
 export type ProductFormInitial = {
   id: string;
@@ -64,6 +66,12 @@ export type ProductFormInitial = {
    * Undefined for keychain/vending/stocked — those manage fields elsewhere.
    */
   initialFields?: ConfigField[];
+  /**
+   * Inline variants — pre-hydrated options + variants for stocked/simple products.
+   * When provided, VariantEditor renders inline instead of showing a "Manage variants →" link.
+   */
+  initialOptions?: HydratedOption[];
+  initialVariants?: HydratedVariant[];
 };
 
 export type CategoryOption = { id: string; name: string };
@@ -101,12 +109,15 @@ export function ProductForm({
   categories,
   subcategories,
   customFonts,
+  productSlug,
 }: {
   initialData?: ProductFormInitial;
   categories: CategoryOption[];
   subcategories: SubcategoryOption[];
   /** Custom uploaded fonts to surface in the Quill font picker. */
   customFonts?: { familySlug: string; displayName: string }[];
+  /** Product slug — passed through to VariantEditor for auto-SKU generation. */
+  productSlug?: string;
 }) {
   const router = useRouter();
   const editing = !!initialData;
@@ -389,12 +400,11 @@ export function ProductForm({
         // (no auto-seed; admin curates fields freely).
         // Quick task 260430-kmr — `simple` now lands directly on the unified
         // /edit page since fields are managed inline (no /fields hop).
-        if (productType === "simple") {
-          router.push(`/admin/products/${result.productId}/edit`);
-        } else if (productType === "configurable" || productType === "keychain" || productType === "vending") {
+        if (productType === "configurable" || productType === "keychain" || productType === "vending") {
           router.push(`/admin/products/${result.productId}/configurator`);
         } else {
-          router.push(`/admin/products/${result.productId}/variants`);
+          // stocked + simple — variants are now inline on /edit#variants
+          router.push(`/admin/products/${result.productId}/edit#variants`);
         }
         router.refresh();
       } else {
@@ -661,31 +671,35 @@ export function ProductForm({
         </CardContent>
       </Card>
 
-      {/* Variants — only shown for stocked products; configurator link shown for configurable */}
-      {productType === "stocked" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Variants</CardTitle>
-            <p className="text-sm text-[var(--color-brand-text-muted)]">
-              Sizes, colors, parts, prices, stock, and images are managed on the
-              dedicated variants page.
-            </p>
-          </CardHeader>
-          <CardContent>
-            {initialData?.id ? (
-              <a
-                href={`/admin/products/${initialData.id}/variants`}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
-              >
-                Manage variants →
-              </a>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Save the product first, then manage its variants.
+      {/* Variants — inline editor for stocked + simple products.
+          Shown when the product already exists (edit flow) with pre-hydrated data,
+          or as a "save first" placeholder on the create flow. */}
+      {(productType === "stocked" || productType === "simple") && (
+        <div id="variants" className="rounded-2xl border border-[var(--color-brand-border)] bg-white p-5 md:p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-bold text-[var(--color-brand-text-primary)]">Variants</h2>
+              <p className="text-sm text-[var(--color-brand-text-muted)] mt-0.5">
+                {productType === "simple"
+                  ? "Optional single-axis variants (e.g. Size OR Colour) for this product."
+                  : "Manage sizes, colours, prices, stock, and images per variant."}
               </p>
-            )}
-          </CardContent>
-        </Card>
+            </div>
+          </div>
+          {initialData?.id && productSlug ? (
+            <VariantEditor
+              productId={initialData.id}
+              productSlug={productSlug}
+              initialOptions={initialData.initialOptions ?? []}
+              initialVariants={initialData.initialVariants ?? []}
+              productType={productType === "simple" ? "simple" : "stocked"}
+            />
+          ) : (
+            <p className="text-sm text-[var(--color-brand-text-muted)]">
+              Save the product first, then manage its variants here.
+            </p>
+          )}
+        </div>
       )}
       {/* Quick task 260430-kmr — unified inline fields editor for simple AND
           configurable products. Description editor (Quill) is universal in
