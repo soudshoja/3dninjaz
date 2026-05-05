@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 
@@ -13,6 +13,11 @@ import { BRAND } from "@/lib/brand";
  * server-resolved srcset (avif/webp/jpeg). Parent passes pre-resolved
  * `pictures` PictureData[] from src/lib/image-manifest.ts. Legacy URLs
  * fall through to a single <img>.
+ *
+ * Mobile / tablet: scroll-snap carousel — finger-swipe left/right. Dot
+ * indicators below the images track the active slide. Arrow buttons and
+ * thumbnail strip are desktop-only (md:flex).
+ * Respects `prefers-reduced-motion: reduce` — skips smooth scroll.
  */
 
 type PictureSource = {
@@ -38,14 +43,54 @@ export function ProductGallery({
   const [activeIndex, setActiveIndex] = useState(0);
   const stripRef = useRef<HTMLUListElement>(null);
   const thumbRefs = useRef<(HTMLLIElement | null)[]>([]);
+  const slideContainerRef = useRef<HTMLDivElement>(null);
+  // True when the user prefers reduced motion
+  const prefersReducedMotion = useRef(false);
   const hasImages = images.length > 0;
-  const activePic = pictures?.[activeIndex];
-  const activeImage = hasImages ? images[activeIndex] : null;
   const sizes = "(max-width: 1024px) 100vw, 50vw";
   const thumbSizes = "80px";
 
-  const atStart = activeIndex === 0;
-  const atEnd = activeIndex === images.length - 1;
+  // Pick up prefers-reduced-motion on mount (client-only)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      prefersReducedMotion.current = window.matchMedia(
+        "(prefers-reduced-motion: reduce)"
+      ).matches;
+    }
+  }, []);
+
+  // When activeIndex changes externally (variant swap re-renders with new images
+  // array where the variant image is prepended at index 0), reset the carousel
+  // scroll position to the start.
+  useEffect(() => {
+    if (slideContainerRef.current) {
+      slideContainerRef.current.scrollTo({ left: 0, behavior: "instant" });
+    }
+    setActiveIndex(0);
+    // Only run when the images array reference changes (variant swap)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [images]);
+
+  // Sync activeIndex from scroll position (fires after touch swipe settles)
+  const handleScroll = useCallback(() => {
+    const container = slideContainerRef.current;
+    if (!container) return;
+    const slideWidth = container.offsetWidth;
+    if (slideWidth === 0) return;
+    const idx = Math.round(container.scrollLeft / slideWidth);
+    setActiveIndex((prev) => {
+      if (prev === idx) return prev;
+      // Also keep thumbnail strip in sync
+      requestAnimationFrame(() => {
+        thumbRefs.current[idx]?.scrollIntoView({
+          behavior: prefersReducedMotion.current ? "instant" : "smooth",
+          block: "nearest",
+          inline: "center",
+        });
+      });
+      return idx;
+    });
+  }, []);
 
   function goTo(dir: "left" | "right") {
     const newIdx =
@@ -53,61 +98,133 @@ export function ProductGallery({
         ? Math.max(0, activeIndex - 1)
         : Math.min(images.length - 1, activeIndex + 1);
     if (newIdx === activeIndex) return;
+
+    // Scroll the slide container to the target slide
+    const container = slideContainerRef.current;
+    if (container) {
+      container.scrollTo({
+        left: newIdx * container.offsetWidth,
+        behavior: prefersReducedMotion.current ? "instant" : "smooth",
+      });
+    }
+
     setActiveIndex(newIdx);
-    // Defer to next frame so the active thumb's updated styles settle before scroll
     requestAnimationFrame(() => {
       thumbRefs.current[newIdx]?.scrollIntoView({
-        behavior: "smooth",
+        behavior: prefersReducedMotion.current ? "instant" : "smooth",
         block: "nearest",
         inline: "center",
       });
     });
   }
 
+  function goToIndex(i: number) {
+    const container = slideContainerRef.current;
+    if (container) {
+      container.scrollTo({
+        left: i * container.offsetWidth,
+        behavior: prefersReducedMotion.current ? "instant" : "smooth",
+      });
+    }
+    setActiveIndex(i);
+  }
+
+  const atStart = activeIndex === 0;
+  const atEnd = activeIndex === images.length - 1;
+
   return (
     <div className="flex flex-col gap-4">
+      {/* ── Slide container (mobile: scroll-snap; desktop: single visible) ── */}
       <div
-        className="relative aspect-[4/5] rounded-[28px] overflow-hidden shadow-lg"
+        className="relative rounded-[28px] overflow-hidden shadow-lg"
         style={{ backgroundColor: `${BRAND.blue}15` }}
       >
-        {activeImage ? (
-          activePic && activePic.sources.length > 0 ? (
-            <picture>
-              {activePic.sources.map((s) => (
-                <source
-                  key={s.type}
-                  type={s.type}
-                  srcSet={s.srcSet}
-                  sizes={sizes}
-                />
-              ))}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={activePic.fallbackSrc}
-                alt={alt}
-                className="absolute inset-0 h-full w-full object-cover"
-                fetchPriority="high"
-              />
-            </picture>
+        <div
+          ref={slideContainerRef}
+          onScroll={handleScroll}
+          className="flex overflow-x-auto snap-x snap-mandatory"
+          style={{
+            scrollbarWidth: "none",
+            WebkitOverflowScrolling: "touch",
+          }}
+          aria-label="Product images"
+          role="region"
+        >
+          {hasImages ? (
+            images.map((img, i) => {
+              const pic = pictures?.[i];
+              return (
+                <div
+                  key={img + i}
+                  className="shrink-0 w-full snap-start aspect-[4/5] relative"
+                  aria-hidden={i !== activeIndex}
+                >
+                  {pic && pic.sources.length > 0 ? (
+                    <picture>
+                      {pic.sources.map((s) => (
+                        <source
+                          key={s.type}
+                          type={s.type}
+                          srcSet={s.srcSet}
+                          sizes={sizes}
+                        />
+                      ))}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={pic.fallbackSrc}
+                        alt={i === 0 ? alt : ""}
+                        className="absolute inset-0 h-full w-full object-cover"
+                        fetchPriority={i === 0 ? "high" : undefined}
+                        loading={i === 0 ? undefined : "lazy"}
+                      />
+                    </picture>
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={img}
+                      alt={i === 0 ? alt : ""}
+                      className="absolute inset-0 h-full w-full object-cover"
+                      fetchPriority={i === 0 ? "high" : undefined}
+                      loading={i === 0 ? undefined : "lazy"}
+                    />
+                  )}
+                </div>
+              );
+            })
           ) : (
-            // Legacy fallback
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={activeImage}
-              alt={alt}
-              className="absolute inset-0 h-full w-full object-cover"
-              fetchPriority="high"
-            />
-          )
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-slate-500">
-            No image available
-          </div>
-        )}
-
+            <div
+              className="shrink-0 w-full snap-start aspect-[4/5] flex items-center justify-center text-slate-500"
+            >
+              No image available
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* ── Dot indicators (mobile only, multi-image only) ── */}
       {images.length > 1 ? (
-        <div className="relative flex items-center gap-1 -mx-2 px-2">
+        <div className="flex md:hidden justify-center gap-1.5" aria-hidden="true">
+          {images.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => goToIndex(i)}
+              aria-label={`Go to image ${i + 1}`}
+              className="rounded-full transition-all duration-200"
+              style={{
+                width: i === activeIndex ? 20 : 7,
+                height: 7,
+                backgroundColor:
+                  i === activeIndex ? BRAND.blue : `${BRAND.ink}30`,
+              }}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      {/* ── Arrows + thumbnail strip (desktop only) ── */}
+      {images.length > 1 ? (
+        <div className="hidden md:flex items-center gap-1 -mx-2 px-2">
           {/* Left arrow — previous image */}
           <button
             type="button"
@@ -146,16 +263,17 @@ export function ProductGallery({
                 >
                   <button
                     type="button"
-                    onClick={() => setActiveIndex(i)}
+                    onClick={() => goToIndex(i)}
                     aria-label={`View image ${i + 1} of ${images.length}`}
                     aria-current={i === activeIndex ? "true" : undefined}
                     className="relative h-20 w-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all duration-200 cursor-pointer min-h-[48px] min-w-[48px]"
                     style={{
                       borderColor: i === activeIndex ? BRAND.blue : "transparent",
                       backgroundColor: `${BRAND.blue}10`,
-                      boxShadow: i === activeIndex
-                        ? `0 0 0 2px ${BRAND.blue}40, 0 3px 0 ${BRAND.blueDark}40`
-                        : "0 2px 4px rgba(0,0,0,0.06)",
+                      boxShadow:
+                        i === activeIndex
+                          ? `0 0 0 2px ${BRAND.blue}40, 0 3px 0 ${BRAND.blueDark}40`
+                          : "0 2px 4px rgba(0,0,0,0.06)",
                     }}
                   >
                     {tp && tp.sources.length > 0 ? (
