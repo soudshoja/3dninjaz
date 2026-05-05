@@ -6,7 +6,7 @@
  * INFORMATION_SCHEMA existence check).
  *
  * Applies one mutation:
- *   products.hide_base_price  BOOLEAN NOT NULL DEFAULT 0  AFTER weight_kg
+ *   products.hide_base_price  BOOLEAN NOT NULL DEFAULT 0  AFTER shipping_weight_kg
  *
  * Run: node scripts/phase-hide-base-price-migrate.cjs
  *   or: dotenv -e .env.local -- node scripts/phase-hide-base-price-migrate.cjs
@@ -56,7 +56,7 @@ async function main() {
     } else {
       await conn.query(
         `ALTER TABLE products
-         ADD COLUMN hide_base_price BOOLEAN NOT NULL DEFAULT 0 AFTER weight_kg`,
+         ADD COLUMN hide_base_price BOOLEAN NOT NULL DEFAULT 0 AFTER shipping_weight_kg`,
       );
       console.log("✓ Added products.hide_base_price");
     }
