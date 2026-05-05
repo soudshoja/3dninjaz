@@ -43,7 +43,7 @@ export async function SiteFooter() {
 
   const hasEmail = !!settings.contactEmail;
   const hasPhone = usable(settings.contactPhone);
-  const hasWhatsApp = !!settings.whatsappNumber && settings.whatsappNumber !== "60000000000";
+  const hasWhatsApp = !!settings.whatsappNumber && settings.whatsappNumber.length > 0;
 
   return (
     <footer

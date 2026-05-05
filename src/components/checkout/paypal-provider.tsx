@@ -19,6 +19,7 @@ import {
 import type { SavedAddress } from "@/actions/addresses";
 import type { AppliedCoupon } from "@/components/store/coupon-apply";
 import { clearDraft } from "@/stores/checkout-draft-store";
+import { WhatsAppBankTransferButton } from "./whatsapp-bank-transfer-button";
 
 /**
  * Client-side checkout island (D3-04). Wraps everything in PayPalScriptProvider
@@ -38,7 +39,7 @@ import { clearDraft } from "@/stores/checkout-draft-store";
  */
 export function CheckoutIsland({
   defaultName,
-  defaultEmail: _defaultEmail,
+  defaultEmail,
   savedAddresses,
   userId,
 }: {
@@ -155,6 +156,15 @@ export function CheckoutIsland({
               shipping={shipping}
               onPaid={handlePaid}
             />
+            <WhatsAppBankTransferButton
+              items={items}
+              subtotal={subtotal}
+              shipping={shipping}
+              address={address}
+              customerName={defaultName}
+              customerEmail={defaultEmail}
+              disabled={items.length === 0}
+            />
           </div>
         </section>
 
@@ -190,6 +200,8 @@ export function CheckoutIsland({
           onCouponChange={setAppliedCoupon}
           shipping={shipping}
           onPaid={handlePaid}
+          customerName={defaultName}
+          customerEmail={defaultEmail}
         />
       </div>
     </PayPalScriptProvider>

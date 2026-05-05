@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/drawer";
 import { CheckoutSummary } from "./checkout-summary";
 import { PayPalButton } from "./paypal-button";
+import { WhatsAppBankTransferButton } from "./whatsapp-bank-transfer-button";
 import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
 import type { HydratedCartItem } from "@/actions/cart";
@@ -25,7 +26,7 @@ import type { SelectedShipping } from "./shipping-rate-picker";
  * - Visible only below the `md` breakpoint (≤ 768px).
  * - Dock shows the current total and a "Review & Pay" button that opens
  *   a Drawer (vaul bottom-sheet shape on mobile) with the order summary
- *   plus the PayPal button.
+ *   plus the PayPal button and WhatsApp bank-transfer CTA.
  * - Tap targets: total+button row meets 60px minimum for primary CTAs
  *   (D3-20).
  */
@@ -37,6 +38,8 @@ export function MobileSummarySheet({
   onCouponChange,
   shipping,
   onPaid,
+  customerName,
+  customerEmail,
 }: {
   items: HydratedCartItem[];
   subtotalMyr: number;
@@ -45,6 +48,8 @@ export function MobileSummarySheet({
   onCouponChange: (next: AppliedCoupon | null) => void;
   shipping: SelectedShipping | null;
   onPaid: (redirectTo: string) => void;
+  customerName: string;
+  customerEmail: string;
 }) {
   const [open, setOpen] = useState(false);
   const discountedSubtotal = appliedCoupon
@@ -106,6 +111,15 @@ export function MobileSummarySheet({
                 setOpen(false);
                 onPaid(redirect);
               }}
+            />
+            <WhatsAppBankTransferButton
+              items={items}
+              subtotal={subtotalMyr}
+              shipping={shipping}
+              address={address}
+              customerName={customerName}
+              customerEmail={customerEmail}
+              disabled={items.length === 0}
             />
           </DrawerFooter>
         </DrawerContent>
