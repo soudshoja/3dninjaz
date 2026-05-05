@@ -353,6 +353,7 @@ export function SimpleFieldsEditor({ initial }: Props) {
         open={addModalOpen}
         onOpenChange={setAddModalOpen}
         productId={product.id}
+        productSlug={product.slug}
         mode="add"
         onSaved={async () => {
           setAddModalOpen(false);
@@ -369,6 +370,7 @@ export function SimpleFieldsEditor({ initial }: Props) {
             if (!v) setEditingField(null);
           }}
           productId={product.id}
+          productSlug={product.slug}
           mode="edit"
           initialField={editingField}
           onSaved={async () => {

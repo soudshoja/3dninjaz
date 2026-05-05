@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, Plus, Trash2, Type, Hash, Palette, ListChecks, FileText, ImagePlus, Camera, X } from "lucide-react";
+import { AlertCircle, Plus, Trash2, Type, Hash, Palette, ListChecks, FileText, ImagePlus, Camera, X, Loader2 } from "lucide-react";
 import { ColourPickerDialog, type ColourPickerRow, type MyColoursPrompt } from "@/components/admin/colour-picker-dialog";
 import { getActiveColoursForPicker, getMyColoursForPicker } from "@/actions/admin-colours";
 import {
@@ -24,6 +24,7 @@ import {
   removeSelectOptionImage,
   type ConfigField,
 } from "@/actions/configurator";
+import { generateVariantSku } from "@/lib/sku";
 import {
   TextFieldConfigSchema,
   NumberFieldConfigSchema,
@@ -60,6 +61,8 @@ type Props = {
    * run auto-fill logic (e.g. Base → Clicker/Letter palette sync).
    */
   onSaved: (savedField?: ConfigField) => Promise<void> | void;
+  /** Product slug — threaded to SelectConfigForm for SKU autogen. */
+  productSlug?: string;
 };
 
 type FieldTypeMeta = {
@@ -300,19 +303,29 @@ type SelectOption = {
 };
 
 // Internal per-option image button — 40×40 square.
-// Locked (no fieldId): grey camera icon with lock-icon overlay and tooltip.
-// Empty (fieldId present): camera icon button, click opens file picker.
+// When fieldId is missing and onSaveFieldFirst is provided, clicking auto-saves
+// the field first, then proceeds with the upload transparently.
 // Filled: thumbnail, hover reveals X remove button.
 function SelectOptionImageCell({
   opt,
-  fieldId,
+  fieldId: fieldIdProp,
   onImageUrl,
+  onSaveFieldFirst,
 }: {
   opt: SelectOption;
   fieldId: string | undefined;
   onImageUrl: (url: string | undefined) => void;
+  /** Auto-save the parent field and return its new id. Used when fieldId is absent. */
+  onSaveFieldFirst?: () => Promise<{ fieldId: string } | null>;
 }) {
   const [uploading, setUploading] = useState(false);
+  // Track the resolved fieldId locally so that after an auto-save the upload
+  // can proceed with the newly returned id even before the parent re-renders.
+  const resolvedFieldIdRef = useState<string | undefined>(fieldIdProp)[0];
+  // Keep a ref that always holds the latest fieldIdProp so the file-change
+  // handler (registered once) can access the most-recent value.
+  const fieldIdRef = { current: fieldIdProp };
+
   const inputRef = useState(() => {
     if (typeof document === "undefined") return null;
     const el = document.createElement("input");
@@ -326,11 +339,13 @@ function SelectOptionImageCell({
     if (!inputRef) return;
     const handler = async () => {
       const file = inputRef.files?.[0];
-      if (!file || !fieldId) return;
+      if (!file) return;
+      const id = fieldIdRef.current;
+      if (!id) return;
       setUploading(true);
       const fd = new FormData();
       fd.append("file", file);
-      const result = await uploadSelectOptionImage(fieldId, opt.value, fd);
+      const result = await uploadSelectOptionImage(id, opt.value, fd);
       setUploading(false);
       if (result.ok) {
         onImageUrl(result.imageUrl);
@@ -340,23 +355,39 @@ function SelectOptionImageCell({
     };
     inputRef.addEventListener("change", handler);
     return () => inputRef.removeEventListener("change", handler);
-  }, [inputRef, fieldId, opt.value, onImageUrl]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputRef, opt.value, onImageUrl]);
 
-  const triggerPicker = () => {
-    if (!fieldId || uploading) return;
+  // Update ref when prop changes (avoids stale closure in the file handler).
+  fieldIdRef.current = fieldIdProp;
+
+  const triggerPicker = async () => {
+    if (uploading) return;
+    let id = fieldIdRef.current;
+    // Auto-save when fieldId is missing and callback is provided.
+    if (!id && onSaveFieldFirst) {
+      setUploading(true);
+      const saved = await onSaveFieldFirst();
+      setUploading(false);
+      if (!saved?.fieldId) return; // save failed or was cancelled; abort
+      id = saved.fieldId;
+      fieldIdRef.current = id;
+    }
+    if (!id) return; // no fieldId and no auto-save callback; do nothing
     inputRef?.click();
   };
 
   const handleRemove = async () => {
-    if (!fieldId) return;
-    const result = await removeSelectOptionImage(fieldId, opt.value);
+    const id = fieldIdRef.current;
+    if (!id) return;
+    const result = await removeSelectOptionImage(id, opt.value);
     if (result.ok) onImageUrl(undefined);
   };
 
   const SIZE = 40;
 
-  // ── Unsaved field: locked camera button ──────────────────────────────────
-  if (!fieldId) {
+  // ── Fallback: locked camera when no fieldId AND no auto-save callback ────
+  if (!fieldIdProp && !onSaveFieldFirst) {
     return (
       <div
         className="relative flex items-center justify-center rounded border border-zinc-200 bg-zinc-50 shrink-0"
@@ -419,7 +450,7 @@ function SelectOptionImageCell({
     );
   }
 
-  // ── Empty: compact camera button ─────────────────────────────────────────
+  // ── Empty / pending save: camera button (spinner during save+upload) ─────
   return (
     <button
       type="button"
@@ -427,11 +458,11 @@ function SelectOptionImageCell({
       disabled={uploading}
       className="flex items-center justify-center rounded border border-zinc-200 bg-zinc-50 hover:border-zinc-400 hover:bg-zinc-100 transition-colors duration-150 disabled:opacity-50 shrink-0"
       style={{ width: SIZE, height: SIZE }}
-      aria-label="Upload option image"
-      title="Upload option image"
+      aria-label={fieldIdProp ? "Upload option image" : "Upload option image (field will be saved first)"}
+      title={fieldIdProp ? "Upload option image" : "Upload option image (saves field first)"}
     >
       {uploading ? (
-        <span className="text-[10px] text-zinc-400">…</span>
+        <Loader2 className="h-3.5 w-3.5 text-zinc-400 animate-spin" aria-hidden />
       ) : (
         <Camera className="h-4 w-4 text-zinc-400" aria-hidden />
       )}
@@ -443,18 +474,37 @@ export function SelectConfigForm({
   value,
   onChange,
   fieldId,
+  productSlug,
+  onSaveFieldFirst,
 }: {
   value: Partial<SelectFieldConfig>;
   onChange: (v: Partial<SelectFieldConfig>) => void;
   /** fieldId is only available in edit mode (field already saved). Used for image upload. */
   fieldId?: string;
-  /** @deprecated no longer used — kept for call-site compat */
-  onSaveFieldFirst?: () => void;
+  /** Product slug — used to auto-generate SKU when admin types an option label. */
+  productSlug?: string;
+  /** Auto-save the parent field and return its new id. Used for image upload in add mode. */
+  onSaveFieldFirst?: () => Promise<{ fieldId: string } | null>;
 }) {
   const options: SelectOption[] = value.options ?? [];
 
   const updateOption = (index: number, patch: Partial<SelectOption>) => {
-    const next = options.map((o, i) => (i === index ? { ...o, ...patch } : o));
+    const current = options[index];
+    // SKU autogen: when label changes and sku is currently empty, auto-fill.
+    // Only autofill if sku was already empty (or undefined) before this patch —
+    // never overwrite an admin-entered value.
+    let resolvedPatch = patch;
+    if (
+      "label" in patch &&
+      productSlug &&
+      patch.label !== undefined &&
+      !current?.sku // sku is falsy (empty string or undefined)
+    ) {
+      const label = patch.label ?? "";
+      const autoSku = label.trim() ? generateVariantSku(productSlug, [label]) : "";
+      resolvedPatch = { ...patch, sku: autoSku || undefined };
+    }
+    const next = options.map((o, i) => (i === index ? { ...o, ...resolvedPatch } : o));
     onChange({ ...value, options: next });
   };
 
@@ -532,6 +582,7 @@ export function SelectConfigForm({
             opt={opt}
             fieldId={fieldId}
             onImageUrl={(url) => updateOption(i, { imageUrl: url })}
+            onSaveFieldFirst={onSaveFieldFirst}
           />
 
           {/* Delete */}
@@ -563,7 +614,7 @@ export function SelectConfigForm({
 
       <p className="text-xs text-zinc-400 pt-1">
         <strong>Price RM</strong> overrides the tier price.{" "}
-        {!fieldId && (
+        {!fieldId && !onSaveFieldFirst && (
           <span className="text-amber-600 font-medium">
             Save this field once to unlock image upload.
           </span>
@@ -584,6 +635,8 @@ export type ConfigFieldFormBodyProps = {
   initialField?: ConfigField;
   onSaved: (savedField?: ConfigField) => Promise<void> | void;
   onCancel: () => void;
+  /** Product slug — threaded through to SelectConfigForm for SKU autogen. */
+  productSlug?: string;
 };
 
 export function ConfigFieldFormBody({
@@ -592,6 +645,7 @@ export function ConfigFieldFormBody({
   initialField,
   onSaved,
   onCancel,
+  productSlug,
 }: ConfigFieldFormBodyProps) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -702,6 +756,37 @@ export function ConfigFieldFormBody({
       }
       await onSaved(savedField);
     });
+  };
+
+  /**
+   * Auto-save variant for image-upload trigger in add mode.
+   * Runs the same validation + addConfigField call but outside startTransition
+   * so it can return a Promise that resolves with the new fieldId.
+   * Returns null on validation failure or server error.
+   */
+  const saveAndGetFieldId = async (): Promise<{ fieldId: string } | null> => {
+    setError(null);
+    const validationError = validateConfig();
+    if (validationError) {
+      setError(validationError);
+      return null;
+    }
+    const config = getConfig()!;
+    const result = await addConfigField(productId, {
+      fieldType: fieldType!,
+      label: label.trim(),
+      helpText: helpText.trim() || undefined,
+      required,
+      config,
+    });
+    if (!result.ok) {
+      setError("error" in result ? (result.error ?? "Save failed") : "Save failed");
+      return null;
+    }
+    // Notify parent (closes modal / refreshes list) after image upload completes.
+    // Fire-and-forget: we don't await here so the upload can proceed immediately.
+    void onSaved(undefined);
+    return { fieldId: result.field.id };
   };
 
   return (
@@ -866,7 +951,8 @@ export function ConfigFieldFormBody({
               value={selectConfig}
               onChange={setSelectConfig}
               fieldId={mode === "edit" ? initialField?.id : undefined}
-              onSaveFieldFirst={mode === "add" ? handleSave : undefined}
+              productSlug={productSlug}
+              onSaveFieldFirst={mode === "add" ? saveAndGetFieldId : undefined}
             />
           )}
           {/* Quick task 260430-icx — Quill rich-text editor for textarea fields. */}
@@ -916,6 +1002,7 @@ export function ConfigFieldModal({
   mode,
   initialField,
   onSaved,
+  productSlug,
 }: Props) {
   const handleOpenChange = (v: boolean) => {
     onOpenChange(v);
@@ -939,6 +1026,7 @@ export function ConfigFieldModal({
           productId={productId}
           mode={mode}
           initialField={initialField}
+          productSlug={productSlug}
           onSaved={async (savedField) => {
             await onSaved(savedField);
             onOpenChange(false);

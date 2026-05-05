@@ -92,6 +92,8 @@ type Props = {
   initialPrice: string;
   onPriceChange: (price: string) => void;
   onFieldsChange: (fields: PendingField[]) => void;
+  /** Product slug — passed to SelectConfigForm for SKU autogen. */
+  productSlug?: string;
 };
 
 // ============================================================================
@@ -162,6 +164,7 @@ export function InlineFieldsEditor({
   initialPrice,
   onPriceChange,
   onFieldsChange,
+  productSlug,
 }: Props) {
   const [fields, setFieldsLocal] = useState<PendingField[]>(initialFields);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -558,6 +561,7 @@ export function InlineFieldsEditor({
                   <ExpandedFieldBody
                     field={field}
                     productId={productId ?? "new"}
+                    productSlug={productSlug}
                     onLabelChange={(v) => updateField(field.id, { label: v })}
                     onHelpTextChange={(v) =>
                       updateField(field.id, { helpText: v === "" ? null : v })
@@ -596,6 +600,7 @@ export function InlineFieldsEditor({
 function ExpandedFieldBody({
   field,
   productId,
+  productSlug,
   onLabelChange,
   onHelpTextChange,
   onRequiredChange,
@@ -603,6 +608,7 @@ function ExpandedFieldBody({
 }: {
   field: PendingField;
   productId: string;
+  productSlug?: string;
   onLabelChange: (v: string) => void;
   onHelpTextChange: (v: string) => void;
   onRequiredChange: (v: boolean) => void;
@@ -685,6 +691,7 @@ function ExpandedFieldBody({
           <SelectConfigForm
             value={field.config as SelectFieldConfig}
             onChange={(v) => onConfigChange(v as SelectFieldConfig)}
+            productSlug={productSlug}
           />
         )}
         {field.fieldType === "textarea" && (

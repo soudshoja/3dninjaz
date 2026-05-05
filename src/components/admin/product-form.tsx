@@ -738,6 +738,7 @@ export function ProductForm({
           initialPrice={simplePrice}
           onPriceChange={setSimplePrice}
           onFieldsChange={setFields}
+          productSlug={productSlug}
         />
       )}
       {/* Surface the simple-product price validation error inline (the editor

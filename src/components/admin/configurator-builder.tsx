@@ -641,6 +641,7 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
                     {expandedFieldId === field.id && (
                       <ConfigFieldFormBody
                         productId={product.id}
+                        productSlug={product.slug}
                         mode="edit"
                         initialField={field}
                         onSaved={async (savedField) => {
@@ -676,6 +677,7 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
         open={addModalOpen}
         onOpenChange={setAddModalOpen}
         productId={product.id}
+        productSlug={product.slug}
         mode="add"
         onSaved={async (_savedField) => {
           setAddModalOpen(false);
@@ -738,6 +740,7 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
             if (!v) setEditingField(null);
           }}
           productId={product.id}
+          productSlug={product.slug}
           mode="edit"
           initialField={editingField}
           onSaved={async (savedField) => {
