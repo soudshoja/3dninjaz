@@ -600,8 +600,14 @@ export async function uploadSelectOptionImage(
  * Used by the gallery picker so admins can re-use existing product images
  * for Select option thumbnails without creating duplicate files.
  *
- * Returns subdirectory entries (each upload is a directory of variants).
- * Filters to directories that contain a 400w.jpg (i.e. successfully processed).
+ * Returns one entry per image UUID subdirectory that has been successfully
+ * processed (contains manifest.json or at least one image rendition).
+ *
+ * The path-traversal guard uses fs.realpath() to resolve symlinks before
+ * comparing — the server stores uploads outside the deploy tree and symlinks
+ * public/uploads/products → /home/ninjaz/uploads/3dninjaz_v1/products, so
+ * path.resolve() alone (which does NOT follow symlinks) would fail the check
+ * and return [] even when images are present.
  */
 export async function listProductImages(
   productId: string,
@@ -616,43 +622,72 @@ export async function listProductImages(
   if (!safePid) return [];
 
   const bucketDir = path.join(process.cwd(), UPLOADS_DIR, "products", safePid);
-  const root = path.resolve(path.join(process.cwd(), UPLOADS_DIR));
 
-  // Path-traversal guard.
-  if (!path.resolve(bucketDir).startsWith(root)) return [];
+  // Path-traversal guard — use realpath so symlinks resolve before comparison.
+  let realBucket: string;
+  let realRoot: string;
+  try {
+    const rawRoot = path.join(process.cwd(), UPLOADS_DIR);
+    [realBucket, realRoot] = await Promise.all([
+      fsPromises.realpath(bucketDir),
+      fsPromises.realpath(rawRoot).catch(() => path.resolve(rawRoot)),
+    ]);
+  } catch {
+    // bucketDir doesn't exist yet — no images uploaded for this product.
+    return [];
+  }
+  if (!realBucket.startsWith(realRoot)) return [];
 
   let entries: string[];
   try {
-    entries = await fsPromises.readdir(bucketDir);
+    entries = await fsPromises.readdir(realBucket);
   } catch {
-    // Bucket dir doesn't exist yet — no images uploaded.
     return [];
   }
+
+  const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".avif"]);
+  const SKIP_FILES = new Set([".gitkeep", ".DS_Store", "Thumbs.db"]);
 
   const result: { url: string; name: string }[] = [];
 
   for (const entry of entries) {
-    const entryPath = path.join(bucketDir, entry);
+    if (SKIP_FILES.has(entry)) continue;
+
+    const entryPath = path.join(realBucket, entry);
     let stat: Awaited<ReturnType<typeof fsPromises.stat>> | null = null;
     try {
       stat = await fsPromises.stat(entryPath);
     } catch {
       continue;
     }
-    if (!stat.isDirectory()) continue;
 
-    // Confirm at least one image rendition exists (400w.jpg is always written).
-    const marker = path.join(entryPath, "400w.jpg");
-    try {
-      await fsPromises.access(marker);
-    } catch {
-      continue;
+    if (stat.isDirectory()) {
+      // Each image UUID directory contains responsive variants (400w.jpg etc.)
+      // Confirm at least one image variant exists before including it.
+      let hasImage = false;
+      try {
+        const children = await fsPromises.readdir(entryPath);
+        hasImage = children.some((f) => IMAGE_EXTS.has(path.extname(f).toLowerCase()));
+      } catch {
+        continue;
+      }
+      if (!hasImage) continue;
+
+      result.push({
+        url: `${PUBLIC_PREFIX}/products/${safePid}/${entry}`,
+        name: entry,
+      });
+    } else if (stat.isFile()) {
+      // Legacy flat layout: a bare image file directly under the product dir.
+      const ext = path.extname(entry).toLowerCase();
+      if (!IMAGE_EXTS.has(ext)) continue;
+      if (SKIP_FILES.has(entry)) continue;
+
+      result.push({
+        url: `${PUBLIC_PREFIX}/products/${safePid}/${entry}`,
+        name: entry,
+      });
     }
-
-    result.push({
-      url: `${PUBLIC_PREFIX}/products/${safePid}/${entry}`,
-      name: entry,
-    });
   }
 
   return result;
