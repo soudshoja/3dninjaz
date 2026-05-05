@@ -234,14 +234,6 @@ function OptionRow({
         >
           {opt.label}
         </span>
-        {opt.sku && (
-          <span
-            className="font-medium truncate mt-0.5"
-            style={{ fontSize: 11, color: "#94a3b8" }}
-          >
-            {opt.sku}
-          </span>
-        )}
       </span>
 
       <PricePill opt={opt} basePrice={basePrice} />
@@ -302,14 +294,6 @@ function TriggerButton({
             >
               {selected.label}
             </span>
-            {selected.sku && (
-              <span
-                className="font-medium truncate mt-0.5"
-                style={{ fontSize: 11, color: "#94a3b8" }}
-              >
-                {selected.sku}
-              </span>
-            )}
           </span>
           <PricePill opt={selected} />
         </>
@@ -709,14 +693,6 @@ export function VariantOptionPicker({
               >
                 {selectedOpt.label}
               </span>
-              {selectedOpt.sku && (
-                <span
-                  className="font-medium truncate mt-0.5"
-                  style={{ fontSize: 11, color: "#94a3b8" }}
-                >
-                  {selectedOpt.sku}
-                </span>
-              )}
             </span>
             <PricePill opt={selectedOpt} basePrice={basePrice} />
           </>
