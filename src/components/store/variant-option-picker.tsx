@@ -76,35 +76,18 @@ function resolveImageSrc(imageUrl: string | undefined): string | null {
   return imageUrl + "/400w.jpg";
 }
 
-/** Generate a brand-coloured initial chip when no image is available. */
-function InitialChip({ label }: { label: string }) {
-  const initial = (label[0] ?? "?").toUpperCase();
-  return (
-    <span
-      className="flex items-center justify-center text-lg font-extrabold shrink-0 select-none"
-      style={{
-        width: 56,
-        height: 56,
-        borderRadius: 12,
-        backgroundColor: BRAND.blue,
-        color: "#ffffff",
-        boxShadow: `0 3px 0 ${BRAND.blueDark}`,
-      }}
-      aria-hidden="true"
-    >
-      {initial}
-    </span>
-  );
-}
-
-/** Thumbnail with error fallback to InitialChip. */
+/**
+ * Thumbnail with error fallback to an invisible placeholder.
+ * When `showThumb` is false (no options in the picker have images) the caller
+ * omits this component entirely — no column, no letter chip.
+ * When `showThumb` is true but this specific option has no image, we render a
+ * transparent placeholder so rows with images and rows without stay aligned.
+ */
 function OptionThumb({
   imageUrl,
-  label,
   isSelected,
 }: {
   imageUrl?: string;
-  label: string;
   isSelected: boolean;
 }) {
   const [imgError, setImgError] = useState(false);
@@ -129,10 +112,14 @@ function OptionThumb({
           onError={() => setImgError(true)}
         />
       ) : (
-        <InitialChip label={label} />
+        /* Invisible spacer — keeps alignment when some options have images */
+        <span
+          aria-hidden="true"
+          style={{ display: "block", width: 56, height: 56 }}
+        />
       )}
       {/* Selected check badge */}
-      {isSelected && (
+      {isSelected && src && !imgError && (
         <span
           className="absolute flex items-center justify-center"
           style={{
@@ -210,6 +197,7 @@ function OptionRow({
   isSelected,
   isFocused,
   basePrice,
+  showThumb,
   onClick,
   onMouseEnter,
   id,
@@ -218,6 +206,8 @@ function OptionRow({
   isSelected: boolean;
   isFocused: boolean;
   basePrice?: number;
+  /** Whether the thumbnail column should be rendered (true when at least one option in the picker has an image). */
+  showThumb: boolean;
   onClick: () => void;
   onMouseEnter: () => void;
   id: string;
@@ -252,7 +242,9 @@ function OptionRow({
         userSelect: "none",
       }}
     >
-      <OptionThumb imageUrl={opt.imageUrl} label={opt.label} isSelected={isSelected} />
+      {showThumb && (
+        <OptionThumb imageUrl={opt.imageUrl} isSelected={isSelected} />
+      )}
 
       {/* Text block */}
       <span className="flex flex-col min-w-0 flex-1">
@@ -325,7 +317,7 @@ function TriggerButton({
     >
       {selected ? (
         <>
-          <OptionThumb imageUrl={selected.imageUrl} label={selected.label} isSelected={false} />
+          <OptionThumb imageUrl={selected.imageUrl} isSelected={false} />
           <span className="flex flex-col min-w-0 flex-1 text-left">
             <span
               className="font-bold leading-tight truncate"
@@ -372,6 +364,7 @@ interface PopoverProps {
   value: string;
   basePrice?: number;
   focusedIdx: number;
+  showThumb: boolean;
   onSelect: (v: string) => void;
   onFocusIdx: (idx: number) => void;
   listboxId: string;
@@ -385,6 +378,7 @@ function DesktopPopover({
   value,
   basePrice,
   focusedIdx,
+  showThumb,
   onSelect,
   onFocusIdx,
   listboxId,
@@ -467,6 +461,7 @@ function DesktopPopover({
             isSelected={opt.value === value}
             isFocused={idx === focusedIdx}
             basePrice={basePrice}
+            showThumb={showThumb}
             onClick={() => { onSelect(opt.value); onClose(); }}
             onMouseEnter={() => onFocusIdx(idx)}
           />
@@ -486,6 +481,7 @@ interface BottomSheetProps {
   value: string;
   basePrice?: number;
   label?: string;
+  showThumb: boolean;
   onSelect: (v: string) => void;
   onClose: () => void;
 }
@@ -496,6 +492,7 @@ function MobileBottomSheet({
   value,
   basePrice,
   label,
+  showThumb,
   onSelect,
   onClose,
 }: BottomSheetProps) {
@@ -572,6 +569,7 @@ function MobileBottomSheet({
                 isSelected={opt.value === value}
                 isFocused={false}
                 basePrice={basePrice}
+                showThumb={showThumb}
                 onClick={() => { onSelect(opt.value); onClose(); }}
                 onMouseEnter={() => {/* no-op on touch */}}
               />
@@ -684,6 +682,8 @@ export function VariantOptionPicker({
 
   const selectedOpt = options.find((o) => o.value === value);
   const resolvedPlaceholder = placeholder ?? `Select ${label?.toLowerCase() ?? "an option"}…`;
+  // Show the thumbnail column only when at least one option has an image URL.
+  const hasImages = options.some((o) => !!o.imageUrl);
 
   return (
     <div
@@ -722,7 +722,9 @@ export function VariantOptionPicker({
       >
         {selectedOpt ? (
           <>
-            <OptionThumb imageUrl={selectedOpt.imageUrl} label={selectedOpt.label} isSelected={false} />
+            {hasImages && (
+              <OptionThumb imageUrl={selectedOpt.imageUrl} isSelected={false} />
+            )}
             <span className="flex flex-col min-w-0 flex-1 text-left">
               <span
                 className="font-bold leading-tight truncate"
@@ -798,6 +800,7 @@ export function VariantOptionPicker({
                 isSelected={opt.value === value}
                 isFocused={idx === focusedIdx}
                 basePrice={basePrice}
+                showThumb={hasImages}
                 onClick={() => handleSelect(opt.value)}
                 onMouseEnter={() => setFocusedIdx(idx)}
               />
@@ -814,6 +817,7 @@ export function VariantOptionPicker({
           value={value}
           basePrice={basePrice}
           label={label}
+          showThumb={hasImages}
           onSelect={handleSelect}
           onClose={handleClose}
         />
