@@ -9,7 +9,7 @@ import {
   subcategories,
   colors,
 } from "@/lib/db/schema";
-import { and, asc, eq, desc, inArray, isNotNull, or } from "drizzle-orm";
+import { and, asc, eq, desc, inArray, isNotNull, or, sql } from "drizzle-orm";
 import {
   composeVariantLabel,
   type HydratedProductVariants,
@@ -79,12 +79,16 @@ export type CatalogProduct = Omit<ProductRow, "images" | "productType" | "priceT
  * Category tree node consumed by the storefront nav + shop sidebar. Keeps
  * only the fields the UI actually renders, so we don't leak admin-only
  * columns (position is kept so the storefront matches admin ordering).
+ * productCount is computed via sql<number> count subquery.
+ * thumbnailUrl is the first active product's thumbnail image, or null.
  */
 export type CategoryTreeNode = {
   id: string;
   name: string;
   slug: string;
   position: number;
+  productCount: number;
+  thumbnailUrl: string | null;
   subcategories: {
     id: string;
     name: string;
@@ -317,6 +321,10 @@ export async function getActiveCategories(): Promise<CategoryRow[]> {
  * filter sidebar. Empty categories (zero subcategories) are kept so admins
  * can pre-create placeholder categories; the consuming UI chooses whether
  * to hide them.
+ *
+ * Pattern C (WIP) — extends to expose productCount via sql<number> count
+ * subquery and thumbnailUrl (first active product's image).
+ * MariaDB 10.11: manual hydration — no LATERAL joins.
  */
 export async function getActiveCategoryTree(): Promise<CategoryTreeNode[]> {
   const cats = await db
@@ -336,11 +344,57 @@ export async function getActiveCategoryTree(): Promise<CategoryTreeNode[]> {
     )
     .orderBy(asc(subcategories.position), asc(subcategories.name));
 
+  // Fetch product counts per category (active products only)
+  const catIds = cats.map((c) => c.id);
+  const countRows = await db
+    .select({
+      categoryId: products.categoryId,
+      count: sql<number>`COUNT(*)`,
+    })
+    .from(products)
+    .where(and(eq(products.isActive, true), inArray(products.categoryId, catIds)))
+    .groupBy(products.categoryId);
+
+  const countByCategory = new Map<string, number>();
+  for (const row of countRows) {
+    if (row.categoryId) {
+      countByCategory.set(row.categoryId, Number(row.count));
+    }
+  }
+
+  // Fetch the first active product image per category (for thumbnailUrl)
+  const thumbRows = await db
+    .select({
+      categoryId: products.categoryId,
+      images: products.images,
+      thumbnailIndex: products.thumbnailIndex,
+    })
+    .from(products)
+    .where(and(eq(products.isActive, true), inArray(products.categoryId, catIds)))
+    .orderBy(asc(products.createdAt))
+    .limit(catIds.length); // One per category (worst case)
+
+  const thumbnailByCategory = new Map<string, string | null>();
+  for (const row of thumbRows) {
+    if (row.categoryId && !thumbnailByCategory.has(row.categoryId)) {
+      const imageArray = ensureImagesArray(row.images);
+      const idx = typeof row.thumbnailIndex === "number" ? row.thumbnailIndex : 0;
+      const thumbUrl = imageArray.length > 0 && idx >= 0 && idx < imageArray.length
+        ? imageArray[idx]
+        : imageArray.length > 0
+          ? imageArray[0]
+          : null;
+      thumbnailByCategory.set(row.categoryId, thumbUrl ?? null);
+    }
+  }
+
   return cats.map((c) => ({
     id: c.id,
     name: c.name,
     slug: c.slug,
     position: c.position,
+    productCount: countByCategory.get(c.id) ?? 0,
+    thumbnailUrl: thumbnailByCategory.get(c.id) ?? null,
     subcategories: subs
       .filter((s) => s.categoryId === c.id)
       .map((s) => ({
