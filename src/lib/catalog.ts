@@ -81,6 +81,7 @@ export type CatalogProduct = Omit<ProductRow, "images" | "productType" | "priceT
  * columns (position is kept so the storefront matches admin ordering).
  * productCount is computed via sql<number> count subquery.
  * thumbnailUrl is the first active product's thumbnail image, or null.
+ * products is up to 8 active products for the nav dropdown thumbnail grid.
  */
 export type CategoryTreeNode = {
   id: string;
@@ -89,6 +90,12 @@ export type CategoryTreeNode = {
   position: number;
   productCount: number;
   thumbnailUrl: string | null;
+  products: {
+    id: string;
+    slug: string;
+    name: string;
+    thumbnailUrl: string | null;
+  }[];
   subcategories: {
     id: string;
     name: string;
@@ -362,48 +369,83 @@ export async function getActiveCategoryTree(): Promise<CategoryTreeNode[]> {
     }
   }
 
-  // Fetch the first active product image per category (for thumbnailUrl)
-  const thumbRows = await db
+  // Fetch active products per category for the nav dropdown thumbnail grid.
+  // We pull ALL active products for the category set (ordered by position then
+  // createdAt) and slice to 8 per category in memory — no LATERAL join needed.
+  const navProductRows = await db
     .select({
-      categoryId: products.categoryId,
+      id: products.id,
+      slug: products.slug,
+      name: products.name,
       images: products.images,
       thumbnailIndex: products.thumbnailIndex,
+      categoryId: products.categoryId,
+      createdAt: products.createdAt,
     })
     .from(products)
     .where(and(eq(products.isActive, true), inArray(products.categoryId, catIds)))
-    .orderBy(asc(products.createdAt))
-    .limit(catIds.length); // One per category (worst case)
+    .orderBy(desc(products.createdAt));
+
+  // Build per-category product list (max 8) and derive thumbnailUrl from the
+  // first product in each category bucket.
+  const productsByCategory = new Map<string, typeof navProductRows>();
+  for (const row of navProductRows) {
+    if (!row.categoryId) continue;
+    const bucket = productsByCategory.get(row.categoryId) ?? [];
+    bucket.push(row);
+    productsByCategory.set(row.categoryId, bucket);
+  }
 
   const thumbnailByCategory = new Map<string, string | null>();
-  for (const row of thumbRows) {
-    if (row.categoryId && !thumbnailByCategory.has(row.categoryId)) {
-      const imageArray = ensureImagesArray(row.images);
-      const idx = typeof row.thumbnailIndex === "number" ? row.thumbnailIndex : 0;
-      const thumbUrl = imageArray.length > 0 && idx >= 0 && idx < imageArray.length
+  for (const [catId, rows] of productsByCategory.entries()) {
+    const first = rows[0];
+    if (!first) { thumbnailByCategory.set(catId, null); continue; }
+    const imageArray = ensureImagesArray(first.images);
+    const idx = typeof first.thumbnailIndex === "number" ? first.thumbnailIndex : 0;
+    const thumbUrl =
+      imageArray.length > 0 && idx >= 0 && idx < imageArray.length
         ? imageArray[idx]
         : imageArray.length > 0
           ? imageArray[0]
           : null;
-      thumbnailByCategory.set(row.categoryId, thumbUrl ?? null);
-    }
+    thumbnailByCategory.set(catId, thumbUrl ?? null);
   }
 
-  return cats.map((c) => ({
-    id: c.id,
-    name: c.name,
-    slug: c.slug,
-    position: c.position,
-    productCount: countByCategory.get(c.id) ?? 0,
-    thumbnailUrl: thumbnailByCategory.get(c.id) ?? null,
-    subcategories: subs
-      .filter((s) => s.categoryId === c.id)
-      .map((s) => ({
-        id: s.id,
-        name: s.name,
-        slug: s.slug,
-        position: s.position,
-      })),
-  }));
+  return cats.map((c) => {
+    const catProducts = (productsByCategory.get(c.id) ?? []).slice(0, 8);
+    return {
+      id: c.id,
+      name: c.name,
+      slug: c.slug,
+      position: c.position,
+      productCount: countByCategory.get(c.id) ?? 0,
+      thumbnailUrl: thumbnailByCategory.get(c.id) ?? null,
+      products: catProducts.map((p) => {
+        const imgs = ensureImagesArray(p.images);
+        const idx = typeof p.thumbnailIndex === "number" ? p.thumbnailIndex : 0;
+        const thumbUrl =
+          imgs.length > 0 && idx >= 0 && idx < imgs.length
+            ? imgs[idx]
+            : imgs.length > 0
+              ? imgs[0]
+              : null;
+        return {
+          id: p.id,
+          slug: p.slug,
+          name: p.name,
+          thumbnailUrl: thumbUrl ?? null,
+        };
+      }),
+      subcategories: subs
+        .filter((s) => s.categoryId === c.id)
+        .map((s) => ({
+          id: s.id,
+          name: s.name,
+          slug: s.slug,
+          position: s.position,
+        })),
+    };
+  });
 }
 
 export async function getActiveProductsByCategorySlug(
