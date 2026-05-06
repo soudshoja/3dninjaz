@@ -3,12 +3,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import { Menu, X, ChevronDown, ChevronRight } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Menu, X } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import { Logo } from "@/components/brand/logo";
 import { UserNav } from "@/components/auth/user-nav";
 import { CartButton } from "@/components/store/cart-button";
+import { CategorySheet } from "@/components/store/category-sheet";
 import type { CategoryTreeNode } from "@/lib/catalog";
 
 /**
@@ -67,15 +68,11 @@ function DesktopNavIcon({ src }: { src: string }) {
 export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const [shopOpen, setShopOpen] = useState(false);
-  const [expandedCat, setExpandedCat] = useState<string | null>(null);
-  const shopRef = useRef<HTMLDivElement>(null);
+  const [categorySheetOpen, setCategorySheetOpen] = useState(false);
 
-  // Close whenever route changes — standard mobile-nav UX.
+  // Close mobile drawer whenever route changes — standard mobile-nav UX.
   useEffect(() => {
     setOpen(false);
-    setShopOpen(false);
-    setExpandedCat(null);
   }, [pathname]);
 
   // Escape-to-close + body scroll lock while the mobile menu is open.
@@ -92,24 +89,6 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
       window.removeEventListener("keydown", onKey);
     };
   }, [open]);
-
-  // Close desktop mega-menu on outside click / Escape.
-  useEffect(() => {
-    if (!shopOpen) return;
-    function onDocClick(e: MouseEvent) {
-      if (!shopRef.current) return;
-      if (!shopRef.current.contains(e.target as Node)) setShopOpen(false);
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setShopOpen(false);
-    }
-    document.addEventListener("mousedown", onDocClick);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDocClick);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [shopOpen]);
 
   const nonShopLinks = [
     {
@@ -134,6 +113,11 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
     // only use nav/* slugs here (about matches the profile bubble).
   };
 
+  function openCategorySheet() {
+    setOpen(false);
+    setCategorySheetOpen(true);
+  }
+
   return (
     <nav
       aria-label="Primary"
@@ -152,76 +136,17 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
 
         {/* Desktop links */}
         <div className="hidden md:flex items-center gap-8 text-sm font-semibold">
-          {/* Shop with hover/click mega-menu */}
-          <div ref={shopRef} className="relative">
-            <button
-              type="button"
-              onClick={() => setShopOpen((v) => !v)}
-              onMouseEnter={() => setShopOpen(true)}
-              aria-expanded={shopOpen}
-              aria-haspopup="true"
-              className="inline-flex items-center gap-2 min-h-[48px] hover:opacity-70 transition-opacity"
-            >
-              <DesktopNavIcon src="/icons/ninja/nav/shop.png" />
-              Shop
-              <ChevronDown className="h-4 w-4" aria-hidden />
-            </button>
-            {shopOpen && categoryTree.length > 0 ? (
-              <div
-                onMouseLeave={() => setShopOpen(false)}
-                className="absolute right-0 top-full mt-2 w-[min(90vw,720px)] rounded-xl border border-zinc-200 shadow-xl p-5 grid gap-6 grid-cols-2 md:grid-cols-3 bg-white"
-                role="menu"
-              >
-                <div className="col-span-2 md:col-span-3 flex items-baseline justify-between pb-2 mb-1 border-b border-zinc-100">
-                  <span
-                    className="font-[var(--font-heading)] text-lg"
-                    style={{ color: BRAND.ink }}
-                  >
-                    SHOP BY CATEGORY
-                  </span>
-                  <Link
-                    href="/shop"
-                    className="text-xs font-bold underline"
-                    style={{ color: BRAND.purple }}
-                    onClick={() => setShopOpen(false)}
-                  >
-                    All drops &rarr;
-                  </Link>
-                </div>
-                {categoryTree.map((c) => (
-                  <div key={c.id} className="min-w-0">
-                    <Link
-                      href={`/shop?category=${encodeURIComponent(c.slug)}`}
-                      className="block font-bold mb-2 hover:opacity-70"
-                      style={{ color: BRAND.ink }}
-                      onClick={() => setShopOpen(false)}
-                    >
-                      {c.name}
-                    </Link>
-                    <ul className="space-y-1">
-                      {c.subcategories.length === 0 ? (
-                        <li className="text-xs text-slate-500">
-                          No subcategories
-                        </li>
-                      ) : (
-                        c.subcategories.map((s) => (
-                          <li key={s.id}>
-                            <Link
-                              href={`/shop?category=${encodeURIComponent(c.slug)}&subcategory=${encodeURIComponent(s.slug)}`}
-                              className="block text-sm text-slate-600 hover:text-[color:var(--brand-ink,#0B1020)]"
-                              onClick={() => setShopOpen(false)}
-                            >
-                              {s.name}
-                            </Link>
-                          </li>
-                        ))
-                      )}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
+          {/* Shop — opens the CategorySheet */}
+          <button
+            type="button"
+            onClick={openCategorySheet}
+            aria-haspopup="dialog"
+            aria-expanded={categorySheetOpen}
+            className="inline-flex items-center gap-2 min-h-[48px] hover:opacity-70 transition-opacity"
+          >
+            <DesktopNavIcon src="/icons/ninja/nav/shop.png" />
+            Shop
+          </button>
           {nonShopLinks.map((l) => (
             <Link
               key={l.href}
@@ -265,63 +190,18 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
         >
           <ul className="flex flex-col px-6 py-2">
             <li>
-              <Link
-                href="/shop"
-                className="flex items-center gap-3 py-4 min-h-[48px] font-semibold border-b border-zinc-100"
+              <button
+                type="button"
+                className="flex items-center gap-3 py-4 min-h-[48px] font-semibold border-b border-zinc-100 w-full text-left"
                 style={{ color: BRAND.ink }}
-                onClick={() => setOpen(false)}
+                onClick={openCategorySheet}
+                aria-haspopup="dialog"
+                aria-expanded={categorySheetOpen}
               >
                 <MobileNavIcon name="shop" />
-                <span>Shop — all drops</span>
-              </Link>
+                <span>Shop</span>
+              </button>
             </li>
-            {categoryTree.map((c) => {
-              const isExpanded = expandedCat === c.id;
-              return (
-                <li key={c.id} className="border-b border-zinc-100">
-                  <button
-                    type="button"
-                    className="flex items-center justify-between w-full py-3 min-h-[48px] font-semibold text-left"
-                    style={{ color: BRAND.ink }}
-                    onClick={() =>
-                      setExpandedCat((curr) => (curr === c.id ? null : c.id))
-                    }
-                    aria-expanded={isExpanded}
-                  >
-                    <span>{c.name}</span>
-                    {isExpanded ? (
-                      <ChevronDown className="h-4 w-4" aria-hidden />
-                    ) : (
-                      <ChevronRight className="h-4 w-4" aria-hidden />
-                    )}
-                  </button>
-                  {isExpanded ? (
-                    <ul className="pb-3 pl-3">
-                      <li>
-                        <Link
-                          href={`/shop?category=${encodeURIComponent(c.slug)}`}
-                          className="block py-2 text-sm min-h-[44px] text-zinc-600"
-                          onClick={() => setOpen(false)}
-                        >
-                          All in {c.name}
-                        </Link>
-                      </li>
-                      {c.subcategories.map((s) => (
-                        <li key={s.id}>
-                          <Link
-                            href={`/shop?category=${encodeURIComponent(c.slug)}&subcategory=${encodeURIComponent(s.slug)}`}
-                            className="block py-2 text-sm min-h-[44px] text-zinc-700"
-                            onClick={() => setOpen(false)}
-                          >
-                            {s.name}
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </li>
-              );
-            })}
             {nonShopLinks.map((l) => {
               const iconName = MOBILE_ICONS[l.href];
               return (
@@ -353,6 +233,13 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
           </div>
         </div>
       ) : null}
+
+      {/* Category sheet — shared between desktop and mobile Shop triggers */}
+      <CategorySheet
+        open={categorySheetOpen}
+        onOpenChange={setCategorySheetOpen}
+        categories={categoryTree}
+      />
     </nav>
   );
 }
