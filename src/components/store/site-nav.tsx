@@ -8,28 +8,96 @@ import { BRAND } from "@/lib/brand";
 import { Logo } from "@/components/brand/logo";
 import { UserNav } from "@/components/auth/user-nav";
 import { CartButton } from "@/components/store/cart-button";
-import { CategoryProductDropdown } from "@/components/store/category-product-dropdown";
 import type { CategoryTreeNode } from "@/lib/catalog";
 
 const INTENT_DELAY_MS = 200;
+const MAX_DISPLAY = 8;
 
-/**
- * Single category trigger in the desktop nav. Handles hover intent with a
- * short debounce so the cursor can move from the label to the dropdown without
- * flicker, and keyboard (Enter/Space = toggle, Escape = close).
- */
-function CategoryNavItem({
+function CategoryFlyoutContent({
   cat,
+  onNavigate,
+}: {
+  cat: CategoryTreeNode;
+  onNavigate: () => void;
+}) {
+  if (cat.products.length === 0) return null;
+
+  return (
+    <div
+      role="region"
+      aria-label={`${cat.name} products`}
+      className="p-3"
+    >
+      <ul className="grid grid-cols-3 gap-2" role="list">
+        {cat.products.slice(0, MAX_DISPLAY).map((product) => (
+          <li key={product.id}>
+            <Link
+              href={`/products/${product.slug}`}
+              onClick={onNavigate}
+              className="flex flex-col items-center gap-1 rounded-lg p-1.5 hover:bg-zinc-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+              style={{ "--tw-ring-color": BRAND.blue } as React.CSSProperties}
+              tabIndex={0}
+            >
+              <div className="w-16 h-16 rounded-lg overflow-hidden bg-zinc-100 shrink-0 flex items-center justify-center">
+                {product.thumbnailUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={product.thumbnailUrl}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                ) : (
+                  <span
+                    className="text-xs font-bold select-none"
+                    style={{ color: BRAND.ink }}
+                    aria-hidden="true"
+                  >
+                    {product.name.slice(0, 2).toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <span
+                className="text-xs text-center leading-tight line-clamp-2 w-full"
+                style={{ color: BRAND.ink }}
+              >
+                {product.name}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+
+      {cat.productCount > MAX_DISPLAY && (
+        <div className="mt-2 pt-2 border-t border-zinc-100 text-center">
+          <Link
+            href={`/shop?category=${encodeURIComponent(cat.slug)}`}
+            onClick={onNavigate}
+            className="inline-block text-xs font-semibold px-3 py-1 rounded-full transition-opacity hover:opacity-80"
+            style={{ color: BRAND.blue }}
+          >
+            View all {cat.productCount} &rarr;
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ShopNavItem({
+  activeCategories,
   isOpen,
   onOpen,
   onClose,
 }: {
-  cat: CategoryTreeNode;
+  activeCategories: CategoryTreeNode[];
   isOpen: boolean;
   onOpen: () => void;
   onClose: () => void;
 }) {
+  const [hoveredCatId, setHoveredCatId] = useState<string | null>(null);
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   function clearLeave() {
     if (leaveTimer.current) {
@@ -40,11 +108,19 @@ function CategoryNavItem({
 
   function scheduleClose() {
     clearLeave();
-    leaveTimer.current = setTimeout(onClose, INTENT_DELAY_MS);
+    leaveTimer.current = setTimeout(() => {
+      onClose();
+      setHoveredCatId(null);
+    }, INTENT_DELAY_MS);
   }
 
-  // Cleanup on unmount
+  useEffect(() => {
+    if (!isOpen) setHoveredCatId(null);
+  }, [isOpen]);
+
   useEffect(() => () => clearLeave(), []);
+
+  const activeFlyoutCat = activeCategories.find((c) => c.id === hoveredCatId) ?? null;
 
   return (
     <div
@@ -52,9 +128,8 @@ function CategoryNavItem({
       onMouseEnter={() => { clearLeave(); onOpen(); }}
       onMouseLeave={scheduleClose}
     >
-      {/* The visible trigger: a Link + chevron indicator */}
-      <Link
-        href={`/shop?category=${encodeURIComponent(cat.slug)}`}
+      <button
+        type="button"
         aria-expanded={isOpen}
         aria-haspopup="true"
         className="inline-flex items-center gap-1 min-h-[48px] hover:opacity-70 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 rounded"
@@ -64,41 +139,64 @@ function CategoryNavItem({
             e.preventDefault();
             isOpen ? onClose() : onOpen();
           }
-          if (e.key === "Escape") onClose();
+          if (e.key === "Escape") { onClose(); setHoveredCatId(null); }
         }}
-        onClick={(e) => {
-          // On small devices (touch) that reach here, toggle instead of navigate
-          if (window.matchMedia("(hover: none)").matches) {
-            e.preventDefault();
-            isOpen ? onClose() : onOpen();
-          }
-        }}
+        onClick={() => isOpen ? onClose() : onOpen()}
       >
-        {cat.name}
+        Shop
         <ChevronDown
           className={`h-3 w-3 transition-transform ${isOpen ? "rotate-180" : ""}`}
           aria-hidden
         />
-      </Link>
+      </button>
 
-      {/* Dropdown panel */}
       {isOpen && (
         <div
+          ref={panelRef}
+          className="absolute top-full left-0 z-50 mt-1 flex rounded-2xl border border-zinc-200 bg-white shadow-md"
           onMouseEnter={clearLeave}
           onMouseLeave={scheduleClose}
-          onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
+          onKeyDown={(e) => { if (e.key === "Escape") { onClose(); setHoveredCatId(null); } }}
         >
-          <CategoryProductDropdown category={cat} />
+          {/* Category list */}
+          <ul role="list" className="min-w-[180px] py-2 border-r border-zinc-100">
+            {activeCategories.map((cat) => (
+              <li key={cat.id}>
+                <button
+                  type="button"
+                  aria-expanded={hoveredCatId === cat.id}
+                  aria-haspopup="true"
+                  className="flex items-center justify-between w-full px-4 py-2.5 min-h-[44px] text-sm font-semibold text-left hover:bg-zinc-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset"
+                  style={{
+                    color: BRAND.ink,
+                    "--tw-ring-color": BRAND.blue,
+                    background: hoveredCatId === cat.id ? "#f4f4f5" : undefined,
+                  } as React.CSSProperties}
+                  onMouseEnter={() => setHoveredCatId(cat.id)}
+                  onFocus={() => setHoveredCatId(cat.id)}
+                >
+                  <span>{cat.name}</span>
+                  <ChevronRight className="h-3 w-3 shrink-0 ml-3" aria-hidden />
+                </button>
+              </li>
+            ))}
+          </ul>
+
+          {/* Product flyout */}
+          {activeFlyoutCat && activeFlyoutCat.products.length > 0 && (
+            <div className="min-w-[280px] max-w-[480px]">
+              <CategoryFlyoutContent
+                cat={activeFlyoutCat}
+                onNavigate={() => { onClose(); setHoveredCatId(null); }}
+              />
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-/**
- * Mobile accordion item for one category — tap to expand product thumbnails.
- * State is lifted to SiteNav so only one accordion can be open at a time.
- */
 function MobileCategoryAccordion({
   cat,
   isExpanded,
@@ -184,37 +282,22 @@ function MobileCategoryAccordion({
   );
 }
 
-/**
- * Unified customer-facing navigation.
- *
- * Desktop (>= 768px): logo + flat category links (filtered to productCount > 0)
- * each with a hover-intent dropdown showing product thumbnails, followed by
- * About / Contact links + cart button + UserNav.
- *
- * Mobile (< 768px): logo left, cart button in header, hamburger toggles a
- * full-height drawer with category accordion items expanding to thumbnail
- * grids, then About / Contact links, then UserNav.
- *
- * The category tree is loaded once by the server layout and passed in as a
- * prop — no per-page re-query.
- */
 export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const [openCategoryId, setOpenCategoryId] = useState<string | null>(null);
+  const [shopOpen, setShopOpen] = useState(false);
+  const [mobileShopOpen, setMobileShopOpen] = useState(false);
   const [openMobileCategoryId, setOpenMobileCategoryId] = useState<string | null>(null);
 
-  // Filter to categories that have at least one active product
   const activeCategories = categoryTree.filter((c) => c.productCount > 0);
 
-  // Close mobile drawer whenever route changes
   useEffect(() => {
     setOpen(false);
-    setOpenCategoryId(null);
+    setShopOpen(false);
+    setMobileShopOpen(false);
     setOpenMobileCategoryId(null);
   }, [pathname]);
 
-  // Escape-to-close + body scroll lock while the mobile menu is open
   useEffect(() => {
     if (!open) return;
     const prevOverflow = document.body.style.overflow;
@@ -229,21 +312,20 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
     };
   }, [open]);
 
-  // Outside-click closes the desktop dropdown
   const navRef = useRef<HTMLElement>(null);
   useEffect(() => {
-    if (!openCategoryId) return;
+    if (!shopOpen) return;
     function onPointerDown(e: PointerEvent) {
       if (navRef.current && !navRef.current.contains(e.target as Node)) {
-        setOpenCategoryId(null);
+        setShopOpen(false);
       }
     }
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [openCategoryId]);
+  }, [shopOpen]);
 
-  const handleCategoryOpen = useCallback((id: string) => setOpenCategoryId(id), []);
-  const handleCategoryClose = useCallback(() => setOpenCategoryId(null), []);
+  const handleShopOpen = useCallback(() => setShopOpen(true), []);
+  const handleShopClose = useCallback(() => setShopOpen(false), []);
 
   const nonShopLinks = [
     { href: "/about", label: "About" },
@@ -267,20 +349,15 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
           </span>
         </Link>
 
-        {/* Desktop links — flat category row + static links */}
+        {/* Desktop links */}
         <div className="hidden md:flex items-center gap-6 text-sm font-semibold">
-          {/* Category links with dropdown */}
-          {activeCategories.map((cat) => (
-            <CategoryNavItem
-              key={cat.id}
-              cat={cat}
-              isOpen={openCategoryId === cat.id}
-              onOpen={() => handleCategoryOpen(cat.id)}
-              onClose={handleCategoryClose}
-            />
-          ))}
+          <ShopNavItem
+            activeCategories={activeCategories}
+            isOpen={shopOpen}
+            onOpen={handleShopOpen}
+            onClose={handleShopClose}
+          />
 
-          {/* Static links */}
           {nonShopLinks.map((l) => (
             <Link
               key={l.href}
@@ -297,7 +374,6 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
           <div className="hidden md:block">
             <UserNav />
           </div>
-          {/* Mobile hamburger */}
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
@@ -322,18 +398,38 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
           className="md:hidden border-t border-zinc-200 max-h-[80vh] overflow-y-auto bg-white"
         >
           <ul className="flex flex-col px-6 py-2">
-            {/* Category accordion items — single-open enforced by lifted state */}
-            {activeCategories.map((cat) => (
-              <MobileCategoryAccordion
-                key={cat.id}
-                cat={cat}
-                isExpanded={openMobileCategoryId === cat.id}
-                onToggle={() =>
-                  setOpenMobileCategoryId((prev) => (prev === cat.id ? null : cat.id))
-                }
-                onNavigate={() => setOpen(false)}
-              />
-            ))}
+            {/* Shop top-level row */}
+            <li className="border-b border-zinc-100">
+              <button
+                type="button"
+                className="flex items-center justify-between w-full py-4 min-h-[48px] font-semibold text-left"
+                style={{ color: BRAND.ink }}
+                onClick={() => setMobileShopOpen((v) => !v)}
+                aria-expanded={mobileShopOpen}
+              >
+                <span>Shop</span>
+                <ChevronRight
+                  className={`h-4 w-4 shrink-0 transition-transform ${mobileShopOpen ? "rotate-90" : ""}`}
+                  aria-hidden
+                />
+              </button>
+
+              {mobileShopOpen && (
+                <ul className="flex flex-col pl-4 pb-2">
+                  {activeCategories.map((cat) => (
+                    <MobileCategoryAccordion
+                      key={cat.id}
+                      cat={cat}
+                      isExpanded={openMobileCategoryId === cat.id}
+                      onToggle={() =>
+                        setOpenMobileCategoryId((prev) => (prev === cat.id ? null : cat.id))
+                      }
+                      onNavigate={() => setOpen(false)}
+                    />
+                  ))}
+                </ul>
+              )}
+            </li>
 
             {/* Static links */}
             {nonShopLinks.map((l) => (
