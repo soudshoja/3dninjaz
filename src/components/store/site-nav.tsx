@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, useCallback } from "react";
@@ -11,41 +10,6 @@ import { UserNav } from "@/components/auth/user-nav";
 import { CartButton } from "@/components/store/cart-button";
 import { CategoryProductDropdown } from "@/components/store/category-product-dropdown";
 import type { CategoryTreeNode } from "@/lib/catalog";
-
-/**
- * Small helper to render a 24px ninja icon next to a mobile nav link.
- * Uses the @128 variant; the browser scales down cleanly. Decorative
- * alt="" — the link text is the accessible name.
- */
-function MobileNavIcon({ name }: { name: string }) {
-  return (
-    <Image
-      src={`/icons/ninja/nav/${name}@128.png`}
-      alt=""
-      width={24}
-      height={24}
-      className="h-6 w-6 object-contain shrink-0"
-    />
-  );
-}
-
-/**
- * Compact 18px ninja icon for the desktop nav links. Sits to the LEFT
- * of the link text with a small gap. Visible from the `md` breakpoint
- * (>= 768px) so icons show on any desktop/tablet where the desktop nav
- * itself appears. `src` accepts any path under /icons/ninja/.
- */
-function DesktopNavIcon({ src }: { src: string }) {
-  return (
-    <Image
-      src={src}
-      alt=""
-      width={18}
-      height={18}
-      className="hidden md:inline-block h-[18px] w-[18px] object-contain shrink-0"
-    />
-  );
-}
 
 const INTENT_DELAY_MS = 200;
 
@@ -133,36 +97,36 @@ function CategoryNavItem({
 
 /**
  * Mobile accordion item for one category — tap to expand product thumbnails.
+ * State is lifted to SiteNav so only one accordion can be open at a time.
  */
 function MobileCategoryAccordion({
   cat,
+  isExpanded,
+  onToggle,
   onNavigate,
 }: {
   cat: CategoryTreeNode;
+  isExpanded: boolean;
+  onToggle: () => void;
   onNavigate: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-
   return (
     <li className="border-b border-zinc-100">
       <button
         type="button"
         className="flex items-center justify-between w-full py-4 min-h-[48px] font-semibold text-left"
         style={{ color: BRAND.ink }}
-        onClick={() => setExpanded((v) => !v)}
-        aria-expanded={expanded}
+        onClick={onToggle}
+        aria-expanded={isExpanded}
       >
-        <span className="flex items-center gap-3">
-          <MobileNavIcon name="shop" />
-          <span>{cat.name}</span>
-        </span>
+        <span>{cat.name}</span>
         <ChevronRight
-          className={`h-4 w-4 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
+          className={`h-4 w-4 shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
           aria-hidden
         />
       </button>
 
-      {expanded && cat.products.length > 0 && (
+      {isExpanded && cat.products.length > 0 && (
         <div className="pb-3 px-1">
           <ul className="grid grid-cols-3 gap-2" role="list">
             {cat.products.map((product) => (
@@ -238,6 +202,7 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [openCategoryId, setOpenCategoryId] = useState<string | null>(null);
+  const [openMobileCategoryId, setOpenMobileCategoryId] = useState<string | null>(null);
 
   // Filter to categories that have at least one active product
   const activeCategories = categoryTree.filter((c) => c.productCount > 0);
@@ -246,6 +211,7 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
   useEffect(() => {
     setOpen(false);
     setOpenCategoryId(null);
+    setOpenMobileCategoryId(null);
   }, [pathname]);
 
   // Escape-to-close + body scroll lock while the mobile menu is open
@@ -280,21 +246,9 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
   const handleCategoryClose = useCallback(() => setOpenCategoryId(null), []);
 
   const nonShopLinks = [
-    {
-      href: "/about",
-      label: "About",
-      desktopIcon: "/icons/ninja/nav/about.png",
-    },
-    {
-      href: "/contact",
-      label: "Contact",
-      desktopIcon: "/icons/ninja/emoji/contact.png",
-    },
+    { href: "/about", label: "About" },
+    { href: "/contact", label: "Contact" },
   ];
-
-  const MOBILE_ICONS: Record<string, string> = {
-    "/about": "about",
-  };
 
   return (
     <nav
@@ -331,9 +285,8 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
             <Link
               key={l.href}
               href={l.href}
-              className="inline-flex items-center gap-2 min-h-[48px] hover:opacity-70 transition-opacity"
+              className="inline-flex items-center min-h-[48px] hover:opacity-70 transition-opacity"
             >
-              <DesktopNavIcon src={l.desktopIcon} />
               {l.label}
             </Link>
           ))}
@@ -369,41 +322,32 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
           className="md:hidden border-t border-zinc-200 max-h-[80vh] overflow-y-auto bg-white"
         >
           <ul className="flex flex-col px-6 py-2">
-            {/* Category accordion items */}
+            {/* Category accordion items — single-open enforced by lifted state */}
             {activeCategories.map((cat) => (
               <MobileCategoryAccordion
                 key={cat.id}
                 cat={cat}
+                isExpanded={openMobileCategoryId === cat.id}
+                onToggle={() =>
+                  setOpenMobileCategoryId((prev) => (prev === cat.id ? null : cat.id))
+                }
                 onNavigate={() => setOpen(false)}
               />
             ))}
 
             {/* Static links */}
-            {nonShopLinks.map((l) => {
-              const iconName = MOBILE_ICONS[l.href];
-              return (
-                <li key={l.href}>
-                  <Link
-                    href={l.href}
-                    className="flex items-center gap-3 py-4 min-h-[48px] font-semibold border-b border-zinc-100 last:border-b-0"
-                    style={{ color: BRAND.ink }}
-                    onClick={() => setOpen(false)}
-                  >
-                    {iconName ? <MobileNavIcon name={iconName} /> : null}
-                    {l.href === "/contact" ? (
-                      <Image
-                        src="/icons/ninja/emoji/contact@128.png"
-                        alt=""
-                        width={24}
-                        height={24}
-                        className="h-6 w-6 object-contain shrink-0"
-                      />
-                    ) : null}
-                    <span>{l.label}</span>
-                  </Link>
-                </li>
-              );
-            })}
+            {nonShopLinks.map((l) => (
+              <li key={l.href}>
+                <Link
+                  href={l.href}
+                  className="flex items-center py-4 min-h-[48px] font-semibold border-b border-zinc-100 last:border-b-0"
+                  style={{ color: BRAND.ink }}
+                  onClick={() => setOpen(false)}
+                >
+                  {l.label}
+                </Link>
+              </li>
+            ))}
           </ul>
           <div className="px-6 py-4 border-t border-zinc-200">
             <UserNav variant="mobile" />
