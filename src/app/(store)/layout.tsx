@@ -34,7 +34,7 @@ export default async function StoreLayout({ children }: { children: ReactNode })
     >
       <FontFaceLoader />
       <SiteNav categoryTree={categoryTree} />
-      <main className="flex-1">{children}</main>
+      <main className="flex-1 overflow-x-hidden">{children}</main>
       <SiteFooter />
       <CartDrawer />
     </div>
