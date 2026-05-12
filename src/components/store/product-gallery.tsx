@@ -133,7 +133,7 @@ export function ProductGallery({
   const atEnd = activeIndex === images.length - 1;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 w-full min-w-0">
       {/* ── Slide container (mobile: scroll-snap; desktop: single visible) ── */}
       <div
         className="relative rounded-[28px] overflow-hidden shadow-lg"
