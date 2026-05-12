@@ -31,11 +31,9 @@ export function CartButton() {
           ? `Open bag, ${shownCount} ${shownCount === 1 ? "item" : "items"}`
           : "Open bag"
       }
-      className="relative inline-flex items-center gap-2 rounded-full px-4 py-2 font-semibold text-sm text-white shadow-md hover:opacity-90 transition min-h-[48px]"
-      style={{ backgroundColor: BRAND.ink }}
+      className="relative inline-flex items-center justify-center min-h-[48px] min-w-[48px] rounded-full hover:bg-black/5 transition-colors"
     >
       <ShoppingBag className="h-5 w-5" aria-hidden />
-      <span>Bag</span>
       {shownCount > 0 ? (
         <span
           className="absolute -top-1 -right-1 min-w-[22px] h-[22px] rounded-full px-1.5 text-xs font-bold inline-flex items-center justify-center"
