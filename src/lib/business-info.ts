@@ -32,10 +32,8 @@ export const BUSINESS = {
   whatsappNumber: "60167203048",
   whatsappNumberDisplay: "+60 16 720 3048",
   socials: {
-    // TODO: D-05 — replace `#` with real Instagram URL once handle confirmed.
-    instagram: "#",
-    // TODO: D-05 — replace `#` with real TikTok URL once handle confirmed.
-    tiktok: "#",
+    instagram: "https://www.instagram.com/3dninjaz/",
+    tiktok: "https://www.tiktok.com/@shojakidz",
     email: "mailto:info@3dninjaz.com",
   },
   retention: {

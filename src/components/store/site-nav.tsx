@@ -1,88 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState, useCallback } from "react";
-import { Menu, X, ChevronDown, ChevronRight } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState, useCallback, type FormEvent } from "react";
+import { Menu, X, ChevronDown, ChevronRight, Search } from "lucide-react";
+import { createPortal } from "react-dom";
+import Image from "next/image";
 import { BRAND } from "@/lib/brand";
 import { Logo } from "@/components/brand/logo";
 import { UserNav } from "@/components/auth/user-nav";
 import { CartButton } from "@/components/store/cart-button";
+import { BUSINESS } from "@/lib/business-info";
 import type { CategoryTreeNode } from "@/lib/catalog";
 
 const INTENT_DELAY_MS = 200;
 const MAX_DISPLAY = 8;
-
-function CategoryFlyoutContent({
-  cat,
-  onNavigate,
-}: {
-  cat: CategoryTreeNode;
-  onNavigate: () => void;
-}) {
-  if (cat.products.length === 0) return null;
-
-  return (
-    <div
-      role="region"
-      aria-label={`${cat.name} products`}
-      className="p-3"
-    >
-      <ul className="grid grid-cols-3 gap-2" role="list">
-        {cat.products.slice(0, MAX_DISPLAY).map((product) => (
-          <li key={product.id}>
-            <Link
-              href={`/products/${product.slug}`}
-              onClick={onNavigate}
-              className="flex flex-col items-center gap-1 rounded-lg p-1.5 hover:bg-zinc-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
-              style={{ "--tw-ring-color": BRAND.blue } as React.CSSProperties}
-              tabIndex={0}
-            >
-              <div className="w-16 h-16 rounded-lg overflow-hidden bg-zinc-100 shrink-0 flex items-center justify-center">
-                {product.thumbnailUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={product.thumbnailUrl}
-                    alt=""
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
-                ) : (
-                  <span
-                    className="text-xs font-bold select-none"
-                    style={{ color: BRAND.ink }}
-                    aria-hidden="true"
-                  >
-                    {product.name.slice(0, 2).toUpperCase()}
-                  </span>
-                )}
-              </div>
-              <span
-                className="text-xs text-center leading-tight line-clamp-2 w-full"
-                style={{ color: BRAND.ink }}
-              >
-                {product.name}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-
-      {cat.productCount > MAX_DISPLAY && (
-        <div className="mt-2 pt-2 border-t border-zinc-100 text-center">
-          <Link
-            href={`/shop?category=${encodeURIComponent(cat.slug)}`}
-            onClick={onNavigate}
-            className="inline-block text-xs font-semibold px-3 py-1 rounded-full transition-opacity hover:opacity-80"
-            style={{ color: BRAND.blue }}
-          >
-            View all {cat.productCount} &rarr;
-          </Link>
-        </div>
-      )}
-    </div>
-  );
-}
 
 function ShopNavItem({
   activeCategories,
@@ -95,9 +27,7 @@ function ShopNavItem({
   onOpen: () => void;
   onClose: () => void;
 }) {
-  const [hoveredCatId, setHoveredCatId] = useState<string | null>(null);
   const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
 
   function clearLeave() {
     if (leaveTimer.current) {
@@ -110,17 +40,10 @@ function ShopNavItem({
     clearLeave();
     leaveTimer.current = setTimeout(() => {
       onClose();
-      setHoveredCatId(null);
     }, INTENT_DELAY_MS);
   }
 
-  useEffect(() => {
-    if (!isOpen) setHoveredCatId(null);
-  }, [isOpen]);
-
   useEffect(() => () => clearLeave(), []);
-
-  const activeFlyoutCat = activeCategories.find((c) => c.id === hoveredCatId) ?? null;
 
   return (
     <div
@@ -139,7 +62,7 @@ function ShopNavItem({
             e.preventDefault();
             isOpen ? onClose() : onOpen();
           }
-          if (e.key === "Escape") { onClose(); setHoveredCatId(null); }
+          if (e.key === "Escape") onClose();
         }}
         onClick={() => isOpen ? onClose() : onOpen()}
       >
@@ -152,45 +75,25 @@ function ShopNavItem({
 
       {isOpen && (
         <div
-          ref={panelRef}
-          className="absolute top-full left-0 z-50 mt-1 flex rounded-2xl border border-zinc-200 bg-white shadow-md"
+          className="absolute top-full left-0 z-50 mt-1 min-w-[180px] rounded-lg border border-zinc-200 bg-white shadow-sm py-1"
           onMouseEnter={clearLeave}
           onMouseLeave={scheduleClose}
-          onKeyDown={(e) => { if (e.key === "Escape") { onClose(); setHoveredCatId(null); } }}
+          onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
         >
-          {/* Category list */}
-          <ul role="list" className="min-w-[180px] py-2 border-r border-zinc-100">
+          <ul role="list">
             {activeCategories.map((cat) => (
               <li key={cat.id}>
-                <button
-                  type="button"
-                  aria-expanded={hoveredCatId === cat.id}
-                  aria-haspopup="true"
-                  className="flex items-center justify-between w-full px-4 py-2.5 min-h-[44px] text-sm font-semibold text-left hover:bg-zinc-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset"
-                  style={{
-                    color: BRAND.ink,
-                    "--tw-ring-color": BRAND.blue,
-                    background: hoveredCatId === cat.id ? "#f4f4f5" : undefined,
-                  } as React.CSSProperties}
-                  onMouseEnter={() => setHoveredCatId(cat.id)}
-                  onFocus={() => setHoveredCatId(cat.id)}
+                <Link
+                  href={`/shop?category=${encodeURIComponent(cat.slug)}`}
+                  onClick={onClose}
+                  className="block px-4 py-2.5 text-sm hover:bg-zinc-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset"
+                  style={{ color: BRAND.ink, "--tw-ring-color": BRAND.blue } as React.CSSProperties}
                 >
-                  <span>{cat.name}</span>
-                  <ChevronRight className="h-3 w-3 shrink-0 ml-3" aria-hidden />
-                </button>
+                  {cat.name}
+                </Link>
               </li>
             ))}
           </ul>
-
-          {/* Product flyout */}
-          {activeFlyoutCat && activeFlyoutCat.products.length > 0 && (
-            <div className="min-w-[280px] max-w-[480px]">
-              <CategoryFlyoutContent
-                cat={activeFlyoutCat}
-                onNavigate={() => { onClose(); setHoveredCatId(null); }}
-              />
-            </div>
-          )}
         </div>
       )}
     </div>
@@ -217,55 +120,50 @@ function MobileCategoryAccordion({
         onClick={onToggle}
         aria-expanded={isExpanded}
       >
-        <span>{cat.name}</span>
-        <ChevronRight
-          className={`h-4 w-4 shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
-          aria-hidden
-        />
+        <Link
+          href={`/shop?category=${encodeURIComponent(cat.slug)}`}
+          onClick={(e) => { e.stopPropagation(); onNavigate(); }}
+          className="flex-1 hover:opacity-70 transition-opacity"
+          style={{ color: BRAND.ink }}
+        >
+          {cat.name}
+        </Link>
+        {cat.products.length > 0 && (
+          <span
+            onClick={(e) => { e.stopPropagation(); onToggle(); }}
+            role="button"
+            tabIndex={0}
+            aria-label={isExpanded ? "Collapse" : "Expand"}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }}
+            className="p-1"
+          >
+            <ChevronRight
+              className={`h-4 w-4 shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+              aria-hidden
+            />
+          </span>
+        )}
       </button>
 
       {isExpanded && cat.products.length > 0 && (
         <div className="pb-3 px-1">
-          <ul className="grid grid-cols-3 gap-2" role="list">
-            {cat.products.map((product) => (
+          <ul role="list" className="flex flex-col">
+            {cat.products.slice(0, MAX_DISPLAY).map((product) => (
               <li key={product.id}>
                 <Link
                   href={`/products/${product.slug}`}
                   onClick={onNavigate}
-                  className="flex flex-col items-center gap-1 rounded-lg p-1.5 hover:bg-zinc-50 transition-colors"
+                  className="block px-2 py-2 text-sm rounded-lg hover:bg-zinc-50 transition-colors"
+                  style={{ color: BRAND.ink }}
                 >
-                  <div className="w-16 h-16 rounded-lg overflow-hidden bg-zinc-100 shrink-0 flex items-center justify-center">
-                    {product.thumbnailUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={product.thumbnailUrl}
-                        alt=""
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <span
-                        className="text-xs font-bold select-none"
-                        style={{ color: BRAND.ink }}
-                        aria-hidden="true"
-                      >
-                        {product.name.slice(0, 2).toUpperCase()}
-                      </span>
-                    )}
-                  </div>
-                  <span
-                    className="text-xs text-center leading-tight line-clamp-2 w-full"
-                    style={{ color: BRAND.ink }}
-                  >
-                    {product.name}
-                  </span>
+                  {product.name}
                 </Link>
               </li>
             ))}
           </ul>
 
-          {cat.productCount > 8 && (
-            <div className="mt-2 text-center">
+          {cat.productCount > MAX_DISPLAY && (
+            <div className="mt-2 px-2">
               <Link
                 href={`/shop?category=${encodeURIComponent(cat.slug)}`}
                 onClick={onNavigate}
@@ -284,10 +182,33 @@ function MobileCategoryAccordion({
 
 export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [shopOpen, setShopOpen] = useState(false);
   const [mobileShopOpen, setMobileShopOpen] = useState(false);
   const [openMobileCategoryId, setOpenMobileCategoryId] = useState<string | null>(null);
+  const [searchVisible, setSearchVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  function handleSearch(e: FormEvent) {
+    e.preventDefault();
+    const q = searchQuery.trim();
+    if (q) {
+      router.push(`/shop?search=${encodeURIComponent(q)}`);
+      setSearchQuery("");
+      setSearchVisible(false);
+    }
+  }
+
+  function toggleSearch() {
+    setSearchVisible((v) => {
+      if (!v) {
+        setTimeout(() => searchInputRef.current?.focus(), 0);
+      }
+      return !v;
+    });
+  }
 
   const activeCategories = categoryTree.filter((c) => c.productCount > 0);
 
@@ -296,6 +217,8 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
     setShopOpen(false);
     setMobileShopOpen(false);
     setOpenMobileCategoryId(null);
+    setSearchVisible(false);
+    setSearchQuery("");
   }, [pathname]);
 
   useEffect(() => {
@@ -313,6 +236,7 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
   }, [open]);
 
   const navRef = useRef<HTMLElement>(null);
+
   useEffect(() => {
     if (!shopOpen) return;
     function onPointerDown(e: PointerEvent) {
@@ -324,6 +248,17 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [shopOpen]);
 
+  useEffect(() => {
+    if (!searchVisible) return;
+    function onPointerDown(e: PointerEvent) {
+      if (navRef.current && !navRef.current.contains(e.target as Node)) {
+        setSearchVisible(false);
+      }
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [searchVisible]);
+
   const handleShopOpen = useCallback(() => setShopOpen(true), []);
   const handleShopClose = useCallback(() => setShopOpen(false), []);
 
@@ -333,72 +268,157 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
   ];
 
   return (
+    <>
     <nav
       ref={navRef}
       aria-label="Primary"
       className="sticky top-0 z-40 border-b border-zinc-200 backdrop-blur bg-white/90"
     >
       <div className="max-w-6xl mx-auto flex items-center justify-between px-6 md:px-8 py-3">
-        <Link href="/" className="flex items-center gap-3 min-h-[48px]">
+        <Link href="/" className="hidden md:flex items-center min-h-[48px]">
           <Logo size={44} priority />
-          <span
-            className="text-xl tracking-wide font-[var(--font-heading)]"
-            style={{ color: BRAND.ink }}
-          >
-            3D NINJAZ
-          </span>
         </Link>
 
-        {/* Desktop links */}
-        <div className="hidden md:flex items-center gap-6 text-sm font-semibold">
-          <ShopNavItem
-            activeCategories={activeCategories}
-            isOpen={shopOpen}
-            onOpen={handleShopOpen}
-            onClose={handleShopClose}
-          />
+        {/* Desktop: nav links + right-side icons */}
+        <div className="hidden md:flex items-center gap-6">
+          {/* Nav links */}
+          <div className="flex items-center gap-6 text-sm font-semibold">
+            <ShopNavItem
+              activeCategories={activeCategories}
+              isOpen={shopOpen}
+              onOpen={handleShopOpen}
+              onClose={handleShopClose}
+            />
 
-          {nonShopLinks.map((l) => (
-            <Link
-              key={l.href}
-              href={l.href}
-              className="inline-flex items-center min-h-[48px] hover:opacity-70 transition-opacity"
+            {nonShopLinks.map((l) => (
+              <Link
+                key={l.href}
+                href={l.href}
+                className="inline-flex items-center min-h-[48px] hover:opacity-70 transition-opacity"
+              >
+                {l.label}
+              </Link>
+            ))}
+          </div>
+
+          {/* Right-side icons */}
+          <div className="flex items-center gap-1">
+            {/* Social icons */}
+            <a
+              href={BUSINESS.socials.instagram}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Instagram"
+              className="inline-flex items-center justify-center min-h-[48px] min-w-[48px] rounded-full transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+              style={{ "--tw-ring-color": BRAND.blue } as React.CSSProperties}
             >
-              {l.label}
-            </Link>
-          ))}
-        </div>
+              <Image src="/icons/ninja/social/instagram.png" alt="" width={22} height={22} className="object-contain" />
+            </a>
+            <a
+              href={BUSINESS.socials.tiktok}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="TikTok"
+              className="inline-flex items-center justify-center min-h-[48px] min-w-[48px] rounded-full transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+              style={{ "--tw-ring-color": BRAND.blue } as React.CSSProperties}
+            >
+              <Image src="/icons/ninja/social/tiktok.png" alt="" width={22} height={22} className="object-contain" />
+            </a>
+            <div className="flex items-center">
+              {searchVisible && (
+                <form onSubmit={handleSearch} className="mr-1">
+                  <input
+                    ref={searchInputRef}
+                    type="search"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search products..."
+                    aria-label="Search products"
+                    className="w-44 lg:w-56 h-9 rounded-full border border-zinc-300 bg-zinc-50 px-3 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-transparent focus:ring-2 transition-colors"
+                    style={{ "--tw-ring-color": BRAND.blue } as React.CSSProperties}
+                    onKeyDown={(e) => { if (e.key === "Escape") { setSearchVisible(false); setSearchQuery(""); } }}
+                  />
+                </form>
+              )}
+              <button
+                type="button"
+                aria-label={searchVisible ? "Close search" : "Search"}
+                aria-expanded={searchVisible}
+                onClick={toggleSearch}
+                className="inline-flex items-center justify-center min-h-[48px] min-w-[48px] rounded-full hover:bg-black/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                style={{ "--tw-ring-color": BRAND.blue } as React.CSSProperties}
+              >
+                {searchVisible ? (
+                  <X className="h-5 w-5" aria-hidden />
+                ) : (
+                  <Search className="h-5 w-5" aria-hidden />
+                )}
+              </button>
+            </div>
 
-        <div className="flex items-center gap-2 md:gap-3">
-          <CartButton />
-          <div className="hidden md:block">
+            <CartButton />
             <UserNav />
           </div>
+        </div>
+
+        {/* Mobile: hamburger left, logo center, cart right */}
+        <div className="flex md:hidden items-center justify-between w-full relative">
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
             aria-controls="site-nav-mobile"
             aria-label={open ? "Close menu" : "Open menu"}
-            className="md:hidden inline-flex items-center justify-center min-h-[48px] min-w-[48px] rounded-full hover:bg-black/5"
+            className="inline-flex items-center justify-center min-h-[48px] min-w-[48px] rounded-full hover:bg-black/5"
           >
-            {open ? (
-              <X className="h-6 w-6" aria-hidden />
-            ) : (
-              <Menu className="h-6 w-6" aria-hidden />
-            )}
+            <Menu className="h-6 w-6" aria-hidden />
           </button>
+
+          {/* Centered logo */}
+          <Link
+            href="/"
+            className="absolute left-1/2 -translate-x-1/2 flex items-center min-h-[48px]"
+          >
+            <Logo size={44} priority />
+          </Link>
+
+          <CartButton />
         </div>
       </div>
+    </nav>
 
-      {/* Mobile disclosure */}
-      {open ? (
+    {/* Mobile drawer overlay — rendered outside <nav> so it doesn't push content */}
+    {open && typeof document !== "undefined" && createPortal(
+      <>
+        {/* Backdrop */}
+        <div
+          className="fixed inset-0 z-40 bg-black/40"
+          aria-hidden
+          onClick={() => setOpen(false)}
+        />
+
+        {/* Drawer panel */}
         <div
           id="site-nav-mobile"
-          className="md:hidden border-t border-zinc-200 max-h-[80vh] overflow-y-auto bg-white"
+          className="fixed inset-x-0 top-0 z-50 bg-white max-h-screen overflow-y-auto shadow-xl"
         >
+          {/* Drawer header with close button */}
+          <div className="flex items-center justify-between px-6 py-3 border-b border-zinc-200">
+            <Link href="/" className="flex items-center min-h-[48px]" onClick={() => setOpen(false)}>
+              <Logo size={44} priority />
+            </Link>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label="Close menu"
+              className="inline-flex items-center justify-center min-h-[48px] min-w-[48px] rounded-full hover:bg-black/5"
+            >
+              <X className="h-6 w-6" aria-hidden />
+            </button>
+          </div>
+
           <ul className="flex flex-col px-6 py-2">
-            {/* Shop top-level row */}
+            {/* Shop accordion */}
             <li className="border-b border-zinc-100">
               <button
                 type="button"
@@ -445,11 +465,41 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
               </li>
             ))}
           </ul>
-          <div className="px-6 py-4 border-t border-zinc-200">
+
+          {/* Bottom utility: account + social */}
+          <div className="px-6 py-4 border-t border-zinc-200 flex items-center justify-between gap-4">
             <UserNav variant="mobile" />
+            <div className="flex items-center gap-3">
+              {BUSINESS.socials.instagram && BUSINESS.socials.instagram !== "#" && (
+                <a
+                  href={BUSINESS.socials.instagram}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Instagram"
+                  className="inline-flex items-center justify-center rounded-full transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                  style={{ "--tw-ring-color": BRAND.blue } as React.CSSProperties}
+                >
+                  <Image src="/icons/ninja/social/instagram.png" alt="" width={28} height={28} className="object-contain" />
+                </a>
+              )}
+              {BUSINESS.socials.tiktok && BUSINESS.socials.tiktok !== "#" && (
+                <a
+                  href={BUSINESS.socials.tiktok}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="TikTok"
+                  className="inline-flex items-center justify-center rounded-full transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                  style={{ "--tw-ring-color": BRAND.blue } as React.CSSProperties}
+                >
+                  <Image src="/icons/ninja/social/tiktok.png" alt="" width={28} height={28} className="object-contain" />
+                </a>
+              )}
+            </div>
           </div>
         </div>
-      ) : null}
-    </nav>
+      </>,
+      document.body
+    )}
+    </>
   );
 }

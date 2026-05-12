@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { Trash2, Loader2 } from "lucide-react";
-import type { CustomFont } from "@/actions/custom-fonts";
+import type { CustomFont } from "@/lib/db/schema";
 import { toggleCustomFontActive, deleteCustomFont } from "@/actions/custom-fonts";
 
 export function FontsTable({ fonts }: { fonts: CustomFont[] }) {

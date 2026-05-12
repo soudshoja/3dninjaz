@@ -8,6 +8,7 @@ import { BRAND } from "@/lib/brand";
 import { ProductCard } from "@/components/store/product-card";
 import {
   getActiveProducts,
+  searchActiveProducts,
   getActiveProductsByCategorySlug,
   getActiveProductsBySubcategorySlug,
   getActiveCategoryTree,
@@ -26,6 +27,8 @@ type SearchParams = Promise<{
   subcategory?: string;
   // Phase 18 (18-08) — comma-separated colour slugs (D-13 URL grammar)
   colour?: string;
+  // Nav search bar
+  search?: string;
 }>;
 
 /**
@@ -45,13 +48,13 @@ export default async function ShopPage({
 }: {
   searchParams: SearchParams;
 }) {
-  const { category, subcategory, colour } = await searchParams;
+  const { category, subcategory, colour, search } = await searchParams;
   const colourSlugs = colour ? colour.split(",").filter(Boolean) : [];
 
   const [tree, colourChips, result] = await Promise.all([
     getActiveCategoryTree(),
     getActiveProductColourChips(),
-    resolveProducts(category, subcategory, colourSlugs),
+    resolveProducts(category, subcategory, colourSlugs, search),
   ]);
 
   if (result === "not_found") notFound();
@@ -204,9 +207,19 @@ async function resolveProducts(
   categorySlug: string | undefined,
   subcategorySlug: string | undefined,
   colourSlugs: string[],
+  searchQuery?: string,
 ): Promise<ResolvedView | "not_found"> {
   let base: ResolvedView | "not_found";
-  if (subcategorySlug) {
+
+  // Search query overrides category/subcategory filtering
+  if (searchQuery) {
+    const results = await searchActiveProducts(searchQuery);
+    base = {
+      products: results,
+      headline: `Search: "${searchQuery}"`,
+      breadcrumb: [{ label: "Shop", href: "/shop" }],
+    };
+  } else if (subcategorySlug) {
     // Prefer scoping by category when both are supplied to avoid
     // ambiguity across parents.
     const out = await getActiveProductsBySubcategorySlug(

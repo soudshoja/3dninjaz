@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { LoginForm } from "@/components/auth/login-form";
+import { UnifiedAuthForm, type AuthMode } from "@/components/auth/unified-auth-form";
 
 export const metadata: Metadata = {
   title: "Sign In",
@@ -19,10 +19,16 @@ function isSafeNext(next: string | undefined): next is string {
   return next.startsWith("/") && !next.startsWith("//");
 }
 
+function toAuthMode(tab: string | undefined): AuthMode {
+  if (tab === "register") return "register";
+  if (tab === "forgot") return "forgot";
+  return "login";
+}
+
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string; tab?: string }>;
 }) {
   // If the user already has a session, don't let them sit on /login —
   // push them to the role-appropriate dashboard. Honors ?next= the same
@@ -44,5 +50,8 @@ export default async function LoginPage({
     redirect("/account");
   }
 
-  return <LoginForm />;
+  const params = await searchParams;
+  const defaultMode = toAuthMode(params.tab);
+
+  return <UnifiedAuthForm defaultMode={defaultMode} />;
 }
