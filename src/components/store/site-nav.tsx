@@ -275,7 +275,7 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
     >
       <div className="max-w-6xl mx-auto flex items-center justify-between px-6 md:px-8 py-3">
         <Link href="/" className="hidden md:flex items-center min-h-[48px]">
-          <Logo size={44} priority />
+          <Logo size={56} priority />
         </Link>
 
         {/* Desktop: nav links + right-side icons */}
@@ -382,12 +382,51 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
             href="/"
             className="absolute left-1/2 -translate-x-1/2 flex items-center min-h-[48px]"
           >
-            <Logo size={44} priority />
+            <Logo size={56} priority />
           </Link>
+
+          {/* Search icon */}
+          <button
+            type="button"
+            aria-label={searchVisible ? "Close search" : "Search"}
+            aria-expanded={searchVisible}
+            onClick={toggleSearch}
+            className="inline-flex items-center justify-center min-h-[48px] min-w-[48px] rounded-full hover:bg-black/5 transition-colors"
+          >
+            {searchVisible ? (
+              <X className="h-5 w-5" aria-hidden />
+            ) : (
+              <Search className="h-5 w-5" aria-hidden />
+            )}
+          </button>
 
           <CartButton />
         </div>
       </div>
+
+      {/* Mobile search bar — shown below nav bar when searchVisible */}
+      {searchVisible && (
+        <div className="md:hidden border-t border-zinc-100 px-4 py-2 bg-white">
+          <form onSubmit={handleSearch}>
+            <input
+              ref={searchInputRef}
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search products..."
+              aria-label="Search products"
+              className="w-full h-9 rounded-full border border-zinc-300 bg-zinc-50 px-3 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-transparent focus:ring-2 transition-colors"
+              style={{ "--tw-ring-color": BRAND.blue } as React.CSSProperties}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setSearchVisible(false);
+                  setSearchQuery("");
+                }
+              }}
+            />
+          </form>
+        </div>
+      )}
     </nav>
 
     {/* Mobile drawer overlay — rendered outside <nav> so it doesn't push content */}
@@ -408,7 +447,7 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
           {/* Drawer header with close button */}
           <div className="flex items-center justify-between px-6 py-3 border-b border-zinc-200">
             <Link href="/" className="flex items-center min-h-[48px]" onClick={() => setOpen(false)}>
-              <Logo size={44} priority />
+              <Logo size={56} priority />
             </Link>
             <button
               type="button"
