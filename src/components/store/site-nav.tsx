@@ -470,7 +470,7 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
           <div className="px-6 py-4 border-t border-zinc-200 flex items-center justify-between gap-4">
             <UserNav variant="mobile" />
             <div className="flex items-center gap-3">
-              {BUSINESS.socials.instagram && BUSINESS.socials.instagram !== "#" && (
+              {BUSINESS.socials.instagram && (
                 <a
                   href={BUSINESS.socials.instagram}
                   target="_blank"
@@ -482,7 +482,7 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
                   <Image src="/icons/ninja/social/instagram.png" alt="" width={28} height={28} className="object-contain" />
                 </a>
               )}
-              {BUSINESS.socials.tiktok && BUSINESS.socials.tiktok !== "#" && (
+              {BUSINESS.socials.tiktok && (
                 <a
                   href={BUSINESS.socials.tiktok}
                   target="_blank"
