@@ -135,7 +135,7 @@ export async function ProductCard({
           style={{ borderColor: accent }}
         >
           <h3
-            className="font-[var(--font-heading)] text-[15px] md:text-base leading-snug font-extrabold uppercase tracking-tight line-clamp-2"
+            className="font-[var(--font-heading)] text-[15px] md:text-base leading-snug font-extrabold uppercase tracking-tight line-clamp-2 min-h-[40px]"
             style={{ color: BRAND.ink }}
           >
             {product.name}
