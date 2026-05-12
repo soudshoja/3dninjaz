@@ -312,7 +312,7 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
               className="inline-flex items-center justify-center min-h-[48px] min-w-[48px] rounded-full transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
               style={{ "--tw-ring-color": BRAND.blue } as React.CSSProperties}
             >
-              <Image src="/icons/ninja/social/instagram.png" alt="" width={22} height={22} className="object-contain" />
+              <Image src="/icons/ninja/social/instagram@128.png" alt="" width={26} height={26} className="object-contain" />
             </a>
             <a
               href={BUSINESS.socials.tiktok}
@@ -322,7 +322,7 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
               className="inline-flex items-center justify-center min-h-[48px] min-w-[48px] rounded-full transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
               style={{ "--tw-ring-color": BRAND.blue } as React.CSSProperties}
             >
-              <Image src="/icons/ninja/social/tiktok.png" alt="" width={22} height={22} className="object-contain" />
+              <Image src="/icons/ninja/social/tiktok@128.png" alt="" width={26} height={26} className="object-contain" />
             </a>
             <div className="flex items-center">
               {searchVisible && (
