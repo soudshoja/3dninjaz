@@ -9,8 +9,6 @@ import { customFonts } from "@/lib/db/schema";
 import type { CustomFont } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth-helpers";
 
-export type { CustomFont };
-
 /**
  * List all custom fonts. Pass activeOnly=true to filter to is_active=true rows.
  * No admin guard — storefront needs active fonts to render @font-face rules.

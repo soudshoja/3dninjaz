@@ -291,6 +291,26 @@ export async function getActiveProducts(): Promise<CatalogProduct[]> {
   return hydrateProducts(rows);
 }
 
+export async function searchActiveProducts(
+  q: string,
+): Promise<CatalogProduct[]> {
+  const pattern = `%${q}%`;
+  const rows = await db
+    .select()
+    .from(products)
+    .where(
+      and(
+        eq(products.isActive, true),
+        or(
+          sql`${products.name} LIKE ${pattern}`,
+          sql`${products.description} LIKE ${pattern}`,
+        ),
+      ),
+    )
+    .orderBy(desc(products.createdAt));
+  return hydrateProducts(rows);
+}
+
 export async function getActiveFeaturedProducts(
   limit = 4
 ): Promise<CatalogProduct[]> {
