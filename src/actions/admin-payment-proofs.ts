@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db";
 import { paymentProofs, orders, paymentLinks } from "@/lib/db/schema";
-import { eq, isNull } from "drizzle-orm";
+import { eq, isNull, count } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { assertValidTransition } from "@/lib/orders";
@@ -36,6 +36,30 @@ export type RejectPaymentProofResult =
 export type AdminUploadPaymentProofResult =
   | { ok: true; proofId: string }
   | { ok: false; error: string };
+
+// ============================================================================
+// getPaymentProofsAwaitingReviewCount — sidebar badge + filter chip count
+// ============================================================================
+
+/**
+ * Count of orders currently in awaiting_payment_review status.
+ * Used by:
+ *   - /admin/orders filter chip (pendingProofCount prop on AdminOrderFilter)
+ *   - Sidebar nav badge (paymentProofsAwaitingReview key on SidebarNav)
+ *
+ * Queries orders.status directly — it is an indexed ENUM column. One SELECT.
+ * Admin-only (CVE-2025-29927 mitigation).
+ */
+export async function getPaymentProofsAwaitingReviewCount(): Promise<number> {
+  await requireAdmin();
+
+  const [row] = await db
+    .select({ cnt: count() })
+    .from(orders)
+    .where(eq(orders.status, "awaiting_payment_review"));
+
+  return row?.cnt ?? 0;
+}
 
 // ============================================================================
 // confirmPaymentProof

@@ -9,6 +9,8 @@ import { SignOutButton } from "@/components/admin/sign-out-button";
 import { getPendingReviewCount } from "@/actions/admin-reviews";
 // Phase 7 (07-07) — recon drift sidebar badge.
 import { getReconDriftBadgeCount } from "@/actions/admin-recon";
+// Phase 20 (20-10) — payment-review sidebar badge.
+import { getPaymentProofsAwaitingReviewCount } from "@/actions/admin-payment-proofs";
 import { FontFaceLoader } from "@/components/store/font-face-loader";
 
 async function currentAdminPath(): Promise<string> {
@@ -91,6 +93,14 @@ export default async function AdminLayout({
   // failure-safe (returns 0 on any error, including no-runs-yet).
   const reconDriftCount = await getReconDriftBadgeCount();
 
+  // Phase 20 (20-10) — payment-review badge. Failure-safe — returns 0 on DB errors.
+  let paymentProofsAwaitingReview = 0;
+  try {
+    paymentProofsAwaitingReview = await getPaymentProofsAwaitingReviewCount();
+  } catch {
+    paymentProofsAwaitingReview = 0;
+  }
+
   return (
     <>
       <FontFaceLoader />
@@ -129,6 +139,7 @@ export default async function AdminLayout({
         <SidebarNav
           pendingReviewCount={pendingReviewCount}
           reconDriftCount={reconDriftCount}
+          paymentProofsAwaitingReview={paymentProofsAwaitingReview}
         />
         <div className="mt-auto">
           <SignOutButton />

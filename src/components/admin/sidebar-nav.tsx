@@ -17,7 +17,7 @@ type NavItem = {
   label: string;
   ninjaIcon: string;
   exact?: boolean;
-  badge?: "pendingReviewCount" | "reconDriftCount";
+  badge?: "pendingReviewCount" | "reconDriftCount" | "paymentProofsAwaitingReview";
 };
 
 type NavGroup = { name: string; title: string; items: NavItem[] };
@@ -43,7 +43,12 @@ const GROUPS: NavGroup[] = [
     title: "Sales",
     items: [
       { href: "/admin/pos", label: "Point of Sale", ninjaIcon: "shop", exact: true },
-      { href: "/admin/orders", label: "Orders", ninjaIcon: "download" },
+      {
+        href: "/admin/orders",
+        label: "Orders",
+        ninjaIcon: "download",
+        badge: "paymentProofsAwaitingReview" as const,
+      },
       { href: "/admin/disputes", label: "Disputes", ninjaIcon: "warning" },
     ],
   },
@@ -122,10 +127,13 @@ function storageKey(groupName: string): string {
 export function SidebarNav({
   pendingReviewCount = 0,
   reconDriftCount = 0,
+  paymentProofsAwaitingReview = 0,
 }: {
   pendingReviewCount?: number;
   /** Phase 7 (07-07) — drift count from latest reconciliation run. */
   reconDriftCount?: number;
+  /** Phase 20 (20-10) — orders in awaiting_payment_review status. Amber badge on Orders item. */
+  paymentProofsAwaitingReview?: number;
 }) {
   const pathname = usePathname();
 
@@ -201,8 +209,12 @@ export function SidebarNav({
         ? pendingReviewCount
         : badgeKey === "reconDriftCount"
           ? reconDriftCount
-          : 0;
+          : badgeKey === "paymentProofsAwaitingReview"
+            ? paymentProofsAwaitingReview
+            : 0;
     const showBadge = !!badgeKey && badgeCount > 0;
+    // Phase 20 (20-10) — amber badge for payment-review; red for all others
+    const isAmberBadge = badgeKey === "paymentProofsAwaitingReview";
     return (
       <Link
         key={item.href}
@@ -224,7 +236,10 @@ export function SidebarNav({
         <span>{item.label}</span>
         {showBadge ? (
           <span
-            className="ml-auto inline-flex items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white"
+            className={cn(
+              "ml-auto inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-xs font-bold text-white",
+              isAmberBadge ? "bg-amber-500" : "bg-red-500",
+            )}
             aria-label={`${badgeCount} pending`}
           >
             {badgeCount}
