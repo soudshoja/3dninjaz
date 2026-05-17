@@ -1,0 +1,723 @@
+"use server";
+
+import { db } from "@/lib/db";
+import {
+  orders,
+  orderItems,
+  products,
+  productVariants,
+  productConfigFields,
+  coupons,
+} from "@/lib/db/schema";
+import { and, asc, eq, inArray, like, sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { requireAdmin } from "@/lib/auth-helpers";
+import { revalidatePath } from "next/cache";
+import { formatOrderNumber } from "@/lib/orders";
+import { assertValidTransition } from "@/lib/orders";
+import { getShippingRate } from "@/actions/admin-shipping";
+import { applyCouponToSubtotal, type CouponSnapshot } from "@/lib/pricing";
+import { redeemCoupon } from "@/actions/coupons";
+// ensureConfigJson is used in getPosConfigFields callers (admin POS UI) — not
+// needed server-side since we return raw configJson for the client to parse.
+// Import only the type for reference; no runtime usage in this module.
+
+/**
+ * Phase 20 (20-05) — Admin POS multi-line order builder server actions.
+ *
+ * Provides:
+ *   - getPosProductSearch   : type-ahead search across active products
+ *   - getPosConfigFields    : fetch product_config_fields for configurable/keychain products
+ *   - getStockedVariantsForPos : slim variant projection for stocked products
+ *   - createPosOrder        : write one orders row + N order_items in a transaction
+ *   - setOrderAwaitingCustomer : transition pending → awaiting_customer
+ *
+ * Every export awaits `requireAdmin()` first (CVE-2025-29927 mitigation).
+ * MariaDB 10.11 no-LATERAL rule: every read uses manual multi-query hydration.
+ * D-06 sentinel: free-text lines write productId='manual' + variantId='manual'.
+ */
+
+// ============================================================================
+// Types
+// ============================================================================
+
+export type PosProductResult = {
+  id: string;
+  name: string;
+  productType: string;
+  thumbnailUrl: string | null;
+  variantCount: number;
+};
+
+export type PosConfigField = {
+  id: string;
+  position: number;
+  fieldType: string;
+  label: string;
+  helpText: string | null;
+  required: boolean;
+  configJson: string | null;
+};
+
+export type PosVariant = {
+  variantId: string;
+  label: string;
+  price: number;
+  salePrice: number | null;
+  isOnSale: boolean;
+  inStock: boolean;
+};
+
+/** Discriminated union for POS order lines. */
+export type PosLineStocked = {
+  kind: "stocked";
+  productId: string;
+  variantId: string;
+  quantity: number;
+  unitPriceOverride?: number;
+};
+
+export type PosLineConfigurable = {
+  kind: "configurable";
+  productId: string;
+  variantId?: string;
+  quantity: number;
+  configurationData: string; // JSON string
+  computedUnitPrice: number;
+  unitPriceOverride?: number;
+};
+
+export type PosLineFreeText = {
+  kind: "free_text";
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  description?: string;
+};
+
+export type PosLine = PosLineStocked | PosLineConfigurable | PosLineFreeText;
+
+export type PosOrderCustomer = {
+  name: string;
+  email?: string;
+  phone: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  postcode: string;
+  country?: string;
+};
+
+export type PosOrderInput = {
+  lines: PosLine[];
+  customer: PosOrderCustomer;
+  shippingOverride?: number;
+  couponCode?: string;
+};
+
+export type CreatePosOrderResult =
+  | { ok: true; orderId: string; orderNumber: string }
+  | { ok: false; error: string };
+
+// Sentinel for /admin/orders email domain (mirrors admin-manual-orders.ts pattern)
+const SENTINEL_EMAIL_DOMAIN = "@3dninjaz.local";
+
+// ============================================================================
+// Task 1: Read helpers
+// ============================================================================
+
+/**
+ * Type-ahead product search for the POS product picker.
+ * Returns up to 25 active products matching name or SKU.
+ * Excludes archived/inactive products. No LATERAL joins (MariaDB 10.11).
+ */
+export async function getPosProductSearch(
+  query: string,
+): Promise<PosProductResult[]> {
+  const session = await requireAdmin();
+  void session;
+
+  const trimmed = (query ?? "").trim();
+  if (!trimmed) return [];
+
+  // Search active products by name. MariaDB LIKE is case-insensitive by default
+  // on utf8mb4_general_ci collation — no need for LOWER().
+  const productRows = await db
+    .select({
+      id: products.id,
+      name: products.name,
+      productType: products.productType,
+      images: products.images,
+      thumbnailIndex: products.thumbnailIndex,
+    })
+    .from(products)
+    .where(
+      and(
+        eq(products.isActive, true),
+        like(products.name, `%${trimmed}%`),
+      ),
+    )
+    .limit(25);
+
+  if (productRows.length === 0) return [];
+
+  // Batch fetch variant counts per product (no LATERAL)
+  const productIds = productRows.map((p) => p.id);
+  const variantCountRows = await db
+    .select({
+      productId: productVariants.productId,
+      cnt: sql<number>`COUNT(*)`,
+    })
+    .from(productVariants)
+    .where(inArray(productVariants.productId, productIds))
+    .groupBy(productVariants.productId);
+
+  const countByProduct = new Map<string, number>(
+    variantCountRows.map((r) => [r.productId, Number(r.cnt)]),
+  );
+
+  return productRows.map((p) => {
+    // Pick thumbnail URL from images array (JSON LONGTEXT — parse safely)
+    let thumbnailUrl: string | null = null;
+    try {
+      const rawImages = typeof p.images === "string"
+        ? JSON.parse(p.images as string)
+        : p.images;
+      const arr = Array.isArray(rawImages) ? rawImages : [];
+      const idx = typeof p.thumbnailIndex === "number" ? p.thumbnailIndex : 0;
+      const entry = arr[idx] ?? arr[0];
+      if (typeof entry === "string") thumbnailUrl = entry;
+      else if (entry && typeof entry === "object" && "url" in entry)
+        thumbnailUrl = entry.url as string;
+    } catch {
+      thumbnailUrl = null;
+    }
+
+    return {
+      id: p.id,
+      name: p.name,
+      productType: p.productType,
+      thumbnailUrl,
+      variantCount: countByProduct.get(p.id) ?? 0,
+    };
+  });
+}
+
+/**
+ * Fetch product_config_fields for a configurable or keychain product.
+ * Returns null for stocked products (caller falls through to variant picker).
+ * Uses manual hydration — no LATERAL (MariaDB 10.11).
+ */
+export async function getPosConfigFields(
+  productId: string,
+): Promise<PosConfigField[] | null> {
+  const session = await requireAdmin();
+  void session;
+
+  // Determine productType to decide whether this product has config fields
+  const [productRow] = await db
+    .select({ productType: products.productType })
+    .from(products)
+    .where(eq(products.id, productId))
+    .limit(1);
+
+  if (!productRow) return null;
+  // Stocked + simple products use variant picker, not configurator
+  if (productRow.productType === "stocked") return null;
+
+  const fieldRows = await db
+    .select({
+      id: productConfigFields.id,
+      position: productConfigFields.position,
+      fieldType: productConfigFields.fieldType,
+      label: productConfigFields.label,
+      helpText: productConfigFields.helpText,
+      required: productConfigFields.required,
+      configJson: productConfigFields.configJson,
+    })
+    .from(productConfigFields)
+    .where(eq(productConfigFields.productId, productId))
+    .orderBy(asc(productConfigFields.position));
+
+  return fieldRows.map((r) => ({
+    id: r.id,
+    position: r.position,
+    fieldType: r.fieldType,
+    label: r.label,
+    helpText: r.helpText ?? null,
+    required: r.required,
+    configJson: r.configJson ?? null,
+  }));
+}
+
+/**
+ * Slim variant projection for the POS stocked-product picker.
+ * Returns {variantId, label, price, salePrice, isOnSale, inStock} per variant.
+ * No LATERAL joins (MariaDB 10.11).
+ */
+export async function getStockedVariantsForPos(
+  productId: string,
+): Promise<PosVariant[]> {
+  const session = await requireAdmin();
+  void session;
+
+  const variantRows = await db
+    .select({
+      id: productVariants.id,
+      labelCache: productVariants.labelCache,
+      price: productVariants.price,
+      salePrice: productVariants.salePrice,
+      saleFrom: productVariants.saleFrom,
+      saleTo: productVariants.saleTo,
+      inStock: productVariants.inStock,
+    })
+    .from(productVariants)
+    .where(eq(productVariants.productId, productId))
+    .orderBy(asc(productVariants.position));
+
+  const now = new Date();
+
+  return variantRows.map((v) => {
+    const hasSalePrice = v.salePrice !== null;
+    const afterFrom = !v.saleFrom || v.saleFrom <= now;
+    const beforeTo = !v.saleTo || v.saleTo >= now;
+    const isOnSale = hasSalePrice && afterFrom && beforeTo;
+
+    return {
+      variantId: v.id,
+      label: v.labelCache ?? "",
+      price: parseFloat(v.price),
+      salePrice: v.salePrice !== null ? parseFloat(v.salePrice) : null,
+      isOnSale,
+      inStock: v.inStock,
+    };
+  });
+}
+
+// ============================================================================
+// Task 2: createPosOrder (write path)
+// ============================================================================
+
+/**
+ * Create a POS order with N order_items rows in a single transaction.
+ * Handles stocked + configurable + free-text lines.
+ * Atomic coupon redemption inside the transaction.
+ * D-06: free-text lines use productId='manual' + variantId='manual' sentinels.
+ * D-21: paymentMethod is null (set later when customer chooses).
+ */
+export async function createPosOrder(
+  input: PosOrderInput,
+): Promise<CreatePosOrderResult> {
+  const session = await requireAdmin();
+
+  const { lines, customer, shippingOverride, couponCode } = input;
+
+  if (!lines || lines.length === 0) {
+    return { ok: false, error: "At least one line is required." };
+  }
+
+  // ── Step 1: Validate lines and resolve unit prices ──────────────────────
+
+  type ResolvedLine = {
+    productId: string;
+    variantId: string;
+    productName: string;
+    productSlug: string | null;
+    productImage: string | null;
+    variantLabel: string | null;
+    unitPrice: number;
+    quantity: number;
+    configurationData: string | null;
+  };
+
+  const resolvedLines: ResolvedLine[] = [];
+
+  for (const line of lines) {
+    if (line.kind === "free_text") {
+      if (!line.name || line.name.trim().length === 0) {
+        return { ok: false, error: "Free-text line must have a name." };
+      }
+      if (typeof line.unitPrice !== "number" || line.unitPrice < 0) {
+        return { ok: false, error: `Invalid price for free-text line "${line.name}".` };
+      }
+      if (typeof line.quantity !== "number" || line.quantity < 1) {
+        return { ok: false, error: `Invalid quantity for free-text line "${line.name}".` };
+      }
+      resolvedLines.push({
+        productId: "manual",
+        variantId: "manual",
+        productName: line.name.trim(),
+        productSlug: null,
+        productImage: null,
+        variantLabel: null,
+        unitPrice: line.unitPrice,
+        quantity: line.quantity,
+        configurationData: null,
+      });
+      continue;
+    }
+
+    if (line.kind === "stocked") {
+      // Validate variantId belongs to productId
+      const [variantRow] = await db
+        .select({
+          id: productVariants.id,
+          price: productVariants.price,
+          salePrice: productVariants.salePrice,
+          saleFrom: productVariants.saleFrom,
+          saleTo: productVariants.saleTo,
+          inStock: productVariants.inStock,
+          labelCache: productVariants.labelCache,
+        })
+        .from(productVariants)
+        .where(
+          and(
+            eq(productVariants.id, line.variantId),
+            eq(productVariants.productId, line.productId),
+          ),
+        )
+        .limit(1);
+
+      if (!variantRow) {
+        return {
+          ok: false,
+          error: `Variant ${line.variantId} not found for product ${line.productId}.`,
+        };
+      }
+
+      const [productRow] = await db
+        .select({
+          name: products.name,
+          slug: products.slug,
+          images: products.images,
+          thumbnailIndex: products.thumbnailIndex,
+        })
+        .from(products)
+        .where(eq(products.id, line.productId))
+        .limit(1);
+
+      if (!productRow) {
+        return { ok: false, error: `Product ${line.productId} not found.` };
+      }
+
+      // Resolve effective price
+      const now = new Date();
+      const hasSalePrice = variantRow.salePrice !== null;
+      const afterFrom = !variantRow.saleFrom || variantRow.saleFrom <= now;
+      const beforeTo = !variantRow.saleTo || variantRow.saleTo >= now;
+      const isOnSale = hasSalePrice && afterFrom && beforeTo;
+      const basePrice = isOnSale
+        ? parseFloat(variantRow.salePrice!)
+        : parseFloat(variantRow.price);
+      const unitPrice =
+        typeof line.unitPriceOverride === "number"
+          ? line.unitPriceOverride
+          : basePrice;
+
+      // Pick thumbnail image
+      let productImage: string | null = null;
+      try {
+        const rawImages =
+          typeof productRow.images === "string"
+            ? JSON.parse(productRow.images as string)
+            : productRow.images;
+        const arr = Array.isArray(rawImages) ? rawImages : [];
+        const idx =
+          typeof productRow.thumbnailIndex === "number"
+            ? productRow.thumbnailIndex
+            : 0;
+        const entry = arr[idx] ?? arr[0];
+        if (typeof entry === "string") productImage = entry;
+        else if (entry && typeof entry === "object" && "url" in entry)
+          productImage = (entry as { url: string }).url;
+      } catch {
+        productImage = null;
+      }
+
+      resolvedLines.push({
+        productId: line.productId,
+        variantId: line.variantId,
+        productName: productRow.name,
+        productSlug: productRow.slug,
+        productImage,
+        variantLabel: variantRow.labelCache ?? null,
+        unitPrice,
+        quantity: line.quantity,
+        configurationData: null,
+      });
+      continue;
+    }
+
+    if (line.kind === "configurable") {
+      const [productRow] = await db
+        .select({
+          name: products.name,
+          slug: products.slug,
+          images: products.images,
+          thumbnailIndex: products.thumbnailIndex,
+        })
+        .from(products)
+        .where(eq(products.id, line.productId))
+        .limit(1);
+
+      if (!productRow) {
+        return { ok: false, error: `Product ${line.productId} not found.` };
+      }
+
+      const unitPrice =
+        typeof line.unitPriceOverride === "number"
+          ? line.unitPriceOverride
+          : line.computedUnitPrice;
+
+      // Pick thumbnail image
+      let productImage: string | null = null;
+      try {
+        const rawImages =
+          typeof productRow.images === "string"
+            ? JSON.parse(productRow.images as string)
+            : productRow.images;
+        const arr = Array.isArray(rawImages) ? rawImages : [];
+        const idx =
+          typeof productRow.thumbnailIndex === "number"
+            ? productRow.thumbnailIndex
+            : 0;
+        const entry = arr[idx] ?? arr[0];
+        if (typeof entry === "string") productImage = entry;
+        else if (entry && typeof entry === "object" && "url" in entry)
+          productImage = (entry as { url: string }).url;
+      } catch {
+        productImage = null;
+      }
+
+      // variantId: use the provided one or fall back to 'manual' sentinel for
+      // configurable products with no variant axis (D-06)
+      const variantId = line.variantId ?? "manual";
+
+      resolvedLines.push({
+        productId: line.productId,
+        variantId,
+        productName: productRow.name,
+        productSlug: productRow.slug,
+        productImage,
+        variantLabel: null,
+        unitPrice,
+        quantity: line.quantity,
+        configurationData: line.configurationData ?? null,
+      });
+      continue;
+    }
+  }
+
+  // ── Step 2: Compute subtotal ─────────────────────────────────────────────
+
+  const subtotal = resolvedLines.reduce(
+    (sum, l) => sum + l.unitPrice * l.quantity,
+    0,
+  );
+
+  // ── Step 3: Coupon validation (read-only; redemption happens in tx) ──────
+
+  let discountAmount = 0;
+  let validatedCouponId: string | null = null;
+  let couponSnapshot: CouponSnapshot | null = null;
+
+  if (couponCode && couponCode.trim().length > 0) {
+    const upper = couponCode.trim().toUpperCase();
+
+    // Fetch coupon row directly (admin is authenticated; skip the session check
+    // in the customer-facing validateCoupon which gates on getSessionUser)
+    const [couponRow] = await db
+      .select()
+      .from(coupons)
+      .where(eq(coupons.code, upper))
+      .limit(1);
+
+    if (!couponRow) {
+      return { ok: false, error: "Invalid coupon code." };
+    }
+    if (!couponRow.active) {
+      return { ok: false, error: "Coupon is not active." };
+    }
+    const now = new Date();
+    if (couponRow.startsAt && couponRow.startsAt > now) {
+      return { ok: false, error: "Coupon is not yet valid." };
+    }
+    if (couponRow.endsAt && couponRow.endsAt < now) {
+      return { ok: false, error: "Coupon has expired." };
+    }
+
+    couponSnapshot = {
+      id: couponRow.id,
+      code: couponRow.code,
+      type: couponRow.type,
+      amount: couponRow.amount,
+      minSpend: couponRow.minSpend ?? null,
+      startsAt: couponRow.startsAt ?? null,
+      endsAt: couponRow.endsAt ?? null,
+      usageCap: couponRow.usageCap ?? null,
+      usageCount: couponRow.usageCount,
+      active: !!couponRow.active,
+    };
+
+    try {
+      const result = applyCouponToSubtotal(subtotal, couponSnapshot);
+      discountAmount = result.discount;
+      validatedCouponId = couponRow.id;
+    } catch (e) {
+      return {
+        ok: false,
+        error:
+          e instanceof Error ? e.message : "Coupon could not be applied.",
+      };
+    }
+  }
+
+  // ── Step 4: Compute shipping ─────────────────────────────────────────────
+
+  let shippingCost: number;
+  if (typeof shippingOverride === "number") {
+    shippingCost = shippingOverride;
+  } else {
+    try {
+      const shippingResult = await getShippingRate(
+        customer.state,
+        subtotal - discountAmount,
+      );
+      shippingCost = shippingResult.cost;
+    } catch {
+      shippingCost = 0;
+    }
+  }
+
+  // ── Step 5: Compute totals ───────────────────────────────────────────────
+
+  const total = subtotal - discountAmount + shippingCost;
+
+  // ── Step 6: Generate IDs ─────────────────────────────────────────────────
+
+  const orderId = randomUUID();
+  const orderNumber = formatOrderNumber(orderId);
+
+  // Sentinel email when admin doesn't supply one
+  const customerEmail =
+    customer.email && customer.email.trim().length > 0
+      ? customer.email.trim()
+      : `manual+${orderId}${SENTINEL_EMAIL_DOMAIN}`;
+
+  // ── Steps 7–9: Transaction — insert orders + order_items + redeem coupon ─
+
+  try {
+    await db.transaction(async (tx) => {
+      // Insert orders row — D-21: paymentMethod is null
+      await tx.insert(orders).values({
+        id: orderId,
+        userId: session.user.id,
+        status: "pending",
+        paymentMethod: null,
+        subtotal: subtotal.toFixed(2),
+        shippingCost: shippingCost.toFixed(2),
+        totalAmount: total.toFixed(2),
+        currency: "MYR",
+        customerEmail,
+        shippingName: customer.name,
+        shippingPhone: customer.phone,
+        shippingLine1: customer.addressLine1,
+        shippingLine2: customer.addressLine2 ?? null,
+        shippingCity: customer.city,
+        shippingState: customer.state,
+        shippingPostcode: customer.postcode,
+        shippingCountry: customer.country ?? "Malaysia",
+        sourceType: "manual",
+        // customItem* columns stay null for new POS orders (D-06 / REQ-20-2)
+        customItemName: null,
+        customItemDescription: null,
+        customImages: null,
+      });
+
+      // Insert one order_items row per POS line
+      for (const line of resolvedLines) {
+        const lineTotal = (line.unitPrice * line.quantity).toFixed(2);
+        await tx.insert(orderItems).values({
+          id: randomUUID(),
+          orderId,
+          productId: line.productId,
+          variantId: line.variantId,
+          productName: line.productName,
+          productSlug: line.productSlug ?? "",
+          productImage: line.productImage ?? null,
+          variantLabel: line.variantLabel ?? null,
+          unitPrice: line.unitPrice.toFixed(2),
+          quantity: line.quantity,
+          lineTotal,
+          configurationData: line.configurationData ?? null,
+        });
+      }
+
+      // Step 9: Atomic coupon redemption (inside tx so it rolls back with order)
+      if (validatedCouponId) {
+        const redemption = await redeemCoupon(
+          validatedCouponId,
+          orderId,
+          session.user.id,
+          subtotal,
+        );
+        if (!redemption.ok) {
+          throw new Error(redemption.error ?? "Coupon already exhausted.");
+        }
+      }
+    });
+  } catch (err) {
+    console.error("[admin-pos] createPosOrder transaction failed:", err);
+    const msg =
+      err instanceof Error ? err.message : "Could not save the order. Please retry.";
+    return { ok: false, error: msg };
+  }
+
+  revalidatePath("/admin/orders");
+  revalidatePath("/admin/pos");
+  return { ok: true, orderId, orderNumber };
+}
+
+// ============================================================================
+// Task 3: setOrderAwaitingCustomer (W-1 patch)
+// ============================================================================
+
+/**
+ * Transition an order from pending → awaiting_customer.
+ * Called by Plan 20-09 Task 4 (send-draft modal) after generatePaymentLink returns ok.
+ * D-23: does NOT touch paymentLinks.usedAt — that is set only in confirmPaymentProof (20-07).
+ */
+export async function setOrderAwaitingCustomer(
+  orderId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const session = await requireAdmin();
+  void session;
+
+  const order = await db.query.orders.findFirst({
+    where: eq(orders.id, orderId),
+    columns: { id: true, status: true },
+  });
+
+  if (!order) {
+    return { ok: false, error: "Order not found." };
+  }
+
+  try {
+    assertValidTransition(order.status, "awaiting_customer");
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Invalid status transition.",
+    };
+  }
+
+  await db
+    .update(orders)
+    .set({ status: "awaiting_customer" })
+    .where(eq(orders.id, orderId));
+
+  revalidatePath("/admin/orders/" + orderId);
+  revalidatePath("/admin/orders");
+  return { ok: true };
+}
