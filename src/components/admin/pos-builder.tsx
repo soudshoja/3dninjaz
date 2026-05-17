@@ -29,16 +29,19 @@ import {
   Loader2,
   X,
 } from "lucide-react";
+// Note: Settings2 / Keyboard / Package still used in productTypeIcon below
 import { BRAND } from "@/lib/brand";
 import { MALAYSIAN_STATES } from "@/lib/validators";
 import {
   createPosOrder,
   getPosProductSearch,
+  getPosProductHydration,
   type PosLine,
   type PosLineStocked,
   type PosLineConfigurable,
   type PosLineFreeText,
   type PosProductResult,
+  type PosProductHydration,
 } from "@/actions/admin-pos";
 import { DraftRestoredBanner } from "@/components/admin/draft-restored-banner";
 import { PosLineRow } from "@/components/admin/pos-line-row";
@@ -57,8 +60,15 @@ type CustomerForm = {
   postcode: string;
 };
 
+import type { PosAddToOrderLine } from "@/components/store/product-detail";
+
 /** Internal representation with a stable local ID for React keys. */
-type LineWithId = { localId: string } & PosLine;
+type LineWithId = {
+  localId: string;
+  hydration?: PosProductHydration | null;
+  fillState?: "filling" | "filled";
+  filledLine?: PosAddToOrderLine | null;
+} & PosLine;
 
 // ─── Autosave ─────────────────────────────────────────────────────────────────
 
@@ -95,7 +105,6 @@ export function PosBuilder() {
   // ── State ─────────────────────────────────────────────────────────────────
 
   const [lines, setLines] = useState<LineWithId[]>([]);
-  const [expandedLineId, setExpandedLineId] = useState<string | null>(null);
 
   const [customerForm, setCustomerForm] = useState<CustomerForm>({
     name: "",
@@ -160,9 +169,11 @@ export function PosBuilder() {
     if (pickerDebounce.current) clearTimeout(pickerDebounce.current);
     const timer = setTimeout(() => {
       try {
+        // Strip hydration data from autosave — it's fetched fresh on restore
+        const linesForSave = lines.map(({ hydration: _h, ...rest }) => rest);
         const payload: DraftPayload = {
           savedAt: Date.now(),
-          lines,
+          lines: linesForSave as LineWithId[],
           customerForm,
           couponCode,
           shippingOverride,
@@ -214,31 +225,50 @@ export function PosBuilder() {
   function addProductLine(product: PosProductResult) {
     const localId = makeLocalId();
     const isConfigurable =
-      product.productType === "configurable" || product.productType === "keychain";
+      product.productType === "configurable" ||
+      product.productType === "keychain" ||
+      product.productType === "simple";
 
-    if (isConfigurable) {
-      const newLine: LineWithId = {
-        localId,
-        kind: "configurable",
-        productId: product.id,
-        quantity: 1,
-        configurationData: "{}",
-        computedUnitPrice: 0,
-      };
-      setLines((prev) => [...prev, newLine]);
-      // Auto-expand new configurable line so admin can fill fields
-      setExpandedLineId(localId);
-    } else {
-      // Stocked — add a placeholder; the row will show variant selector
-      const newLine: LineWithId = {
-        localId,
-        kind: "stocked",
-        productId: product.id,
-        variantId: "",
-        quantity: 1,
-      };
-      setLines((prev) => [...prev, newLine]);
-    }
+    // Create the line in "filling" state with hydration=null (loading)
+    const newLine: LineWithId = isConfigurable
+      ? {
+          localId,
+          kind: "configurable",
+          productId: product.id,
+          quantity: 1,
+          configurationData: "{}",
+          computedUnitPrice: 0,
+          fillState: "filling",
+          hydration: null,
+        }
+      : {
+          localId,
+          kind: "stocked",
+          productId: product.id,
+          variantId: "",
+          quantity: 1,
+          fillState: "filling",
+          hydration: null,
+        };
+
+    setLines((prev) => [...prev, newLine]);
+
+    // Fetch hydration data asynchronously and patch the line
+    getPosProductHydration(product.id).then((hydration) => {
+      setLines((prev) =>
+        prev.map((l) =>
+          l.localId === localId
+            ? { ...l, hydration: hydration ?? null }
+            : l,
+        ),
+      );
+    }).catch(() => {
+      setLines((prev) =>
+        prev.map((l) =>
+          l.localId === localId ? { ...l, hydration: null } : l,
+        ),
+      );
+    });
 
     setPickerQuery("");
     setPickerResults([]);
@@ -261,13 +291,25 @@ export function PosBuilder() {
 
   function updateLine(localId: string, updated: PosLine) {
     setLines((prev) =>
-      prev.map((l) => (l.localId === localId ? { ...updated, localId } : l))
+      prev.map((l) => {
+        if (l.localId !== localId) return l;
+        // Preserve UI-only fields that ride along on the PosLine object
+        const ext = updated as LineWithId;
+        return {
+          ...updated,
+          localId,
+          // Preserve hydration/fillState/filledLine from either the incoming
+          // object (when PosLineRow passes merged state) or from the current line.
+          hydration: ext.hydration !== undefined ? ext.hydration : l.hydration,
+          fillState: ext.fillState !== undefined ? ext.fillState : l.fillState,
+          filledLine: ext.filledLine !== undefined ? ext.filledLine : l.filledLine,
+        } as LineWithId;
+      }),
     );
   }
 
   function removeLine(localId: string) {
     setLines((prev) => prev.filter((l) => l.localId !== localId));
-    if (expandedLineId === localId) setExpandedLineId(null);
   }
 
   // ── Coupon ─────────────────────────────────────────────────────────────────
@@ -326,8 +368,8 @@ export function PosBuilder() {
     }
 
     startTransition(async () => {
-      // Strip localId from lines before sending to server
-      const serverLines = lines.map(({ localId: _localId, ...rest }) => rest) as PosLine[];
+      // Strip localId and UI-only fields from lines before sending to server
+      const serverLines = lines.map(({ localId: _localId, hydration: _h, fillState: _fs, filledLine: _fl, ...rest }) => rest) as PosLine[];
 
       const result = await createPosOrder({
         lines: serverLines,
@@ -369,12 +411,30 @@ export function PosBuilder() {
 
   function handleRestoreDraft() {
     if (!pendingDraft) return;
-    setLines(pendingDraft.lines ?? []);
+    const restoredLines = (pendingDraft.lines ?? []).map((l) => ({
+      ...l,
+      hydration: undefined, // will be re-fetched below for filled lines
+    })) as LineWithId[];
+    setLines(restoredLines);
     setCustomerForm(pendingDraft.customerForm ?? customerForm);
     setCouponCode(pendingDraft.couponCode ?? "");
     setShippingOverride(pendingDraft.shippingOverride ?? "");
     setShowRestoreBanner(false);
     setPendingDraft(null);
+
+    // Re-fetch hydration for all product lines (not free-text)
+    for (const l of restoredLines) {
+      if (l.kind === "free_text") continue;
+      const productId = (l as PosLineStocked | PosLineConfigurable).productId;
+      if (!productId || productId === "manual") continue;
+      getPosProductHydration(productId).then((hydration) => {
+        setLines((prev) =>
+          prev.map((pl) =>
+            pl.localId === l.localId ? { ...pl, hydration: hydration ?? null } : pl,
+          ),
+        );
+      }).catch(() => {});
+    }
   }
 
   function handleDiscardDraft() {
@@ -538,12 +598,6 @@ export function PosBuilder() {
                       line={line}
                       onChange={(updated) => updateLine(line.localId, updated)}
                       onRemove={() => removeLine(line.localId)}
-                      isExpanded={expandedLineId === line.localId}
-                      onToggleExpand={() =>
-                        setExpandedLineId((prev) =>
-                          prev === line.localId ? null : line.localId
-                        )
-                      }
                     />
                   ))}
                 </div>
