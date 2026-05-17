@@ -1,6 +1,7 @@
 import {
   mysqlTable,
   varchar,
+  char,
   text,
   mediumtext,
   longtext,
@@ -8,6 +9,7 @@ import {
   int,
   decimal,
   timestamp,
+  datetime,
   mysqlEnum,
   json,
   index,
@@ -469,8 +471,13 @@ export const productVariantsRelations = relations(
 //   rows (PDPA audit requirement; customerEmail is snapshotted for contact).
 // ============================================================================
 
+// Phase 20 (20-01) — extended from 6 to 8 values. New statuses support the
+// POS draft-order flow (D-19, D-20). Order MUST stay in sync with OrderStatus
+// in src/lib/orders.ts. Live DB ENUM extended via scripts/phase20-migrate.cjs.
 export const orderStatusValues = [
   "pending",
+  "awaiting_customer",
+  "awaiting_payment_review",
   "paid",
   "processing",
   "shipped",
@@ -494,6 +501,10 @@ export const orders = mysqlTable("orders", {
   // PayPal identifiers (nullable until each phase of the payment flow completes)
   paypalOrderId: varchar("paypal_order_id", { length: 64 }).unique(),
   paypalCaptureId: varchar("paypal_capture_id", { length: 64 }),
+  // Phase 20 (20-01) — payment method used (NULL for legacy rows, 'paypal' for
+  // existing captured orders after back-fill in scripts/phase20-migrate.cjs).
+  // D-21: set at status-transition time by the checkout/slip-upload actions.
+  paymentMethod: mysqlEnum("payment_method", ["paypal", "bank_transfer"]),
   // Money (MYR) — decimal(10,2) stores up to 99,999,999.99
   subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
   shippingCost: decimal("shipping_cost", { precision: 10, scale: 2 })
@@ -590,10 +601,70 @@ export const orderItems = mysqlTable("order_items", {
 export const ordersRelations = relations(orders, ({ one, many }) => ({
   user: one(user, { fields: [orders.userId], references: [user.id] }),
   items: many(orderItems),
+  paymentProofs: many(paymentProofs),
 }));
 
 export const orderItemsRelations = relations(orderItems, ({ one }) => ({
   order: one(orders, { fields: [orderItems.orderId], references: [orders.id] }),
+}));
+
+// ============================================================================
+// Phase 20 (20-01) — payment_proofs table
+//
+// Stores customer- and admin-uploaded payment slips for bank-transfer orders.
+// One-to-many on order_id; each rejected slip is preserved (D-13).
+// UUIDs are app-generated (randomUUID) per CLAUDE.md MariaDB quirk.
+// No JSON columns — no ensureXxx helper needed for this table.
+// Live table created via scripts/phase20-migrate.cjs.
+//
+// D-22 shape:
+//   id                  CHAR(36) PK
+//   orderId             CHAR(36) NOT NULL (FK enforced at live DB level)
+//   imageUrl            VARCHAR(500) NOT NULL
+//   thumbnailUrl        VARCHAR(500) NULL (NULL for PDFs)
+//   mimeType            VARCHAR(64) NOT NULL
+//   sizeBytes           INT NOT NULL
+//   uploadedBy          ENUM('customer','admin') NOT NULL
+//   uploadedByUserId    CHAR(36) NULL
+//   status              ENUM('pending','approved','rejected') DEFAULT 'pending'
+//   adminNote           TEXT NULL
+//   reviewedBy          CHAR(36) NULL
+//   reviewedAt          DATETIME NULL
+//   createdAt           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+//   KEY idx_pp_order_status(order_id, status)
+//   KEY idx_pp_status_created(status, created_at)
+// ============================================================================
+
+export const paymentProofs = mysqlTable(
+  "payment_proofs",
+  {
+    id: char("id", { length: 36 }).notNull().primaryKey(),
+    orderId: char("order_id", { length: 36 }).notNull(),
+    imageUrl: varchar("image_url", { length: 500 }).notNull(),
+    thumbnailUrl: varchar("thumbnail_url", { length: 500 }),
+    mimeType: varchar("mime_type", { length: 64 }).notNull(),
+    sizeBytes: int("size_bytes").notNull(),
+    uploadedBy: mysqlEnum("uploaded_by", ["customer", "admin"]).notNull(),
+    uploadedByUserId: char("uploaded_by_user_id", { length: 36 }),
+    status: mysqlEnum("status", ["pending", "approved", "rejected"])
+      .notNull()
+      .default("pending"),
+    adminNote: text("admin_note"),
+    reviewedBy: char("reviewed_by", { length: 36 }),
+    reviewedAt: datetime("reviewed_at"),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => ({
+    orderStatusIdx: index("idx_pp_order_status").on(t.orderId, t.status),
+    statusCreatedIdx: index("idx_pp_status_created").on(t.status, t.createdAt),
+  }),
+);
+
+export const paymentProofsRelations = relations(paymentProofs, ({ one }) => ({
+  order: one(orders, {
+    fields: [paymentProofs.orderId],
+    references: [orders.id],
+  }),
 }));
 
 // ============================================================================
@@ -880,6 +951,15 @@ export const storeSettings = mysqlTable("store_settings", {
   defaultElectricityKwhPerHour: decimal("default_electricity_kwh_per_hour", { precision: 6, scale: 3 }),
   defaultLaborRatePerHour: decimal("default_labor_rate_per_hour", { precision: 8, scale: 2 }),
   defaultOverheadPercent: decimal("default_overhead_percent", { precision: 5, scale: 2 }).notNull().default("0"),
+  // Phase 20 (20-01) — bank transfer details surfaced on the customer draft page.
+  // D-16: if any of bankName/bankAccountNumber/bankAccountHolder is NULL/empty,
+  // the Bank Transfer card is hidden entirely from the draft page (server guard).
+  // D-18: draftLinkTemplate is a Mustache-style body for WhatsApp/email deeplinks.
+  // Live DB columns added via scripts/phase20-migrate.cjs.
+  bankName: varchar("bank_name", { length: 100 }),
+  bankAccountNumber: varchar("bank_account_number", { length: 50 }),
+  bankAccountHolder: varchar("bank_account_holder", { length: 200 }),
+  draftLinkTemplate: text("draft_link_template"),
   updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
 });
 

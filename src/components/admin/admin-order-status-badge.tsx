@@ -7,21 +7,25 @@ import type { OrderStatus } from "@/lib/orders";
  * step on files owned by the parallel customer-side plan 03-03. Visual tokens
  * come from the unified 5-color palette (D3-02 / Phase 2 D-01):
  *
- *   pending     → purple  (waiting on the buyer)
- *   paid        → blue    (money captured, not yet processed)
- *   processing  → blue    (in the print/pick queue)
- *   shipped     → green   (out for delivery)
- *   delivered   → green   (done)
- *   cancelled   → ink     (terminal, neutral)
+ *   pending                 → purple  (waiting on the buyer)
+ *   awaiting_customer       → amber   (draft sent to customer)
+ *   awaiting_payment_review → amber   (slip uploaded; admin review pending)
+ *   paid                    → blue    (money captured, not yet processed)
+ *   processing              → blue    (in the print/pick queue)
+ *   shipped                 → green   (out for delivery)
+ *   delivered               → green   (done)
+ *   cancelled               → ink     (terminal, neutral)
  */
 
 const STATUS_THEME: Record<OrderStatus, { bg: string; fg: string; label: string }> = {
-  pending:    { bg: `${BRAND.purple}22`, fg: BRAND.purple, label: "Pending" },
-  paid:       { bg: `${BRAND.blue}22`,   fg: BRAND.blue,   label: "Paid" },
-  processing: { bg: `${BRAND.blue}22`,   fg: BRAND.blue,   label: "Processing" },
-  shipped:    { bg: `${BRAND.green}22`,  fg: BRAND.green,  label: "Shipped" },
-  delivered:  { bg: `${BRAND.green}22`,  fg: BRAND.green,  label: "Delivered" },
-  cancelled:  { bg: `${BRAND.ink}18`,    fg: BRAND.ink,    label: "Cancelled" },
+  pending:                  { bg: `${BRAND.purple}22`, fg: BRAND.purple, label: "Pending" },
+  awaiting_customer:        { bg: "#fef3c7",           fg: "#92400e",    label: "Awaiting customer" },
+  awaiting_payment_review:  { bg: "#fef3c7",           fg: "#92400e",    label: "Awaiting payment review" },
+  paid:                     { bg: `${BRAND.blue}22`,   fg: BRAND.blue,   label: "Paid" },
+  processing:               { bg: `${BRAND.blue}22`,   fg: BRAND.blue,   label: "Processing" },
+  shipped:                  { bg: `${BRAND.green}22`,  fg: BRAND.green,  label: "Shipped" },
+  delivered:                { bg: `${BRAND.green}22`,  fg: BRAND.green,  label: "Delivered" },
+  cancelled:                { bg: `${BRAND.ink}18`,    fg: BRAND.ink,    label: "Cancelled" },
 };
 
 export function AdminOrderStatusBadge({ status }: { status: OrderStatus }) {

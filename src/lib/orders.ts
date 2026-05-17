@@ -6,11 +6,17 @@
  *
  * NOTE: The OrderStatus string-literal union here MUST stay in sync with
  * `orderStatusValues` in `src/lib/db/schema.ts` and `orderStatusEnum`
- * in `src/lib/validators.ts`. All three are the same six strings.
+ * in `src/lib/validators.ts`. All three are the same eight strings.
+ *
+ * Phase 20 (20-01) — Added two new statuses for the POS + bank-transfer flow:
+ *   - awaiting_customer      : draft order sent to customer, pending their action
+ *   - awaiting_payment_review: customer uploaded a bank-transfer slip; admin must confirm
  */
 
 export type OrderStatus =
   | "pending"
+  | "awaiting_customer"
+  | "awaiting_payment_review"
   | "paid"
   | "processing"
   | "shipped"
@@ -18,19 +24,23 @@ export type OrderStatus =
   | "cancelled";
 
 /**
- * Status transition graph per D3-12. Admin can only advance orders through
- * these transitions; backwards moves and skipped states are rejected at the
- * server action layer via `assertValidTransition()`.
+ * Status transition graph per D3-12 + D-20. Admin can only advance orders
+ * through these transitions; backwards moves and skipped states are rejected
+ * at the server action layer via `assertValidTransition()`.
  *
- *   pending    -> paid | cancelled
- *   paid       -> processing | cancelled
- *   processing -> shipped | cancelled
- *   shipped    -> delivered
- *   delivered  -> (terminal)
- *   cancelled  -> (terminal)
+ *   pending                 -> awaiting_customer | paid | cancelled
+ *   awaiting_customer       -> awaiting_payment_review | paid | cancelled
+ *   awaiting_payment_review -> paid | awaiting_customer | cancelled
+ *   paid                    -> processing | cancelled
+ *   processing              -> shipped | cancelled
+ *   shipped                 -> delivered
+ *   delivered               -> (terminal)
+ *   cancelled               -> (terminal)
  */
 export const ORDER_STATUS_FLOW: Record<OrderStatus, OrderStatus[]> = {
-  pending: ["paid", "cancelled"],
+  pending: ["awaiting_customer", "paid", "cancelled"],
+  awaiting_customer: ["awaiting_payment_review", "paid", "cancelled"],
+  awaiting_payment_review: ["paid", "awaiting_customer", "cancelled"],
   paid: ["processing", "cancelled"],
   processing: ["shipped", "cancelled"],
   shipped: ["delivered"],
@@ -58,6 +68,21 @@ export function assertValidTransition(
   if (!allowed.includes(to)) {
     throw new Error(`Invalid status transition: ${from} -> ${to}`);
   }
+}
+
+/**
+ * Detects free-text manual lines by their sentinel product/variant IDs.
+ * Real products have UUID-shaped ids; the literal string 'manual' cannot collide
+ * with a real UUID. Per D-06/D-07 (Phase 20).
+ *
+ * Every render site that links to /products/<id> or fetches from the products
+ * table MUST call this first and short-circuit to a name/price direct render.
+ */
+export function isManualLine(item: {
+  productId: string;
+  variantId: string;
+}): boolean {
+  return item.productId === "manual" && item.variantId === "manual";
 }
 
 /**

@@ -7,6 +7,8 @@ import { nextAllowedStatuses, type OrderStatus } from "@/lib/orders";
 
 const LABELS: Record<OrderStatus, string> = {
   pending: "Pending",
+  awaiting_customer: "Awaiting customer",
+  awaiting_payment_review: "Awaiting payment review",
   paid: "Paid",
   processing: "Processing",
   shipped: "Shipped",
