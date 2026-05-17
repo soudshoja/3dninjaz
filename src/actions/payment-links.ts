@@ -1,24 +1,58 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { orders, paymentLinks } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { orders, paymentLinks, orderItems, paymentProofs } from "@/lib/db/schema";
+import { eq, inArray, desc } from "drizzle-orm";
 import { ordersController, PAYPAL_CURRENCY } from "@/lib/paypal";
 import { CheckoutPaymentIntent } from "@paypal/paypal-server-sdk";
 import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
 import { revalidatePath } from "next/cache";
+import { writePaymentProof } from "@/lib/payment-proof-storage";
+import { assertValidTransition } from "@/lib/orders";
+import crypto from "node:crypto";
 
 /**
  * Phase 7 (07-03) — PUBLIC payment-link actions.
+ * Phase 20 (20-06) — Extended for bank-transfer flow.
  *
- * NO requireAdmin() / requireUser() — anyone with the token can pay.
+ * PUBLIC FILE — no admin session required to call these actions.
  * The token itself is the credential. Server NEVER trusts a client-sent
  * amount: every PayPal call re-derives `orders.totalAmount` keyed by the
  * token row (T-07-X-money).
  *
  * URL contains ONLY the token — never email/name/phone in URL or query
  * (T-07-X-PII-on-payment-link).
+ *
+ * D-23: paymentLinks.usedAt is set ONLY when order reaches `paid`.
+ * Slip upload alone does NOT mark the token used.
+ * D-25: Public token actions — token+status validation is the only gate.
  */
+
+/** Snapshot of a single order line for the public payment page. */
+export type PaymentLinkOrderItem = {
+  id: string;
+  productId: string;
+  variantId: string;
+  productName: string;
+  variantLabel: string | null;
+  configurationData: string | null;
+  unitPrice: string;
+  quantity: number;
+  lineTotal: string;
+};
+
+/** Snapshot of a payment proof row for the public payment page. */
+export type PaymentLinkProof = {
+  id: string;
+  imageUrl: string;
+  thumbnailUrl: string | null;
+  mimeType: string;
+  sizeBytes: number;
+  uploadedBy: "customer" | "admin";
+  status: "pending" | "approved" | "rejected";
+  adminNote: string | null;
+  createdAt: Date;
+};
 
 export type PaymentLinkView = {
   ok: true;
@@ -31,7 +65,13 @@ export type PaymentLinkView = {
     customImages: string[];
     totalAmount: string;
     currency: string;
+    /** Phase 20 (20-06): payment method — null until customer selects one. */
+    paymentMethod: "paypal" | "bank_transfer" | null;
   };
+  /** Phase 20 (20-06): line items for the order (manual multi-query hydration — no LATERAL). */
+  orderItems: PaymentLinkOrderItem[];
+  /** Phase 20 (20-06): payment proofs for this order, latest first (empty for new orders). */
+  paymentProofs: PaymentLinkProof[];
 };
 
 export type PaymentLinkError = {
@@ -57,6 +97,21 @@ function shortOrderNumber(id: string): string {
   return `PN-${hex.slice(-8).toUpperCase()}`;
 }
 
+/**
+ * Live token statuses for bank-transfer flow (D-23).
+ * `pending`                 — Phase 7 PayPal-only (unchanged)
+ * `awaiting_customer`       — Phase 20 draft sent to customer; awaiting payment
+ * `awaiting_payment_review` — customer uploaded slip; re-open allowed after rejection
+ *
+ * Any other status (paid, processing, shipped, delivered, cancelled) is treated
+ * as "already-paid" or terminal — token is no longer live.
+ */
+const LIVE_ORDER_STATUSES = new Set([
+  "pending",
+  "awaiting_customer",
+  "awaiting_payment_review",
+]);
+
 export async function getPaymentLinkByToken(
   token: string,
 ): Promise<PaymentLinkView | PaymentLinkError> {
@@ -74,7 +129,26 @@ export async function getPaymentLinkByToken(
     where: eq(orders.id, link.orderId),
   });
   if (!order) return { ok: false, error: "not-found" };
+
+  // Phase 7: paid check via paypalCaptureId (PayPal capture path).
+  // Phase 20: also check order status — non-live statuses mean token is terminal.
   if (order.paypalCaptureId) return { ok: false, error: "already-paid" };
+  if (!LIVE_ORDER_STATUSES.has(order.status)) {
+    return { ok: false, error: "already-paid" };
+  }
+
+  // Phase 20 (20-06): hydrate order_items — manual multi-query (no LATERAL per MariaDB quirk).
+  const items = await db
+    .select()
+    .from(orderItems)
+    .where(eq(orderItems.orderId, order.id));
+
+  // Phase 20 (20-06): hydrate payment_proofs — latest first.
+  const proofs = await db
+    .select()
+    .from(paymentProofs)
+    .where(eq(paymentProofs.orderId, order.id))
+    .orderBy(desc(paymentProofs.createdAt));
 
   return {
     ok: true,
@@ -87,8 +161,143 @@ export async function getPaymentLinkByToken(
       customImages: ensureImagesArray(order.customImages),
       totalAmount: order.totalAmount,
       currency: order.currency,
+      paymentMethod: order.paymentMethod ?? null,
     },
+    orderItems: items.map((item) => ({
+      id: item.id,
+      productId: item.productId,
+      variantId: item.variantId,
+      productName: item.productName,
+      variantLabel: item.variantLabel ?? null,
+      configurationData: item.configurationData ?? null,
+      unitPrice: item.unitPrice,
+      quantity: item.quantity,
+      lineTotal: item.lineTotal,
+    })),
+    paymentProofs: proofs.map((p) => ({
+      id: p.id,
+      imageUrl: p.imageUrl,
+      thumbnailUrl: p.thumbnailUrl ?? null,
+      mimeType: p.mimeType,
+      sizeBytes: p.sizeBytes,
+      uploadedBy: p.uploadedBy,
+      status: p.status,
+      adminNote: p.adminNote ?? null,
+      createdAt: p.createdAt,
+    })),
   };
+}
+
+// ============================================================================
+// Phase 20 (20-06) — Public bank-transfer slip upload action
+//
+// D-25: PUBLIC ACTION — token + status validation is the ONLY gate (no admin session).
+// D-23: paymentLinks.usedAt is NOT set here — only on transition to `paid`.
+// D-10: File caps (10 MB + MIME allowlist) enforced via writePaymentProof.
+// ============================================================================
+
+export type UploadPaymentProofByTokenResult =
+  | { ok: true; proofId: string }
+  | { ok: false; error: string };
+
+/**
+ * Public action for customers to upload a bank-transfer payment slip.
+ * Called from /payment-links/[token] — no admin auth required (D-25).
+ *
+ * Token + status validation is the FIRST thing this function does.
+ * File caps are enforced inside writePaymentProof (D-10).
+ * paymentLinks.usedAt is never touched here (D-23).
+ */
+export async function uploadPaymentProofByToken(
+  token: string,
+  formData: FormData,
+): Promise<UploadPaymentProofByTokenResult> {
+  // ── Step 1: Token validation (MUST be first awaits — D-25) ─────────────────
+  if (!token || typeof token !== "string" || token.length > 64) {
+    return { ok: false, error: "Invalid or expired link." };
+  }
+
+  const link = await db.query.paymentLinks.findFirst({
+    where: eq(paymentLinks.token, token),
+  });
+
+  if (!link) {
+    return { ok: false, error: "Invalid or expired link." };
+  }
+  if (link.usedAt !== null) {
+    return { ok: false, error: "Invalid or expired link." };
+  }
+  if (link.expiresAt < new Date()) {
+    return { ok: false, error: "Invalid or expired link." };
+  }
+
+  // ── Step 2: Order status validation ────────────────────────────────────────
+  const order = await db.query.orders.findFirst({
+    where: eq(orders.id, link.orderId),
+  });
+
+  if (!order) {
+    return { ok: false, error: "Order not accepting payment proofs." };
+  }
+  // Only `awaiting_customer` allows a new slip upload (D-25).
+  if (order.status !== "awaiting_customer") {
+    return { ok: false, error: "Order not accepting payment proofs." };
+  }
+
+  // ── Step 3: Extract file from formData ─────────────────────────────────────
+  // FormData.get returns string | File | null. Reject strings and nulls.
+  const fileRaw = formData.get("file");
+  if (!fileRaw || typeof fileRaw === "string") {
+    return { ok: false, error: "No file provided." };
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const file = fileRaw as any as File;
+
+  // ── Step 4: Write file to disk (inherits MIME + size validation from D-10) ─
+  const writeResult = await writePaymentProof(order.id, file);
+  if (!writeResult.ok) {
+    return { ok: false, error: writeResult.error };
+  }
+
+  // ── Steps 5–7: DB writes inside a transaction ─────────────────────────────
+  // Protects DB consistency (proof row + order status transition together).
+  // File orphan on rollback is an acceptable known minor leak per plan spec.
+  const proofId = crypto.randomUUID();
+
+  try {
+    await db.transaction(async (tx) => {
+      // Insert payment_proofs row.
+      await tx.insert(paymentProofs).values({
+        id: proofId,
+        orderId: order.id,
+        imageUrl: writeResult.imageUrl,
+        thumbnailUrl: writeResult.thumbnailUrl ?? null,
+        mimeType: writeResult.mimeType,
+        sizeBytes: writeResult.sizeBytes,
+        uploadedBy: "customer",
+        uploadedByUserId: null,
+        status: "pending",
+      });
+
+      // Transition order: awaiting_customer → awaiting_payment_review (D-20).
+      assertValidTransition(order.status as Parameters<typeof assertValidTransition>[0], "awaiting_payment_review");
+
+      await tx
+        .update(orders)
+        .set({ status: "awaiting_payment_review", paymentMethod: "bank_transfer" })
+        .where(eq(orders.id, order.id));
+
+      // paymentLinks.usedAt is NOT set here (D-23).
+    });
+  } catch (err) {
+    console.error("[payment-links] uploadPaymentProofByToken DB transaction failed:", err);
+    return { ok: false, error: "Could not save payment proof. Please try again." };
+  }
+
+  // Revalidate the public payment-link page so the customer sees the post-upload state.
+  revalidatePath(`/payment-links/${token}`, "page");
+
+  return { ok: true, proofId };
 }
 
 export type CreatePayPalOrderForLinkResult =
