@@ -400,11 +400,23 @@ Phases execute in numeric order: 1 → 2 → ... → 15
 
 ### Phase 20: Admin POS + Draft Order Flow
 
-**Goal:** [To be planned]
-**Requirements**: TBD
+**Goal:** Admin can build a multi-line offline order on a new /admin/pos surface (product picker across stocked + variants + configurable + keyboard clicker + free-text lines), generate a tokenized public draft link for customer review-and-pay via PayPal OR Bank Transfer (with admin-moderated slip upload), and review incoming slips with Confirm/Reject from /admin/orders/[id]. Every admin order surface exposes the existing invoice PDF via a Download Invoice button.
+**Requirements**: REQ-20-1, REQ-20-2, REQ-20-3, REQ-20-4, REQ-20-5, REQ-20-6, REQ-20-7, REQ-20-8, REQ-20-9, REQ-20-10, REQ-20-11, REQ-20-12 (see 20-SPEC.md)
 **Depends on:** Phase 19
-**Plans:** 0 plans
+**Plans:** 13 plans
 
 Plans:
 
-- [ ] TBD (run /gsd:plan-phase 20 to break down)
+- [ ] 20-01-PLAN.md — Extend OrderStatus + ORDER_STATUS_FLOW + isManualLine + Drizzle schema mirror (Wave 1)
+- [ ] 20-02-PLAN.md — [BLOCKING] Raw-SQL migration applicator + live MariaDB DDL apply (Wave 1)
+- [ ] 20-03-PLAN.md — Payment-proof storage helper with EXIF strip + 256px thumbnail (Wave 1)
+- [ ] 20-04-PLAN.md — store-settings reader extension + admin bank/template writer (Wave 2)
+- [ ] 20-05-PLAN.md — admin-pos server action (search, config fields, createPosOrder) (Wave 2)
+- [ ] 20-06-PLAN.md — payment-links view-model + public uploadPaymentProofByToken (Wave 2)
+- [ ] 20-07-PLAN.md — payment-proof admin actions (confirm, reject, admin upload) (Wave 2)
+- [ ] 20-08-PLAN.md — Public draft page with two-card method picker + bank-transfer slip upload (Wave 3)
+- [ ] 20-09-PLAN.md — /admin/pos builder + line rows + send-draft modal (Wave 4)
+- [ ] 20-10-PLAN.md — Awaiting-payment-review filter chip + sidebar badge + row thumbnail (Wave 5)
+- [ ] 20-11-PLAN.md — Admin order-detail payment-proof review surface + Download Invoice button (Wave 5)
+- [ ] 20-12-PLAN.md — /admin/settings bank-details + draft-template fieldsets (Wave 6)
+- [ ] 20-13-PLAN.md — isManualLine render guards on invoice + order details + email (Wave 6)
