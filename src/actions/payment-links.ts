@@ -67,6 +67,8 @@ export type PaymentLinkView = {
     currency: string;
     /** Phase 20 (20-06): payment method — null until customer selects one. */
     paymentMethod: "paypal" | "bank_transfer" | null;
+    /** Phase 20 (20-08): order status — needed for UI branching on the public page. */
+    status: string;
   };
   /** Phase 20 (20-06): line items for the order (manual multi-query hydration — no LATERAL). */
   orderItems: PaymentLinkOrderItem[];
@@ -162,6 +164,7 @@ export async function getPaymentLinkByToken(
       totalAmount: order.totalAmount,
       currency: order.currency,
       paymentMethod: order.paymentMethod ?? null,
+      status: order.status,
     },
     orderItems: items.map((item) => ({
       id: item.id,
