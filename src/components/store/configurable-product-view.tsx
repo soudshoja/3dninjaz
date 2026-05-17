@@ -34,6 +34,7 @@ import { DescriptionDisplay } from "@/components/store/description-display";
 import { PdpProductCare, PdpColourNote } from "@/components/store/pdp-info-blocks";
 import type { PublicConfigField } from "@/lib/configurable-product-data";
 import type { PictureData } from "@/lib/image-manifest";
+import type { PosAddToOrderLine } from "@/components/store/product-detail";
 
 // ============================================================================
 // Types
@@ -64,6 +65,11 @@ type Props = {
   ratingCount?: number;
   /** Bug 3 — when true, hide the base-price pill until a select option resolves the price. */
   hideBasePrice?: boolean;
+  /**
+   * POS-only: when set, "Add to bag" becomes "Add to order" and calls this
+   * callback instead of the Zustand cart store.
+   */
+  onAddToOrder?: (line: PosAddToOrderLine) => void;
 };
 
 // ============================================================================
@@ -178,6 +184,7 @@ export function ConfigurableProductView({
   ratingAvg = 0,
   ratingCount = 0,
   hideBasePrice = false,
+  onAddToOrder,
 }: Props) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState(false);
@@ -291,13 +298,27 @@ export function ConfigurableProductView({
     if (!canAdd || currentPrice === null) return;
 
     const summary = buildSummary(fields, values, currentPrice);
-    const configurationData = {
+    const configData = {
       values,
       computedPrice: currentPrice,
       computedSummary: summary,
     };
-    addItem({ productId: product.id, configurationData });
-    setDrawerOpen(true);
+
+    if (onAddToOrder) {
+      onAddToOrder({
+        productId: product.id,
+        variantId: null,
+        qty: 1,
+        unitPrice: currentPrice,
+        productName: product.name,
+        productImageUrl: product.images[0] ?? null,
+        variantLabel: null,
+        configurationData: configData,
+      });
+    } else {
+      addItem({ productId: product.id, configurationData: configData });
+      setDrawerOpen(true);
+    }
   }
 
   const material = product.materialType ?? "PLA";
@@ -337,8 +358,9 @@ export function ConfigurableProductView({
   );
 
   // ── CTA button label ──────────────────────────────────────────────────────
+  const addLabel = onAddToOrder ? "Add to order" : "Add to Bag";
   const ctaLabel = canAdd
-    ? `Add to Bag · ${formatMYR(currentPrice!)}`
+    ? `${addLabel} · ${formatMYR(currentPrice!)}`
     : outOfTable
     ? "Too many characters"
     : !requiredFilled

@@ -42,6 +42,7 @@ import type { PublicConfigField } from "@/lib/configurable-product-data";
 import type { HydratedOption, HydratedVariant } from "@/lib/variants";
 import type { PictureData } from "@/lib/image-manifest";
 import type { TextareaFieldConfig, SelectFieldConfig } from "@/lib/config-fields";
+import type { PosAddToOrderLine } from "@/components/store/product-detail";
 
 // ============================================================================
 // Types
@@ -85,6 +86,11 @@ type Props = {
   variantPictures?: Record<string, PictureData | null>;
   /** Bug 3 — when true, hide the flat-rate base-price pill until a select option resolves the price. */
   hideBasePrice?: boolean;
+  /**
+   * POS-only: when set, "Add to bag" becomes "Add to order" and calls this
+   * callback instead of the Zustand cart store.
+   */
+  onAddToOrder?: (line: PosAddToOrderLine) => void;
 };
 
 // ============================================================================
@@ -127,6 +133,7 @@ export function SimpleProductView({
   hydratedVariants = [],
   variantPictures = {},
   hideBasePrice = false,
+  onAddToOrder,
 }: Props) {
   const [values, setValues] = useState<Record<string, string>>({});
 
@@ -251,10 +258,24 @@ export function SimpleProductView({
 
     if (hasVariants) {
       if (!selectedHydrated) return;
-      // Stocked-style cart entry — variantId is the sole key. Cart hydration
-      // resolves price + label + image server-side from the variant row.
-      addItem({ variantId: selectedHydrated.id, quantity: 1 });
-      setDrawerOpen(true);
+      const unitPrice = parseFloat(selectedHydrated.effectivePrice ?? selectedHydrated.price);
+      if (onAddToOrder) {
+        onAddToOrder({
+          productId: product.id,
+          variantId: selectedHydrated.id,
+          qty: 1,
+          unitPrice,
+          productName: product.name,
+          productImageUrl: product.images[0] ?? null,
+          variantLabel: selectedHydrated.label ?? null,
+          configurationData: null,
+        });
+      } else {
+        // Stocked-style cart entry — variantId is the sole key. Cart hydration
+        // resolves price + label + image server-side from the variant row.
+        addItem({ variantId: selectedHydrated.id, quantity: 1 });
+        setDrawerOpen(true);
+      }
       return;
     }
 
@@ -268,19 +289,34 @@ export function SimpleProductView({
     }
 
     const summary = buildSimpleSummary(fields, customerValues);
-    const configurationData = {
+    const configData = {
       values: customerValues,
       computedPrice: flatPrice,
       computedSummary: summary,
     };
-    addItem({ productId: product.id, configurationData });
-    setDrawerOpen(true);
+
+    if (onAddToOrder) {
+      onAddToOrder({
+        productId: product.id,
+        variantId: null,
+        qty: 1,
+        unitPrice: flatPrice,
+        productName: product.name,
+        productImageUrl: product.images[0] ?? null,
+        variantLabel: null,
+        configurationData: configData,
+      });
+    } else {
+      addItem({ productId: product.id, configurationData: configData });
+      setDrawerOpen(true);
+    }
   }
 
   const material = product.materialType ?? "PLA";
   const leadDays = product.estimatedProductionDays ?? 7;
 
   // CTA label — three branches: variant / flat-with-fields / flat-no-fields.
+  const addLabel = onAddToOrder ? "Add to order" : "Add to Bag";
   const ctaLabel = (() => {
     if (hasVariants) {
       if (soldOut) return "Out of stock";
@@ -288,9 +324,9 @@ export function SimpleProductView({
         return "Pick a product";
       }
       const priceLabel = formatMYR(effectivePriceNumber ?? 0);
-      return isPreorderSelected ? `Pre-order · ${priceLabel}` : `Add to Bag · ${priceLabel}`;
+      return isPreorderSelected ? `Pre-order · ${priceLabel}` : `${addLabel} · ${priceLabel}`;
     }
-    if (canAdd) return `Add to Bag · ${formatMYR(flatPrice!)}`;
+    if (canAdd) return `${addLabel} · ${formatMYR(flatPrice!)}`;
     if (!requiredFilled) return "Fill in all fields first";
     return "Enter your details";
   })();

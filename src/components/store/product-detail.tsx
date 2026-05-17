@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useMemo, useState, useCallback } from "react";
+import { ShoppingBag } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import { formatMYR, priceRangeMYR } from "@/lib/format";
 import { ProductGallery } from "@/components/store/product-gallery";
@@ -16,6 +17,26 @@ import { SimpleProductView } from "@/components/store/simple-product-view";
 import { DescriptionDisplay } from "@/components/store/description-display";
 import { PdpProductCare, PdpColourNote } from "@/components/store/pdp-info-blocks";
 import type { PublicConfigField } from "@/lib/configurable-product-data";
+import { useCartStore } from "@/stores/cart-store";
+
+/**
+ * Line shape passed to onAddToOrder when admin clicks "Add to order" in POS.
+ * Mirrors the cart-store addItem inputs but as a plain serialisable object.
+ */
+export type PosAddToOrderLine = {
+  productId: string;
+  variantId: string | null;
+  qty: number;
+  unitPrice: number;
+  productName: string;
+  productImageUrl: string | null;
+  variantLabel?: string | null;
+  configurationData?: {
+    values: Record<string, string>;
+    computedPrice: number;
+    computedSummary: string;
+  } | null;
+};
 
 type ProductDetailProps = {
   product: {
@@ -45,6 +66,12 @@ type ProductDetailProps = {
   /** Pre-resolved PictureData keyed by variantId for variants that have imageUrl set */
   variantPictures?: Record<string, PictureData | null>;
   configurableData?: { fields: PublicConfigField[]; maxUnitCount: number | null; priceTiers: Record<string, number>; unitField: string | null };
+  /**
+   * POS-only: when set, "Add to bag" becomes "Add to order" and calls this
+   * callback instead of the Zustand cart store. Customer PDP is unaffected
+   * (prop is undefined by default).
+   */
+  onAddToOrder?: (line: PosAddToOrderLine) => void;
 };
 
 /**
@@ -62,6 +89,7 @@ export function ProductDetail({
   pictures,
   variantPictures = {},
   configurableData,
+  onAddToOrder,
 }: ProductDetailProps) {
   // Quick task 260430-icx — `simple` PDP renders <SimpleProductView>, NOT
   // ConfigurableProductView, because textarea fields render as read-only
@@ -81,11 +109,22 @@ export function ProductDetail({
         ratingAvg={ratingAvg}
         ratingCount={ratingCount}
         hideBasePrice={product.hideBasePrice}
+        onAddToOrder={onAddToOrder}
       />
     );
   }
   if ((product.productType === "configurable" || product.productType === "keychain" || product.productType === "vending") && configurableData) {
-    return <ConfigurableProductView product={{ ...product, pictures }} {...configurableData} isWishlistedInitial={isWishlistedInitial} ratingAvg={ratingAvg} ratingCount={ratingCount} hideBasePrice={product.hideBasePrice} />;
+    return (
+      <ConfigurableProductView
+        product={{ ...product, pictures }}
+        {...configurableData}
+        isWishlistedInitial={isWishlistedInitial}
+        ratingAvg={ratingAvg}
+        ratingCount={ratingCount}
+        hideBasePrice={product.hideBasePrice}
+        onAddToOrder={onAddToOrder}
+      />
+    );
   }
   const [selectedHydrated, setSelectedHydrated] = useState<HydratedVariant | null>(null);
   // Bug fix: track first missing option name for the Add-to-bag button label.
@@ -103,6 +142,30 @@ export function ProductDetail({
   const handleFirstMissingOptionChange = useCallback((name: string | null) => {
     setFirstMissingOptionName(name);
   }, []);
+
+  // POS onAddToOrder wiring — cart store used only when onAddToOrder is absent
+  const addItem = useCartStore((s) => s.addItem);
+  const setDrawerOpen = useCartStore((s) => s.setDrawerOpen);
+
+  function handleAddToOrderOrBag() {
+    if (!selectedHydrated || soldOut) return;
+    const unitPrice = parseFloat(selectedHydrated.effectivePrice ?? selectedHydrated.price);
+    if (onAddToOrder) {
+      onAddToOrder({
+        productId: product.id,
+        variantId: selectedHydrated.id,
+        qty: 1,
+        unitPrice,
+        productName: product.name,
+        productImageUrl: product.images[0] ?? null,
+        variantLabel: selectedHydrated.label ?? null,
+        configurationData: null,
+      });
+    } else {
+      addItem({ variantId: selectedHydrated.id, quantity: 1 });
+      setDrawerOpen(true);
+    }
+  }
 
   // What the user sees: hover wins over click for display.
   const displayedHydrated = hoveredHydrated ?? selectedHydrated;
@@ -346,7 +409,7 @@ export function ProductDetail({
               )}
             </div>
 
-            {/* Add to bag card */}
+            {/* Add to bag / Add to order card */}
             <div
               className="rounded-3xl p-5 sm:p-6"
               style={{
@@ -357,18 +420,37 @@ export function ProductDetail({
             >
               <div className="flex items-center gap-3 flex-wrap">
                 <div className="flex-1 min-w-0">
-                  <AddToBagButton
-                    selectedVariant={
-                      !soldOut && selectedHydrated
-                        ? { ...selectedHydrated, isPreorder: isPreorderSelected }
-                        : null
-                    }
-                    productId={product.id}
-                    productSlug={product.slug}
-                    productName={product.name}
-                    productImage={product.images[0] ?? null}
-                    firstMissingOptionName={firstMissingOptionName}
-                  />
+                  {onAddToOrder ? (
+                    /* POS mode: custom button so we intercept the click */
+                    <button
+                      type="button"
+                      disabled={!selectedHydrated || soldOut}
+                      onClick={handleAddToOrderOrBag}
+                      className="mt-6 w-full rounded-full py-4 px-6 font-bold text-lg text-white shadow-[0_6px_0_rgba(0,0,0,0.35)] hover:translate-y-[2px] hover:shadow-[0_4px_0_rgba(0,0,0,0.35)] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0 transition min-h-[60px] flex items-center justify-center gap-2"
+                      style={{ backgroundColor: !selectedHydrated || soldOut ? "#6b7280" : BRAND.ink }}
+                    >
+                      <ShoppingBag size={20} strokeWidth={2.5} aria-hidden="true" />
+                      {soldOut
+                        ? "Out of stock"
+                        : !selectedHydrated
+                          ? firstMissingOptionName ? `Pick a ${firstMissingOptionName}` : "Pick a variant"
+                          : `Add to order · ${formatMYR(selectedHydrated.effectivePrice ?? selectedHydrated.price)}`}
+                    </button>
+                  ) : (
+                    /* Customer mode: original AddToBagButton — zero regression */
+                    <AddToBagButton
+                      selectedVariant={
+                        !soldOut && selectedHydrated
+                          ? { ...selectedHydrated, isPreorder: isPreorderSelected }
+                          : null
+                      }
+                      productId={product.id}
+                      productSlug={product.slug}
+                      productName={product.name}
+                      productImage={product.images[0] ?? null}
+                      firstMissingOptionName={firstMissingOptionName}
+                    />
+                  )}
                 </div>
                 <WishlistButton
                   productId={product.id}
