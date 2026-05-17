@@ -403,7 +403,7 @@ Phases execute in numeric order: 1 → 2 → ... → 15
 **Goal:** Admin can build a multi-line offline order on a new /admin/pos surface (product picker across stocked + variants + configurable + keyboard clicker + free-text lines), generate a tokenized public draft link for customer review-and-pay via PayPal OR Bank Transfer (with admin-moderated slip upload), and review incoming slips with Confirm/Reject from /admin/orders/[id]. Every admin order surface exposes the existing invoice PDF via a Download Invoice button.
 **Requirements**: REQ-20-1, REQ-20-2, REQ-20-3, REQ-20-4, REQ-20-5, REQ-20-6, REQ-20-7, REQ-20-8, REQ-20-9, REQ-20-10, REQ-20-11, REQ-20-12 (see 20-SPEC.md)
 **Depends on:** Phase 19
-**Plans:** 12/13 plans executed
+**Plans:** 13/13 plans complete
 
 Plans:
 
@@ -419,4 +419,4 @@ Plans:
 - [x] 20-10-PLAN.md — Awaiting-payment-review filter chip + sidebar badge + row thumbnail (Wave 5)
 - [x] 20-11-PLAN.md — Admin order-detail payment-proof review surface + Download Invoice button (Wave 5)
 - [x] 20-12-PLAN.md — /admin/settings bank-details + draft-template fieldsets (Wave 6)
-- [ ] 20-13-PLAN.md — isManualLine render guards on invoice + order details + email (Wave 6)
+- [x] 20-13-PLAN.md — isManualLine render guards on invoice + order details + email (Wave 6)
