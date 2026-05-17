@@ -145,6 +145,8 @@ export async function GET(
         totalAmount: order.totalAmount,
         items: order.items.map((i) => ({
           id: i.id,
+          productId: i.productId,   // Phase 20 (20-13) — D-08 isManualLine guard
+          variantId: i.variantId,   // Phase 20 (20-13) — D-08 isManualLine guard
           productName: i.productName,
           size: i.size,
           variantLabel: i.variantLabel ?? null,

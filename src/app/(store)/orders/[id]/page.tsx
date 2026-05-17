@@ -5,7 +5,7 @@ import { getSessionUser } from "@/lib/auth-helpers";
 import { getMyOrder } from "@/actions/orders";
 import { ensureOrderItemConfigData } from "@/lib/config-fields";
 import { BRAND } from "@/lib/brand";
-import { formatOrderNumber } from "@/lib/orders";
+import { formatOrderNumber, isManualLine } from "@/lib/orders";
 import { formatMYR } from "@/lib/format";
 import { OrderStatusBadge } from "@/components/orders/order-status-badge";
 import { OrderTimeline } from "@/components/orders/order-timeline";
@@ -187,7 +187,8 @@ export default async function OrderDetailPage({
                   className="h-16 w-16 md:h-20 md:w-20 rounded-xl overflow-hidden shrink-0"
                   style={{ backgroundColor: `${BRAND.blue}15` }}
                 >
-                  {i.productImage ? (
+                  {/* D-08 (Phase 20): manual lines have no product image — no fetch */}
+                  {i.productImage && !isManualLine(i) ? (
                     // eslint-disable-next-line @next/next/no-img-element -- product may be deleted
                     <img
                       src={i.productImage}
@@ -197,14 +198,25 @@ export default async function OrderDetailPage({
                   ) : null}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <Link
-                    href={`/products/${i.productSlug}`}
-                    className="font-bold truncate block hover:underline"
-                  >
-                    {i.productName}
-                  </Link>
+                  {/* D-08 (Phase 20): manual lines must NOT link to /products/<manual> */}
+                  {isManualLine(i) ? (
+                    <span className="font-bold truncate block">
+                      {i.productName}
+                    </span>
+                  ) : (
+                    <Link
+                      href={`/products/${i.productSlug}`}
+                      className="font-bold truncate block hover:underline"
+                    >
+                      {i.productName}
+                    </Link>
+                  )}
                   <p className="text-sm text-slate-600 mt-0.5">
                     {(() => {
+                      // D-08: manual lines have no variant/config — show qty + price only
+                      if (isManualLine(i)) {
+                        return <>Qty {i.quantity} · {formatMYR(i.unitPrice)} each</>;
+                      }
                       const cfg = ensureOrderItemConfigData(i.configurationData);
                       const summary = cfg?.computedSummary ?? i.variantLabel ?? (i.size ? `Size ${i.size}` : null);
                       return <>{summary ? `${summary} · ` : ""}Qty {i.quantity} · {formatMYR(i.unitPrice)} each</>;
@@ -239,16 +251,19 @@ export default async function OrderDetailPage({
 
         {/* Phase 6 06-05 — per-item Review your items section. Hidden when
             order isn't in a buyer-qualifying status. */}
+        {/* D-08 (Phase 20): filter out manual lines — they have no product record */}
         <ReviewsSection
           status={row.status}
-          items={row.items.map((i) => ({
-            id: i.id,
-            productId: i.productId,
-            productSlug: i.productSlug,
-            productName: i.productName,
-            size: i.size,
-            variantLabel: i.variantLabel ?? null,
-          }))}
+          items={row.items
+            .filter((i) => !isManualLine(i))
+            .map((i) => ({
+              id: i.id,
+              productId: i.productId,
+              productSlug: i.productSlug,
+              productName: i.productName,
+              size: i.size,
+              variantLabel: i.variantLabel ?? null,
+            }))}
         />
 
         {/* Phase 6 06-06 / 06-07 — Cancel / return action panel. Renders only
