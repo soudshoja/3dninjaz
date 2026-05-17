@@ -6,7 +6,6 @@ import {
   orderItems,
   products,
   productVariants,
-  productConfigFields,
   coupons,
 } from "@/lib/db/schema";
 import { and, asc, eq, inArray, like, sql } from "drizzle-orm";
@@ -25,23 +24,23 @@ import { renderDescription } from "@/lib/render-description";
 import { ensureImagesV2 } from "@/lib/config-fields";
 import type { PictureData } from "@/lib/image-manifest";
 import type { PublicConfigField } from "@/lib/configurable-product-data";
-// ensureConfigJson is used in getPosConfigFields callers (admin POS UI) — not
-// needed server-side since we return raw configJson for the client to parse.
-// Import only the type for reference; no runtime usage in this module.
 
 /**
- * Phase 20 (20-05) — Admin POS multi-line order builder server actions.
+ * Phase 20 (20-05 / 20-09b) — Admin POS multi-line order builder server actions.
  *
  * Provides:
- *   - getPosProductSearch   : type-ahead search across active products
- *   - getPosConfigFields    : fetch product_config_fields for configurable/keychain products
- *   - getStockedVariantsForPos : slim variant projection for stocked products
- *   - createPosOrder        : write one orders row + N order_items in a transaction
+ *   - getPosProductSearch      : type-ahead search across active products
+ *   - getPosProductHydration   : full PDP hydration for mounting <ProductDetail> in POS
+ *   - createPosOrder           : write one orders row + N order_items in a transaction
  *   - setOrderAwaitingCustomer : transition pending → awaiting_customer
  *
  * Every export awaits `requireAdmin()` first (CVE-2025-29927 mitigation).
  * MariaDB 10.11 no-LATERAL rule: every read uses manual multi-query hydration.
  * D-06 sentinel: free-text lines write productId='manual' + variantId='manual'.
+ *
+ * 20-09b rework: getPosConfigFields + getStockedVariantsForPos removed —
+ * the POS now mounts the customer <ProductDetail> directly (onAddToOrder callback)
+ * so separate config-field and variant queries are no longer needed.
  */
 
 // ============================================================================
@@ -54,25 +53,6 @@ export type PosProductResult = {
   productType: string;
   thumbnailUrl: string | null;
   variantCount: number;
-};
-
-export type PosConfigField = {
-  id: string;
-  position: number;
-  fieldType: string;
-  label: string;
-  helpText: string | null;
-  required: boolean;
-  configJson: string | null;
-};
-
-export type PosVariant = {
-  variantId: string;
-  label: string;
-  price: number;
-  salePrice: number | null;
-  isOnSale: boolean;
-  inStock: boolean;
 };
 
 /** Discriminated union for POS order lines. */
@@ -235,97 +215,6 @@ export async function getPosProductSearch(
       productType: p.productType,
       thumbnailUrl,
       variantCount: countByProduct.get(p.id) ?? 0,
-    };
-  });
-}
-
-/**
- * Fetch product_config_fields for a configurable or keychain product.
- * Returns null for stocked products (caller falls through to variant picker).
- * Uses manual hydration — no LATERAL (MariaDB 10.11).
- */
-export async function getPosConfigFields(
-  productId: string,
-): Promise<PosConfigField[] | null> {
-  const session = await requireAdmin();
-  void session;
-
-  // Determine productType to decide whether this product has config fields
-  const [productRow] = await db
-    .select({ productType: products.productType })
-    .from(products)
-    .where(eq(products.id, productId))
-    .limit(1);
-
-  if (!productRow) return null;
-  // Stocked + simple products use variant picker, not configurator
-  if (productRow.productType === "stocked") return null;
-
-  const fieldRows = await db
-    .select({
-      id: productConfigFields.id,
-      position: productConfigFields.position,
-      fieldType: productConfigFields.fieldType,
-      label: productConfigFields.label,
-      helpText: productConfigFields.helpText,
-      required: productConfigFields.required,
-      configJson: productConfigFields.configJson,
-    })
-    .from(productConfigFields)
-    .where(eq(productConfigFields.productId, productId))
-    .orderBy(asc(productConfigFields.position));
-
-  return fieldRows.map((r) => ({
-    id: r.id,
-    position: r.position,
-    fieldType: r.fieldType,
-    label: r.label,
-    helpText: r.helpText ?? null,
-    required: r.required,
-    configJson: r.configJson ?? null,
-  }));
-}
-
-/**
- * Slim variant projection for the POS stocked-product picker.
- * Returns {variantId, label, price, salePrice, isOnSale, inStock} per variant.
- * No LATERAL joins (MariaDB 10.11).
- */
-export async function getStockedVariantsForPos(
-  productId: string,
-): Promise<PosVariant[]> {
-  const session = await requireAdmin();
-  void session;
-
-  const variantRows = await db
-    .select({
-      id: productVariants.id,
-      labelCache: productVariants.labelCache,
-      price: productVariants.price,
-      salePrice: productVariants.salePrice,
-      saleFrom: productVariants.saleFrom,
-      saleTo: productVariants.saleTo,
-      inStock: productVariants.inStock,
-    })
-    .from(productVariants)
-    .where(eq(productVariants.productId, productId))
-    .orderBy(asc(productVariants.position));
-
-  const now = new Date();
-
-  return variantRows.map((v) => {
-    const hasSalePrice = v.salePrice !== null;
-    const afterFrom = !v.saleFrom || v.saleFrom <= now;
-    const beforeTo = !v.saleTo || v.saleTo >= now;
-    const isOnSale = hasSalePrice && afterFrom && beforeTo;
-
-    return {
-      variantId: v.id,
-      label: v.labelCache ?? "",
-      price: parseFloat(v.price),
-      salePrice: v.salePrice !== null ? parseFloat(v.salePrice) : null,
-      isOnSale,
-      inStock: v.inStock,
     };
   });
 }
