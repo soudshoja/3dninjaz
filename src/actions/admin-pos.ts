@@ -18,6 +18,13 @@ import { assertValidTransition } from "@/lib/orders";
 import { getShippingRate } from "@/actions/admin-shipping";
 import { applyCouponToSubtotal, type CouponSnapshot } from "@/lib/pricing";
 import { redeemCoupon } from "@/actions/coupons";
+import { pickImage } from "@/lib/image-manifest";
+import { hydrateProductVariants } from "@/lib/variants";
+import { getConfigurableProductData } from "@/lib/configurable-product-data";
+import { renderDescription } from "@/lib/render-description";
+import { ensureImagesV2 } from "@/lib/config-fields";
+import type { PictureData } from "@/lib/image-manifest";
+import type { PublicConfigField } from "@/lib/configurable-product-data";
 // ensureConfigJson is used in getPosConfigFields callers (admin POS UI) — not
 // needed server-side since we return raw configJson for the client to parse.
 // Import only the type for reference; no runtime usage in this module.
@@ -119,6 +126,34 @@ export type PosOrderInput = {
 export type CreatePosOrderResult =
   | { ok: true; orderId: string; orderNumber: string }
   | { ok: false; error: string };
+
+/**
+ * Hydration payload returned by getPosProductHydration.
+ * Mirrors what src/app/(store)/products/[slug]/page.tsx fetches for ProductDetail.
+ */
+export type PosProductHydration = {
+  product: {
+    id: string;
+    name: string;
+    slug: string;
+    description: string;
+    descriptionHtml: string;
+    images: string[];
+    imageCaptions: (string | null | undefined)[];
+    materialType: string | null;
+    estimatedProductionDays: number | null;
+    category: { name: string; slug: string } | null;
+    options: Awaited<ReturnType<typeof hydrateProductVariants>>["options"];
+    hydratedVariants: Awaited<ReturnType<typeof hydrateProductVariants>>["variants"];
+    productType: "stocked" | "configurable" | "keychain" | "vending" | "simple";
+    hideBasePrice: boolean;
+  };
+  pictures: PictureData[];
+  variantPictures: Record<string, PictureData | null>;
+  configurableData:
+    | { fields: PublicConfigField[]; maxUnitCount: number | null; priceTiers: Record<string, number>; unitField: string | null }
+    | undefined;
+};
 
 // Sentinel for /admin/orders email domain (mirrors admin-manual-orders.ts pattern)
 const SENTINEL_EMAIL_DOMAIN = "@3dninjaz.local";
@@ -293,6 +328,114 @@ export async function getStockedVariantsForPos(
       inStock: v.inStock,
     };
   });
+}
+
+// ============================================================================
+// Task 1b: getPosProductHydration
+// ============================================================================
+
+/**
+ * Fetch the full PDP hydration payload for a given product id.
+ * Mirrors the server-side data fetching in src/app/(store)/products/[slug]/page.tsx
+ * so the POS can mount <ProductDetail> with identical props.
+ *
+ * Does NOT include isWishlistedInitial / ratingAvg / ratingCount — POS passes
+ * false / 0 for those (not needed in the admin context).
+ *
+ * Uses manual multi-query hydration (no LATERAL — MariaDB 10.11).
+ */
+export async function getPosProductHydration(
+  productId: string,
+): Promise<PosProductHydration | null> {
+  const session = await requireAdmin();
+  void session;
+
+  // Fetch the base product row (active OR inactive — admin sees all)
+  const [row] = await db
+    .select()
+    .from(products)
+    .where(eq(products.id, productId))
+    .limit(1);
+
+  if (!row) return null;
+
+  // Resolve images array (MariaDB JSON LONGTEXT)
+  const { ensureImagesArray: _ensureImages } = await (async () => {
+    // Inline the same logic as catalog.ts ensureImagesArray
+    function ensureImagesArray(raw: unknown): string[] {
+      return ensureImagesV2(raw).map((e) => e.url);
+    }
+    return { ensureImagesArray };
+  })();
+
+  const images = _ensureImages(row.images);
+  const imagesV2 = ensureImagesV2(row.images);
+  const imageCaptions = imagesV2.map((e) => e.caption ?? null);
+
+  // Category name/slug
+  let category: { name: string; slug: string } | null = null;
+  if (row.categoryId) {
+    const { categories } = await import("@/lib/db/schema");
+    const [catRow] = await db
+      .select({ name: categories.name, slug: categories.slug })
+      .from(categories)
+      .where(eq(categories.id, row.categoryId))
+      .limit(1);
+    if (catRow) category = catRow;
+  }
+
+  // Hydrate options + variants (same helper the PDP page uses)
+  const { options, variants: hydratedVariants } = await hydrateProductVariants(productId);
+
+  // Configurable data — matches page.tsx condition verbatim
+  const needsConfigData =
+    row.productType === "configurable" ||
+    row.productType === "keychain" ||
+    row.productType === "vending" ||
+    row.productType === "simple";
+  const configurableData = needsConfigData
+    ? await getConfigurableProductData(productId)
+    : undefined;
+
+  // Pre-resolve <picture> sources for all product images
+  const pictures = await Promise.all(images.map((u) => pickImage(u)));
+
+  // Per-variant PictureData for variants that have an imageUrl
+  const variantPictureEntries = await Promise.all(
+    hydratedVariants
+      .filter((v) => v.imageUrl)
+      .map(async (v) => [v.id, await pickImage(v.imageUrl!)] as const),
+  );
+  const variantPictures = Object.fromEntries(variantPictureEntries);
+
+  const productType = (row.productType ?? "stocked") as
+    | "stocked"
+    | "configurable"
+    | "keychain"
+    | "vending"
+    | "simple";
+
+  return {
+    product: {
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+      description: row.description ?? "",
+      descriptionHtml: renderDescription(row.description ?? ""),
+      images,
+      imageCaptions,
+      materialType: row.materialType ?? null,
+      estimatedProductionDays: row.estimatedProductionDays ?? null,
+      category,
+      options,
+      hydratedVariants,
+      productType,
+      hideBasePrice: row.hideBasePrice ?? false,
+    },
+    pictures,
+    variantPictures,
+    configurableData,
+  };
 }
 
 // ============================================================================
