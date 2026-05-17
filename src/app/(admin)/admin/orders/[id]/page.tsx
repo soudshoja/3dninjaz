@@ -27,6 +27,13 @@ import { getOrderShipment, getAdminOrderTracking } from "@/actions/shipping";
 import { OrderShipmentPanel } from "@/components/admin/order-shipment-panel";
 // Phase 10 (10-01) — cost + profit panel with inline edits.
 import { OrderCostsPanel } from "@/components/admin/order-costs-panel";
+// Phase 20 (20-11) — payment proof review surface + Download Invoice button.
+import { db } from "@/lib/db";
+import { paymentProofs } from "@/lib/db/schema";
+import { eq, desc } from "drizzle-orm";
+import { FileDown } from "lucide-react";
+import { PaymentProofSection } from "@/components/admin/payment-proof-section";
+import { AdminUploadProofForm } from "@/components/admin/admin-upload-proof-form";
 
 export const dynamic = "force-dynamic";
 
@@ -87,6 +94,23 @@ export default async function AdminOrderDetailPage({
     console.warn("getAdminOrderTracking failed", (e as Error).message);
   }
 
+  // Phase 20 (20-11) — manual multi-query hydration (no LATERAL joins per
+  // MariaDB 10.11 quirk). Fetches payment proofs for this order ordered by
+  // created_at DESC (latest first).
+  const proofRows = await db
+    .select()
+    .from(paymentProofs)
+    .where(eq(paymentProofs.orderId, id))
+    .orderBy(desc(paymentProofs.createdAt));
+
+  // Mount admin upload form when order is still awaiting payment confirmation
+  // or is an unconfirmed bank-transfer order (no PayPal capture yet and not paid).
+  // Status-based guard: show for pending / awaiting_customer / awaiting_payment_review.
+  const showAdminUploadForm =
+    row.status === "awaiting_customer" ||
+    row.status === "awaiting_payment_review" ||
+    (row.status === "pending" && !row.paypalCaptureId);
+
   return (
     <main
       className="min-h-screen"
@@ -115,7 +139,20 @@ export default async function AdminOrderDetailPage({
               </p>
             ) : null}
           </div>
-          <AdminOrderStatusBadge status={row.status} />
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Phase 20 (20-11) — Download Invoice PDF button */}
+            <a
+              href={`/orders/${row.id}/invoice.pdf`}
+              target="_blank"
+              rel="noopener"
+              className="inline-flex items-center gap-2 px-4 font-semibold rounded-[4px] border-2 border-slate-700 text-slate-700 hover:bg-slate-100 transition-colors duration-150"
+              style={{ minHeight: 48 }}
+            >
+              <FileDown size={20} />
+              Download Invoice (PDF)
+            </a>
+            <AdminOrderStatusBadge status={row.status} />
+          </div>
         </header>
 
         <div className="grid gap-6 md:grid-cols-2">
@@ -153,6 +190,39 @@ export default async function AdminOrderDetailPage({
               {row.shippingPhone}
             </address>
           </section>
+
+          {/* Phase 20 (20-11) — Payment Proof review section.
+              Rendered between Customer/Shipping cards and Order timeline.
+              PaymentProofSection early-returns null when proofRows is empty. */}
+          <div className="md:col-span-2 flex flex-col gap-4">
+            <PaymentProofSection
+              orderId={row.id}
+              proofs={proofRows.map((p) => ({
+                id: p.id,
+                imageUrl: p.imageUrl,
+                thumbnailUrl: p.thumbnailUrl ?? null,
+                mimeType: p.mimeType,
+                sizeBytes: p.sizeBytes,
+                uploadedBy: p.uploadedBy,
+                uploadedByUserId: p.uploadedByUserId ?? null,
+                status: p.status,
+                adminNote: p.adminNote ?? null,
+                createdAt: p.createdAt instanceof Date ? p.createdAt : new Date(p.createdAt),
+              }))}
+              orderTotal={row.totalAmount}
+            />
+
+            {/* Admin slip upload — shown when order is still awaiting payment */}
+            {showAdminUploadForm && (
+              <AdminUploadProofForm
+                orderId={row.id}
+                onSuccess={() => {
+                  // revalidatePath in adminUploadPaymentProof triggers RSC re-render
+                  // No router.refresh() per Phase 17 AD-06 — server action handles it.
+                }}
+              />
+            )}
+          </div>
 
           <section
             className="rounded-2xl p-4 md:p-6 md:col-span-2"
