@@ -680,6 +680,24 @@ export async function createPosOrder(
 }
 
 // ============================================================================
+// Task 3.5: getDraftLinkTemplate (thin read for send-draft modal)
+// ============================================================================
+
+/**
+ * Return the draft_link_template from store_settings.
+ * Thin wrapper so the client-side PosSendDraftModal can call it without
+ * importing server-only store-settings.ts directly.
+ */
+export async function getDraftLinkTemplate(): Promise<string | null> {
+  const session = await requireAdmin();
+  void session;
+
+  const { getStoreSettingsCached } = await import("@/lib/store-settings");
+  const settings = await getStoreSettingsCached();
+  return settings.draftLinkTemplate ?? null;
+}
+
+// ============================================================================
 // Task 3: setOrderAwaitingCustomer (W-1 patch)
 // ============================================================================
 

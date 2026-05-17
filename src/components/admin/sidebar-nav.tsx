@@ -42,6 +42,7 @@ const GROUPS: NavGroup[] = [
     name: "sales",
     title: "Sales",
     items: [
+      { href: "/admin/pos", label: "Point of Sale", ninjaIcon: "shop", exact: true },
       { href: "/admin/orders", label: "Orders", ninjaIcon: "download" },
       { href: "/admin/disputes", label: "Disputes", ninjaIcon: "warning" },
     ],
