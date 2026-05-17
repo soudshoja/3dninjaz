@@ -3,6 +3,8 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import { getStoreSettings } from "@/actions/admin-settings";
 import { BRAND } from "@/lib/brand";
 import { SettingsForm } from "@/components/admin/settings-form";
+import { BankDetailsFieldset } from "@/components/admin/bank-details-fieldset";
+import { DraftTemplateFieldset } from "@/components/admin/draft-template-fieldset";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -56,6 +58,20 @@ export default async function AdminSettingsPage() {
             defaultOverheadPercent: settings.defaultOverheadPercent ?? "0",
           }}
         />
+
+        {/* Phase 20 (20-12) — Bank Details fieldset (below Contact, above Socials visual order) */}
+        <div className="mt-8 max-w-2xl space-y-6">
+          <BankDetailsFieldset
+            initialBankName={settings.bankName ?? null}
+            initialBankAccountNumber={settings.bankAccountNumber ?? null}
+            initialBankAccountHolder={settings.bankAccountHolder ?? null}
+          />
+
+          {/* Phase 20 (20-12) — Draft order message template fieldset */}
+          <DraftTemplateFieldset
+            initialTemplate={settings.draftLinkTemplate ?? null}
+          />
+        </div>
       </div>
     </main>
   );
