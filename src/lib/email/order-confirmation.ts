@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { orders, orderItems } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { sendMail } from "@/lib/mailer";
-import { formatOrderNumber } from "@/lib/orders";
+import { formatOrderNumber, isManualLine } from "@/lib/orders";
 import { ensureOrderItemConfigData } from "@/lib/config-fields";
 
 /**
@@ -37,6 +37,8 @@ function baseUrl(): string {
 
 type OrderWithItems = typeof orders.$inferSelect & {
   items: Array<{
+    productId: string;             // Phase 20 (20-13) — D-08 isManualLine guard
+    variantId: string;             // Phase 20 (20-13) — D-08 isManualLine guard
     productName: string;
     size: string | null;
     variantLabel?: string | null;
@@ -69,6 +71,21 @@ export function renderOrderConfirmationHtml(order: OrderWithItems): string {
 
   const itemsHtml = order.items
     .map((i) => {
+      // D-08 (Phase 20): manual lines have no variant/config — render name + qty only.
+      // No product link in email HTML (email items never linked anyway).
+      if (isManualLine(i)) {
+        return `
+      <tr>
+        <td style="padding:12px 0;border-bottom:1px solid #eee;">
+          <strong>${escapeHtml(i.productName)}</strong><br>
+          <span style="color:#666;font-size:13px;">Qty ${i.quantity}</span>
+        </td>
+        <td style="padding:12px 0;border-bottom:1px solid #eee;text-align:right;white-space:nowrap;">
+          ${formatMYRServer(i.lineTotal)}
+        </td>
+      </tr>
+    `;
+      }
       const cfg = ensureOrderItemConfigData(i.configurationData);
       const summary = cfg?.computedSummary ?? i.variantLabel ?? (i.size ? `Size ${i.size}` : "");
       return `
@@ -171,6 +188,11 @@ export function renderOrderConfirmationText(order: OrderWithItems): string {
   lines.push("");
   lines.push("Items:");
   for (const i of order.items) {
+    // D-08 (Phase 20): manual lines have no variant/config data
+    if (isManualLine(i)) {
+      lines.push(`  - ${i.productName} x${i.quantity} — ${formatMYRServer(i.lineTotal)}`);
+      continue;
+    }
     const cfg = ensureOrderItemConfigData(i.configurationData);
     const summary = cfg?.computedSummary ?? i.variantLabel ?? (i.size ? `Size ${i.size}` : null);
     lines.push(
@@ -204,6 +226,20 @@ export function renderOrderConfirmationText(order: OrderWithItems): string {
 function renderItemsTableFragment(order: OrderWithItems): string {
   return order.items
     .map((i) => {
+      // D-08 (Phase 20): manual lines have no variant/config — render name + qty only.
+      if (isManualLine(i)) {
+        return `
+      <tr>
+        <td style="padding:12px 0;border-bottom:1px solid #eee;">
+          <strong>${escapeHtml(i.productName)}</strong><br>
+          <span style="color:#666;font-size:13px;">Qty ${i.quantity}</span>
+        </td>
+        <td style="padding:12px 0;border-bottom:1px solid #eee;text-align:right;white-space:nowrap;">
+          ${formatMYRServer(i.lineTotal)}
+        </td>
+      </tr>
+    `;
+      }
       const cfg = ensureOrderItemConfigData(i.configurationData);
       const summary = cfg?.computedSummary ?? i.variantLabel ?? (i.size ? `Size ${i.size}` : "");
       return `

@@ -6,7 +6,7 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import { getAdminOrder } from "@/actions/admin-orders";
 import { ensureOrderItemConfigData } from "@/lib/config-fields";
 import { BRAND } from "@/lib/brand";
-import { formatOrderNumber } from "@/lib/orders";
+import { formatOrderNumber, isManualLine } from "@/lib/orders";
 import { formatMYR } from "@/lib/format";
 import { AdminOrderStatusBadge } from "@/components/admin/admin-order-status-badge";
 import { AdminOrderTimeline } from "@/components/admin/admin-order-timeline";
@@ -309,7 +309,8 @@ export default async function AdminOrderDetailPage({
                       className="h-14 w-14 md:h-16 md:w-16 rounded-xl overflow-hidden shrink-0 relative"
                       style={{ backgroundColor: `${BRAND.blue}15` }}
                     >
-                      {i.productImage ? (
+                      {/* D-08 (Phase 20): manual lines have no product image — skip fetch */}
+                      {i.productImage && !isManualLine(i) ? (
                         <Image
                           src={i.productImage}
                           alt=""
@@ -321,15 +322,22 @@ export default async function AdminOrderDetailPage({
                       ) : null}
                     </div>
                     <div className="flex-1 min-w-0">
+                      {/* D-08: manual lines render name directly — no Link to /products/<id> */}
                       <p className="font-semibold truncate">{i.productName}</p>
                       <p className="text-sm text-slate-600">
                         {(() => {
+                          // D-08: manual lines have no variant/config data
+                          if (isManualLine(i)) {
+                            return <>Qty {i.quantity} · {formatMYR(i.unitPrice)} each</>;
+                          }
                           const cfg = ensureOrderItemConfigData(i.configurationData);
                           const summary = cfg?.computedSummary ?? i.variantLabel ?? (i.size ? `Size ${i.size}` : null);
                           return <>{summary ? `${summary} · ` : ""}Qty {i.quantity} · {formatMYR(i.unitPrice)} each</>;
                         })()}
                       </p>
                       {(() => {
+                        // D-08: skip configuration JSON block for manual lines
+                        if (isManualLine(i)) return null;
                         const cfg = ensureOrderItemConfigData(i.configurationData);
                         if (!cfg) return null;
                         return (
