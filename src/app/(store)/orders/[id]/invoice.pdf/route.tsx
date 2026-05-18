@@ -1,13 +1,18 @@
 import { NextResponse } from "next/server";
 import ReactPDF from "@react-pdf/renderer";
+import fs from "fs";
+import path from "path";
 import { requireUser } from "@/lib/auth-helpers";
 import { getMyOrder } from "@/actions/orders";
 import { formatOrderNumber } from "@/lib/orders";
 import { InvoiceDocument } from "@/lib/pdf/invoice";
+import { NinjazInvoiceDocument } from "@/lib/pdf/invoice-branded";
+import type { NinjazInvoiceBusiness } from "@/lib/pdf/invoice-branded";
 import { BUSINESS } from "@/lib/business-info";
 
 /**
  * Phase 6 06-06 — GET /orders/[id]/invoice.pdf (CUST-06).
+ * Phase 21      — ?template=branded (default) | ?template=minimal
  *
  * THREAT MODEL:
  *  - T-06-06-auth: requireUser() FIRST await; throws -> handled as 401
@@ -45,59 +50,78 @@ function allowInvoice(userId: string): boolean {
 const PDPA_LINE =
   "This is a digital invoice; no signature required. Records retained for 7 years per Malaysian PDPA 2010.";
 
-async function resolveBusiness(): Promise<{
-  businessName: string;
-  contactEmail: string;
-  whatsappDisplay: string;
-  pdpaLine: string;
-}> {
-  // Default — static BUSINESS const (widen the as-const literals to string).
-  let business: {
-    businessName: string;
-    contactEmail: string;
-    whatsappDisplay: string;
-    pdpaLine: string;
-  } = {
+/**
+ * Read logo.png from public/ and return as a data URI, or null if absent.
+ * react-pdf v4 accepts data URIs for Image src.
+ */
+function readLogoBase64(): string | null {
+  try {
+    const logoPath = path.join(process.cwd(), "public", "logo.png");
+    if (!fs.existsSync(logoPath)) return null;
+    const buffer = fs.readFileSync(logoPath);
+    return `data:image/png;base64,${buffer.toString("base64")}`;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveBusiness(): Promise<NinjazInvoiceBusiness> {
+  // Default — static BUSINESS const.
+  let business: NinjazInvoiceBusiness = {
     businessName: BUSINESS.legalName,
     contactEmail: BUSINESS.contactEmail,
     whatsappDisplay: BUSINESS.whatsappNumberDisplay,
     pdpaLine: PDPA_LINE,
+    bankName: null,
+    bankAccountNumber: null,
+    bankAccountHolder: null,
+    city: BUSINESS.city,
+    website: "3dninjaz.com",
+    logoBase64: readLogoBase64(),
   };
+
   try {
-    // Phase 5 05-04 may export getStoreSettings — load it dynamically so we
+    // Phase 5 05-04 may export getStoreSettingsCached — load dynamically so we
     // don't break when the module isn't merged yet.
     const mod: unknown = await import("@/lib/store-settings").catch(() => null);
     const fn =
-      mod && typeof mod === "object" && "getStoreSettings" in mod
-        ? (mod as { getStoreSettings?: () => Promise<unknown> })
-            .getStoreSettings
+      mod && typeof mod === "object" && "getStoreSettingsCached" in mod
+        ? (mod as { getStoreSettingsCached?: () => Promise<unknown> })
+            .getStoreSettingsCached
         : null;
     if (typeof fn === "function") {
       const s = (await fn()) as
         | {
-            businessName?: string;
-            contactEmail?: string;
-            whatsappNumberDisplay?: string;
+            businessName?: string | null;
+            contactEmail?: string | null;
+            whatsappNumberDisplay?: string | null;
+            bankName?: string | null;
+            bankAccountNumber?: string | null;
+            bankAccountHolder?: string | null;
           }
         | null;
       if (s) {
         business = {
+          ...business,
           businessName: s.businessName ?? business.businessName,
           contactEmail: s.contactEmail ?? business.contactEmail,
           whatsappDisplay:
             s.whatsappNumberDisplay ?? business.whatsappDisplay,
-          pdpaLine: PDPA_LINE,
+          bankName: s.bankName ?? null,
+          bankAccountNumber: s.bankAccountNumber ?? null,
+          bankAccountHolder: s.bankAccountHolder ?? null,
         };
       }
     }
   } catch {
-    // Phase 5 05-04 hasn't shipped — silently use BUSINESS fallback.
+    // getStoreSettingsCached unavailable — silently use BUSINESS fallback.
   }
+
   return business;
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   let session;
@@ -124,41 +148,57 @@ export async function GET(
 
   const business = await resolveBusiness();
 
-  const stream = await ReactPDF.renderToStream(
+  // ?template=minimal falls back to the original simple template.
+  const url = new URL(req.url);
+  const template = url.searchParams.get("template") ?? "branded";
+  const useMinimal = template === "minimal";
+
+  const orderData = {
+    id: order.id,
+    status: order.status,
+    createdAt: order.createdAt,
+    currency: order.currency,
+    customerEmail: order.customerEmail,
+    shippingName: order.shippingName,
+    shippingPhone: order.shippingPhone,
+    shippingLine1: order.shippingLine1,
+    shippingLine2: order.shippingLine2,
+    shippingCity: order.shippingCity,
+    shippingState: order.shippingState,
+    shippingPostcode: order.shippingPostcode,
+    shippingCountry: order.shippingCountry,
+    subtotal: order.subtotal,
+    shippingCost: order.shippingCost,
+    totalAmount: order.totalAmount,
+    items: order.items.map((i) => ({
+      id: i.id,
+      productId: i.productId,   // Phase 20 (20-13) — D-08 isManualLine guard
+      variantId: i.variantId,   // Phase 20 (20-13) — D-08 isManualLine guard
+      productName: i.productName,
+      size: i.size,
+      variantLabel: i.variantLabel ?? null,
+      configurationData: i.configurationData ?? null, // Phase 19 (19-09)
+      quantity: i.quantity,
+      unitPrice: i.unitPrice,
+      lineTotal: i.lineTotal,
+    })),
+  };
+
+  const doc = useMinimal ? (
     <InvoiceDocument
-      order={{
-        id: order.id,
-        status: order.status,
-        createdAt: order.createdAt,
-        currency: order.currency,
-        customerEmail: order.customerEmail,
-        shippingName: order.shippingName,
-        shippingPhone: order.shippingPhone,
-        shippingLine1: order.shippingLine1,
-        shippingLine2: order.shippingLine2,
-        shippingCity: order.shippingCity,
-        shippingState: order.shippingState,
-        shippingPostcode: order.shippingPostcode,
-        shippingCountry: order.shippingCountry,
-        subtotal: order.subtotal,
-        shippingCost: order.shippingCost,
-        totalAmount: order.totalAmount,
-        items: order.items.map((i) => ({
-          id: i.id,
-          productId: i.productId,   // Phase 20 (20-13) — D-08 isManualLine guard
-          variantId: i.variantId,   // Phase 20 (20-13) — D-08 isManualLine guard
-          productName: i.productName,
-          size: i.size,
-          variantLabel: i.variantLabel ?? null,
-          configurationData: i.configurationData ?? null, // Phase 19 (19-09)
-          quantity: i.quantity,
-          unitPrice: i.unitPrice,
-          lineTotal: i.lineTotal,
-        })),
+      order={orderData}
+      business={{
+        businessName: business.businessName,
+        contactEmail: business.contactEmail,
+        whatsappDisplay: business.whatsappDisplay,
+        pdpaLine: business.pdpaLine,
       }}
-      business={business}
-    />,
+    />
+  ) : (
+    <NinjazInvoiceDocument order={orderData} business={business} />
   );
+
+  const stream = await ReactPDF.renderToStream(doc);
 
   // react-pdf returns a Node Readable; collect to a buffer for NextResponse.
   const chunks: Buffer[] = [];
