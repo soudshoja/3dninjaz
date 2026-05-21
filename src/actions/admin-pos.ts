@@ -7,8 +7,9 @@ import {
   products,
   productVariants,
   coupons,
+  user,
 } from "@/lib/db/schema";
-import { and, asc, eq, inArray, like, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, like, ne, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { revalidatePath } from "next/cache";
@@ -709,6 +710,113 @@ export async function createPosOrder(
   revalidatePath("/admin/orders");
   revalidatePath("/admin/pos");
   return { ok: true, orderId, orderNumber };
+}
+
+// ============================================================================
+// Task 0b: getPosCustomerSearch — returning-customer lookup for the customer step
+// ============================================================================
+
+export type PosCustomerResult = {
+  userId: string;
+  name: string;
+  email: string;
+  orderCount: number;
+  phone?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;
+  postcode?: string;
+};
+
+/**
+ * Search customers (non-admin users) by name or email for the POS customer step.
+ * Returns up to 15 results with autofill data from their most recent order.
+ *
+ * No LATERAL joins (MariaDB 10.11) — fetches matching users, then fetches all
+ * their orders ordered by createdAt desc, and picks the most recent per user
+ * in memory to populate address fields.
+ *
+ * TODO: Re-attribute the POS order to the selected customer userId when the
+ *       business needs per-customer order history (currently orders are
+ *       attributed to the admin session user).
+ */
+export async function getPosCustomerSearch(
+  query: string,
+): Promise<PosCustomerResult[]> {
+  await requireAdmin();
+
+  const trimmed = (query ?? "").trim();
+  if (!trimmed) return [];
+
+  // Search non-admin users by name OR email (LIKE, case-insensitive on MariaDB utf8mb4_general_ci)
+  const userRows = await db
+    .select({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+    })
+    .from(user)
+    .where(
+      and(
+        ne(user.role, "admin"),
+        or(
+          like(user.name, `%${trimmed}%`),
+          like(user.email, `%${trimmed}%`),
+        ),
+      ),
+    )
+    .limit(15);
+
+  if (userRows.length === 0) return [];
+
+  const userIds = userRows.map((u) => u.id);
+
+  // Fetch all orders for matched users ordered by most recent first.
+  // No LATERAL — fetch all then group in memory.
+  const orderRows = await db
+    .select({
+      userId: orders.userId,
+      shippingName: orders.shippingName,
+      shippingPhone: orders.shippingPhone,
+      shippingLine1: orders.shippingLine1,
+      shippingLine2: orders.shippingLine2,
+      shippingCity: orders.shippingCity,
+      shippingState: orders.shippingState,
+      shippingPostcode: orders.shippingPostcode,
+      createdAt: orders.createdAt,
+    })
+    .from(orders)
+    .where(inArray(orders.userId, userIds))
+    .orderBy(desc(orders.createdAt));
+
+  // Group orders in memory — pick most recent per user + count
+  const latestOrder = new Map<string, typeof orderRows[number]>();
+  const orderCount = new Map<string, number>();
+
+  for (const row of orderRows) {
+    const uid = row.userId;
+    orderCount.set(uid, (orderCount.get(uid) ?? 0) + 1);
+    if (!latestOrder.has(uid)) {
+      latestOrder.set(uid, row); // Already sorted desc, so first seen = most recent
+    }
+  }
+
+  return userRows.map((u) => {
+    const latest = latestOrder.get(u.id);
+    return {
+      userId: u.id,
+      name: u.name,
+      email: u.email,
+      orderCount: orderCount.get(u.id) ?? 0,
+      phone: latest?.shippingPhone ?? undefined,
+      addressLine1: latest?.shippingLine1 ?? undefined,
+      addressLine2: latest?.shippingLine2 ?? undefined,
+      city: latest?.shippingCity ?? undefined,
+      state: latest?.shippingState ?? undefined,
+      postcode: latest?.shippingPostcode ?? undefined,
+    };
+  });
 }
 
 // ============================================================================
