@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>POS Demo A — Register (tap-to-add grid)</title>
+<style>
+  :root{
+    --blue:#0080ff; --blue-d:#0061C2;
+    --green:#03C03C; --green-d:#018A29;
+    --purple:#8A00C2; --purple-d:#62008C;
+    --ink:#0B1020; --cream:#F7FAF4;
+    --line:#e3e8ef; --line2:#cdd5e0; --muted:#64748b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--cream);color:var(--ink);height:100vh;overflow:hidden}
+  .topbar{height:56px;display:flex;align-items:center;gap:12px;padding:0 20px;background:#fff;border-bottom:2px solid var(--line)}
+  .topbar h1{font-size:18px;font-weight:700}
+  .badge{font-size:11px;font-weight:700;color:var(--blue);background:#0080ff14;padding:3px 8px;border-radius:4px}
+  .layout{display:grid;grid-template-columns:1fr 400px;height:calc(100vh - 56px)}
+
+  /* LEFT — product browser */
+  .browser{padding:18px;overflow-y:auto}
+  .search{position:relative;margin-bottom:16px}
+  .search input{width:100%;height:48px;border:2px solid var(--line2);border-radius:4px;padding:0 14px 0 40px;font-size:15px;outline:none}
+  .search input:focus{border-color:var(--blue)}
+  .search svg{position:absolute;left:12px;top:14px;color:var(--muted)}
+  .chips{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+  .chip{font-size:13px;font-weight:600;padding:6px 12px;border-radius:999px;border:2px solid var(--line2);background:#fff;cursor:pointer;color:var(--muted)}
+  .chip.active{background:var(--blue);border-color:var(--blue);color:#fff}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+  .tile{background:#fff;border:2px solid var(--line);border-radius:8px;overflow:hidden;cursor:pointer;transition:.12s;display:flex;flex-direction:column}
+  .tile:hover{border-color:var(--blue);transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,128,255,.12)}
+  .tile:active{transform:translateY(0)}
+  .thumb{aspect-ratio:1;background:linear-gradient(135deg,#eef2f7,#dde6f2);display:flex;align-items:center;justify-content:center;font-size:42px}
+  .tile .meta{padding:10px}
+  .tile .nm{font-size:13px;font-weight:600;line-height:1.25;height:33px;overflow:hidden}
+  .tile .pr{font-size:14px;font-weight:800;color:var(--ink);margin-top:4px}
+  .tile .tag{display:inline-block;font-size:10px;font-weight:700;color:var(--purple);background:#8a00c214;padding:2px 6px;border-radius:3px;margin-top:6px}
+
+  /* RIGHT — ticket */
+  .ticket{background:#fff;border-left:2px solid var(--line);display:flex;flex-direction:column;height:100%}
+  .ticket h2{font-size:15px;font-weight:800;padding:16px 16px 10px}
+  .lines{flex:1;overflow-y:auto;padding:0 12px}
+  .empty{text-align:center;color:var(--muted);padding:40px 20px;font-size:14px}
+  .line{border:2px solid var(--line);border-radius:6px;padding:10px;margin-bottom:8px}
+  .line .row1{display:flex;gap:10px;align-items:flex-start}
+  .line .lt{width:38px;height:38px;border-radius:5px;background:#eef2f7;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+  .line .nm{font-size:13px;font-weight:700;flex:1;line-height:1.3}
+  .line .rm{color:#ef4444;cursor:pointer;background:none;border:none;font-size:16px;line-height:1}
+  .opts{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+  .opts select{font-size:12px;border:2px solid var(--line2);border-radius:4px;padding:4px 6px;font-weight:600;color:var(--ink);background:#fff;outline:none}
+  .opts select:focus{border-color:var(--blue)}
+  .row2{display:flex;align-items:center;justify-content:space-between;margin-top:10px}
+  .stepper{display:flex;align-items:center;border:2px solid var(--line2);border-radius:5px;overflow:hidden}
+  .stepper button{width:30px;height:30px;border:none;background:#fff;font-size:16px;cursor:pointer;color:var(--ink)}
+  .stepper button:hover{background:#f1f5f9}
+  .stepper span{width:30px;text-align:center;font-weight:700;font-size:13px}
+  .price{display:flex;align-items:center;gap:6px}
+  .price .rmlbl{font-size:11px;color:var(--muted)}
+  .price input{width:74px;height:30px;border:2px solid var(--line2);border-radius:4px;text-align:right;font-family:monospace;font-weight:700;font-size:13px;padding:0 6px;outline:none}
+  .price input:focus{border-color:var(--blue)}
+  .summary{border-top:2px solid var(--line);padding:14px 16px}
+  .srow{display:flex;justify-content:space-between;font-size:14px;margin-bottom:8px;color:var(--muted)}
+  .srow.total{color:var(--ink);font-weight:800;font-size:18px;border-top:2px solid var(--line);padding-top:10px;margin-top:4px}
+  .cust{font-size:13px;color:var(--blue);font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;padding:10px 16px;border-top:2px dashed var(--line)}
+  .create{margin:12px 16px 16px;width:calc(100% - 32px);height:54px;border:none;border-radius:6px;background:var(--green);color:#fff;font-size:16px;font-weight:800;cursor:pointer}
+  .create:hover{background:var(--green-d)}
+  .note{font-size:11px;color:var(--muted);text-align:center;padding-bottom:10px}
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>Point of Sale</h1>
+    <span class="badge">DEMO A · Register grid</span>
+  </div>
+  <div class="layout">
+    <!-- LEFT -->
+    <div class="browser">
+      <div class="search">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input placeholder="Search products… (tap a tile to add)" />
+      </div>
+      <div class="chips">
+        <span class="chip active">All</span>
+        <span class="chip">Keychains</span>
+        <span class="chip">Figures</span>
+        <span class="chip">Clickers</span>
+        <span class="chip">Decor</span>
+      </div>
+      <div class="grid" id="grid"></div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="ticket">
+      <h2>Order ticket</h2>
+      <div class="lines" id="lines"><div class="empty" id="empty">Tap a product on the left to add it.</div></div>
+      <div class="cust">＋ Add customer details</div>
+      <div class="summary">
+        <div class="srow"><span>Subtotal</span><span id="sub">RM 0.00</span></div>
+        <div class="srow"><span>Shipping</span><span>RM 0.00</span></div>
+        <div class="srow total"><span>Total</span><span id="tot">RM 0.00</span></div>
+      </div>
+      <button class="create">Create order</button>
+      <div class="note">Variants picked inline · everything on one screen</div>
+    </div>
+  </div>
+
+<script>
+const products=[
+  {id:1,n:"Dragon Keychain",p:25,e:"🐉",t:"keychain",v:["S","M","L"],c:["Red","Blue","Green"]},
+  {id:2,n:"Mini Ninja Figure",p:45,e:"🥷",t:"figure",v:["S","M","L"]},
+  {id:3,n:"Custom Keyboard Clicker",p:40,e:"⌨️",t:"clicker",cfg:true},
+  {id:4,n:"Cat Planter Pot",p:38,e:"🐱"},
+  {id:5,n:"Geometric Vase",p:55,e:"🏺",v:["S","L"]},
+  {id:6,n:"Skull Dice Set",p:30,e:"💀",c:["Black","White","Glow"]},
+  {id:7,n:"Phone Stand",p:22,e:"📱"},
+  {id:8,n:"Articulated Octopus",p:48,e:"🐙",c:["Purple","Orange","Teal"]},
+  {id:9,n:"Desk Cable Clip",p:12,e:"🔌"},
+];
+const g=document.getElementById('grid');
+products.forEach(p=>{
+  const d=document.createElement('div');d.className='tile';
+  d.innerHTML=`<div class="thumb">${p.e}</div><div class="meta"><div class="nm">${p.n}</div><div class="pr">RM ${p.p.toFixed(2)}</div>${p.cfg?'<span class="tag">CONFIGURABLE</span>':p.v?'<span class="tag">VARIANTS</span>':''}</div>`;
+  d.onclick=()=>addLine(p);
+  g.appendChild(d);
+});
+const lines=[];
+function addLine(p){lines.push({...p,qty:1,price:p.p});render();}
+function render(){
+  const L=document.getElementById('lines');const E=document.getElementById('empty');
+  if(!lines.length){L.innerHTML='<div class="empty">Tap a product on the left to add it.</div>';update();return;}
+  L.innerHTML='';
+  lines.forEach((l,i)=>{
+    const opts=[];
+    if(l.v)opts.push(`<select>${l.v.map(x=>`<option>Size ${x}</option>`).join('')}</select>`);
+    if(l.c)opts.push(`<select>${l.c.map(x=>`<option>${x}</option>`).join('')}</select>`);
+    if(l.cfg)opts.push(`<select><option>3 fields set ▾</option></select>`);
+    const el=document.createElement('div');el.className='line';
+    el.innerHTML=`
+      <div class="row1">
+        <div class="lt">${l.e}</div>
+        <div class="nm">${l.n}</div>
+        <button class="rm" onclick="rm(${i})">✕</button>
+      </div>
+      ${opts.length?`<div class="opts">${opts.join('')}</div>`:''}
+      <div class="row2">
+        <div class="stepper"><button onclick="q(${i},-1)">−</button><span>${l.qty}</span><button onclick="q(${i},1)">+</button></div>
+        <div class="price"><span class="rmlbl">RM</span><input value="${(l.price).toFixed(2)}" onchange="pr(${i},this.value)"></div>
+      </div>`;
+    L.appendChild(el);
+  });
+  update();
+}
+function q(i,d){lines[i].qty=Math.max(1,lines[i].qty+d);render();}
+function pr(i,v){lines[i].price=parseFloat(v)||0;render();}
+function rm(i){lines.splice(i,1);render();}
+function update(){
+  const s=lines.reduce((a,l)=>a+l.price*l.qty,0);
+  document.getElementById('sub').textContent='RM '+s.toFixed(2);
+  document.getElementById('tot').textContent='RM '+s.toFixed(2);
+}
+</script>
+</body>
+</html>
