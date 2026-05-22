@@ -6,7 +6,7 @@ import {
   Image,
   StyleSheet,
   Svg,
-  Path,
+  Line,
 } from "@react-pdf/renderer";
 import { formatMYR } from "@/lib/format";
 import { formatOrderNumber, isManualLine } from "@/lib/orders";
@@ -17,18 +17,17 @@ import type { InvoiceOrder } from "./invoice";
  * Phase 21 — Branded invoice PDF for 3D Ninjaz.
  *
  * Canva-matched layout:
- *   - Soft wavy diagonal stripes background (light gray, subtle)
- *   - White rounded body panel behind content
  *   - Logo top-left, bill-to/dates top-right
  *   - Large "Invoice" hero text
  *   - Items table with No | Description | Price | Qty | Amount
- *   - Payment info bottom-left (bank_transfer only), total amount bottom-right
- *   - Dark footer bar with contact info (whatsapp | email | website)
+ *   - Payment info bottom-left, total amount bottom-right
+ *   - Dark footer bar with contact info
+ *   - Diagonal stripe watermark behind content
  *   - CANCELLED overlay for cancelled orders
  *
  * react-pdf v4 constraints:
  *   - No Intl, no window, no DOM — all formatting in pure TS
- *   - No Canvas — use Svg/Path for drawing
+ *   - No Canvas — use Svg/Line/Rect for drawing
  *   - Fonts: Helvetica / Helvetica-Bold (built-in)
  */
 
@@ -68,38 +67,24 @@ function formatInvoiceDate(d: Date): string {
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 const INK = "#0B1020";
-const SLATE = "#64748b";
+const SLATE = "#475569";
 const DIVIDER = "#e2e8f0";
 const WHITE = "#ffffff";
 
 const styles = StyleSheet.create({
   page: {
-    // Light cool-gray page background — stripes will sit on top
-    backgroundColor: "#eef0f3",
+    backgroundColor: WHITE,
     padding: 0,
     fontFamily: "Helvetica",
     fontSize: 11,
     color: INK,
   },
-
-  // White rounded body panel that sits over the stripes background.
-  // Margins are intentionally asymmetric to match the target:
-  // top/left/right show the stripe background; bottom reserved for footer.
-  bodyPanel: {
-    position: "absolute",
-    top: 22,
-    left: 22,
-    right: 22,
-    bottom: 46, // sits just above the footer bar
-    backgroundColor: WHITE,
-    borderRadius: 10,
-  },
-
-  // Content area — inset from white panel edges
+  // Content area sits above the footer and insets from edges
   content: {
     paddingHorizontal: 40,
-    paddingTop: 36,
-    paddingBottom: 76, // breathing room above absolute footer
+    paddingTop: 40,
+    // paddingBottom gives space above the absolute footer (height ~44pt)
+    paddingBottom: 80,
     flex: 1,
   },
 
@@ -110,93 +95,92 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   logo: {
-    width: 110,
+    width: 130,
   },
   logoFallback: {
-    fontSize: 16,
+    fontSize: 18,
     fontFamily: "Helvetica-Bold",
     color: INK,
   },
-
-  // Bill-to block on the right — text aligned right
   billToBlock: {
     flexDirection: "column",
     alignItems: "flex-end",
   },
   grayLabel: {
-    fontSize: 8,
+    fontSize: 10,
     color: SLATE,
-    marginBottom: 1,
+    marginBottom: 2,
   },
-  boldValue: {
-    fontSize: 10,
+  boldMd: {
+    fontSize: 12,
     fontFamily: "Helvetica-Bold",
-    marginBottom: 0,
   },
-  boldValueLg: {
-    fontSize: 10,
+  boldSm: {
+    fontSize: 11,
+    fontFamily: "Helvetica-Bold",
+  },
+  boldLg: {
+    fontSize: 12,
     fontFamily: "Helvetica-Bold",
   },
   metaGap: {
-    marginTop: 6,
+    marginTop: 8,
   },
 
   // ── Hero ────────────────────────────────────────────────────────────────
   heroRow: {
-    marginTop: 18,
+    marginTop: 24,
   },
   heroTitle: {
-    fontSize: 62,
+    fontSize: 52,
     fontFamily: "Helvetica-Bold",
     color: INK,
     lineHeight: 1,
   },
   heroSub: {
-    fontSize: 9.5,
+    fontSize: 11,
     color: SLATE,
-    marginTop: 2,
+    marginTop: 4,
   },
 
   // ── Divider ─────────────────────────────────────────────────────────────
   divider: {
     borderBottom: 1,
     borderBottomColor: DIVIDER,
-    marginTop: 12,
-    marginBottom: 12,
+    marginTop: 16,
+    marginBottom: 16,
   },
 
   // ── Table ───────────────────────────────────────────────────────────────
   tableHeadRow: {
     flexDirection: "row",
-    paddingBottom: 6,
+    paddingBottom: 8,
     borderBottom: 1.5,
     borderBottomColor: INK,
   },
   tableDataRow: {
     flexDirection: "row",
-    paddingVertical: 7,
-    borderBottom: 1,
-    borderBottomColor: DIVIDER,
+    paddingVertical: 8,
   },
   tableHeadText: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 9.5,
+    fontSize: 11,
   },
   tableDataText: {
-    fontSize: 9.5,
+    fontSize: 11,
   },
   colNo: {
-    flex: 0.35,
+    flex: 0.4,
   },
   colDesc: {
-    flex: 3.2,
+    flex: 3,
   },
   colPrice: {
     flex: 1,
     textAlign: "right",
   },
   colQty: {
-    flex: 0.7,
+    flex: 0.8,
     textAlign: "center",
   },
   colAmount: {
@@ -207,7 +191,7 @@ const styles = StyleSheet.create({
   // ── Spacer ──────────────────────────────────────────────────────────────
   spacer: {
     flex: 1,
-    minHeight: 28,
+    minHeight: 40,
   },
 
   // ── Bottom row ──────────────────────────────────────────────────────────
@@ -215,18 +199,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-end",
-    marginTop: 10,
+    marginTop: 16,
   },
   paymentBlock: {
     flexDirection: "column",
   },
   paymentTitle: {
     fontFamily: "Helvetica-Bold",
-    fontSize: 9.5,
-    marginBottom: 5,
+    fontSize: 11,
+    marginBottom: 6,
   },
   paymentLine: {
-    fontSize: 8.5,
+    fontSize: 10,
     color: SLATE,
     marginBottom: 2,
   },
@@ -234,7 +218,7 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     alignItems: "flex-end",
   },
-  // Subtotal / shipping breakdown rows (only shown when shipping > 0)
+  // Subtotal / shipping breakdown rows
   breakdownRow: {
     flexDirection: "row",
     justifyContent: "flex-end",
@@ -242,34 +226,33 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
   breakdownLabel: {
-    fontSize: 8.5,
+    fontSize: 10,
     color: SLATE,
     textAlign: "right",
     marginRight: 12,
-    minWidth: 50,
+    minWidth: 60,
   },
   breakdownValue: {
-    fontSize: 8.5,
+    fontSize: 10,
     color: SLATE,
     textAlign: "right",
-    minWidth: 50,
+    minWidth: 60,
     fontFamily: "Helvetica",
   },
   breakdownDivider: {
     borderBottom: 1,
     borderBottomColor: DIVIDER,
     marginTop: 4,
-    marginBottom: 5,
+    marginBottom: 6,
     width: "100%",
   },
   totalLabel: {
-    fontSize: 9.5,
+    fontSize: 11,
     color: SLATE,
     textAlign: "right",
-    marginBottom: 2,
   },
   totalAmount: {
-    fontSize: 38,
+    fontSize: 36,
     fontFamily: "Helvetica-Bold",
     textAlign: "right",
     color: INK,
@@ -282,15 +265,14 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: INK,
-    paddingVertical: 9,
-    paddingHorizontal: 44,
+    paddingVertical: 12,
+    paddingHorizontal: 40,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    height: 40,
   },
   footerText: {
-    fontSize: 8.5,
+    fontSize: 10,
     color: WHITE,
   },
 
@@ -307,53 +289,30 @@ const styles = StyleSheet.create({
   },
 });
 
-// ── Wavy diagonal stripes SVG ────────────────────────────────────────────────
-// A4 page = 595 x 842 pt.
-// Soft sinusoidal wavy lines running diagonally (bottom-left to top-right)
-// at ~30° angle. Very subtle — stroke very light, low opacity.
-// Each line uses quadratic bezier curves to produce a gentle wave.
-function WavyStripes() {
+// ── Diagonal stripes SVG ─────────────────────────────────────────────────────
+// A4 page = 595 x 842 pt. Draw lines at ~30° angle spaced ~40pt apart.
+// We extend lines well beyond the page boundary so they cover edge-to-edge.
+function DiagonalStripes() {
+  // Lines run from bottom-left to top-right at ~30 degrees.
+  // step between lines along the x axis (perpendicular spacing ~40pt)
+  const STEP = 40;
   const W = 595;
   const H = 842;
-  // Wider gap between stripes for a more open, airy look matching the target
-  const STEP = 28;
-  // Gentle wave amplitude — small to stay subtle
-  const WAVE_AMP = 5;
-  // Horizontal period of the wave
-  const WAVE_LEN = 100;
 
-  // ~28° diagonal angle
-  const tanAngle = 0.53;
-  const rise = H * tanAngle;
-  const startX = -rise - STEP * 2;
-
-  const paths: string[] = [];
-
-  for (let ox = startX; ox <= W + rise + STEP; ox += STEP) {
-    const segments = 16;
-    const dy = H / segments;
-    let d = "";
-
-    for (let s = 0; s <= segments; s++) {
-      const y = H - s * dy;
-      const xBase = ox + (H - y) * tanAngle;
-      const wave = WAVE_AMP * Math.sin((y / WAVE_LEN) * 2 * Math.PI);
-      const x = xBase + wave;
-
-      if (s === 0) {
-        d += `M ${x.toFixed(1)} ${y.toFixed(1)} `;
-      } else {
-        // Quadratic bezier control point — offset to produce smooth wave
-        const cy = y + dy / 2;
-        const cxBase = ox + (H - cy) * tanAngle;
-        const cWave =
-          WAVE_AMP * Math.sin(((cy / WAVE_LEN) * 2 * Math.PI) + Math.PI);
-        const cx = cxBase + cWave;
-        d += `Q ${cx.toFixed(1)} ${cy.toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)} `;
-      }
-    }
-
-    paths.push(d.trim());
+  // Generate start/end points. Lines are defined as going from
+  // (x, H) upward to the right at tan(30°) ≈ 0.577 slope.
+  // We sweep x from -(H * tan(30°)) to W so coverage is full.
+  const tan30 = Math.tan((30 * Math.PI) / 180); // ≈ 0.5774
+  const xStart = -Math.round(H * tan30);
+  const xEnd = W + Math.round(H * tan30);
+  const lines: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
+  for (let x = xStart; x <= xEnd; x += STEP) {
+    lines.push({
+      x1: x,
+      y1: H,
+      x2: x + Math.round(H * tan30),
+      y2: 0,
+    });
   }
 
   return (
@@ -362,14 +321,16 @@ function WavyStripes() {
       style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
       viewBox={`0 0 ${W} ${H}`}
     >
-      {paths.map((d, i) => (
-        <Path
+      {lines.map((l, i) => (
+        <Line
           key={i}
-          d={d}
-          stroke="#b8bdc8"
-          strokeWidth="0.6"
-          fill="none"
-          opacity="0.45"
+          x1={String(l.x1)}
+          y1={String(l.y1)}
+          x2={String(l.x2)}
+          y2={String(l.y2)}
+          stroke="#e2e8f0"
+          strokeWidth="0.5"
+          opacity="0.6"
         />
       ))}
     </Svg>
@@ -392,34 +353,35 @@ export function NinjazInvoiceDocument({
     : new Date(order.createdAt);
   const dueDate = new Date(createdAt.getTime() + 10 * 24 * 60 * 60 * 1000);
 
-  // Show bank block only for bank_transfer orders that have bank info
   const hasBankInfo =
-    order.paymentMethod === "bank_transfer" &&
     business.bankName && business.bankAccountNumber && business.bankAccountHolder;
 
-  // Format total without space: "RM192"  (drop decimals when .00)
+  // Format total without space: "RM99.00"
   const rawTotal = typeof order.totalAmount === "string"
     ? parseFloat(order.totalAmount)
     : order.totalAmount;
   const totalFormatted = Number.isFinite(rawTotal)
-    ? (rawTotal % 1 === 0 ? `RM${rawTotal.toFixed(0)}` : `RM${rawTotal.toFixed(2)}`)
-    : "RM0";
+    ? `RM${rawTotal.toFixed(2)}`
+    : "RM0.00";
 
-  // Show breakdown only when shipping > 0
-  const rawShipping = parseFloat(order.shippingCost ?? "");
+  // Subtotal + shipping breakdown
   const rawSubtotal = parseFloat(order.subtotal ?? "");
-  const showBreakdown =
-    Number.isFinite(rawShipping) && rawShipping > 0 &&
-    Number.isFinite(rawSubtotal);
+  const rawShipping = parseFloat(order.shippingCost ?? "");
+
+  const hasBreakdown =
+    Number.isFinite(rawSubtotal) && Number.isFinite(rawShipping);
+  const shippingFormatted =
+    hasBreakdown && rawShipping === 0
+      ? "FREE"
+      : hasBreakdown
+        ? formatMYR(rawShipping)
+        : null;
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        {/* Wavy stripes — rendered behind everything, fixed so no page break */}
-        <WavyStripes />
-
-        {/* White rounded body panel — sits above stripes, fixed */}
-        <View fixed style={styles.bodyPanel} />
+        {/* Diagonal stripes — rendered behind content */}
+        <DiagonalStripes />
 
         {/* CANCELLED watermark — fixed so it does not contribute to flow */}
         {isCancelled ? (
@@ -438,18 +400,18 @@ export function NinjazInvoiceDocument({
               <Text style={styles.logoFallback}>{business.businessName}</Text>
             )}
 
-            {/* Bill-to / dates — right-aligned column */}
+            {/* Bill-to / dates */}
             <View style={styles.billToBlock}>
               <Text style={styles.grayLabel}>Billed To :</Text>
-              <Text style={styles.boldValue}>{order.shippingName}</Text>
+              <Text style={styles.boldMd}>{order.shippingName}</Text>
 
               <View style={styles.metaGap} />
               <Text style={styles.grayLabel}>Invoice Date :</Text>
-              <Text style={styles.boldValue}>{formatInvoiceDate(createdAt)}</Text>
+              <Text style={styles.boldSm}>{formatInvoiceDate(createdAt)}</Text>
 
               <View style={styles.metaGap} />
               <Text style={styles.grayLabel}>Due Date :</Text>
-              <Text style={styles.boldValueLg}>{formatInvoiceDate(dueDate)}</Text>
+              <Text style={styles.boldLg}>{formatInvoiceDate(dueDate)}</Text>
             </View>
           </View>
 
@@ -461,10 +423,11 @@ export function NinjazInvoiceDocument({
             </Text>
           </View>
 
-          {/* Divider */}
-          <View style={styles.divider} />
+          {/* Gap before table (no line — matches design) */}
+          <View style={{ marginTop: 28 }} />
 
-          {/* Table header */}
+          {/* Table */}
+          {/* Header */}
           <View style={styles.tableHeadRow}>
             <Text style={[styles.colNo, styles.tableHeadText]}>No</Text>
             <Text style={[styles.colDesc, styles.tableHeadText]}>Item Description</Text>
@@ -473,7 +436,7 @@ export function NinjazInvoiceDocument({
             <Text style={[styles.colAmount, styles.tableHeadText]}>Amount</Text>
           </View>
 
-          {/* Table data rows */}
+          {/* Data rows */}
           {order.items.map((item, index) => {
             if (isManualLine(item)) {
               return (
@@ -525,20 +488,20 @@ export function NinjazInvoiceDocument({
             );
           })}
 
-          {/* Flex spacer — pushes bottom row down */}
+          {/* Flex spacer */}
           <View style={styles.spacer} />
 
-          {/* Bottom row: payment info (left) + total (right) */}
+          {/* Bottom row: payment info + total */}
           <View style={styles.bottomRow}>
-            {/* Payment block — only rendered for bank_transfer with bank info */}
+            {/* Payment info */}
             <View style={styles.paymentBlock}>
-              {hasBankInfo ? (
+              {order.paymentMethod === "bank_transfer" && hasBankInfo ? (
                 <>
                   <Text style={styles.paymentTitle}>
                     Please make payment via
                   </Text>
                   <Text style={styles.paymentLine}>
-                    {"Bank Name : " + (business.bankName ?? "")}
+                    {"Bank Name: " + (business.bankName ?? "")}
                   </Text>
                   <Text style={styles.paymentLine}>
                     {"Account Number : " + (business.bankAccountNumber ?? "")}
@@ -550,24 +513,29 @@ export function NinjazInvoiceDocument({
               ) : null}
             </View>
 
-            {/* Total block — breakdown only shown when shipping > 0 */}
+            {/* Total breakdown + grand total */}
             <View style={styles.totalBlock}>
-              {showBreakdown ? (
-                <>
-                  <View style={styles.breakdownRow}>
-                    <Text style={styles.breakdownLabel}>Subtotal</Text>
-                    <Text style={styles.breakdownValue}>
-                      {formatMYR(rawSubtotal)}
-                    </Text>
-                  </View>
-                  <View style={styles.breakdownRow}>
-                    <Text style={styles.breakdownLabel}>Shipping</Text>
-                    <Text style={styles.breakdownValue}>
-                      {formatMYR(rawShipping)}
-                    </Text>
-                  </View>
-                  <View style={styles.breakdownDivider} />
-                </>
+              {/* Subtotal row */}
+              {hasBreakdown ? (
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.breakdownLabel}>Subtotal</Text>
+                  <Text style={styles.breakdownValue}>
+                    {formatMYR(rawSubtotal)}
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Shipping row */}
+              {hasBreakdown ? (
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.breakdownLabel}>Shipping</Text>
+                  <Text style={styles.breakdownValue}>{shippingFormatted}</Text>
+                </View>
+              ) : null}
+
+              {/* Divider before grand total */}
+              {hasBreakdown ? (
+                <View style={styles.breakdownDivider} />
               ) : null}
 
               <Text style={styles.totalLabel}>Total Amount Due</Text>
@@ -576,7 +544,7 @@ export function NinjazInvoiceDocument({
           </View>
         </View>
 
-        {/* Footer bar — fixed so it always appears at page bottom */}
+        {/* Footer bar */}
         <View style={styles.footer} fixed>
           <Text style={styles.footerText}>{business.whatsappDisplay}</Text>
           <Text style={styles.footerText}>{business.contactEmail}</Text>
