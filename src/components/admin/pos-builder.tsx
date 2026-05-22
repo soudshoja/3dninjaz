@@ -1,56 +1,58 @@
 "use client";
 
 /**
- * Phase 20 (20-09 rework) — Admin POS Builder — "quick-add modal" flow.
+ * Phase 20 (20-09b / Demo-B rework) — Admin POS Builder.
  *
- * Flow:
- *   1. Admin searches and picks a product → PosProductModal opens (real PDP)
- *   2. Admin configures options + qty → "Add to order" → modal closes → compact
- *      line appears in ticket
- *   3. Edit pencil on a line → reopens PosProductModal for that line's productId;
- *      on re-add, replaces that line (matched by localId)
- *   4. "Create order" → customer step modal (returning/new) → confirm → server
- *      action → PosSendDraftModal on success
+ * Layout matches the approved Demo B mockup (public/demo/pos-b-quickadd.html):
+ *   LEFT pane  — search box + product tile grid (thumbnail, name, price, badge).
+ *                Tapping a tile with no options adds directly to ticket.
+ *                Tapping a tile with variants/config opens PosProductModal.
+ *   RIGHT pane — compact order ticket (small thumb, name, subtitle, qty×price,
+ *                line total, remove) + Summary block (subtotal / shipping /
+ *                total) + green Create-order button.
  *
- * Layout: left = product search + custom-line button + ticket + coupon strip;
- * right (sticky) = summary card with Create order button.
+ * Flow unchanged from 20-09:
+ *   tile tap → modal (if needed) → ticket line → Create order →
+ *   PosCustomerStep → createPosOrder → PosSendDraftModal
  *
- * Autosave: lines + customerForm + couponCode + shippingOverride saved to
- * "admin-pos-draft" in localStorage with 1s debounce. DraftRestoredBanner shown
- * on mount when draft exists.
- *
- * Reactivity contract (Phase 17 AD-06):
- *   Pattern A optimistic — qty stepper, unit-price override.
- *   NEVER router.refresh() in any mutation path.
+ * Autosave: "admin-pos-draft" localStorage 1s debounce. DraftRestoredBanner.
+ * Reactivity contract AD-06: NEVER router.refresh().
  */
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import {
   Package,
-  Settings2,
-  Keyboard,
-  Pencil,
-  ShoppingBag,
+  Search,
   Loader2,
   X,
-  CheckCircle2,
+  Pencil,
 } from "lucide-react";
 import { BRAND } from "@/lib/brand";
-import { MALAYSIAN_STATES } from "@/lib/validators";
 import {
   createPosOrder,
   getPosProductSearch,
+  getPosRecentProducts,
   type PosLine,
   type PosLineStocked,
   type PosLineConfigurable,
   type PosProductResult,
 } from "@/actions/admin-pos";
 import { DraftRestoredBanner } from "@/components/admin/draft-restored-banner";
-import { PosLineRow, type LineWithId } from "@/components/admin/pos-line-row";
 import { PosSendDraftModal } from "@/components/admin/pos-send-draft-modal";
 import { PosProductModal } from "@/components/admin/pos-product-modal";
 import { PosCustomerStep, type CustomerForm } from "@/components/admin/pos-customer-step";
 import type { PosAddToOrderLine } from "@/components/store/product-detail";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+/** Ticket line — PosLine + stable React key + display snapshot fields. */
+export type TicketLine = {
+  localId: string;
+  productName?: string;
+  productImageUrl?: string | null;
+  variantLabel?: string | null;
+  configSummary?: string | null;
+} & PosLine;
 
 // ─── Autosave ─────────────────────────────────────────────────────────────────
 
@@ -59,38 +61,45 @@ const AUTOSAVE_DEBOUNCE_MS = 1000;
 
 type DraftPayload = {
   savedAt: number;
-  lines: LineWithId[];
+  lines: TicketLine[];
   customerForm: CustomerForm;
-  couponCode: string;
   shippingOverride: string;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function productTypeIcon(productType: string) {
-  if (productType === "configurable") return <Settings2 size={16} />;
-  if (productType === "keychain") return <Keyboard size={16} />;
-  return <Package size={16} />;
-}
-
 function makeLocalId() {
   return Math.random().toString(36).slice(2);
 }
 
-function formatMYR(n: number) {
+function fmtMYR(n: number) {
   return `RM ${n.toFixed(2)}`;
 }
 
-/** Map a PosAddToOrderLine (from ProductDetail) to a LineWithId for the ticket. */
-function posAddToOrderToLineWithId(
-  posLine: PosAddToOrderLine,
-  localId: string,
-): LineWithId {
-  const configSummary = posLine.configurationData?.computedSummary ?? null;
+function getLineUnitPrice(line: PosLine): number {
+  if (line.kind === "free_text") return line.unitPrice;
+  if (line.kind === "stocked") return (line as PosLineStocked).unitPriceOverride ?? 0;
+  if (line.kind === "configurable") {
+    const cl = line as PosLineConfigurable;
+    return cl.unitPriceOverride ?? cl.computedUnitPrice;
+  }
+  return 0;
+}
 
+/** Does this product need the quick-add modal (has options / config)? */
+function needsModal(product: PosProductResult): boolean {
+  return (
+    product.variantCount > 0 ||
+    product.productType === "configurable" ||
+    product.productType === "keychain"
+  );
+}
+
+/** Map PosAddToOrderLine → TicketLine. */
+function toTicketLine(posLine: PosAddToOrderLine, localId: string): TicketLine {
+  const configSummary = posLine.configurationData?.computedSummary ?? null;
   if (posLine.variantId) {
-    // Stocked variant line
-    const line: LineWithId = {
+    return {
       localId,
       kind: "stocked",
       productId: posLine.productId,
@@ -101,38 +110,180 @@ function posAddToOrderToLineWithId(
       productImageUrl: posLine.productImageUrl ?? null,
       variantLabel: posLine.variantLabel ?? null,
       configSummary,
-    };
-    return line;
-  } else {
-    // Configurable / simple / keychain line
-    const line: LineWithId = {
-      localId,
-      kind: "configurable",
-      productId: posLine.productId,
-      variantId: undefined,
-      quantity: posLine.qty,
-      computedUnitPrice: posLine.unitPrice,
-      configurationData: posLine.configurationData
-        ? JSON.stringify(posLine.configurationData.values)
-        : "{}",
-      productName: posLine.productName,
-      productImageUrl: posLine.productImageUrl ?? null,
-      variantLabel: posLine.variantLabel ?? null,
-      configSummary,
-    };
-    return line;
+    } as TicketLine;
   }
+  return {
+    localId,
+    kind: "configurable",
+    productId: posLine.productId,
+    quantity: posLine.qty,
+    computedUnitPrice: posLine.unitPrice,
+    configurationData: posLine.configurationData
+      ? JSON.stringify(posLine.configurationData.values)
+      : "{}",
+    productName: posLine.productName,
+    productImageUrl: posLine.productImageUrl ?? null,
+    variantLabel: posLine.variantLabel ?? null,
+    configSummary,
+  } as TicketLine;
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+/** Product tile — thumbnail + name + price + OPTIONS/CONFIG badge. */
+function ProductTile({
+  product,
+  onClick,
+}: {
+  product: PosProductResult;
+  onClick: () => void;
+}) {
+  const hasOptions = needsModal(product);
+  const badge =
+    product.productType === "configurable" || product.productType === "keychain"
+      ? "CONFIG"
+      : hasOptions
+        ? "OPTIONS"
+        : null;
+
+  const priceLabel =
+    product.minPrice !== null
+      ? fmtMYR(product.minPrice)
+      : product.productType === "keychain"
+        ? "Tiered"
+        : product.productType === "configurable"
+          ? "Tiered"
+          : "—";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative bg-white border-2 border-slate-200 rounded-lg overflow-hidden cursor-pointer text-left transition-all duration-150 hover:-translate-y-0.5"
+      style={{ minHeight: 0 }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLButtonElement).style.borderColor = "#8A00C2";
+        (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 6px 16px rgba(138,0,194,.12)";
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLButtonElement).style.borderColor = "#e2e8f0";
+        (e.currentTarget as HTMLButtonElement).style.boxShadow = "none";
+      }}
+    >
+      {/* Badge */}
+      {badge && (
+        <span
+          className="absolute top-2 right-2 text-[9px] font-extrabold text-white px-1.5 py-0.5 rounded-[3px] z-10"
+          style={{ backgroundColor: "#8A00C2" }}
+        >
+          {badge}
+        </span>
+      )}
+
+      {/* Thumbnail */}
+      <div
+        className="aspect-square w-full bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center overflow-hidden"
+      >
+        {product.thumbnailUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={product.thumbnailUrl}
+            alt={product.name}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <Package size={32} className="text-slate-400" />
+        )}
+      </div>
+
+      {/* Meta */}
+      <div className="p-2.5">
+        <p
+          className="text-[13px] font-semibold leading-snug line-clamp-2"
+          style={{ color: BRAND.ink }}
+        >
+          {product.name}
+        </p>
+        <p
+          className="text-[14px] font-extrabold mt-1 tabular-nums"
+          style={{ color: BRAND.ink }}
+        >
+          {priceLabel}
+        </p>
+      </div>
+    </button>
+  );
+}
+
+/** Compact ticket line row. */
+function TicketLineRow({
+  line,
+  onRemove,
+}: {
+  line: TicketLine;
+  onRemove: () => void;
+}) {
+  const unitPrice = getLineUnitPrice(line);
+  const lineTotal = unitPrice * line.quantity;
+  const subtitle = [line.variantLabel, line.configSummary].filter(Boolean).join(" · ");
+  const thumbUrl = line.productImageUrl ?? null;
+
+  return (
+    <div
+      className="flex items-center gap-2.5 px-3 py-2.5 border-b border-slate-100"
+    >
+      {/* Thumb */}
+      <div
+        className="h-9 w-9 shrink-0 rounded-[5px] bg-slate-100 flex items-center justify-center overflow-hidden"
+      >
+        {thumbUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={thumbUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <Package size={16} className="text-slate-400" />
+        )}
+      </div>
+
+      {/* Name + meta */}
+      <div className="flex-1 min-w-0">
+        <p className="text-[13px] font-bold leading-tight truncate" style={{ color: BRAND.ink }}>
+          {line.kind === "free_text"
+            ? line.name || "(custom line)"
+            : line.productName ?? "Product"}
+        </p>
+        {subtitle ? (
+          <p className="text-[11px] text-slate-500 truncate mt-0.5">{subtitle}</p>
+        ) : null}
+        <p className="text-[12px] font-semibold tabular-nums mt-0.5" style={{ color: BRAND.ink }}>
+          {line.quantity} × {fmtMYR(unitPrice)}
+        </p>
+      </div>
+
+      {/* Line total */}
+      <p className="text-[13px] font-extrabold tabular-nums shrink-0 font-mono" style={{ color: BRAND.ink }}>
+        {fmtMYR(lineTotal)}
+      </p>
+
+      {/* Remove */}
+      <button
+        type="button"
+        onClick={onRemove}
+        className="flex items-center justify-center w-8 h-8 text-red-400 hover:text-red-600 transition-colors shrink-0 cursor-pointer"
+        aria-label={`Remove ${line.kind === "free_text" ? line.name || "item" : line.productName ?? "item"}`}
+      >
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
+
+// ─── PosBuilder ───────────────────────────────────────────────────────────────
 
 export function PosBuilder() {
   // ── Lines ──────────────────────────────────────────────────────────────────
-
-  const [lines, setLines] = useState<LineWithId[]>([]);
+  const [lines, setLines] = useState<TicketLine[]>([]);
 
   // ── Customer form ──────────────────────────────────────────────────────────
-
   const [customerForm, setCustomerForm] = useState<CustomerForm>({
     name: "",
     email: "",
@@ -144,29 +295,24 @@ export function PosBuilder() {
     postcode: "",
   });
 
-  // ── Coupon ─────────────────────────────────────────────────────────────────
-
-  const [couponCode, setCouponCode] = useState("");
-  const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
-  const [couponError, setCouponError] = useState<string | null>(null);
-
   // ── Shipping override ──────────────────────────────────────────────────────
-
   const [shippingOverride, setShippingOverride] = useState<string>("");
   const [editingShipping, setEditingShipping] = useState(false);
 
-  // ── Product modal ──────────────────────────────────────────────────────────
+  // ── Product grid / search ──────────────────────────────────────────────────
+  const [searchQuery, setSearchQuery] = useState("");
+  const [gridProducts, setGridProducts] = useState<PosProductResult[]>([]);
+  const [gridLoading, setGridLoading] = useState(true);
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── Product modal ──────────────────────────────────────────────────────────
   const [modalProductId, setModalProductId] = useState<string | null>(null);
-  /** If set, re-adding from the modal replaces the line with this localId */
   const [editingLocalId, setEditingLocalId] = useState<string | null>(null);
 
   // ── Customer step modal ────────────────────────────────────────────────────
-
   const [showCustomerStep, setShowCustomerStep] = useState(false);
 
   // ── Submit / send-draft ────────────────────────────────────────────────────
-
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [sendDraftOpen, setSendDraftOpen] = useState(false);
@@ -175,22 +321,45 @@ export function PosBuilder() {
   const [createdOrderTotal, setCreatedOrderTotal] = useState<number>(0);
 
   // ── Restore banner ─────────────────────────────────────────────────────────
-
   const [showRestoreBanner, setShowRestoreBanner] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<number>(0);
   const [pendingDraft, setPendingDraft] = useState<DraftPayload | null>(null);
 
-  // ── Product picker ─────────────────────────────────────────────────────────
+  // ── Load initial grid ──────────────────────────────────────────────────────
+  useEffect(() => {
+    setGridLoading(true);
+    getPosRecentProducts()
+      .then((rows) => setGridProducts(rows))
+      .catch(() => setGridProducts([]))
+      .finally(() => setGridLoading(false));
+  }, []);
 
-  const [pickerQuery, setPickerQuery] = useState("");
-  const [pickerResults, setPickerResults] = useState<PosProductResult[]>([]);
-  const [pickerLoading, setPickerLoading] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const pickerRef = useRef<HTMLDivElement>(null);
-  const pickerDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ── Debounced search ───────────────────────────────────────────────────────
+  useEffect(() => {
+    if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    if (!searchQuery.trim()) {
+      // Restore the full recent-products grid when search is cleared
+      setGridLoading(true);
+      getPosRecentProducts()
+        .then((rows) => setGridProducts(rows))
+        .catch(() => setGridProducts([]))
+        .finally(() => setGridLoading(false));
+      return;
+    }
+    setGridLoading(true);
+    searchDebounce.current = setTimeout(async () => {
+      try {
+        const results = await getPosProductSearch(searchQuery);
+        setGridProducts(results);
+      } catch {
+        setGridProducts([]);
+      } finally {
+        setGridLoading(false);
+      }
+    }, 350);
+  }, [searchQuery]);
 
   // ── Autosave: load on mount ────────────────────────────────────────────────
-
   useEffect(() => {
     try {
       const stored = localStorage.getItem(AUTOSAVE_KEY);
@@ -206,165 +375,62 @@ export function PosBuilder() {
   }, []);
 
   // ── Autosave: debounced write ──────────────────────────────────────────────
-
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
-        const payload: DraftPayload = {
-          savedAt: Date.now(),
-          lines,
-          customerForm,
-          couponCode,
-          shippingOverride,
-        };
-        localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(payload));
+        localStorage.setItem(
+          AUTOSAVE_KEY,
+          JSON.stringify({
+            savedAt: Date.now(),
+            lines,
+            customerForm,
+            shippingOverride,
+          } satisfies DraftPayload),
+        );
       } catch {
-        // localStorage quota exceeded — silently skip
+        // quota exceeded — silently skip
       }
     }, AUTOSAVE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lines, customerForm, couponCode, shippingOverride]);
-
-  // ── Product picker: debounced search ──────────────────────────────────────
-
-  useEffect(() => {
-    if (pickerDebounce.current) clearTimeout(pickerDebounce.current);
-    if (!pickerQuery.trim()) {
-      setPickerResults([]);
-      setPickerLoading(false);
-      return;
-    }
-    setPickerLoading(true);
-    pickerDebounce.current = setTimeout(async () => {
-      try {
-        const results = await getPosProductSearch(pickerQuery);
-        setPickerResults(results);
-      } catch {
-        setPickerResults([]);
-      } finally {
-        setPickerLoading(false);
-      }
-    }, 350);
-  }, [pickerQuery]);
-
-  // Close picker on outside click
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setPickerOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
+  }, [lines, customerForm, shippingOverride]);
 
   // ── Line management ────────────────────────────────────────────────────────
 
-  /** Called when admin picks a product from search: open modal (no filling state). */
-  function openProductModal(product: PosProductResult) {
-    setEditingLocalId(null); // New line, not editing existing
-    setModalProductId(product.id);
-    setPickerQuery("");
-    setPickerResults([]);
-    setPickerOpen(false);
+  function handleTileTap(product: PosProductResult) {
+    if (needsModal(product)) {
+      setEditingLocalId(null);
+      setModalProductId(product.id);
+    } else {
+      // Simple product — add directly with price from minPrice (may be null if no variants)
+      // We open the modal to let ProductDetail handle the actual add so price is correct.
+      setEditingLocalId(null);
+      setModalProductId(product.id);
+    }
   }
 
-  /** Called when modal's onAdd fires (new line or edit). */
   function handleModalAdd(posLine: PosAddToOrderLine) {
     if (editingLocalId) {
-      // Replace existing line
       setLines((prev) =>
         prev.map((l) =>
-          l.localId === editingLocalId
-            ? posAddToOrderToLineWithId(posLine, editingLocalId)
-            : l,
+          l.localId === editingLocalId ? toTicketLine(posLine, editingLocalId) : l,
         ),
       );
     } else {
-      // Append new line
       const localId = makeLocalId();
-      setLines((prev) => [...prev, posAddToOrderToLineWithId(posLine, localId)]);
+      setLines((prev) => [...prev, toTicketLine(posLine, localId)]);
     }
     setEditingLocalId(null);
-  }
-
-  function openEditModal(localId: string) {
-    const line = lines.find((l) => l.localId === localId);
-    if (!line || line.kind === "free_text") return;
-    const productId = (line as PosLineStocked | PosLineConfigurable).productId;
-    setEditingLocalId(localId);
-    setModalProductId(productId);
-  }
-
-  function addFreeTextLine() {
-    const localId = makeLocalId();
-    const newLine: LineWithId = {
-      localId,
-      kind: "free_text",
-      name: "",
-      quantity: 1,
-      unitPrice: 0,
-    };
-    setLines((prev) => [...prev, newLine]);
-    setPickerOpen(false);
-    setPickerQuery("");
-  }
-
-  function updateLine(localId: string, updated: PosLine) {
-    setLines((prev) =>
-      prev.map((l) => {
-        if (l.localId !== localId) return l;
-        // Preserve display snapshot fields
-        const ext = updated as LineWithId;
-        return {
-          ...updated,
-          localId,
-          productName: ext.productName ?? (l as LineWithId).productName,
-          productImageUrl: ext.productImageUrl ?? (l as LineWithId).productImageUrl,
-          variantLabel: ext.variantLabel ?? (l as LineWithId).variantLabel,
-          configSummary: ext.configSummary ?? (l as LineWithId).configSummary,
-        } as LineWithId;
-      }),
-    );
   }
 
   function removeLine(localId: string) {
     setLines((prev) => prev.filter((l) => l.localId !== localId));
   }
 
-  // ── Coupon ─────────────────────────────────────────────────────────────────
-
-  function handleApplyCoupon() {
-    const code = couponCode.trim().toUpperCase();
-    if (!code) {
-      setCouponError("Enter a coupon code first.");
-      return;
-    }
-    setAppliedCoupon(code);
-    setCouponError(null);
-  }
-
-  function handleRemoveCoupon() {
-    setAppliedCoupon(null);
-    setCouponCode("");
-    setCouponError(null);
-  }
-
   // ── Totals ─────────────────────────────────────────────────────────────────
 
   const subtotal = lines.reduce((sum, line) => {
-    if (line.kind === "free_text") return sum + line.unitPrice * line.quantity;
-    if (line.kind === "stocked") {
-      const override = (line as PosLineStocked).unitPriceOverride;
-      return sum + (override ?? 0) * line.quantity;
-    }
-    if (line.kind === "configurable") {
-      const cl = line as PosLineConfigurable;
-      const price = cl.unitPriceOverride ?? cl.computedUnitPrice;
-      return sum + price * cl.quantity;
-    }
-    return sum;
+    return sum + getLineUnitPrice(line) * line.quantity;
   }, 0);
 
   const shippingCost = shippingOverride !== "" ? parseFloat(shippingOverride) || 0 : 0;
@@ -382,32 +448,14 @@ export function PosBuilder() {
   }
 
   function handleCustomerStepConfirm() {
-    // Validate required fields
-    if (!customerForm.name.trim()) {
-      setSubmitError("Customer name is required.");
-      return;
-    }
-    if (!customerForm.phone.trim()) {
-      setSubmitError("Customer phone is required.");
-      return;
-    }
-    if (!customerForm.addressLine1.trim()) {
-      setSubmitError("Address line 1 is required.");
-      return;
-    }
-    if (!customerForm.city.trim()) {
-      setSubmitError("City is required.");
-      return;
-    }
-    if (!customerForm.postcode.trim()) {
-      setSubmitError("Postcode is required.");
-      return;
-    }
-
+    if (!customerForm.name.trim()) { setSubmitError("Customer name is required."); return; }
+    if (!customerForm.phone.trim()) { setSubmitError("Customer phone is required."); return; }
+    if (!customerForm.addressLine1.trim()) { setSubmitError("Address line 1 is required."); return; }
+    if (!customerForm.city.trim()) { setSubmitError("City is required."); return; }
+    if (!customerForm.postcode.trim()) { setSubmitError("Postcode is required."); return; }
     setSubmitError(null);
 
     startTransition(async () => {
-      // Strip localId and display snapshot fields — server only needs PosLine fields
       const serverLines = lines.map(
         ({ localId: _lid, productName: _pn, productImageUrl: _pi, variantLabel: _vl, configSummary: _cs, ...rest }) => rest,
       ) as PosLine[];
@@ -427,7 +475,6 @@ export function PosBuilder() {
         },
         shippingOverride:
           shippingOverride !== "" ? parseFloat(shippingOverride) || undefined : undefined,
-        couponCode: appliedCoupon || undefined,
       });
 
       if (!result.ok) {
@@ -435,13 +482,7 @@ export function PosBuilder() {
         return;
       }
 
-      // Clear autosave
-      try {
-        localStorage.removeItem(AUTOSAVE_KEY);
-      } catch {
-        // noop
-      }
-
+      try { localStorage.removeItem(AUTOSAVE_KEY); } catch { /* noop */ }
       setCreatedOrderId(result.orderId);
       setCreatedOrderNumber(result.orderNumber);
       setCreatedOrderTotal(total);
@@ -456,31 +497,23 @@ export function PosBuilder() {
     if (!pendingDraft) return;
     setLines(pendingDraft.lines ?? []);
     setCustomerForm(pendingDraft.customerForm ?? customerForm);
-    setCouponCode(pendingDraft.couponCode ?? "");
     setShippingOverride(pendingDraft.shippingOverride ?? "");
     setShowRestoreBanner(false);
     setPendingDraft(null);
   }
 
   function handleDiscardDraft() {
-    try {
-      localStorage.removeItem(AUTOSAVE_KEY);
-    } catch {
-      // noop
-    }
+    try { localStorage.removeItem(AUTOSAVE_KEY); } catch { /* noop */ }
     setShowRestoreBanner(false);
     setPendingDraft(null);
   }
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
-  const inputClass =
-    "w-full min-h-[48px] rounded-[4px] border-2 border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:border-[#0080ff] transition-colors";
-
   return (
     <div className="max-w-6xl mx-auto">
       {/* Restore banner */}
-      {showRestoreBanner ? (
+      {showRestoreBanner && (
         <div className="mb-4">
           <DraftRestoredBanner
             savedAt={draftSavedAt}
@@ -488,274 +521,198 @@ export function PosBuilder() {
             onDiscard={handleDiscardDraft}
           />
         </div>
-      ) : null}
+      )}
 
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-        {/* ── Left column: builder ── */}
-        <div className="flex-1 min-w-0 space-y-4">
-
-          {/* Product picker */}
-          <section
-            className="rounded-[4px] border-2 border-slate-200 bg-white p-4 space-y-3"
-            aria-label="Product search"
-          >
-            <h2
-              className="font-[var(--font-heading)] text-lg font-semibold"
-              style={{ color: BRAND.ink }}
-            >
-              Add products
-            </h2>
-
-            {/* Combobox */}
-            <div className="relative" ref={pickerRef}>
-              <input
-                type="text"
-                placeholder="Search any product…"
-                value={pickerQuery}
-                onChange={(e) => {
-                  setPickerQuery(e.target.value);
-                  setPickerOpen(true);
-                }}
-                onFocus={() => setPickerOpen(true)}
-                className={inputClass}
-                aria-label="Search products"
-                aria-expanded={pickerOpen && (pickerResults.length > 0 || pickerLoading)}
-                aria-haspopup="listbox"
+      {/* Two-column layout: product browser | order ticket */}
+      <div
+        className="grid gap-0 border-2 border-slate-200 rounded-xl overflow-hidden bg-white"
+        style={{ gridTemplateColumns: "1fr 380px", minHeight: "calc(100vh - 200px)" }}
+      >
+        {/* ── LEFT: Product browser ─────────────────────────────────────── */}
+        <div
+          className="flex flex-col border-r-2 border-slate-200"
+          style={{ backgroundColor: BRAND.cream }}
+        >
+          {/* Search bar */}
+          <div className="p-4 bg-white border-b-2 border-slate-200">
+            <div className="relative">
+              <Search
+                size={18}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
               />
-
-              {/* Dropdown */}
-              {pickerOpen && (pickerQuery.trim() || pickerLoading) ? (
-                <div
-                  className="absolute left-0 right-0 top-full z-30 mt-1 rounded-[4px] border-2 border-slate-200 bg-white shadow-md"
-                  role="listbox"
-                >
-                  {pickerLoading ? (
-                    <div className="p-2 space-y-2">
-                      {[1, 2, 3].map((i) => (
-                        <div key={i} className="h-16 rounded-[4px] bg-slate-100 animate-pulse" />
-                      ))}
-                    </div>
-                  ) : pickerResults.length > 0 ? (
-                    <ul>
-                      {pickerResults.map((product) => (
-                        <li key={product.id}>
-                          <button
-                            type="button"
-                            onClick={() => openProductModal(product)}
-                            className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-slate-50 transition-colors min-h-[64px] cursor-pointer"
-                          >
-                            {/* Thumbnail */}
-                            <div className="h-10 w-10 shrink-0 rounded-[4px] bg-slate-100 overflow-hidden flex items-center justify-center">
-                              {product.thumbnailUrl ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={product.thumbnailUrl}
-                                  alt={product.name}
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : (
-                                <Package size={20} className="text-slate-400" />
-                              )}
-                            </div>
-
-                            {/* Name + subtitle */}
-                            <div className="flex-1 min-w-0">
-                              <p className="truncate text-sm font-medium" style={{ color: BRAND.ink }}>
-                                {product.name}
-                              </p>
-                              <p className="text-xs text-slate-500">
-                                {product.productType} · {product.variantCount} variant
-                                {product.variantCount !== 1 ? "s" : ""}
-                              </p>
-                            </div>
-
-                            {/* Type icon */}
-                            <span className="text-slate-400 shrink-0">
-                              {productTypeIcon(product.productType)}
-                            </span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <div className="px-4 py-3 text-sm text-slate-500">
-                      Nothing matched. Add a custom line instead.
-                    </div>
-                  )}
-                </div>
-              ) : null}
+              <input
+                type="search"
+                placeholder="Search products…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full min-h-[48px] rounded-[4px] border-2 border-slate-300 bg-white pl-10 pr-4 text-[15px] focus:outline-none focus:border-[#0080ff] transition-colors duration-150"
+                aria-label="Search products"
+              />
             </div>
+          </div>
 
-            {/* Add custom free-text line button */}
-            <button
-              type="button"
-              onClick={addFreeTextLine}
-              className="flex w-full items-center justify-center gap-2 min-h-[48px] rounded-[4px] border-2 px-4 text-sm font-medium transition-colors hover:bg-slate-50 cursor-pointer"
-              style={{ borderColor: "#8A00C2", color: BRAND.ink }}
-            >
-              <Pencil size={16} style={{ color: "#8A00C2" }} />
-              + Add custom (free-text) line
-            </button>
-          </section>
-
-          {/* Line list */}
-          <section aria-label="Order lines">
-            {lines.length === 0 ? (
-              <div
-                className="rounded-[4px] border-2 border-dashed border-slate-200 p-8 text-center"
-                style={{ backgroundColor: BRAND.cream }}
-              >
-                <ShoppingBag size={32} className="mx-auto mb-3 text-slate-300" />
-                <p className="text-sm text-slate-500">
-                  Search a product above to pop the option picker, or add a custom line.
+          {/* Product tile grid */}
+          <div className="flex-1 overflow-y-auto p-4">
+            {gridLoading ? (
+              <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))" }}>
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="rounded-lg overflow-hidden border-2 border-slate-200 bg-white animate-pulse">
+                    <div className="aspect-square bg-slate-100" />
+                    <div className="p-2.5 space-y-1.5">
+                      <div className="h-3 bg-slate-200 rounded w-4/5" />
+                      <div className="h-3 bg-slate-200 rounded w-2/5" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : gridProducts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-32 text-slate-400">
+                <Package size={32} className="mb-2" />
+                <p className="text-sm">
+                  {searchQuery.trim() ? "No products matched." : "No active products found."}
                 </p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {lines.map((line) => (
-                  <PosLineRow
-                    key={line.localId}
-                    line={line}
-                    onChange={(updated) => updateLine(line.localId, updated)}
-                    onRemove={() => removeLine(line.localId)}
-                    onEdit={
-                      line.kind !== "free_text"
-                        ? () => openEditModal(line.localId)
-                        : undefined
-                    }
+              <div
+                className="grid gap-3"
+                style={{ gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))" }}
+              >
+                {gridProducts.map((product) => (
+                  <ProductTile
+                    key={product.id}
+                    product={product}
+                    onClick={() => handleTileTap(product)}
                   />
                 ))}
               </div>
             )}
-          </section>
+          </div>
 
-          {/* Coupon strip */}
-          <section
-            className="rounded-[4px] border-2 border-slate-200 bg-white p-4"
-            aria-label="Coupon"
-          >
-            <h2
-              className="font-[var(--font-heading)] text-base font-semibold mb-3"
-              style={{ color: BRAND.ink }}
-            >
-              Coupon
-            </h2>
-            {appliedCoupon ? (
-              <div className="flex items-center gap-3">
-                <span
-                  className="inline-flex items-center gap-1.5 rounded-[4px] px-3 py-1.5 text-sm font-semibold"
-                  style={{ backgroundColor: "#0080ff1a", color: "#0080ff" }}
-                >
-                  <CheckCircle2 size={14} />
-                  {appliedCoupon}
-                </span>
-                <button
-                  type="button"
-                  onClick={handleRemoveCoupon}
-                  className="flex items-center gap-1 text-xs text-red-600 hover:text-red-700 min-h-[40px] px-2 transition-colors cursor-pointer"
-                  aria-label="Remove coupon"
-                >
-                  <X size={14} />
-                  Remove
-                </button>
-              </div>
-            ) : (
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="COUPON CODE"
-                  value={couponCode}
-                  onChange={(e) => {
-                    setCouponCode(e.target.value.toUpperCase());
-                    setCouponError(null);
-                  }}
-                  className="w-40 min-h-[48px] rounded-[4px] border-2 border-slate-300 bg-white px-3 py-2 text-sm font-mono focus:outline-none focus:border-[#0080ff] transition-colors"
-                  aria-label="Coupon code"
-                />
-                <button
-                  type="button"
-                  onClick={handleApplyCoupon}
-                  className="min-h-[48px] rounded-[4px] px-4 text-sm font-semibold text-white transition-colors cursor-pointer"
-                  style={{ backgroundColor: "#8A00C2" }}
-                  onMouseEnter={(e) =>
-                    ((e.target as HTMLButtonElement).style.backgroundColor = "#62008C")
-                  }
-                  onMouseLeave={(e) =>
-                    ((e.target as HTMLButtonElement).style.backgroundColor = "#8A00C2")
-                  }
-                >
-                  Apply
-                </button>
-              </div>
-            )}
-            {couponError ? (
-              <p className="mt-1.5 text-xs text-red-600" role="alert">
-                {couponError}
-              </p>
-            ) : null}
-          </section>
-
-          {/* Submit error */}
-          {submitError ? (
-            <div
-              className="rounded-[4px] border-2 border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700"
-              role="alert"
-            >
-              {submitError}
-            </div>
-          ) : null}
-
-          {/* Mobile sticky bottom button */}
-          <div className="lg:hidden fixed bottom-0 left-0 right-0 z-10 bg-white border-t-2 border-slate-200 px-4 py-3">
+          {/* Add custom free-text line */}
+          <div className="p-4 bg-white border-t-2 border-slate-200">
             <button
               type="button"
-              onClick={handleCreateOrderClick}
-              disabled={pending}
-              className="flex w-full items-center justify-center gap-2 min-h-[60px] rounded-[4px] text-base font-semibold text-white transition-colors disabled:opacity-60 cursor-pointer"
-              style={{ backgroundColor: "#03C03C" }}
+              onClick={() => {
+                const localId = makeLocalId();
+                setLines((prev) => [
+                  ...prev,
+                  { localId, kind: "free_text", name: "", quantity: 1, unitPrice: 0 },
+                ]);
+              }}
+              className="flex w-full items-center justify-center gap-2 min-h-[44px] rounded-[4px] border-2 px-4 text-sm font-medium transition-colors hover:bg-slate-50 cursor-pointer"
+              style={{ borderColor: "#8A00C2", color: BRAND.ink }}
             >
-              {pending ? (
-                <>
-                  <Loader2 size={20} className="animate-spin" />
-                  Working…
-                </>
-              ) : (
-                "Create order"
-              )}
+              <Pencil size={14} style={{ color: "#8A00C2" }} />
+              Add custom (free-text) line
             </button>
           </div>
         </div>
 
-        {/* ── Right column: summary (sticky on desktop) ── */}
-        <div className="w-full lg:w-80 shrink-0">
-          <div
-            className="sticky top-8 rounded-[4px] border-2 border-slate-200 bg-white p-6 space-y-4"
-            aria-label="Order totals"
-          >
+        {/* ── RIGHT: Order ticket ───────────────────────────────────────── */}
+        <div className="flex flex-col bg-white">
+          {/* Ticket header */}
+          <div className="px-4 pt-4 pb-3 border-b-2 border-slate-100">
             <h2
-              className="font-[var(--font-heading)] text-lg font-semibold"
+              className="text-[15px] font-extrabold"
               style={{ color: BRAND.ink }}
             >
-              Summary
+              Order ticket
+              {lines.length > 0 && (
+                <span className="ml-2 text-xs font-semibold text-slate-400">
+                  ({lines.length} item{lines.length !== 1 ? "s" : ""})
+                </span>
+              )}
             </h2>
+          </div>
 
-            {/* Line count badge */}
-            {lines.length > 0 ? (
-              <p className="text-xs text-slate-500">
-                {lines.length} line{lines.length !== 1 ? "s" : ""}
-              </p>
-            ) : null}
+          {/* Lines */}
+          <div className="flex-1 overflow-y-auto">
+            {lines.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full py-10 px-5 text-center text-slate-400">
+                <p className="text-sm">
+                  Tap a product tile. Items with options pop a quick picker.
+                </p>
+              </div>
+            ) : (
+              <div>
+                {lines.map((line) => {
+                  if (line.kind === "free_text") {
+                    // Inline free-text editor row
+                    return (
+                      <div
+                        key={line.localId}
+                        className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-100"
+                      >
+                        <Pencil size={14} className="text-slate-400 shrink-0" />
+                        <input
+                          type="text"
+                          placeholder="Item name"
+                          value={line.name}
+                          onChange={(e) =>
+                            setLines((prev) =>
+                              prev.map((l) =>
+                                l.localId === line.localId
+                                  ? { ...l, name: e.target.value }
+                                  : l,
+                              ),
+                            )
+                          }
+                          className="flex-1 min-w-0 text-[13px] border-0 bg-transparent p-0 focus:outline-none font-medium"
+                          style={{ color: BRAND.ink }}
+                          aria-label="Custom item name"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={line.unitPrice.toFixed(2)}
+                          onChange={(e) =>
+                            setLines((prev) =>
+                              prev.map((l) =>
+                                l.localId === line.localId
+                                  ? { ...l, unitPrice: parseFloat(e.target.value) || 0 }
+                                  : l,
+                              ),
+                            )
+                          }
+                          className="w-20 rounded-[4px] border border-slate-200 px-2 py-1 text-xs text-right font-mono focus:outline-none focus:border-[#0080ff]"
+                          aria-label="Unit price"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeLine(line.localId)}
+                          className="flex items-center justify-center w-8 h-8 text-red-400 hover:text-red-600 transition-colors shrink-0 cursor-pointer"
+                          aria-label="Remove custom line"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    );
+                  }
+                  return (
+                    <TicketLineRow
+                      key={line.localId}
+                      line={line}
+                      onRemove={() => removeLine(line.localId)}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
+          {/* Summary block */}
+          <div className="border-t-2 border-slate-100 px-4 pt-3 pb-2 space-y-2">
             {/* Subtotal */}
-            <div className="flex justify-between text-sm tabular-nums">
-              <span className="text-slate-600">Subtotal</span>
-              <span>{formatMYR(subtotal)}</span>
+            <div className="flex justify-between text-[14px] text-slate-500 tabular-nums">
+              <span>Subtotal</span>
+              <span>{fmtMYR(subtotal)}</span>
             </div>
 
-            {/* Shipping */}
-            <div className="flex items-center justify-between text-sm tabular-nums">
-              <span className="text-slate-600">Shipping</span>
-              <div className="flex items-center gap-2">
+            {/* Shipping (editable) */}
+            <div className="flex items-center justify-between text-[14px] text-slate-500 tabular-nums">
+              <span>Shipping</span>
+              <div className="flex items-center gap-1.5">
                 {editingShipping ? (
                   <input
                     type="number"
@@ -765,49 +722,51 @@ export function PosBuilder() {
                     onChange={(e) => setShippingOverride(e.target.value)}
                     onBlur={() => setEditingShipping(false)}
                     autoFocus
-                    className="w-24 rounded-[4px] border border-slate-300 px-2 py-1 text-sm text-right font-mono focus:outline-none focus:border-[#0080ff]"
+                    className="w-20 rounded-[4px] border border-slate-300 px-2 py-1 text-sm text-right font-mono focus:outline-none focus:border-[#0080ff]"
                     placeholder="0.00"
                     aria-label="Override shipping cost"
                   />
                 ) : (
                   <>
-                    <span>{formatMYR(shippingCost)}</span>
+                    <span>{fmtMYR(shippingCost)}</span>
                     <button
                       type="button"
                       onClick={() => setEditingShipping(true)}
-                      className="text-slate-400 hover:text-slate-600 min-h-[32px] min-w-[32px] flex items-center justify-center transition-colors cursor-pointer"
+                      className="flex items-center justify-center w-7 h-7 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
                       aria-label="Edit shipping cost"
                     >
-                      <Pencil size={14} />
+                      <Pencil size={12} />
                     </button>
                   </>
                 )}
               </div>
             </div>
 
-            {/* Coupon */}
-            {appliedCoupon ? (
-              <div className="flex justify-between text-sm text-green-700 tabular-nums">
-                <span>Coupon ({appliedCoupon})</span>
-                <span>Applied at submit</span>
-              </div>
-            ) : null}
-
             {/* Total */}
             <div
-              className="flex justify-between border-t-2 border-slate-200 pt-4 text-base font-bold tabular-nums"
+              className="flex justify-between pt-2.5 border-t-2 border-slate-100 text-[18px] font-extrabold tabular-nums"
+              style={{ color: BRAND.ink }}
             >
               <span>Total</span>
-              <span>{formatMYR(total)}</span>
+              <span>{fmtMYR(total)}</span>
             </div>
+          </div>
 
-            {/* Create order button (desktop) */}
+          {/* Submit error */}
+          {submitError && (
+            <div className="mx-4 mb-2 rounded-[4px] border-2 border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">
+              {submitError}
+            </div>
+          )}
+
+          {/* Create order button */}
+          <div className="px-4 pb-4">
             <button
               type="button"
               onClick={handleCreateOrderClick}
               disabled={pending}
-              className="hidden lg:flex w-full items-center justify-center gap-2 min-h-[60px] rounded-[4px] text-base font-semibold text-white transition-colors disabled:opacity-60 cursor-pointer"
-              style={{ backgroundColor: "#03C03C" }}
+              className="w-full flex items-center justify-center gap-2 rounded-[6px] text-[16px] font-extrabold text-white transition-colors duration-150 disabled:opacity-60 cursor-pointer"
+              style={{ minHeight: 54, backgroundColor: "#03C03C" }}
               onMouseEnter={(e) => {
                 if (!pending) (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#018A29";
               }}
@@ -824,12 +783,15 @@ export function PosBuilder() {
                 "Create order"
               )}
             </button>
+            <p className="text-center text-[11px] text-slate-400 mt-2">
+              Clean ticket · options chosen in a focused modal
+            </p>
           </div>
         </div>
       </div>
 
       {/* ── Product quick-add modal ── */}
-      {modalProductId ? (
+      {modalProductId && (
         <PosProductModal
           productId={modalProductId}
           open={!!modalProductId}
@@ -839,10 +801,10 @@ export function PosBuilder() {
           }}
           onAdd={handleModalAdd}
         />
-      ) : null}
+      )}
 
       {/* ── Customer step modal ── */}
-      {showCustomerStep ? (
+      {showCustomerStep && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ backgroundColor: "rgba(11,16,32,0.55)" }}
@@ -863,10 +825,7 @@ export function PosBuilder() {
           >
             {/* Header */}
             <div className="sticky top-0 z-10 flex items-center gap-3 px-5 py-4 border-b-2 border-slate-200 bg-white shrink-0">
-              <span
-                className="flex-1 font-semibold text-base"
-                style={{ color: BRAND.ink }}
-              >
+              <span className="flex-1 font-semibold text-base" style={{ color: BRAND.ink }}>
                 Customer details
               </span>
               <button
@@ -881,20 +840,15 @@ export function PosBuilder() {
 
             {/* Body */}
             <div className="overflow-y-auto flex-1 px-5 py-5">
-              <PosCustomerStep
-                customerForm={customerForm}
-                onChange={setCustomerForm}
-              />
-
-              {/* Submit error inside modal */}
-              {submitError ? (
+              <PosCustomerStep customerForm={customerForm} onChange={setCustomerForm} />
+              {submitError && (
                 <div
                   className="mt-4 rounded-[4px] border-2 border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700"
                   role="alert"
                 >
                   {submitError}
                 </div>
-              ) : null}
+              )}
             </div>
 
             {/* Footer */}
@@ -933,10 +887,10 @@ export function PosBuilder() {
             </div>
           </div>
         </div>
-      ) : null}
+      )}
 
       {/* ── Send-draft modal ── */}
-      {sendDraftOpen && createdOrderId && createdOrderNumber ? (
+      {sendDraftOpen && createdOrderId && createdOrderNumber && (
         <PosSendDraftModal
           open={sendDraftOpen}
           onClose={() => setSendDraftOpen(false)}
@@ -946,7 +900,7 @@ export function PosBuilder() {
           customerName={customerForm.name}
           customerPhone={customerForm.phone}
         />
-      ) : null}
+      )}
     </div>
   );
 }
