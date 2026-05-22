@@ -49,7 +49,11 @@ function formatBytes(n: number): string {
 
 type Props = {
   orderId: string;
-  onSuccess: () => void;
+  /** Optional callback after a successful upload. Server action's revalidatePath
+   * already triggers the RSC re-render so this prop is rarely needed. Making it
+   * optional prevents a server→client function-prop crash when rendered from a
+   * Server Component (RSC cannot pass functions as props). */
+  onSuccess?: () => void;
 };
 
 export function AdminUploadProofForm({ orderId, onSuccess }: Props) {
@@ -133,7 +137,7 @@ export function AdminUploadProofForm({ orderId, onSuccess }: Props) {
       const result = await adminUploadPaymentProof(orderId, formData);
       if (result.ok) {
         clearFile();
-        onSuccess();
+        onSuccess?.();
       } else {
         setSubmitError(result.error);
       }

@@ -54,6 +54,9 @@ export type PosProductResult = {
   productType: string;
   thumbnailUrl: string | null;
   variantCount: number;
+  /** Minimum variant price (MYR). Null for configurable/keychain products
+   *  that use priceTiers instead of a flat variant price. */
+  minPrice: number | null;
 };
 
 /** Discriminated union for POS order lines. */
@@ -178,19 +181,26 @@ export async function getPosProductSearch(
 
   if (productRows.length === 0) return [];
 
-  // Batch fetch variant counts per product (no LATERAL)
+  // Batch fetch variant counts + min prices per product (no LATERAL)
   const productIds = productRows.map((p) => p.id);
-  const variantCountRows = await db
+  const variantAggRows = await db
     .select({
       productId: productVariants.productId,
       cnt: sql<number>`COUNT(*)`,
+      minPrice: sql<string>`MIN(CAST(price AS DECIMAL(10,2)))`,
     })
     .from(productVariants)
     .where(inArray(productVariants.productId, productIds))
     .groupBy(productVariants.productId);
 
   const countByProduct = new Map<string, number>(
-    variantCountRows.map((r) => [r.productId, Number(r.cnt)]),
+    variantAggRows.map((r) => [r.productId, Number(r.cnt)]),
+  );
+  const minPriceByProduct = new Map<string, number | null>(
+    variantAggRows.map((r) => [
+      r.productId,
+      r.minPrice !== null ? Number(r.minPrice) : null,
+    ]),
   );
 
   return productRows.map((p) => {
@@ -216,6 +226,82 @@ export async function getPosProductSearch(
       productType: p.productType,
       thumbnailUrl,
       variantCount: countByProduct.get(p.id) ?? 0,
+      minPrice: minPriceByProduct.get(p.id) ?? null,
+    };
+  });
+}
+
+// ============================================================================
+// Task 1a: getPosRecentProducts — initial product grid (no search query)
+// ============================================================================
+
+/**
+ * Returns up to 40 active products sorted by most recently updated — used to
+ * populate the POS product-tile grid before the admin types a search query.
+ * MariaDB-safe: manual multi-query hydration (no LATERAL).
+ */
+export async function getPosRecentProducts(): Promise<PosProductResult[]> {
+  await requireAdmin();
+
+  const productRows = await db
+    .select({
+      id: products.id,
+      name: products.name,
+      productType: products.productType,
+      images: products.images,
+      thumbnailIndex: products.thumbnailIndex,
+    })
+    .from(products)
+    .where(eq(products.isActive, true))
+    .orderBy(desc(products.updatedAt))
+    .limit(40);
+
+  if (productRows.length === 0) return [];
+
+  const productIds = productRows.map((p) => p.id);
+  const variantAggRows = await db
+    .select({
+      productId: productVariants.productId,
+      cnt: sql<number>`COUNT(*)`,
+      minPrice: sql<string>`MIN(CAST(price AS DECIMAL(10,2)))`,
+    })
+    .from(productVariants)
+    .where(inArray(productVariants.productId, productIds))
+    .groupBy(productVariants.productId);
+
+  const countByProduct = new Map<string, number>(
+    variantAggRows.map((r) => [r.productId, Number(r.cnt)]),
+  );
+  const minPriceByProduct = new Map<string, number | null>(
+    variantAggRows.map((r) => [
+      r.productId,
+      r.minPrice !== null ? Number(r.minPrice) : null,
+    ]),
+  );
+
+  return productRows.map((p) => {
+    let thumbnailUrl: string | null = null;
+    try {
+      const rawImages = typeof p.images === "string"
+        ? JSON.parse(p.images as string)
+        : p.images;
+      const arr = Array.isArray(rawImages) ? rawImages : [];
+      const idx = typeof p.thumbnailIndex === "number" ? p.thumbnailIndex : 0;
+      const entry = arr[idx] ?? arr[0];
+      if (typeof entry === "string") thumbnailUrl = entry;
+      else if (entry && typeof entry === "object" && "url" in entry)
+        thumbnailUrl = entry.url as string;
+    } catch {
+      thumbnailUrl = null;
+    }
+
+    return {
+      id: p.id,
+      name: p.name,
+      productType: p.productType,
+      thumbnailUrl,
+      variantCount: countByProduct.get(p.id) ?? 0,
+      minPrice: minPriceByProduct.get(p.id) ?? null,
     };
   });
 }

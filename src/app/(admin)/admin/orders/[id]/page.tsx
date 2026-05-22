@@ -212,15 +212,13 @@ export default async function AdminOrderDetailPage({
               orderTotal={row.totalAmount}
             />
 
-            {/* Admin slip upload — shown when order is still awaiting payment */}
+            {/* Admin slip upload — shown when order is still awaiting payment.
+                onSuccess is intentionally omitted: revalidatePath inside
+                adminUploadPaymentProof triggers the RSC re-render automatically.
+                Passing a function prop across the Server→Client boundary would
+                cause a runtime crash on force-dynamic pages (RSC boundary rule). */}
             {showAdminUploadForm && (
-              <AdminUploadProofForm
-                orderId={row.id}
-                onSuccess={() => {
-                  // revalidatePath in adminUploadPaymentProof triggers RSC re-render
-                  // No router.refresh() per Phase 17 AD-06 — server action handles it.
-                }}
-              />
+              <AdminUploadProofForm orderId={row.id} />
             )}
           </div>
 
