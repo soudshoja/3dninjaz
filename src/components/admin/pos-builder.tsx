@@ -42,6 +42,7 @@ import { PosSendDraftModal } from "@/components/admin/pos-send-draft-modal";
 import { PosProductModal } from "@/components/admin/pos-product-modal";
 import { PosCustomerStep, type CustomerForm } from "@/components/admin/pos-customer-step";
 import type { PosAddToOrderLine } from "@/components/store/product-detail";
+import type { CartItemForQuote } from "@/actions/shipping-quote";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -435,6 +436,26 @@ export function PosBuilder() {
 
   const shippingCost = shippingOverride !== "" ? parseFloat(shippingOverride) || 0 : 0;
   const total = subtotal + shippingCost;
+
+  // ── Cart items for shipping quote ──────────────────────────────────────────
+  // Map ticket lines → CartItemForQuote[]. Free-text lines (productId undefined)
+  // and configurable lines without a variantId get variantId="manual" — the
+  // weight fallback in quoteForCart handles missing variant rows gracefully.
+  const quoteItems: CartItemForQuote[] = lines
+    .filter((l) => l.kind !== "free_text")
+    .map((l) => ({
+      productId: (l as { productId?: string }).productId ?? "manual",
+      variantId:
+        l.kind === "stocked"
+          ? ((l as { variantId?: string }).variantId ?? "manual")
+          : "manual",
+      quantity: l.quantity,
+      unitPrice: getLineUnitPrice(l),
+    }));
+
+  function handleShippingFromCustomerStep(price: number) {
+    setShippingOverride(price === 0 ? "0" : price.toFixed(2));
+  }
 
   // ── Create order → customer step → submit ─────────────────────────────────
 
@@ -840,7 +861,12 @@ export function PosBuilder() {
 
             {/* Body */}
             <div className="overflow-y-auto flex-1 px-5 py-5">
-              <PosCustomerStep customerForm={customerForm} onChange={setCustomerForm} />
+              <PosCustomerStep
+                customerForm={customerForm}
+                onChange={setCustomerForm}
+                items={quoteItems}
+                onShippingChange={handleShippingFromCustomerStep}
+              />
               {submitError && (
                 <div
                   className="mt-4 rounded-[4px] border-2 border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700"
