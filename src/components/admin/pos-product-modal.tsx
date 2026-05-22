@@ -83,7 +83,8 @@ export function PosProductModal({ productId, open, onClose, onAdd }: Props) {
         ref={panelRef}
         className="relative flex flex-col bg-white rounded-xl overflow-hidden"
         style={{
-          maxWidth: 680,
+          // ~2x wider on desktop for a roomier PDP; mobile still tracks 92vw.
+          maxWidth: 1280,
           width: "92vw",
           maxHeight: "88vh",
           boxShadow: "0 24px 64px rgba(0,0,0,0.32)",
