@@ -220,6 +220,34 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     alignItems: "flex-end",
   },
+  // Subtotal / shipping breakdown rows
+  breakdownRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    marginBottom: 3,
+  },
+  breakdownLabel: {
+    fontSize: 10,
+    color: SLATE,
+    textAlign: "right",
+    marginRight: 12,
+    minWidth: 60,
+  },
+  breakdownValue: {
+    fontSize: 10,
+    color: SLATE,
+    textAlign: "right",
+    minWidth: 60,
+    fontFamily: "Helvetica",
+  },
+  breakdownDivider: {
+    borderBottom: 1,
+    borderBottomColor: DIVIDER,
+    marginTop: 4,
+    marginBottom: 6,
+    width: "100%",
+  },
   totalLabel: {
     fontSize: 11,
     color: SLATE,
@@ -291,6 +319,7 @@ function DiagonalStripes() {
 
   return (
     <Svg
+      fixed
       style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
       viewBox={`0 0 ${W} ${H}`}
     >
@@ -337,15 +366,28 @@ export function NinjazInvoiceDocument({
     ? `RM${rawTotal.toFixed(2)}`
     : "RM0.00";
 
+  // Subtotal + shipping breakdown
+  const rawSubtotal = parseFloat(order.subtotal ?? "");
+  const rawShipping = parseFloat(order.shippingCost ?? "");
+
+  const hasBreakdown =
+    Number.isFinite(rawSubtotal) && Number.isFinite(rawShipping);
+  const shippingFormatted =
+    hasBreakdown && rawShipping === 0
+      ? "FREE"
+      : hasBreakdown
+        ? formatMYR(rawShipping)
+        : null;
+
   return (
     <Document>
       <Page size="A4" style={styles.page}>
         {/* Diagonal stripes — rendered behind content */}
         <DiagonalStripes />
 
-        {/* CANCELLED watermark */}
+        {/* CANCELLED watermark — fixed so it does not contribute to flow */}
         {isCancelled ? (
-          <Text style={styles.watermark}>CANCELLED</Text>
+          <Text fixed style={styles.watermark}>CANCELLED</Text>
         ) : null}
 
         {/* Main content area */}
@@ -473,8 +515,31 @@ export function NinjazInvoiceDocument({
               ) : null}
             </View>
 
-            {/* Total */}
+            {/* Total breakdown + grand total */}
             <View style={styles.totalBlock}>
+              {/* Subtotal row */}
+              {hasBreakdown ? (
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.breakdownLabel}>Subtotal</Text>
+                  <Text style={styles.breakdownValue}>
+                    {formatMYR(rawSubtotal)}
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Shipping row */}
+              {hasBreakdown ? (
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.breakdownLabel}>Shipping</Text>
+                  <Text style={styles.breakdownValue}>{shippingFormatted}</Text>
+                </View>
+              ) : null}
+
+              {/* Divider before grand total */}
+              {hasBreakdown ? (
+                <View style={styles.breakdownDivider} />
+              ) : null}
+
               <Text style={styles.totalLabel}>Total Amount Due</Text>
               <Text style={styles.totalAmount}>{totalFormatted}</Text>
             </View>
