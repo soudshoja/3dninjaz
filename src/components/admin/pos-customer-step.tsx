@@ -13,16 +13,27 @@
  *   Standard address form (name, phone, email optional, address, city,
  *   state dropdown, postcode).
  *
+ * Once the address postcode (/^\d{5}$/) and state are set, automatically
+ * quotes live Delyva shipping rates using quoteForCart. The cheapest option
+ * is pre-selected and `onShippingChange` is called so the builder's summary
+ * reflects the shipping cost before submit. Falls back to getShippingRate
+ * (state flat-rate) when Delyva returns no options or errors.
+ *
  * Props:
- *   customerForm   — current CustomerForm state
- *   onChange(form) — parent updates its state
+ *   customerForm      — current CustomerForm state
+ *   onChange(form)    — parent updates its state
+ *   items             — CartItemForQuote[] from the current ticket
+ *   onShippingChange  — emits selected shipping cost (MYR) to parent
  */
 
 import { useEffect, useRef, useState } from "react";
-import { Search, Loader2, User, Phone, Mail, MapPin } from "lucide-react";
+import { Search, Loader2, User, Phone, Mail, MapPin, Truck, CheckCircle2 } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import { MALAYSIAN_STATES } from "@/lib/validators";
 import { getPosCustomerSearch, type PosCustomerResult } from "@/actions/admin-pos";
+import { quoteForCart, type QuoteOption, type CartItemForQuote } from "@/actions/shipping-quote";
+import { getShippingRate } from "@/actions/admin-shipping";
+import { formatMYR } from "@/lib/format";
 
 export type CustomerForm = {
   name: string;
@@ -38,11 +49,13 @@ export type CustomerForm = {
 type Props = {
   customerForm: CustomerForm;
   onChange: (form: CustomerForm) => void;
+  items: CartItemForQuote[];
+  onShippingChange: (price: number) => void;
 };
 
 type Tab = "returning" | "new";
 
-export function PosCustomerStep({ customerForm, onChange }: Props) {
+export function PosCustomerStep({ customerForm, onChange, items, onShippingChange }: Props) {
   const [tab, setTab] = useState<Tab>("returning");
 
   // Returning customer search
@@ -51,6 +64,14 @@ export function PosCustomerStep({ customerForm, onChange }: Props) {
   const [searching, setSearching] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<PosCustomerResult | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Shipping quote ──────────────────────────────────────────────────────────
+  const [shippingOptions, setShippingOptions] = useState<QuoteOption[]>([]);
+  const [selectedServiceCode, setSelectedServiceCode] = useState<string | null>(null);
+  const [quotingShipping, setQuotingShipping] = useState(false);
+  const [shippingError, setShippingError] = useState<string | null>(null);
+  const shippingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastQuoteKeyRef = useRef<string>("");
 
   // Debounced search
   useEffect(() => {
@@ -73,6 +94,82 @@ export function PosCustomerStep({ customerForm, onChange }: Props) {
       }
     }, 350);
   }, [searchQuery]);
+
+  // ── Shipping quote: trigger when postcode + state are valid ─────────────────
+  useEffect(() => {
+    const postcode = customerForm.postcode.trim();
+    const state = customerForm.state;
+    const addressValid = /^\d{5}$/.test(postcode) && !!state;
+
+    if (!addressValid || items.length === 0) {
+      if (shippingDebounceRef.current) clearTimeout(shippingDebounceRef.current);
+      setShippingOptions([]);
+      setSelectedServiceCode(null);
+      setShippingError(null);
+      setQuotingShipping(false);
+      lastQuoteKeyRef.current = "";
+      return;
+    }
+
+    const quoteKey = JSON.stringify({ postcode, state, items: items.map(i => ({ id: i.productId, v: i.variantId, q: i.quantity })) });
+    if (quoteKey === lastQuoteKeyRef.current) return;
+
+    if (shippingDebounceRef.current) clearTimeout(shippingDebounceRef.current);
+
+    shippingDebounceRef.current = setTimeout(async () => {
+      lastQuoteKeyRef.current = quoteKey;
+      setQuotingShipping(true);
+      setShippingError(null);
+      try {
+        const res = await quoteForCart(items, {
+          address1: customerForm.addressLine1 || "-",
+          address2: customerForm.addressLine2 || null,
+          city: customerForm.city || "-",
+          state,
+          postcode,
+          country: "MY",
+        });
+
+        if (res.ok && res.options.length > 0) {
+          setShippingOptions(res.options);
+          const sorted = [...res.options].sort((a, b) => a.finalPrice - b.finalPrice);
+          const cheapest = sorted[0];
+          setSelectedServiceCode(cheapest.serviceCode);
+          onShippingChange(cheapest.finalPrice);
+          setQuotingShipping(false);
+          return;
+        }
+      } catch {
+        // Fall through to flat-rate fallback
+      }
+
+      // Fallback: use flat-rate getShippingRate
+      try {
+        const subtotal = items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+        const fallback = await getShippingRate(state, subtotal);
+        setShippingOptions([]);
+        setSelectedServiceCode(null);
+        setShippingError(null);
+        onShippingChange(fallback.cost);
+      } catch {
+        setShippingOptions([]);
+        setSelectedServiceCode(null);
+        setShippingError("Could not fetch shipping rates. You can override the amount manually.");
+        onShippingChange(0);
+      }
+      setQuotingShipping(false);
+    }, 500);
+
+    return () => {
+      if (shippingDebounceRef.current) clearTimeout(shippingDebounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerForm.postcode, customerForm.state, customerForm.addressLine1, items]);
+
+  function handleSelectShippingOption(opt: QuoteOption) {
+    setSelectedServiceCode(opt.serviceCode);
+    onShippingChange(opt.finalPrice);
+  }
 
   function selectCustomer(c: PosCustomerResult) {
     setSelectedCustomer(c);
@@ -395,6 +492,102 @@ export function PosCustomerStep({ customerForm, onChange }: Props) {
               aria-label="Postcode"
             />
           </div>
+        </div>
+      ) : null}
+
+      {/* ── Shipping rate picker ── */}
+      {/^\d{5}$/.test(customerForm.postcode.trim()) && customerForm.state ? (
+        <div
+          className="rounded-[4px] border-2 border-slate-200 p-4 space-y-3"
+          aria-label="Shipping options"
+        >
+          <div className="flex items-center gap-2">
+            <Truck size={16} style={{ color: "#0080ff" }} aria-hidden />
+            <span className="text-sm font-semibold" style={{ color: BRAND.ink }}>
+              Courier &amp; Shipping Rate
+            </span>
+            {quotingShipping && (
+              <Loader2
+                size={14}
+                className="animate-spin ml-auto"
+                style={{ color: "#0080ff" }}
+                aria-label="Fetching shipping rates"
+              />
+            )}
+          </div>
+
+          {shippingError ? (
+            <p
+              className="text-xs rounded-[4px] px-3 py-2"
+              style={{ backgroundColor: "#fff3cd", color: "#92400e" }}
+              role="alert"
+            >
+              {shippingError}
+            </p>
+          ) : null}
+
+          {!quotingShipping && shippingOptions.length === 0 && !shippingError ? (
+            <p className="text-xs text-slate-500">
+              Fetching live rates — or using flat-rate fallback if Delyva is unavailable.
+            </p>
+          ) : null}
+
+          {!quotingShipping && shippingOptions.length > 0 ? (
+            <fieldset className="grid gap-2">
+              <legend className="sr-only">Choose a courier</legend>
+              {shippingOptions.map((opt) => {
+                const selected = selectedServiceCode === opt.serviceCode;
+                const eta =
+                  opt.etaMin && opt.etaMax
+                    ? `${opt.etaMin}–${opt.etaMax} min`
+                    : opt.etaMin
+                      ? `${opt.etaMin} min`
+                      : null;
+                return (
+                  <label
+                    key={opt.serviceCode}
+                    className="flex items-center gap-3 rounded-[4px] border-2 px-3 py-3 cursor-pointer transition-colors duration-150 min-h-[52px]"
+                    style={{
+                      borderColor: selected ? "#0080ff" : "#e2e8f0",
+                      backgroundColor: selected ? "#0080ff0d" : "#ffffff",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="pos_shipping_service"
+                      value={opt.serviceCode}
+                      checked={selected}
+                      onChange={() => handleSelectShippingOption(opt)}
+                      className="h-4 w-4 shrink-0"
+                      aria-label={`${opt.serviceName} — ${opt.freeShipApplied ? "FREE" : formatMYR(opt.finalPrice)}`}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold leading-tight" style={{ color: BRAND.ink }}>
+                        {opt.serviceName}
+                      </p>
+                      {eta ? (
+                        <p className="text-xs text-slate-500">ETA {eta}</p>
+                      ) : null}
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {opt.freeShipApplied ? (
+                        <span className="text-sm font-bold tabular-nums" style={{ color: "#03C03C" }}>
+                          FREE
+                        </span>
+                      ) : (
+                        <span className="text-sm font-bold tabular-nums" style={{ color: BRAND.ink }}>
+                          {formatMYR(opt.finalPrice)}
+                        </span>
+                      )}
+                      {selected ? (
+                        <CheckCircle2 size={15} style={{ color: "#0080ff" }} aria-hidden />
+                      ) : null}
+                    </div>
+                  </label>
+                );
+              })}
+            </fieldset>
+          ) : null}
         </div>
       ) : null}
     </div>
