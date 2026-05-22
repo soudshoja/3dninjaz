@@ -170,6 +170,7 @@ export async function GET(
     subtotal: order.subtotal,
     shippingCost: order.shippingCost,
     totalAmount: order.totalAmount,
+    paymentMethod: order.paymentMethod,
     items: order.items.map((i) => ({
       id: i.id,
       productId: i.productId,   // Phase 20 (20-13) — D-08 isManualLine guard

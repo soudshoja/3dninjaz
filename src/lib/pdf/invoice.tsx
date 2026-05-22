@@ -107,6 +107,7 @@ export type InvoiceOrder = {
   subtotal: string;
   shippingCost: string;
   totalAmount: string;
+  paymentMethod?: string | null;
   items: Array<{
     id: string;
     productId: string;    // Phase 20 (20-13) — D-08 isManualLine guard
