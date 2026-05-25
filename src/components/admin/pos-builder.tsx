@@ -43,6 +43,7 @@ import { PosProductModal } from "@/components/admin/pos-product-modal";
 import { PosCustomerStep, type CustomerForm } from "@/components/admin/pos-customer-step";
 import type { PosAddToOrderLine } from "@/components/store/product-detail";
 import type { CartItemForQuote } from "@/actions/shipping-quote";
+import { ensureConfigurationData } from "@/lib/config-fields";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -441,6 +442,13 @@ export function PosBuilder() {
   // Map ticket lines → CartItemForQuote[]. Free-text lines (productId undefined)
   // and configurable lines without a variantId get variantId="manual" — the
   // weight fallback in quoteForCart handles missing variant rows gracefully.
+  //
+  // CRITICAL — POS configurable shape differs from checkout:
+  //   PosLineConfigurable.configurationData (admin-pos.ts ~line 76) is typed
+  //   `string` (a JSON STRING serialised via JSON.stringify in toTicketLine).
+  //   Accessing .values directly on the raw string returns undefined.
+  //   We must parse via ensureConfigurationData() before reading .values.
+  //   Contrast: checkout HydratedCartItem.configurationData is a real OBJECT.
   const quoteItems: CartItemForQuote[] = lines
     .filter((l) => l.kind !== "free_text")
     .map((l) => ({
@@ -451,6 +459,12 @@ export function PosBuilder() {
           : "manual",
       quantity: l.quantity,
       unitPrice: getLineUnitPrice(l),
+      // Configurable POS lines carry configurationData as a JSON STRING — parse first.
+      // Yields undefined on parse failure, causing graceful fallthrough to default weight.
+      configValues:
+        l.kind === "configurable"
+          ? ensureConfigurationData((l as PosLineConfigurable).configurationData)?.values
+          : undefined,
     }));
 
   function handleShippingFromCustomerStep(price: number) {
