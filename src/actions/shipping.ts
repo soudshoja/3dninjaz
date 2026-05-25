@@ -13,6 +13,7 @@ import {
   shippingServiceCatalog,
   products,
   productVariants,
+  productConfigFields,
 } from "@/lib/db/schema";
 import { requireAdmin, getSessionUser } from "@/lib/auth-helpers";
 import { delyvaApi, DelyvaError, parseQuoteServices, getDelyvaWebhookSecret } from "@/lib/delyva";
@@ -32,6 +33,10 @@ import type { ShippingConfigRow as ShippingConfigRowType } from "@/lib/shipping-
 import { filterByEnabledCatalog } from "@/lib/delyva-filter";
 import { sendOrderShippedEmail } from "@/actions/send-emails";
 import { formatOrderNumber } from "@/lib/orders";
+import { ensureConfigJson, ensureConfigurationData } from "@/lib/config-fields";
+import type { SelectFieldConfig } from "@/lib/config-fields";
+import { resolveOptionWeightKg } from "@/lib/option-weight";
+import type { FieldWeightEntry } from "@/lib/option-weight";
 
 // ============================================================================
 // Phase 9 (09-01) — admin-side shipping configuration + Delyva-backed order
@@ -455,26 +460,85 @@ async function sumOrderWeight(
     variantWeights.set(v.id, v.weightG ?? null);
   }
 
+  // Tier 0: batch-fetch select-type config fields for items with a configurationData
+  // snapshot. Resolves the chosen option's weight from the DB — never trusts a
+  // client-supplied weight (T-17-09). MariaDB no-LATERAL: inArray + in-memory join.
+  const configItemProductIds = Array.from(
+    new Set(
+      items
+        .filter((i) => i.configurationData !== null && i.configurationData !== undefined)
+        .map((i) => i.productId),
+    ),
+  );
+  const fieldsByProduct = new Map<string, FieldWeightEntry[]>();
+  if (configItemProductIds.length > 0) {
+    const cfRows = await db
+      .select({
+        id: productConfigFields.id,
+        productId: productConfigFields.productId,
+        fieldType: productConfigFields.fieldType,
+        configJson: productConfigFields.configJson,
+      })
+      .from(productConfigFields)
+      .where(inArray(productConfigFields.productId, configItemProductIds));
+
+    for (const row of cfRows) {
+      if (row.fieldType !== "select") continue;
+      try {
+        const parsed = ensureConfigJson("select", row.configJson) as SelectFieldConfig;
+        const optionsByValue = new Map<string, number>();
+        for (const opt of parsed.options) {
+          if (typeof opt.weight === "number") {
+            optionsByValue.set(opt.value, opt.weight);
+          }
+        }
+        if (optionsByValue.size === 0) continue;
+        const existing = fieldsByProduct.get(row.productId) ?? [];
+        existing.push({ fieldId: row.id, optionsByValue });
+        fieldsByProduct.set(row.productId, existing);
+      } catch {
+        // Parse error on corrupt configJson — skip, fall through to next tier
+      }
+    }
+  }
+
   let total = 0;
   for (const i of items) {
-    const variantWeightG = variantWeights.get(i.variantId) ?? null;
     let w: number;
-    if (variantWeightG !== null) {
-      // Tier 1: per-variant weight_g (grams → kg)
-      w = variantWeightG / 1000;
+
+    // Tier 0: per-option weight from the order_item configuration snapshot.
+    // order_items.configurationData is a JSON STRING column — parse via
+    // ensureConfigurationData() before reading .values.
+    const configData = ensureConfigurationData(i.configurationData);
+    const optKg =
+      configData?.values && Object.keys(configData.values).length > 0
+        ? resolveOptionWeightKg(configData.values, fieldsByProduct.get(i.productId) ?? [])
+        : null;
+
+    if (optKg !== null) {
+      w = optKg;
     } else {
-      const productWeightKg = productWeights.get(i.productId) ?? null;
-      if (productWeightKg !== null) {
-        // Tier 2: product-level shippingWeightKg
-        w = productWeightKg;
+      const variantWeightG = variantWeights.get(i.variantId) ?? null;
+      if (variantWeightG !== null) {
+        // Tier 1: per-variant weight_g (grams → kg)
+        w = variantWeightG / 1000;
       } else {
-        // Tier 3: global fallback
-        w = fallbackKg;
+        const productWeightKg = productWeights.get(i.productId) ?? null;
+        if (productWeightKg !== null) {
+          // Tier 2: product-level shippingWeightKg
+          w = productWeightKg;
+        } else {
+          // Tier 3: global fallback
+          w = fallbackKg;
+        }
       }
     }
     total += w * i.quantity;
   }
   return total;
+  // TODO: bookShipmentForOrder's inventory weight ladder does not yet resolve
+  // option weight. Mirror resolveOptionWeightKg there if per-parcel weight
+  // accuracy at booking time becomes a requirement. Out of scope for 260525-xbb.
 }
 
 /**
