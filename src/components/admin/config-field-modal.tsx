@@ -301,6 +301,7 @@ type SelectOption = {
   price?: number;
   sku?: string;
   imageUrl?: string;
+  weight?: number;
 };
 
 // Internal per-option image button — 40×40 square.
@@ -584,10 +585,11 @@ export function SelectConfigForm({
   return (
     <div className="space-y-1">
       {/* Column header row */}
-      <div className="grid grid-cols-[minmax(0,1fr)_96px_96px_auto_28px] items-center gap-2 px-3 py-2 text-[10px] uppercase tracking-wide text-zinc-500">
+      <div className="grid grid-cols-[minmax(0,1fr)_96px_96px_88px_auto_28px] items-center gap-2 px-3 py-2 text-[10px] uppercase tracking-wide text-zinc-500">
         <span>Label / Value</span>
         <span>Price RM</span>
         <span>SKU</span>
+        <span>Weight g</span>
         {/* image + delete placeholders */}
         <span />
         <span />
@@ -596,7 +598,7 @@ export function SelectConfigForm({
       {options.map((opt, i) => (
         <div
           key={i}
-          className="grid grid-cols-[minmax(0,1fr)_96px_96px_auto_28px] items-center gap-2 py-2 border-b border-zinc-100 last:border-b-0"
+          className="grid grid-cols-[minmax(0,1fr)_96px_96px_88px_auto_28px] items-center gap-2 py-2 border-b border-zinc-100 last:border-b-0"
         >
           {/* Label input — grid column 1 */}
           <Input
@@ -640,6 +642,26 @@ export function SelectConfigForm({
             className="h-9 font-mono text-xs"
             title="SKU for this option (for order fulfilment)"
             aria-label={`Option ${i + 1} SKU`}
+          />
+
+          {/* Weight (g) */}
+          <Input
+            type="number"
+            min={0}
+            step={1}
+            value={opt.weight ?? ""}
+            onChange={(e) =>
+              updateOption(i, {
+                weight:
+                  e.target.value === ""
+                    ? undefined
+                    : Math.round(Number(e.target.value)),
+              })
+            }
+            placeholder="—"
+            className="h-9"
+            title="Per-option shipping weight in grams — used for the Delyva shipping quote"
+            aria-label={`Option ${i + 1} weight (grams)`}
           />
 
           {/* Image — camera + gallery buttons */}
