@@ -941,8 +941,9 @@ export async function getPosCustomerSearch(
   const trimmed = (query ?? "").trim();
   if (!trimmed) return [];
 
+  // ── Candidate source 1: name/email user match ────────────────────────────
   // Search non-admin users by name OR email (LIKE, case-insensitive on MariaDB utf8mb4_general_ci)
-  const userRows = await db
+  const nameEmailRows = await db
     .select({
       id: user.id,
       name: user.name,
@@ -960,11 +961,49 @@ export async function getPosCustomerSearch(
     )
     .limit(15);
 
-  if (userRows.length === 0) return [];
+  // ── Candidate source 2: phone match via prior orders ─────────────────────
+  // `user` has no phone column — resolve phone matches via orders.shippingPhone.
+  // This query ALWAYS runs (not gated on nameEmailRows.length) so that a
+  // phone-only search (no name/email user match) is never short-circuited.
+  // No LATERAL — plain WHERE + DISTINCT, group in memory.
+  const phoneOrderRows = await db
+    .select({ userId: orders.userId })
+    .from(orders)
+    .where(like(orders.shippingPhone, `%${trimmed}%`));
 
-  const userIds = userRows.map((u) => u.id);
+  // Collect phone-derived userIds (unique, exclude duplicates)
+  const phoneUserIdSet = new Set<string>(
+    phoneOrderRows.map((r) => r.userId),
+  );
 
-  // Fetch all orders for matched users ordered by most recent first.
+  // ── Build union of candidate ids ─────────────────────────────────────────
+  const nameEmailIdSet = new Set<string>(nameEmailRows.map((r) => r.id));
+  // Phone-only ids: ids found via phone that aren't already in the name/email set
+  const phoneOnlyIds = [...phoneUserIdSet].filter((id) => !nameEmailIdSet.has(id));
+
+  // Fetch full user rows for phone-only ids, excluding admin
+  let phoneOnlyRows: Array<{ id: string; name: string; email: string }> = [];
+  if (phoneOnlyIds.length > 0) {
+    phoneOnlyRows = await db
+      .select({ id: user.id, name: user.name, email: user.email })
+      .from(user)
+      .where(
+        and(
+          ne(user.role, "admin"),
+          inArray(user.id, phoneOnlyIds),
+        ),
+      );
+  }
+
+  // Union: name/email matches first (more specific), then phone-only matches
+  const allUserRows = [...nameEmailRows, ...phoneOnlyRows].slice(0, 15);
+
+  // If both candidate sources produced nothing, bail
+  if (allUserRows.length === 0) return [];
+
+  const userIds = allUserRows.map((u) => u.id);
+
+  // ── Fetch orders for matched users ────────────────────────────────────────
   // No LATERAL — fetch all then group in memory.
   const orderRows = await db
     .select({
@@ -994,7 +1033,7 @@ export async function getPosCustomerSearch(
     }
   }
 
-  return userRows.map((u) => {
+  return allUserRows.map((u) => {
     const latest = latestOrder.get(u.id);
     return {
       userId: u.id,
