@@ -143,6 +143,100 @@ export type PosProductHydration = {
 const SENTINEL_EMAIL_DOMAIN = "@3dninjaz.local";
 
 // ============================================================================
+// resolvePosCustomerId — find-or-create customer user row inside a transaction
+// ============================================================================
+
+/**
+ * Resolve (find or create) a customer `user` row inside the createPosOrder
+ * transaction so the order is attributed to a real customer, not the admin.
+ *
+ * Resolution ladder (runs inside the caller's tx so it rolls back with the order):
+ *  1. find-by-email: if customerEmail is a real address (not a sentinel), SELECT
+ *     WHERE email = trimmedEmail AND id != adminUserId. The admin guard means that
+ *     even if the operator typed the admin's own email the admin row is skipped and
+ *     a new customer row is created instead (REQ-4).
+ *  2. find-by-phone-via-orders (only when customerEmail is a sentinel): SELECT
+ *     orders.userId WHERE shippingPhone = phone ORDER BY createdAt DESC LIMIT 1;
+ *     skip any userId equal to adminUserId (legacy admin-attributed rows).
+ *  3. create-new: INSERT user with randomUUID, role="customer", emailVerified=false.
+ *     No `account` row — customer cannot log in until they do a password reset.
+ *
+ * Race handling: on ER_DUP_ENTRY (email UNIQUE collision from a concurrent create)
+ * re-SELECT with the same admin guard. If that still returns nothing (the collision
+ * was against the admin's own email row), throw a descriptive error.
+ */
+async function resolvePosCustomerId(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  args: {
+    customerEmail: string;
+    name: string;
+    phone: string;
+    adminUserId: string;
+  },
+): Promise<string> {
+  const { customerEmail, name, phone, adminUserId } = args;
+
+  const isSentinel = customerEmail.endsWith(SENTINEL_EMAIL_DOMAIN);
+
+  // ── Step 1: find-by-email (skip sentinel emails — they are not real addresses) ──
+  if (!isSentinel) {
+    const [found] = await tx
+      .select({ id: user.id })
+      .from(user)
+      .where(and(eq(user.email, customerEmail), ne(user.id, adminUserId)))
+      .limit(1);
+    if (found) return found.id;
+  }
+
+  // ── Step 2: find-by-phone via prior orders (only when no real email given) ──
+  if (isSentinel && phone) {
+    const [phoneOrder] = await tx
+      .select({ userId: orders.userId })
+      .from(orders)
+      .where(eq(orders.shippingPhone, phone))
+      .orderBy(desc(orders.createdAt))
+      .limit(1);
+    if (phoneOrder && phoneOrder.userId !== adminUserId) {
+      return phoneOrder.userId;
+    }
+  }
+
+  // ── Step 3: create-new customer row ─────────────────────────────────────────
+  const newId = randomUUID();
+  const now = new Date();
+  try {
+    await tx.insert(user).values({
+      id: newId,
+      name,
+      email: customerEmail,
+      emailVerified: false,
+      role: "customer",
+      createdAt: now,
+      updatedAt: now,
+    });
+    return newId;
+  } catch (err: unknown) {
+    // ER_DUP_ENTRY: concurrent create for the same email — re-select and reuse
+    const isdup =
+      (err as { code?: string; errno?: number }).code === "ER_DUP_ENTRY" ||
+      (err as { errno?: number }).errno === 1062;
+    if (isdup) {
+      const [raceFound] = await tx
+        .select({ id: user.id })
+        .from(user)
+        .where(and(eq(user.email, customerEmail), ne(user.id, adminUserId)))
+        .limit(1);
+      if (raceFound) return raceFound.id;
+      // The collision was against the admin's own email row — operator data-entry error
+      throw new Error(
+        "The email entered belongs to the admin account. Please enter the customer's own email or leave it blank.",
+      );
+    }
+    throw err;
+  }
+}
+
+// ============================================================================
 // Task 1: Read helpers
 // ============================================================================
 
@@ -728,10 +822,19 @@ export async function createPosOrder(
 
   try {
     await db.transaction(async (tx) => {
+      // Resolve (find-or-create) a customer user row so the order is attributed
+      // to the real customer, not the admin (REQ-1, REQ-4).
+      const customerUserId = await resolvePosCustomerId(tx, {
+        customerEmail,
+        name: customer.name,
+        phone: customer.phone,
+        adminUserId: session.user.id,
+      });
+
       // Insert orders row — D-21: paymentMethod is null
       await tx.insert(orders).values({
         id: orderId,
-        userId: session.user.id,
+        userId: customerUserId,
         status: "pending",
         paymentMethod: null,
         subtotal: subtotal.toFixed(2),
@@ -773,12 +876,14 @@ export async function createPosOrder(
         });
       }
 
-      // Step 9: Atomic coupon redemption (inside tx so it rolls back with order)
+      // Step 9: Atomic coupon redemption (inside tx so it rolls back with order).
+      // Attribute to customerUserId (not session.user.id) so per-customer coupon
+      // usage limits track the customer, not the admin (locked decision).
       if (validatedCouponId) {
         const redemption = await redeemCoupon(
           validatedCouponId,
           orderId,
-          session.user.id,
+          customerUserId,
           subtotal,
         );
         if (!redemption.ok) {
@@ -816,16 +921,17 @@ export type PosCustomerResult = {
 };
 
 /**
- * Search customers (non-admin users) by name or email for the POS customer step.
- * Returns up to 15 results with autofill data from their most recent order.
+ * Search customers (non-admin users) by name, email, or phone for the POS
+ * customer step. Returns up to 15 results with autofill data from their most
+ * recent order.
  *
- * No LATERAL joins (MariaDB 10.11) — fetches matching users, then fetches all
- * their orders ordered by createdAt desc, and picks the most recent per user
- * in memory to populate address fields.
+ * No LATERAL joins (MariaDB 10.11) — fetches matching users/phone-derived ids,
+ * then fetches all their orders ordered by createdAt desc, and picks the most
+ * recent per user in memory to populate address fields.
  *
- * TODO: Re-attribute the POS order to the selected customer userId when the
- *       business needs per-customer order history (currently orders are
- *       attributed to the admin session user).
+ * Phone matching resolves via orders.shippingPhone (user table has no phone
+ * column). The phone-candidate query always runs regardless of the name/email
+ * match count so that phone-only walk-in searches are never short-circuited.
  */
 export async function getPosCustomerSearch(
   query: string,
@@ -835,8 +941,9 @@ export async function getPosCustomerSearch(
   const trimmed = (query ?? "").trim();
   if (!trimmed) return [];
 
+  // ── Candidate source 1: name/email user match ────────────────────────────
   // Search non-admin users by name OR email (LIKE, case-insensitive on MariaDB utf8mb4_general_ci)
-  const userRows = await db
+  const nameEmailRows = await db
     .select({
       id: user.id,
       name: user.name,
@@ -854,11 +961,49 @@ export async function getPosCustomerSearch(
     )
     .limit(15);
 
-  if (userRows.length === 0) return [];
+  // ── Candidate source 2: phone match via prior orders ─────────────────────
+  // `user` has no phone column — resolve phone matches via orders.shippingPhone.
+  // This query ALWAYS runs (not gated on nameEmailRows.length) so that a
+  // phone-only search (no name/email user match) is never short-circuited.
+  // No LATERAL — plain WHERE + DISTINCT, group in memory.
+  const phoneOrderRows = await db
+    .select({ userId: orders.userId })
+    .from(orders)
+    .where(like(orders.shippingPhone, `%${trimmed}%`));
 
-  const userIds = userRows.map((u) => u.id);
+  // Collect phone-derived userIds (unique, exclude duplicates)
+  const phoneUserIdSet = new Set<string>(
+    phoneOrderRows.map((r) => r.userId),
+  );
 
-  // Fetch all orders for matched users ordered by most recent first.
+  // ── Build union of candidate ids ─────────────────────────────────────────
+  const nameEmailIdSet = new Set<string>(nameEmailRows.map((r) => r.id));
+  // Phone-only ids: ids found via phone that aren't already in the name/email set
+  const phoneOnlyIds = [...phoneUserIdSet].filter((id) => !nameEmailIdSet.has(id));
+
+  // Fetch full user rows for phone-only ids, excluding admin
+  let phoneOnlyRows: Array<{ id: string; name: string; email: string }> = [];
+  if (phoneOnlyIds.length > 0) {
+    phoneOnlyRows = await db
+      .select({ id: user.id, name: user.name, email: user.email })
+      .from(user)
+      .where(
+        and(
+          ne(user.role, "admin"),
+          inArray(user.id, phoneOnlyIds),
+        ),
+      );
+  }
+
+  // Union: name/email matches first (more specific), then phone-only matches
+  const allUserRows = [...nameEmailRows, ...phoneOnlyRows].slice(0, 15);
+
+  // If both candidate sources produced nothing, bail
+  if (allUserRows.length === 0) return [];
+
+  const userIds = allUserRows.map((u) => u.id);
+
+  // ── Fetch orders for matched users ────────────────────────────────────────
   // No LATERAL — fetch all then group in memory.
   const orderRows = await db
     .select({
@@ -888,7 +1033,7 @@ export async function getPosCustomerSearch(
     }
   }
 
-  return userRows.map((u) => {
+  return allUserRows.map((u) => {
     const latest = latestOrder.get(u.id);
     return {
       userId: u.id,
