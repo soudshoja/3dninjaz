@@ -94,6 +94,7 @@ export async function createCategory(
   revalidatePath("/admin/categories");
   revalidatePath("/admin/products");
   revalidatePath("/shop");
+  revalidatePath("/", "layout");
   return { success: true, id };
 }
 
@@ -139,6 +140,7 @@ export async function updateCategory(
   revalidatePath("/admin/categories");
   revalidatePath("/admin/products");
   revalidatePath("/shop");
+  revalidatePath("/", "layout");
   return { success: true };
 }
 
@@ -156,6 +158,7 @@ export async function deleteCategory(
   revalidatePath("/admin/categories");
   revalidatePath("/admin/products");
   revalidatePath("/shop");
+  revalidatePath("/", "layout");
   return { success: true };
 }
 
@@ -186,6 +189,7 @@ export async function moveCategory(
 
   revalidatePath("/admin/categories");
   revalidatePath("/shop");
+  revalidatePath("/", "layout");
   return { success: true };
 }
 
@@ -241,6 +245,7 @@ export async function createSubcategory(
   revalidatePath("/admin/categories");
   revalidatePath("/admin/products");
   revalidatePath("/shop");
+  revalidatePath("/", "layout");
   return { success: true, id };
 }
 
@@ -291,6 +296,7 @@ export async function updateSubcategory(
   revalidatePath("/admin/categories");
   revalidatePath("/admin/products");
   revalidatePath("/shop");
+  revalidatePath("/", "layout");
   return { success: true };
 }
 
@@ -316,6 +322,7 @@ export async function deleteSubcategory(
   revalidatePath("/admin/categories");
   revalidatePath("/admin/products");
   revalidatePath("/shop");
+  revalidatePath("/", "layout");
   return { success: true };
 }
 
@@ -351,6 +358,7 @@ export async function moveSubcategory(
 
   revalidatePath("/admin/categories");
   revalidatePath("/shop");
+  revalidatePath("/", "layout");
   return { success: true };
 }
 
