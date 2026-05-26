@@ -461,6 +461,7 @@ export async function createProduct(
 
   revalidatePath("/admin/products");
   revalidatePath("/admin");
+  revalidatePath("/", "layout");
   return { success: true, productId: id };
 }
 
@@ -663,6 +664,7 @@ export async function updateProduct(
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${id}/edit`);
   revalidatePath("/admin");
+  revalidatePath("/", "layout");
   return { success: true };
 }
 
@@ -672,6 +674,7 @@ export async function deleteProduct(id: string): Promise<ProductActionResult> {
   await db.delete(products).where(eq(products.id, id));
   revalidatePath("/admin/products");
   revalidatePath("/admin");
+  revalidatePath("/", "layout");
   return { success: true };
 }
 
@@ -683,6 +686,7 @@ export async function toggleProductActive(
   await db.update(products).set({ isActive }).where(eq(products.id, id));
   revalidatePath("/admin/products");
   revalidatePath("/admin");
+  revalidatePath("/", "layout");
   return { success: true };
 }
 
@@ -694,6 +698,7 @@ export async function toggleProductFeatured(
   await db.update(products).set({ isFeatured }).where(eq(products.id, id));
   revalidatePath("/admin/products");
   revalidatePath("/admin");
+  revalidatePath("/", "layout");
   return { success: true };
 }
 
