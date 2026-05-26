@@ -48,7 +48,7 @@ export function ShippingRatePicker({ address, items, onChange }: Props) {
   const lastKeyRef = useRef<string>("");
 
   // Stable key for debouncing. Re-run only when the fields that affect the
-  // Delyva quote change (postcode, city, state, line1, and the cart).
+  // Delyva quote change (postcode, city, state, line1, cart, and config selection).
   const key = address
     ? JSON.stringify({
         postcode: address.postcode,
@@ -59,7 +59,10 @@ export function ShippingRatePicker({ address, items, onChange }: Props) {
           productId: i.productId,
           quantity: i.quantity,
           unitPrice: Number(i.unitPrice),
-        })), // HydratedCartItem has productId + unitPrice
+          // Include selected option values so changing a Select option re-quotes.
+          // HydratedCartItem.configurationData is a real object — direct .values access.
+          configValues: i.configurationData?.values,
+        })),
       })
     : "";
 
@@ -90,6 +93,9 @@ export function ShippingRatePicker({ address, items, onChange }: Props) {
             variantId: i.variantId,
             quantity: i.quantity,
             unitPrice: Number(i.unitPrice),
+            // HydratedCartItem carries configurationData as a real ConfigurationData
+            // OBJECT — direct .values access is correct here (do NOT parse).
+            configValues: i.configurationData?.values,
           })),
           {
             address1: address.addressLine1,

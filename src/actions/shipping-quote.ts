@@ -5,11 +5,19 @@ import { inArray } from "drizzle-orm";
 import crypto from "node:crypto";
 import { headers } from "next/headers";
 import { db } from "@/lib/db";
-import { products, productVariants } from "@/lib/db/schema";
+import { products, productVariants, productConfigFields } from "@/lib/db/schema";
 import { delyvaApi, DelyvaError, parseQuoteServices } from "@/lib/delyva";
 import { loadShippingConfig, resolveItemType } from "@/lib/shipping-config";
 import { filterByEnabledCatalog } from "@/lib/delyva-filter";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { ensureConfigJson } from "@/lib/config-fields";
+import type { SelectFieldConfig } from "@/lib/config-fields";
+import { resolveOptionWeightKg } from "@/lib/option-weight";
+import type { FieldWeightEntry } from "@/lib/option-weight";
+
+// Re-export so callers (shipping.ts, tests) have a single source of truth.
+export { resolveOptionWeightKg };
+export type { FieldWeightEntry };
 
 // ============================================================================
 // Phase 9 (09-01) — checkout shipping-quote helper (NOT YET WIRED TO UI).
@@ -47,7 +55,14 @@ export type CartItemForQuote = {
   variantId: string;
   quantity: number;
   unitPrice: number; // MYR
+  /**
+   * fieldId -> selected option.value for configurable products.
+   * Server re-reads option.weight from product_config_fields.configJson —
+   * NEVER trusts a client weight (T-17-09).
+   */
+  configValues?: Record<string, string>;
 };
+
 
 export type CartDestination = {
   address1: string;
@@ -116,8 +131,9 @@ export async function quoteForCart(
   const cfg = await loadShippingConfig();
 
   // --- weight + subtotal (AD-08: per-variant weight resolution)
-  // Weight ladder: variant.weight_g ?? product.shippingWeightKg*1000 ?? defaultWeightKg
-  // Server always re-fetches weight_g by variantId — never trusts client values (T-17-09).
+  // Weight ladder (Tier 0 new): selected-option weight (DB re-read) -> variant.weight_g
+  //   -> product.shippingWeightKg -> defaultWeightKg
+  // Server always re-fetches weights — never trusts client values (T-17-09).
   const fallbackWeight = Number(cfg.defaultWeightKg); // kg
 
   // Batch-fetch product-level weights
@@ -146,23 +162,72 @@ export async function quoteForCart(
     variantWeights.set(v.id, v.weightG ?? null);
   }
 
+  // Tier 0: batch-fetch select-type config fields for items that carry configValues.
+  // MariaDB no-LATERAL — inArray query, join in memory. Server re-reads option weight
+  // from configJson; never trusts a client-supplied numeric weight (T-17-09).
+  const configProductIds = Array.from(
+    new Set(items.filter((i) => i.configValues && Object.keys(i.configValues).length > 0).map((i) => i.productId)),
+  );
+  const fieldsByProduct = new Map<string, FieldWeightEntry[]>();
+  if (configProductIds.length > 0) {
+    const cfRows = await db
+      .select({
+        id: productConfigFields.id,
+        productId: productConfigFields.productId,
+        fieldType: productConfigFields.fieldType,
+        configJson: productConfigFields.configJson,
+      })
+      .from(productConfigFields)
+      .where(inArray(productConfigFields.productId, configProductIds));
+
+    for (const row of cfRows) {
+      if (row.fieldType !== "select") continue;
+      try {
+        const parsed = ensureConfigJson("select", row.configJson) as SelectFieldConfig;
+        const optionsByValue = new Map<string, number>();
+        for (const opt of parsed.options) {
+          if (typeof opt.weight === "number") {
+            optionsByValue.set(opt.value, opt.weight);
+          }
+        }
+        if (optionsByValue.size === 0) continue; // no options have weight — skip
+        const existing = fieldsByProduct.get(row.productId) ?? [];
+        existing.push({ fieldId: row.id, optionsByValue });
+        fieldsByProduct.set(row.productId, existing);
+      } catch {
+        // Parse error on corrupt configJson — skip this field, fall through
+      }
+    }
+  }
+
   let totalWeight = 0;
   let subtotal = 0;
   for (const it of items) {
-    const variantWeightG = variantWeights.get(it.variantId) ?? null;
     let w: number;
-    if (variantWeightG !== null) {
-      // Tier 1: per-variant weight_g (grams → kg)
-      w = variantWeightG / 1000;
+
+    // Tier 0: per-option weight from DB configJson (configurable products)
+    const optKg =
+      it.configValues && Object.keys(it.configValues).length > 0
+        ? resolveOptionWeightKg(it.configValues, fieldsByProduct.get(it.productId) ?? [])
+        : null;
+
+    if (optKg !== null) {
+      w = optKg;
     } else {
-      const productWeightKg = productWeights.get(it.productId) ?? null;
-      if (productWeightKg !== null) {
-        // Tier 2: product-level shippingWeightKg
-        w = productWeightKg;
+      const variantWeightG = variantWeights.get(it.variantId) ?? null;
+      if (variantWeightG !== null) {
+        // Tier 1: per-variant weight_g (grams → kg)
+        w = variantWeightG / 1000;
       } else {
-        // Tier 3: final fallback — emit warn so admin knows weight data is missing
-        console.warn("[shipping] no weight data for variantId=%s productId=%s — using defaultWeightKg=%s", it.variantId, it.productId, fallbackWeight);
-        w = fallbackWeight;
+        const productWeightKg = productWeights.get(it.productId) ?? null;
+        if (productWeightKg !== null) {
+          // Tier 2: product-level shippingWeightKg
+          w = productWeightKg;
+        } else {
+          // Tier 3: final fallback — emit warn so admin knows weight data is missing
+          console.warn("[shipping] no weight data for variantId=%s productId=%s — using defaultWeightKg=%s", it.variantId, it.productId, fallbackWeight);
+          w = fallbackWeight;
+        }
       }
     }
     totalWeight += w * it.quantity;

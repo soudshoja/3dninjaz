@@ -55,6 +55,13 @@ export type SelectFieldConfig = {
     sku?: string;
     /** Public URL of the option image (from writeUpload pipeline). */
     imageUrl?: string;
+    /**
+     * Per-option shipping weight in GRAMS (integer >= 0).
+     * Matches the existing product_variants.weight_g grams convention (AD-08).
+     * Optional + backward compatible: old options without weight fall through to
+     * the variant/product/default ladder.
+     */
+    weight?: number;
   }>;
 };
 
@@ -132,6 +139,7 @@ export const SelectFieldConfigSchema: z.ZodType<SelectFieldConfig> = z.object({
         price: z.number().nonnegative().optional(),
         sku: z.string().optional(),
         imageUrl: z.string().optional(),
+        weight: z.number().int().min(0).max(50_000).optional(),
       }),
     )
     .min(1),
