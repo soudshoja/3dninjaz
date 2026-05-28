@@ -99,6 +99,13 @@ export function CheckoutIsland({
       currency: "MYR",
       intent: "capture",
       components: "buttons",
+      // Malaysian PayPal merchant accounts do NOT have Advanced Card
+      // capability — the default "Debit or Credit Card" button renders a
+      // hosted-fields form that PayPal then rejects ("This card can't be
+      // used for your payment"). Disable unsupported funding sources so
+      // customers only see the PayPal wallet button that actually works
+      // for MY merchants.
+      disableFunding: "card,credit,paylater,venmo",
     }),
     [],
   );
