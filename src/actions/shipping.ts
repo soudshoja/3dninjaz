@@ -681,7 +681,10 @@ async function _bookShipmentInternal(
       extId: order.id,
       referenceNo: order.id.slice(0, 8).toUpperCase(),
       origin: { scheduledAt: pickupAt, inventory, contact: originContact },
-      destination: { scheduledAt: deliveryAt, contact: destContact },
+      // Delyva (2026-05) now requires destination.inventory too. Use the
+      // same inventory array on both ends — the parcel doesn't change
+      // between pickup and dropoff.
+      destination: { scheduledAt: deliveryAt, inventory, contact: destContact },
     });
 
     await delyvaApi.process(draft.id, {
