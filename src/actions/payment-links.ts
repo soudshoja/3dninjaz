@@ -10,6 +10,7 @@ import { revalidatePath } from "next/cache";
 import { writePaymentProof } from "@/lib/payment-proof-storage";
 import { assertValidTransition } from "@/lib/orders";
 import crypto from "node:crypto";
+import { autoBookShipmentAfterPayment } from "@/actions/shipping";
 
 /**
  * Phase 7 (07-03) — PUBLIC payment-link actions.
@@ -57,6 +58,8 @@ export type PaymentLinkProof = {
 
 export type PaymentLinkView = {
   ok: true;
+  /** true once payment has been captured (PayPal capture id set or status paid/processing/shipped/delivered). */
+  paid: boolean;
   link: { id: string; token: string; expiresAt: Date };
   order: {
     id: string;
@@ -67,6 +70,7 @@ export type PaymentLinkView = {
     subtotal: string;
     shippingCost: string;
     shippingServiceName: string | null;
+    shippingServiceCode: string | null;
     discountAmount: string;
     totalAmount: string;
     currency: string;
@@ -85,6 +89,14 @@ export type PaymentLinkError = {
   ok: false;
   error: "expired" | "used" | "not-found" | "already-paid";
 };
+
+/** Set of paid/terminal statuses that constitute a "paid" order. */
+const PAID_ORDER_STATUSES = new Set([
+  "paid",
+  "processing",
+  "shipped",
+  "delivered",
+]);
 
 function ensureImagesArray(raw: unknown): string[] {
   if (Array.isArray(raw)) return raw.map(String).filter(Boolean);
@@ -129,19 +141,27 @@ export async function getPaymentLinkByToken(
     where: eq(paymentLinks.token, token),
   });
   if (!link) return { ok: false, error: "not-found" };
-  if (link.usedAt) return { ok: false, error: "used" };
-  if (link.expiresAt < new Date()) return { ok: false, error: "expired" };
 
   const order = await db.query.orders.findFirst({
     where: eq(orders.id, link.orderId),
   });
   if (!order) return { ok: false, error: "not-found" };
 
-  // Phase 7: paid check via paypalCaptureId (PayPal capture path).
-  // Phase 20: also check order status — non-live statuses mean token is terminal.
-  if (order.paypalCaptureId) return { ok: false, error: "already-paid" };
-  if (!LIVE_ORDER_STATUSES.has(order.status)) {
-    return { ok: false, error: "already-paid" };
+  // Determine whether the order is paid/terminal.
+  const isPaid = !!(
+    order.paypalCaptureId || PAID_ORDER_STATUSES.has(order.status)
+  );
+
+  // If the link was marked used but the order is NOT yet paid,
+  // treat as "used" (terminal but not receipt-worthy).
+  if (link.usedAt && !isPaid) return { ok: false, error: "used" };
+
+  // Paid orders always return the full view (skip expiry check — customer deserves receipt).
+  if (!isPaid) {
+    if (link.expiresAt < new Date()) return { ok: false, error: "expired" };
+    if (!LIVE_ORDER_STATUSES.has(order.status)) {
+      return { ok: false, error: "already-paid" };
+    }
   }
 
   // Phase 20 (20-06): hydrate order_items — manual multi-query (no LATERAL per MariaDB quirk).
@@ -167,6 +187,7 @@ export async function getPaymentLinkByToken(
 
   return {
     ok: true,
+    paid: isPaid,
     link: { id: link.id, token: link.token, expiresAt: link.expiresAt },
     order: {
       id: order.id,
@@ -177,6 +198,7 @@ export async function getPaymentLinkByToken(
       subtotal: order.subtotal,
       shippingCost: order.shippingCost,
       shippingServiceName: order.shippingServiceName ?? null,
+      shippingServiceCode: order.shippingServiceCode ?? null,
       discountAmount,
       totalAmount: order.totalAmount,
       currency: order.currency,
@@ -335,6 +357,9 @@ export async function createPaymentLinkPayPalOrder({
   if (!view.ok) {
     return { ok: false, error: `Link ${view.error}.` };
   }
+  if (view.paid) {
+    return { ok: false, error: "Order is already paid." };
+  }
 
   const orderRow = await db.query.orders.findFirst({
     where: eq(orders.id, view.order.id),
@@ -403,20 +428,17 @@ export async function capturePaymentLinkPayment({
   // Re-validate token (T-07-X-money / T-07-X-replay).
   const view = await getPaymentLinkByToken(token);
   if (!view.ok) {
-    if (view.error === "already-paid") {
-      // Surface success-ish — admin marked paid already.
-      const orderRow = await db.query.orders.findFirst({
-        where: eq(orders.paypalOrderId, paypalOrderId),
-      });
-      if (orderRow) {
-        return {
-          ok: true,
-          orderId: orderRow.id,
-          orderNumber: shortOrderNumber(orderRow.id),
-        };
-      }
-    }
     return { ok: false, error: `Link ${view.error}.` };
+  }
+
+  // Idempotent — order was already paid (view now returns ok:true + paid:true
+  // for paid orders so a second capture call surfaces success immediately).
+  if (view.paid) {
+    return {
+      ok: true,
+      orderId: view.order.id,
+      orderNumber: view.order.orderNumber,
+    };
   }
 
   const orderRow = await db.query.orders.findFirst({
@@ -484,6 +506,13 @@ export async function capturePaymentLinkPayment({
     console.error("[payment-links] DB write after capture failed:", err);
     // PayPal already captured — webhook will reconcile if this was transient.
   }
+
+  // Auto-book the Delyva courier the customer selected at checkout.
+  // Fire-and-forget — booking failures must never block the payment
+  // response. Admin can manually retry from /admin/orders/[id] if needed.
+  void autoBookShipmentAfterPayment(orderRow.id).catch((err) =>
+    console.error("[payment-links] auto-book shipment failed:", err),
+  );
 
   // Fire-and-forget order confirmation email if customer has a real email
   // (skip sentinel @3dninjaz.local addresses).

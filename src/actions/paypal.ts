@@ -14,6 +14,7 @@ import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
 import { validateCoupon, redeemCoupon } from "@/actions/coupons";
 import { getShippingRate } from "@/actions/admin-shipping";
 import { quoteForCart } from "@/actions/shipping-quote";
+import { autoBookShipmentAfterPayment } from "@/actions/shipping";
 import { revalidatePath } from "next/cache";
 import type { ConfigurationData } from "@/lib/config-fields";
 
@@ -660,6 +661,13 @@ export async function capturePayPalOrder({
     .update(orders)
     .set({ status: "paid", paypalCaptureId: captureId })
     .where(eq(orders.id, existing.id));
+
+  // Auto-book the Delyva courier the customer selected at checkout.
+  // Fire-and-forget — booking failures must never block the payment
+  // response. Admin can manually retry from /admin/orders/[id] if needed.
+  void autoBookShipmentAfterPayment(existing.id).catch((err) =>
+    console.error("[paypal] auto-book shipment failed:", err),
+  );
 
   // Plan 05-03 — atomic coupon redemption AFTER capture succeeds. If the
   // coupon's usage_cap was hit between approval and capture, we lose the

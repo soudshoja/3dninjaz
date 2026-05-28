@@ -305,6 +305,7 @@ export function PosBuilder() {
   // ── Shipping override ──────────────────────────────────────────────────────
   const [shippingOverride, setShippingOverride] = useState<string>("");
   const [editingShipping, setEditingShipping] = useState(false);
+  const [shippingCourier, setShippingCourier] = useState<{ serviceCode: string; serviceName: string } | null>(null);
 
   // ── Product grid / search ──────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState("");
@@ -472,8 +473,12 @@ export function PosBuilder() {
           : undefined,
     }));
 
-  function handleShippingFromCustomerStep(price: number) {
+  function handleShippingFromCustomerStep(
+    price: number,
+    courier: { serviceCode: string; serviceName: string } | null,
+  ) {
     setShippingOverride(price === 0 ? "0" : price.toFixed(2));
+    setShippingCourier(courier);
   }
 
   // ── Create order → customer step → submit ─────────────────────────────────
@@ -515,6 +520,7 @@ export function PosBuilder() {
         },
         shippingOverride:
           shippingOverride !== "" ? parseFloat(shippingOverride) || undefined : undefined,
+        shippingCourier: shippingCourier ?? null,
       });
 
       if (!result.ok) {
