@@ -21,16 +21,22 @@ const CUSTOMER_ID = Number(process.env.DELYVA_CUSTOMER_ID ?? 0);
 const COMPANY_CODE = process.env.DELYVA_COMPANY_CODE ?? "my";
 
 /**
- * Single source for the Delyva webhook HMAC secret. Reads the canonical
- * DELYVA_WEBHOOK_SECRET first, then falls back to the two legacy names
- * (DELYVA_WEBHOOK_SHARED_SECRET used during registration, DELYVA_API_SECRET
- * used historically by the receiver) so a rename in .env.local can be
- * rolled out without downtime. Set DELYVA_WEBHOOK_SECRET going forward.
+ * Single source for the Delyva webhook HMAC secret.
+ *
+ * Per Delyva docs (2026-05): the secret used to HMAC-sign incoming webhooks
+ * IS the merchant's API Secret — same value as DELYVA_API_SECRET. We keep
+ * DELYVA_WEBHOOK_SECRET as an explicit override slot in case Delyva ever
+ * separates the two, but normal operation should rely on the API Secret.
+ *
+ * Note: the older DELYVA_WEBHOOK_SHARED_SECRET env var (a random value
+ * generated during webhook registration) is NOT the signing key and was
+ * never correct — including it in the fallback chain previously caused
+ * every signed webhook to return 401 (the receiver computed HMAC with the
+ * random value while Delyva signed with the API Secret).
  */
 export function getDelyvaWebhookSecret(): string {
   return (
     process.env.DELYVA_WEBHOOK_SECRET ??
-    process.env.DELYVA_WEBHOOK_SHARED_SECRET ??
     process.env.DELYVA_API_SECRET ??
     ""
   );
