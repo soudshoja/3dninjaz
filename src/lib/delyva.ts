@@ -231,6 +231,7 @@ export type CreateOrderInput = {
   };
   destination: {
     scheduledAt: string;
+    inventory: InventoryItem[];
     contact: DelyvaContact;
   };
   cod?: { currency: string; amount: number };
