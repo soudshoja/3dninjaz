@@ -10,7 +10,8 @@ import {
   subcategories,
 } from "@/lib/db/schema";
 import { eq, desc, inArray, count } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { CATEGORY_TREE_TAG } from "@/lib/catalog";
 import { productSchema, type ProductInput } from "@/lib/validators";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { computeVariantCost } from "@/lib/cost-breakdown";
@@ -462,6 +463,7 @@ export async function createProduct(
   revalidatePath("/admin/products");
   revalidatePath("/admin");
   revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true, productId: id };
 }
 
@@ -665,6 +667,7 @@ export async function updateProduct(
   revalidatePath(`/admin/products/${id}/edit`);
   revalidatePath("/admin");
   revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true };
 }
 
@@ -675,6 +678,7 @@ export async function deleteProduct(id: string): Promise<ProductActionResult> {
   revalidatePath("/admin/products");
   revalidatePath("/admin");
   revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true };
 }
 
@@ -687,6 +691,7 @@ export async function toggleProductActive(
   revalidatePath("/admin/products");
   revalidatePath("/admin");
   revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true };
 }
 
@@ -699,6 +704,7 @@ export async function toggleProductFeatured(
   revalidatePath("/admin/products");
   revalidatePath("/admin");
   revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true };
 }
 

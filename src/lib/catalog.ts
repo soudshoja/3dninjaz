@@ -1,4 +1,5 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import {
   products,
@@ -343,6 +344,12 @@ export async function getActiveCategories(): Promise<CategoryRow[]> {
     .orderBy(asc(categories.position), asc(categories.name));
 }
 
+// Cache tag for the nav category tree. Admin product/category mutations call
+// `revalidateTag(CATEGORY_TREE_TAG)` so every store route picks up the new
+// tree on next render — `revalidatePath('/', 'layout')` only busts `/` itself,
+// leaving /shop, /products/*, /about, etc. rendering a stale (store) layout.
+export const CATEGORY_TREE_TAG = "nav-category-tree";
+
 /**
  * Phase 8 (08-01) — hierarchical tree for the nav mega-menu and the shop
  * filter sidebar. Empty categories (zero subcategories) are kept so admins
@@ -353,7 +360,7 @@ export async function getActiveCategories(): Promise<CategoryRow[]> {
  * subquery and thumbnailUrl (first active product's image).
  * MariaDB 10.11: manual hydration — no LATERAL joins.
  */
-export async function getActiveCategoryTree(): Promise<CategoryTreeNode[]> {
+async function getActiveCategoryTreeUncached(): Promise<CategoryTreeNode[]> {
   const cats = await db
     .select()
     .from(categories)
@@ -467,6 +474,12 @@ export async function getActiveCategoryTree(): Promise<CategoryTreeNode[]> {
     };
   });
 }
+
+export const getActiveCategoryTree = unstable_cache(
+  getActiveCategoryTreeUncached,
+  ["nav-category-tree"],
+  { tags: [CATEGORY_TREE_TAG] },
+);
 
 export async function getActiveProductsByCategorySlug(
   categorySlug: string,
