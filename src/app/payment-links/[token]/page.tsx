@@ -155,12 +155,20 @@ export default async function PaymentLinkPage({
                     key={item.id}
                     className="flex items-start gap-3 py-3 first:pt-0 last:pb-0"
                   >
-                    {/* Product image placeholder for manual lines (D-08) */}
+                    {/* Product image — snapshot URL on the order_item row.
+                        Manual lines or missing snapshots fall back to a label. */}
                     <div className="flex-shrink-0 h-10 w-10 rounded-[4px] bg-slate-100 flex items-center justify-center overflow-hidden">
-                      {!manual && item.productId ? (
-                        <span className="text-xs text-slate-400">img</span>
+                      {item.productImage ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={item.productImage}
+                          alt={item.productName ?? "Product"}
+                          className="h-full w-full object-cover"
+                        />
                       ) : (
-                        <span className="text-xs text-slate-400">Item</span>
+                        <span className="text-xs text-slate-400">
+                          {manual ? "Item" : "img"}
+                        </span>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -216,15 +224,57 @@ export default async function PaymentLinkPage({
             </div>
           ) : null}
 
-          {/* Totals */}
-          <div className="border-t border-slate-200 pt-4 flex items-center justify-between">
-            <span className="text-slate-600">Total</span>
-            <span
-              className="font-[var(--font-heading)] text-2xl font-semibold"
-              style={{ fontFeatureSettings: "'tnum'" }}
-            >
-              {formatMYR(order.totalAmount)} {order.currency}
-            </span>
+          {/* Totals — Subtotal / Shipping (with courier name) / Discount /
+              Total. Discount row only appears when any coupon was applied. */}
+          <div className="border-t border-slate-200 pt-4 space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-600">Subtotal</span>
+              <span
+                className="tabular-nums"
+                style={{ fontFeatureSettings: "'tnum'" }}
+              >
+                {formatMYR(order.subtotal)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-600">
+                Shipping
+                {order.shippingServiceName ? (
+                  <span className="text-slate-400">
+                    {" "}
+                    ({order.shippingServiceName})
+                  </span>
+                ) : null}
+              </span>
+              <span
+                className="tabular-nums"
+                style={{ fontFeatureSettings: "'tnum'" }}
+              >
+                {Number(order.shippingCost) > 0
+                  ? formatMYR(order.shippingCost)
+                  : "Free"}
+              </span>
+            </div>
+            {Number(order.discountAmount) > 0 ? (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-600">Discount</span>
+                <span
+                  className="tabular-nums text-emerald-700"
+                  style={{ fontFeatureSettings: "'tnum'" }}
+                >
+                  −{formatMYR(order.discountAmount)}
+                </span>
+              </div>
+            ) : null}
+            <div className="border-t border-slate-200 pt-3 flex items-center justify-between">
+              <span className="text-slate-600">Total</span>
+              <span
+                className="font-[var(--font-heading)] text-2xl font-semibold"
+                style={{ fontFeatureSettings: "'tnum'" }}
+              >
+                {formatMYR(order.totalAmount)} {order.currency}
+              </span>
+            </div>
           </div>
         </section>
 
