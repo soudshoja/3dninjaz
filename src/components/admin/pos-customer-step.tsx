@@ -50,7 +50,10 @@ type Props = {
   customerForm: CustomerForm;
   onChange: (form: CustomerForm) => void;
   items: CartItemForQuote[];
-  onShippingChange: (price: number) => void;
+  onShippingChange: (
+    price: number,
+    courier: { serviceCode: string; serviceName: string } | null,
+  ) => void;
 };
 
 type Tab = "returning" | "new";
@@ -135,7 +138,10 @@ export function PosCustomerStep({ customerForm, onChange, items, onShippingChang
           const sorted = [...res.options].sort((a, b) => a.finalPrice - b.finalPrice);
           const cheapest = sorted[0];
           setSelectedServiceCode(cheapest.serviceCode);
-          onShippingChange(cheapest.finalPrice);
+          onShippingChange(cheapest.finalPrice, {
+            serviceCode: cheapest.serviceCode,
+            serviceName: cheapest.serviceName,
+          });
           setQuotingShipping(false);
           return;
         }
@@ -150,12 +156,12 @@ export function PosCustomerStep({ customerForm, onChange, items, onShippingChang
         setShippingOptions([]);
         setSelectedServiceCode(null);
         setShippingError(null);
-        onShippingChange(fallback.cost);
+        onShippingChange(fallback.cost, null);
       } catch {
         setShippingOptions([]);
         setSelectedServiceCode(null);
         setShippingError("Could not fetch shipping rates. You can override the amount manually.");
-        onShippingChange(0);
+        onShippingChange(0, null);
       }
       setQuotingShipping(false);
     }, 500);
@@ -168,7 +174,10 @@ export function PosCustomerStep({ customerForm, onChange, items, onShippingChang
 
   function handleSelectShippingOption(opt: QuoteOption) {
     setSelectedServiceCode(opt.serviceCode);
-    onShippingChange(opt.finalPrice);
+    onShippingChange(opt.finalPrice, {
+      serviceCode: opt.serviceCode,
+      serviceName: opt.serviceName,
+    });
   }
 
   function selectCustomer(c: PosCustomerResult) {

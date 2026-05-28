@@ -105,6 +105,7 @@ export type PosOrderInput = {
   customer: PosOrderCustomer;
   shippingOverride?: number;
   couponCode?: string;
+  shippingCourier?: { serviceCode: string; serviceName: string } | null;
 };
 
 export type CreatePosOrderResult =
@@ -524,7 +525,7 @@ export async function createPosOrder(
 ): Promise<CreatePosOrderResult> {
   const session = await requireAdmin();
 
-  const { lines, customer, shippingOverride, couponCode } = input;
+  const { lines, customer, shippingOverride, couponCode, shippingCourier } = input;
 
   if (!lines || lines.length === 0) {
     return { ok: false, error: "At least one line is required." };
@@ -850,6 +851,9 @@ export async function createPosOrder(
         shippingState: customer.state,
         shippingPostcode: customer.postcode,
         shippingCountry: customer.country ?? "Malaysia",
+        shippingServiceCode: shippingCourier?.serviceCode ?? null,
+        shippingServiceName: shippingCourier?.serviceName ?? null,
+        shippingQuotedPrice: shippingCourier ? shippingCost.toFixed(2) : null,
         sourceType: "manual",
         // customItem* columns stay null for new POS orders (D-06 / REQ-20-2)
         customItemName: null,

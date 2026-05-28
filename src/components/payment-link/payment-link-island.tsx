@@ -100,7 +100,8 @@ export function PaymentLinkIsland({
               return;
             }
             setDone(true);
-            // Force refresh so re-loading the page renders the 410.
+            // Force refresh after brief toast so the page re-renders into the
+            // Thank You branch (view.paid === true) instead of this island.
             setTimeout(() => router.refresh(), 1500);
           }}
           onError={(err) => {
