@@ -120,8 +120,13 @@ function toTicketLine(posLine: PosAddToOrderLine, localId: string): TicketLine {
     productId: posLine.productId,
     quantity: posLine.qty,
     computedUnitPrice: posLine.unitPrice,
+    // Stringify the FULL ConfigurationData ({ values, computedPrice,
+    // computedSummary }) — not just .values. Downstream consumers
+    // (ensureConfigurationData via Zod) reject a bare values map, which
+    // would silently zero out Tier 0 per-option shipping weight and break
+    // order_items.configuration_data parsing on the invoice + admin views.
     configurationData: posLine.configurationData
-      ? JSON.stringify(posLine.configurationData.values)
+      ? JSON.stringify(posLine.configurationData)
       : "{}",
     productName: posLine.productName,
     productImageUrl: posLine.productImageUrl ?? null,

@@ -4,7 +4,8 @@ import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 import { categories, subcategories, products } from "@/lib/db/schema";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { CATEGORY_TREE_TAG } from "@/lib/catalog";
 import { categorySchema, subcategorySchema } from "@/lib/validators";
 import { requireAdmin } from "@/lib/auth-helpers";
 
@@ -95,6 +96,7 @@ export async function createCategory(
   revalidatePath("/admin/products");
   revalidatePath("/shop");
   revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true, id };
 }
 
@@ -141,6 +143,7 @@ export async function updateCategory(
   revalidatePath("/admin/products");
   revalidatePath("/shop");
   revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true };
 }
 
@@ -159,6 +162,7 @@ export async function deleteCategory(
   revalidatePath("/admin/products");
   revalidatePath("/shop");
   revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true };
 }
 
@@ -190,6 +194,7 @@ export async function moveCategory(
   revalidatePath("/admin/categories");
   revalidatePath("/shop");
   revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true };
 }
 
@@ -246,6 +251,7 @@ export async function createSubcategory(
   revalidatePath("/admin/products");
   revalidatePath("/shop");
   revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true, id };
 }
 
@@ -297,6 +303,7 @@ export async function updateSubcategory(
   revalidatePath("/admin/products");
   revalidatePath("/shop");
   revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true };
 }
 
@@ -323,6 +330,7 @@ export async function deleteSubcategory(
   revalidatePath("/admin/products");
   revalidatePath("/shop");
   revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true };
 }
 
@@ -359,6 +367,7 @@ export async function moveSubcategory(
   revalidatePath("/admin/categories");
   revalidatePath("/shop");
   revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true };
 }
 
