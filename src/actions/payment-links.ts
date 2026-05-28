@@ -1,8 +1,8 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { orders, paymentLinks, orderItems, paymentProofs } from "@/lib/db/schema";
-import { eq, inArray, desc } from "drizzle-orm";
+import { orders, paymentLinks, orderItems, paymentProofs, couponRedemptions } from "@/lib/db/schema";
+import { eq, inArray, desc, sql } from "drizzle-orm";
 import { ordersController, PAYPAL_CURRENCY } from "@/lib/paypal";
 import { CheckoutPaymentIntent } from "@paypal/paypal-server-sdk";
 import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
@@ -34,6 +34,7 @@ export type PaymentLinkOrderItem = {
   productId: string;
   variantId: string;
   productName: string;
+  productImage: string | null;
   variantLabel: string | null;
   configurationData: string | null;
   unitPrice: string;
@@ -63,6 +64,10 @@ export type PaymentLinkView = {
     customItemName: string | null;
     customItemDescription: string | null;
     customImages: string[];
+    subtotal: string;
+    shippingCost: string;
+    shippingServiceName: string | null;
+    discountAmount: string;
     totalAmount: string;
     currency: string;
     /** Phase 20 (20-06): payment method — null until customer selects one. */
@@ -152,6 +157,14 @@ export async function getPaymentLinkByToken(
     .where(eq(paymentProofs.orderId, order.id))
     .orderBy(desc(paymentProofs.createdAt));
 
+  // Coupon redemptions are stored in a separate audit table; sum across rows
+  // so the totals card can show "Discount −RM X" when any coupon applied.
+  const [redemptionTotal] = await db
+    .select({ sum: sql<string>`COALESCE(SUM(${couponRedemptions.amountApplied}), 0)` })
+    .from(couponRedemptions)
+    .where(eq(couponRedemptions.orderId, order.id));
+  const discountAmount = Number(redemptionTotal?.sum ?? 0).toFixed(2);
+
   return {
     ok: true,
     link: { id: link.id, token: link.token, expiresAt: link.expiresAt },
@@ -161,6 +174,10 @@ export async function getPaymentLinkByToken(
       customItemName: order.customItemName ?? null,
       customItemDescription: order.customItemDescription ?? null,
       customImages: ensureImagesArray(order.customImages),
+      subtotal: order.subtotal,
+      shippingCost: order.shippingCost,
+      shippingServiceName: order.shippingServiceName ?? null,
+      discountAmount,
       totalAmount: order.totalAmount,
       currency: order.currency,
       paymentMethod: order.paymentMethod ?? null,
@@ -171,6 +188,7 @@ export async function getPaymentLinkByToken(
       productId: item.productId,
       variantId: item.variantId,
       productName: item.productName,
+      productImage: item.productImage ?? null,
       variantLabel: item.variantLabel ?? null,
       configurationData: item.configurationData ?? null,
       unitPrice: item.unitPrice,
