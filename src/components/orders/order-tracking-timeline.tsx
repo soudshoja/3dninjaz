@@ -22,9 +22,21 @@ import { CopyTrackingButton } from "@/components/orders/copy-tracking-button";
 type Props = {
   view: ShipmentTrackingView;
   dense?: boolean;
+  /**
+   * Who is looking. Customers get a deliberately simplified view — status,
+   * estimated delivery, and the delivery-event history only. The raw courier
+   * internals (consignment number, driver contact, live map) are reserved for
+   * the admin surface. Defaults to "admin" so the admin panel keeps full detail.
+   */
+  audience?: "customer" | "admin";
 };
 
-export function OrderTrackingTimeline({ view, dense }: Props) {
+export function OrderTrackingTimeline({
+  view,
+  dense,
+  audience = "admin",
+}: Props) {
+  const isAdmin = audience === "admin";
   // Empty state — no shipment booked yet. The customer page uses this
   // friendly copy; the admin panel wraps its own "Book courier" UI around
   // this component and only shows the timeline once a shipment exists.
@@ -84,6 +96,21 @@ export function OrderTrackingTimeline({ view, dense }: Props) {
         </div>
       </div>
 
+      {/* Estimated delivery — shown to everyone when the courier gave an ETA. */}
+      {view.estimatedDelivery ? (
+        <div
+          className="rounded-xl border p-3 md:p-4 flex flex-wrap items-center justify-between gap-2"
+          style={{ borderColor: "#e4e4e7", backgroundColor: "#ffffff" }}
+        >
+          <span className="text-[11px] uppercase tracking-wide text-slate-500 font-semibold">
+            Estimated delivery
+          </span>
+          <span className="font-bold text-zinc-900">
+            {view.estimatedDelivery}
+          </span>
+        </div>
+      ) : null}
+
       {view.cachedNote ? (
         <p
           className="rounded-xl px-3 py-2 text-xs"
@@ -94,8 +121,8 @@ export function OrderTrackingTimeline({ view, dense }: Props) {
         </p>
       ) : null}
 
-      {/* Consignment row */}
-      {view.consignmentNo || view.trackingNo ? (
+      {/* Consignment row — admin only (raw courier identifiers). */}
+      {isAdmin && (view.consignmentNo || view.trackingNo) ? (
         <div
           className="rounded-xl border p-3 md:p-4 flex flex-wrap items-center gap-3"
           style={{ borderColor: "#e4e4e7", backgroundColor: "#ffffff" }}
@@ -114,8 +141,10 @@ export function OrderTrackingTimeline({ view, dense }: Props) {
         </div>
       ) : null}
 
-      {/* Driver card — only shown when personnel info is present */}
-      {view.personnel ? <DriverCard personnel={view.personnel} /> : null}
+      {/* Driver card — admin only, and only when personnel info is present. */}
+      {isAdmin && view.personnel ? (
+        <DriverCard personnel={view.personnel} />
+      ) : null}
 
       {/* Event timeline */}
       {view.timeline.length > 0 ? (
@@ -159,8 +188,9 @@ export function OrderTrackingTimeline({ view, dense }: Props) {
         </div>
       ) : null}
 
-      {/* Live map */}
-      {view.mapEmbedUrl ? (
+      {/* Live map — admin only, and only when the service is live-trackable
+          (mapEmbedUrl is already null for drop couriers with no GPS). */}
+      {isAdmin && view.mapEmbedUrl ? (
         <div>
           <h3 className="font-[var(--font-heading)] text-lg mb-3">
             Live map
