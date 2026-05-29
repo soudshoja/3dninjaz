@@ -71,7 +71,16 @@ type DelyvaWebhookPayload = {
     consignmentNo?: string;
     trackingNo?: string;
     statusCode?: number;
+    // Delyva's tracking webhooks deliver the human-readable progress in
+    // `description` (e.g. "Parcel has been received at dropoff point :
+    // MBE Bandar Rimbayu") and a short label in `statusText` (e.g. "In
+    // Transit"). `statusMessage` is legacy / sometimes empty. We persist
+    // the richest available so the customer tracking page can show a
+    // real event note instead of just a code.
     statusMessage?: string;
+    statusText?: string;
+    description?: string;
+    location?: string | null;
     personnel?: { name?: string; phone?: string };
   };
 };
@@ -122,11 +131,21 @@ export async function POST(req: NextRequest) {
       const delyvaOrderId = String(idRaw);
       const eventAt = payload.timestamp ? new Date(payload.timestamp) : new Date();
 
+      // Prefer the richest text Delyva sent. `description` carries the
+      // actionable progress sentence ("Parcel has been received at..."),
+      // `statusText` is the short label, `statusMessage` is the legacy
+      // fallback. Combining description + location gives the most useful
+      // single line for the timeline view.
+      const richMessage =
+        [data.description ?? data.statusMessage ?? data.statusText, data.location]
+          .filter((s) => s && String(s).trim().length > 0)
+          .join(" — ") || undefined;
+
       await db
         .update(orderShipments)
         .set({
           statusCode: data.statusCode ?? undefined,
-          statusMessage: data.statusMessage ?? undefined,
+          statusMessage: richMessage,
           consignmentNo: data.consignmentNo ?? undefined,
           trackingNo: data.trackingNo ?? undefined,
           personnelName: data.personnel?.name ?? undefined,
@@ -135,8 +154,16 @@ export async function POST(req: NextRequest) {
         })
         .where(eq(orderShipments.delyvaOrderId, delyvaOrderId));
 
-      // Send delivery confirmation email when statusCode === 400 (delivered)
-      if (data.statusCode === 400) {
+      // Delivered detection — text-first because Delyva codes vary by
+      // courier (SPX uses 500 for in-transit, not 400 as docs claimed).
+      // Trigger the delivered email only when the rich text explicitly
+      // confirms delivery. Numeric fallback only if no text was given
+      // and the code is 700+ (well above the 400-699 in-transit band).
+      const textLower = (data.description ?? data.statusText ?? data.statusMessage ?? "").toLowerCase();
+      const looksDelivered =
+        /delivered|delivery successful|signed|received by recipient/.test(textLower) ||
+        (textLower === "" && typeof data.statusCode === "number" && data.statusCode >= 700);
+      if (looksDelivered) {
         try {
           // Find the order associated with this shipment to get customer info
           const shipment = await db

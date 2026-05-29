@@ -227,18 +227,41 @@ export type TrackingBucket =
   | "cancelled"
   | "exception";
 
+/**
+ * Bucket Delyva's status into our UI category. Text takes priority over
+ * the numeric code because Delyva reuses the same number across couriers
+ * with different meanings (observed live 2026-05-29: SPX uses 500 for
+ * "In Transit / received at dropoff point", not for failure). Numeric
+ * fallback is intentionally permissive: only the well-known cancel code
+ * (90) is treated as terminal-bad; everything else defaults to in_transit
+ * so we never accidentally show "Delivery issue" or "Delivered" mid-flight.
+ */
 export function bucketForStatusCode(
   code: number | null,
   hasShipment: boolean,
+  text?: string | null,
 ): TrackingBucket {
   if (!hasShipment) return "awaiting";
+  const t = (text ?? "").toLowerCase();
+  if (t) {
+    if (/cancel|return to sender|rts\b/.test(t)) return "cancelled";
+    if (/fail|undeliver|incident|exception|lost|damaged/.test(t)) return "exception";
+    if (/delivered|delivery successful|signed|received by recipient/.test(t)) return "delivered";
+    if (/out for delivery|with rider|with courier/.test(t)) return "out_for_delivery";
+    if (/in transit|in-transit|received at|arrived at|dropoff point|sorting/.test(t)) return "in_transit";
+    if (/picked up|collected|pickup completed/.test(t)) return "picked_up";
+    if (/created|preparing|order ready|booked|draft/.test(t)) return "awaiting";
+  }
   if (code === null) return "awaiting";
   if (code === 90) return "cancelled";
-  if (code === 500) return "exception";
-  if (code >= 400) return "delivered";
-  if (code >= 300) return "out_for_delivery";
-  if (code >= 200) return "in_transit";
-  if (code >= 100) return "picked_up";
+  // Per Delyva docs: 400 = in transit to pickup, 600 = in transit for dropoff.
+  // 500 observed live as "In Transit / at dropoff point". Treat the 400-699
+  // range as in_transit, NOT delivered or exception.
+  if (code >= 400 && code <= 699) return "in_transit";
+  if (code >= 300 && code < 400) return "out_for_delivery";
+  if (code >= 200 && code < 300) return "picked_up";
+  if (code >= 100 && code < 200) return "awaiting";
+  if (code >= 700) return "delivered";
   return "awaiting";
 }
 
