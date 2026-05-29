@@ -1430,6 +1430,24 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
       ],
     },
     {
+      key: "order_processing",
+      subject: "Your 3D Ninjaz order is being printed ({{order_number}})",
+      html: brandedEmailTemplate(
+        "🖨️",
+        "We're printing your order!",
+        `<p>Hi {{customer_name}},</p>
+        <p>Great news — your 3D Ninjaz order <strong>#{{order_number}}</strong> is now in production. Our printers are warming up and your item will be ready to ship soon.</p>
+        <p style="margin-top:16px">You can check the latest status anytime at your order page.</p>
+        <p>We'll send another note the moment it ships.</p>`,
+        { text: "View Order", url: "order_url" }
+      ),
+      variables: [
+        "customer_name",
+        "order_number",
+        "order_url",
+      ],
+    },
+    {
       key: "order_shipped",
       subject: "Your 3D Ninjaz order is on its way! ({{courier_name}})",
       html: brandedEmailTemplate(

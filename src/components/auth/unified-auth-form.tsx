@@ -5,7 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
-import { sendWelcomeEmail } from "@/actions/send-emails";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -299,9 +298,9 @@ function RegisterForm() {
         return;
       }
 
-      void sendWelcomeEmail(email, name).catch((err) =>
-        console.error("[register] welcome email failed:", err)
-      );
+      // Welcome email is sent server-side by a Better Auth
+      // databaseHooks.user.create.after hook (src/lib/auth.ts) — the
+      // client redirect below used to cancel the SMTP send mid-flight.
 
       router.push("/account");
       router.refresh();

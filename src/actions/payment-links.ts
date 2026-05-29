@@ -514,15 +514,20 @@ export async function capturePaymentLinkPayment({
     console.error("[payment-links] auto-book shipment failed:", err),
   );
 
-  // Fire-and-forget order confirmation email if customer has a real email
-  // (skip sentinel @3dninjaz.local addresses).
+  // Await the order-confirmation email send. Previously fire-and-forget,
+  // but Next.js on Node runtime may abort the pending promise after the
+  // server action returns to the client — customers stopped receiving
+  // confirmations. sendOrderConfirmationEmail catches its own SMTP
+  // errors and never throws, so awaiting only adds latency, never risk.
   if (
     orderRow.customerEmail &&
     !orderRow.customerEmail.endsWith("@3dninjaz.local")
   ) {
-    void sendOrderConfirmationEmail(orderRow.id).catch((err) =>
-      console.error("[payment-links] confirmation email dispatch failed:", err),
-    );
+    try {
+      await sendOrderConfirmationEmail(orderRow.id);
+    } catch (err) {
+      console.error("[payment-links] confirmation email dispatch failed:", err);
+    }
   }
 
   revalidatePath(`/admin/orders/${orderRow.id}`);

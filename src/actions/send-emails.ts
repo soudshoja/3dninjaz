@@ -149,6 +149,43 @@ export async function sendNewsletterUnsubscribedEmail(
 }
 
 // ============================================================================
+// Order Processing Email (admin transitions order to "processing")
+// ============================================================================
+
+export async function sendOrderProcessingEmail(opts: {
+  customerEmail: string;
+  customerName: string;
+  orderNumber: string;
+  orderId: string;
+}): Promise<void> {
+  // Skip internal/sentinel addresses used during development/seeding.
+  if (opts.customerEmail.endsWith("@3dninjaz.local")) return;
+
+  try {
+    const orderUrl = `https://app.3dninjaz.com/orders/${opts.orderId}`;
+
+    const { subject, html, text } = await renderTemplate("order_processing", {
+      customer_name: opts.customerName,
+      order_number: opts.orderNumber,
+      order_url: orderUrl,
+    });
+
+    await sendMail({
+      to: opts.customerEmail,
+      subject,
+      html,
+      text,
+    });
+  } catch (err) {
+    console.error(
+      "[sendOrderProcessingEmail] Failed to send to",
+      opts.customerEmail,
+      err
+    );
+  }
+}
+
+// ============================================================================
 // Order Shipped Email
 // ============================================================================
 
