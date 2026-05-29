@@ -14,9 +14,14 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     sendResetPassword: async ({ user, url }) => {
-      // Fire-and-forget so the handler response isn't blocked by SMTP latency.
-      // Any SMTP errors are logged inside sendResetPasswordEmail.
-      void sendResetPasswordEmail({
+      // Await the SMTP send. Previously `void sendResetPasswordEmail(...)`,
+      // but on Node-runtime server handlers Next.js may abort the pending
+      // promise after the Better Auth response returns to the client, so
+      // password-reset emails were silently failing. sendResetPasswordEmail
+      // catches its own SMTP errors and never throws, so awaiting only
+      // adds latency, never risk. Same fix pattern as the welcome and
+      // order-confirmation emails (see PR #39).
+      await sendResetPasswordEmail({
         to: user.email,
         name: user.name,
         url,
