@@ -52,7 +52,7 @@ export function OrderTrackingTimeline({ view, dense }: Props) {
     );
   }
 
-  const bucket = bucketForStatusCode(view.statusCode, true);
+  const bucket = bucketForStatusCode(view.statusCode, true, view.statusMessage);
   const banner = bannerFor(bucket);
 
   return (
@@ -125,7 +125,7 @@ export function OrderTrackingTimeline({ view, dense }: Props) {
           </h3>
           <ol className="space-y-3">
             {view.timeline.map((evt, i) => {
-              const evtBucket = bucketForStatusCode(evt.statusCode, true);
+              const evtBucket = bucketForStatusCode(evt.statusCode, true, evt.note);
               const dot = dotColorFor(evtBucket);
               const latest = i === 0;
               return (
