@@ -360,13 +360,17 @@ export const delyvaApi = {
   /**
    * POST /order with process: false — two-step booking. Follow with process()
    * to actually dispatch the courier.
+   *
+   * Do NOT pass `companyCode` here — Delyva rejects it with
+   * `UNKNOWN: "companyCode" is not allowed`. companyCode is the
+   * courier-brand grouping key from /service/instantQuote results
+   * (see references/endpoints.md), not a /order field.
    */
   createDraft: (input: CreateOrderInput) =>
     delyva<{ id: number; statusCode: number; referenceNo?: string }>("/order", {
       method: "POST",
       body: JSON.stringify({
         customerId: CUSTOMER_ID,
-        companyCode: COMPANY_CODE,
         process: false,
         ...input,
       }),
