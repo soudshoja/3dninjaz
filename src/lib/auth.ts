@@ -4,6 +4,7 @@ import { admin } from "better-auth/plugins";
 import { db } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { sendResetPasswordEmail } from "@/lib/mailer";
+import { sendWelcomeEmail } from "@/actions/send-emails";
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -20,6 +21,26 @@ export const auth = betterAuth({
         name: user.name,
         url,
       });
+    },
+  },
+  // Welcome email now fires from a server-side Better Auth hook (after the
+  // user row is inserted) instead of the client fire-and-forget that the
+  // signup forms used to do. Previously the browser would redirect away
+  // before the `void sendWelcomeEmail(...)` POST finished, so the email
+  // was cancelled mid-flight and never delivered. The hook runs inside
+  // the signup handler, so the response only returns once the send has
+  // been attempted (errors are caught + logged inside sendWelcomeEmail).
+  databaseHooks: {
+    user: {
+      create: {
+        after: async (user) => {
+          try {
+            await sendWelcomeEmail(user.email, user.name);
+          } catch (err) {
+            console.error("[auth] welcome email dispatch failed:", err);
+          }
+        },
+      },
     },
   },
   user: {

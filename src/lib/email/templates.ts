@@ -25,6 +25,7 @@ import { sanitiseEmailHtml, escapeHtml } from "@/lib/email/sanitize";
 
 export type TemplateKey =
   | "order_confirmation"
+  | "order_processing"
   | "order_shipped"
   | "order_delivered"
   | "order_refunded"
@@ -38,6 +39,11 @@ export type TemplateKey =
   | "dispute_opened_admin";
 
 export const availableVariables: Record<TemplateKey, string[]> = {
+  order_processing: [
+    "customer_name",
+    "order_number",
+    "order_url",
+  ],
   order_confirmation: [
     "customer_name",
     "order_number",

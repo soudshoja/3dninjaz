@@ -700,14 +700,18 @@ export async function capturePayPalOrder({
     }
   }
 
-  // Fire-and-forget order-confirmation email (Plan 03-03).
-  // T-03-26 / D3-10 UX contract: SMTP failure must NEVER block the capture
-  // response. sendOrderConfirmationEmail itself catches and logs internally;
-  // we also attach a catch here as a belt-and-braces guard in case the
-  // top-level DB read inside that function throws before the inner try/catch.
-  void sendOrderConfirmationEmail(existing.id).catch((err) =>
-    console.error("[paypal] confirmation email dispatch failed:", err),
-  );
+  // Await the order-confirmation email send. Previously this was
+  // `void sendOrderConfirmationEmail(...)`, but on Node-runtime server
+  // actions Next.js may abort the pending promise after the response
+  // returns to the client, so customers stopped receiving confirmations.
+  // sendOrderConfirmationEmail catches its own SMTP errors and never
+  // throws — awaiting it adds ~500ms-1s to the capture response but
+  // guarantees the email is actually sent before we hand control back.
+  try {
+    await sendOrderConfirmationEmail(existing.id);
+  } catch (err) {
+    console.error("[paypal] confirmation email dispatch failed:", err);
+  }
 
   revalidatePath(`/orders/${existing.id}`);
   revalidatePath("/orders");
