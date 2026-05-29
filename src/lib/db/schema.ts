@@ -43,6 +43,11 @@ export const user = mysqlTable("user", {
   // Phase 6 06-01 — soft-delete marker for /account/close (T-06-01-PDPA, D-06)
   // Set by /account/close action; requireUser() rejects sessions whose row has this set.
   deletedAt: timestamp("deleted_at"),
+  // Admin mini-CRM (2026-05-29) — free-text notes admin-only, plus a tag
+  // array for segmentation. Both nullable so existing rows stay valid.
+  // MariaDB stores JSON as LONGTEXT; admin actions ensure-array on read.
+  notes: text("notes"),
+  tags: json("tags").$type<string[]>(),
 });
 
 export const session = mysqlTable("session", {
