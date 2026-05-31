@@ -353,6 +353,33 @@ export const orderRequestSchema = z.object({
 export type OrderRequestInput = z.infer<typeof orderRequestSchema>;
 
 /**
+ * 260601-afs — Return-for-replacement request (type="return" branch).
+ * Validates per-item selection and 1–4 review photo paths.
+ * Photos are paths already persisted via the return-upload action (strings).
+ */
+export const returnItemSchema = z.object({
+  orderItemId: z.string().uuid("Invalid order item id"),
+  qty: z.number().int().min(1, "Quantity must be at least 1"),
+});
+export type ReturnItemInput = z.infer<typeof returnItemSchema>;
+
+export const returnRequestSchema = z.object({
+  orderId: z.string().uuid(),
+  reason: z
+    .string()
+    .min(10, "Please provide at least 10 characters of context")
+    .max(1000, "Reason too long (max 1000 chars)"),
+  items: z
+    .array(returnItemSchema)
+    .min(1, "Select at least one item to return"),
+  photos: z
+    .array(z.string().min(1))
+    .min(1, "At least 1 photo is required")
+    .max(4, "Maximum 4 photos allowed"),
+});
+export type ReturnRequestInput = z.infer<typeof returnRequestSchema>;
+
+/**
  * Account closure consent gate — typed-literal check (T-06-01-PDPA).
  * Prevents accidental deletes via JS coercion or stray clicks.
  */

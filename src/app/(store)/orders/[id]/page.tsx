@@ -19,6 +19,8 @@ import { listMyOrderRequests } from "@/actions/order-requests";
 // Phase 9 (09-02) — live courier tracking timeline (customer view).
 import { getMyOrderTracking } from "@/actions/shipping";
 import { OrderTracking } from "@/components/store/order-tracking";
+// 260601-afs — return ship form (shown when a return is approved)
+import { ReturnShipForm } from "@/components/orders/return-ship-form";
 
 /**
  * /orders/[id] — doubles as post-checkout confirmation (PAY-04) AND long-lived
@@ -74,6 +76,10 @@ export default async function OrderDetailPage({
   // order. The OrderActionsPanel uses the pending flag to gate the form.
   const myRequests = await listMyOrderRequests(row.id);
   const hasPendingRequest = myRequests.some((r) => r.status === "pending");
+  // 260601-afs — find any approved return request so we can show the ship form
+  const approvedReturnRequest = myRequests.find(
+    (r) => r.type === "return" && r.status === "approved",
+  );
 
   // Phase 9 (09-02) — live courier tracking view. Ownership re-checked inside
   // getMyOrderTracking (first await, CVE-2025-29927). Returns an empty-shape
@@ -267,13 +273,27 @@ export default async function OrderDetailPage({
         />
 
         {/* Phase 6 06-06 / 06-07 — Cancel / return action panel. Renders only
-            when the status + recency rules allow at least one of the actions. */}
+            when the status + recency rules allow at least one of the actions.
+            260601-afs: passes orderLines for the per-item return picker. */}
         <OrderActionsPanel
           orderId={row.id}
           status={row.status}
           updatedAt={row.updatedAt}
           hasPendingRequest={hasPendingRequest}
+          orderLines={row.items.map((i) => ({
+            id: i.id,
+            productName: i.productName,
+            quantity: i.quantity,
+          }))}
         />
+
+        {/* 260601-afs — ship-back form shown when a return is approved */}
+        {approvedReturnRequest?.approvedAt ? (
+          <ReturnShipForm
+            requestId={approvedReturnRequest.id}
+            approvedAt={approvedReturnRequest.approvedAt}
+          />
+        ) : null}
 
         {/* Phase 6 06-06 — past requests (pending / approved / rejected). */}
         <OrderRequestsList requests={myRequests} />
