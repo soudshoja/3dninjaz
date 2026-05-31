@@ -111,7 +111,7 @@ export function LoginForm() {
             placeholder="you@example.com"
             required
             autoComplete="email"
-            className="h-10"
+            className="h-12"
           />
         </div>
 
@@ -132,7 +132,7 @@ export function LoginForm() {
             onChange={(e) => setPassword(e.target.value)}
             required
             autoComplete="current-password"
-            className="h-10"
+            className="h-12"
           />
         </div>
 
@@ -145,7 +145,7 @@ export function LoginForm() {
         <Button
           type="submit"
           disabled={submitting}
-          className="h-10 w-full bg-[var(--color-brand-cta)] text-white hover:bg-[var(--color-brand-cta)]/90"
+          className="h-12 w-full bg-[var(--color-brand-cta)] text-white hover:bg-[var(--color-brand-cta)]/90"
         >
           {submitting ? "Signing in..." : "Sign In"}
         </Button>

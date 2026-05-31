@@ -239,7 +239,7 @@ export async function SiteFooter() {
               <span className="mt-1.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-zinc-600 md:justify-start">
                 <a
                   href={`mailto:${BUSINESS.contactEmail}`}
-                  className="inline-flex items-center gap-1.5 transition-colors hover:text-zinc-900"
+                  className="inline-flex items-center gap-1.5 min-h-[44px] px-1 transition-colors hover:text-zinc-900"
                   aria-label={`Email ${BUSINESS.contactEmail}`}
                 >
                   <svg
@@ -263,7 +263,7 @@ export async function SiteFooter() {
                 </span>
                 <a
                   href={`tel:+${BUSINESS.whatsappNumber}`}
-                  className="inline-flex items-center gap-1.5 transition-colors hover:text-zinc-900"
+                  className="inline-flex items-center gap-1.5 min-h-[44px] px-1 transition-colors hover:text-zinc-900"
                   aria-label={`Call ${BUSINESS.whatsappNumberDisplay}`}
                 >
                   <svg

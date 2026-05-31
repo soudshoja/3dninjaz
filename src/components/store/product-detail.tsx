@@ -502,6 +502,36 @@ export function ProductDetail({
               </div>
             </div>
 
+            {/* Sticky mobile CTA — customer mode only, stocked PDP */}
+            {!onAddToOrder && (
+              <>
+                <div
+                  className="lg:hidden fixed bottom-0 left-0 right-0 z-40 px-4 pb-safe-area-inset-bottom"
+                  style={{
+                    backgroundColor: "rgba(247,250,244,0.96)",
+                    backdropFilter: "blur(12px)",
+                    borderTop: `2px solid ${BRAND.ink}10`,
+                    paddingTop: 12,
+                    paddingBottom: 16,
+                  }}
+                >
+                  <AddToBagButton
+                    selectedVariant={
+                      !soldOut && selectedHydrated
+                        ? { ...selectedHydrated, isPreorder: isPreorderSelected }
+                        : null
+                    }
+                    productId={product.id}
+                    productSlug={product.slug}
+                    productName={product.name}
+                    productImage={product.images[0] ?? null}
+                    firstMissingOptionName={firstMissingOptionName}
+                  />
+                </div>
+                <div className="lg:hidden h-24" aria-hidden="true" />
+              </>
+            )}
+
             {/* Material & craft card */}
             <div
               className="rounded-3xl p-5 sm:p-6"

@@ -7,5 +7,5 @@ import { OrderTrackingTimeline } from "@/components/orders/order-tracking-timeli
  * without cross-coupling their layouts.
  */
 export function OrderTracking({ view }: { view: ShipmentTrackingView }) {
-  return <OrderTrackingTimeline view={view} />;
+  return <OrderTrackingTimeline view={view} audience="customer" />;
 }

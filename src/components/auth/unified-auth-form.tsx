@@ -121,13 +121,13 @@ function ForgotForm({ onBack }: { onBack: () => void }) {
               placeholder="you@example.com"
               required
               autoComplete="email"
-              className="h-10"
+              className="h-12"
             />
           </div>
           <Button
             type="submit"
             disabled={submitting}
-            className="h-10 w-full bg-[var(--color-brand-cta)] text-white hover:bg-[var(--color-brand-cta)]/90"
+            className="h-12 w-full bg-[var(--color-brand-cta)] text-white hover:bg-[var(--color-brand-cta)]/90"
           >
             {submitting ? "Sending..." : "Send reset link"}
           </Button>
@@ -202,7 +202,7 @@ function LoginForm({
             placeholder="you@example.com"
             required
             autoComplete="email"
-            className="h-10"
+            className="h-12"
           />
         </div>
 
@@ -224,7 +224,7 @@ function LoginForm({
             onChange={(e) => setPassword(e.target.value)}
             required
             autoComplete="current-password"
-            className="h-10"
+            className="h-12"
           />
         </div>
 
@@ -237,7 +237,7 @@ function LoginForm({
         <Button
           type="submit"
           disabled={submitting}
-          className="h-10 w-full bg-[var(--color-brand-cta)] text-white hover:bg-[var(--color-brand-cta)]/90"
+          className="h-12 w-full bg-[var(--color-brand-cta)] text-white hover:bg-[var(--color-brand-cta)]/90"
         >
           {submitting ? "Signing in..." : "Sign In"}
         </Button>
@@ -323,7 +323,7 @@ function RegisterForm() {
           onChange={(e) => setName(e.target.value)}
           required
           autoComplete="name"
-          className="h-10"
+          className="h-12"
         />
       </div>
 
@@ -337,7 +337,7 @@ function RegisterForm() {
           placeholder="you@example.com"
           required
           autoComplete="email"
-          className="h-10"
+          className="h-12"
         />
       </div>
 
@@ -351,7 +351,7 @@ function RegisterForm() {
           required
           minLength={8}
           autoComplete="new-password"
-          className="h-10"
+          className="h-12"
         />
         <p className="text-xs text-[var(--color-brand-text-muted)]">
           Minimum 8 characters.
@@ -368,7 +368,7 @@ function RegisterForm() {
           required
           minLength={8}
           autoComplete="new-password"
-          className="h-10"
+          className="h-12"
         />
       </div>
 
@@ -401,7 +401,7 @@ function RegisterForm() {
       <Button
         type="submit"
         disabled={submitting}
-        className="h-10 w-full bg-[var(--color-brand-cta)] text-white hover:bg-[var(--color-brand-cta)]/90"
+        className="h-12 w-full bg-[var(--color-brand-cta)] text-white hover:bg-[var(--color-brand-cta)]/90"
       >
         {submitting ? "Creating account..." : "Create Account"}
       </Button>
@@ -431,7 +431,7 @@ function TabBar({
             aria-selected={isActive}
             onClick={() => onChange(tab)}
             className={[
-              "flex-1 pb-3 pt-1 text-sm font-medium transition-colors",
+              "flex-1 min-h-[44px] flex items-center justify-center pb-3 pt-1 text-sm font-medium transition-colors",
               isActive
                 ? "border-b-2 border-[#1E8BFF] text-[#1E8BFF]"
                 : "text-[var(--color-brand-text-muted)] hover:text-[var(--color-brand-text-primary)]",

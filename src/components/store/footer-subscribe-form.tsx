@@ -115,7 +115,7 @@ export function FooterSubscribeForm() {
           if (state.kind === "error") setState({ kind: "idle" });
         }}
         disabled={state.kind === "submitting"}
-        className="flex-1 min-h-[48px] rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-offset-0"
+        className="flex-1 min-h-[48px] rounded-xl border border-zinc-300 bg-white px-4 py-2 text-base text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-offset-0"
         style={{ borderColor: "#d4d4d8" }}
       />
       <button
