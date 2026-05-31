@@ -459,6 +459,56 @@ export function ConfigurableProductView({
           {/* ── RIGHT: Product info + form column ─────────────────────── */}
           <div className="flex flex-col gap-5 min-w-0">
 
+            {/* ── Mobile-only sticky live-preview strip ─────────────────
+                Pins a shrunk keychain preview just below the site-nav once the
+                customer starts editing, so the live result stays visible while
+                they fill the form below — no scroll up/down. Hidden on desktop
+                (the sticky side gallery already covers it) and for vending,
+                whose preview is a tall illustration that can't compress into a
+                strip. Reuses the SAME live colour/text state as the hero
+                preview, so both update together. */}
+            {touched && product.productType !== "vending" && (
+              <div className="lg:hidden sticky top-16 z-30 preview-strip-in">
+                <div
+                  className="flex items-center gap-2 rounded-2xl px-3 py-2"
+                  style={{
+                    background: "rgba(255,255,255,0.92)",
+                    backdropFilter: "blur(10px)",
+                    WebkitBackdropFilter: "blur(10px)",
+                    border: `2px solid ${BRAND.green}55`,
+                    boxShadow: `0 8px 22px ${BRAND.ink}1a, 0 2px 0 ${BRAND.green}40`,
+                  }}
+                >
+                  <span
+                    className="shrink-0 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider"
+                    style={{
+                      backgroundColor: BRAND.green,
+                      color: BRAND.ink,
+                      boxShadow: `0 2px 0 ${BRAND.greenDark}`,
+                    }}
+                  >
+                    <span aria-hidden="true">✦</span> Live
+                  </span>
+                  <div className="flex-1 min-w-0 flex justify-center">
+                    <div className="w-full max-w-[260px]">
+                      <KeychainPreview
+                        text={textValue}
+                        baseHex={baseHex}
+                        clickerHex={clickerHex}
+                        letterHex={letterHex}
+                        maxLength={maxLength}
+                        placeholder={
+                          product.productType === "keychain" || textFields.length > 0
+                            ? "YOURTEXT"
+                            : ""
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* ── Product header card ─────────────────────────────────── */}
             <div
               className="rounded-3xl p-5 sm:p-6"
