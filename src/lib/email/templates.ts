@@ -57,7 +57,13 @@ export type TemplateKey =
   | "newsletter_welcome"
   | "newsletter_unsubscribed"
   | "dispute_opened_customer"
-  | "dispute_opened_admin";
+  | "dispute_opened_admin"
+  // 260601-afs — return-for-replacement flow emails
+  | "return_requested"
+  | "return_approved"
+  | "return_rejected"
+  | "return_received"
+  | "return_expired";
 
 export const availableVariables: Record<TemplateKey, string[]> = {
   order_processing: [
@@ -167,6 +173,52 @@ export const availableVariables: Record<TemplateKey, string[]> = {
     "dispute_amount",
     "admin_link",
     "store_name",
+    "current_year",
+  ],
+  // 260601-afs — return-for-replacement flow emails
+  return_requested: [
+    "customer_name",
+    "order_number",
+    "order_link",
+    "store_name",
+    "store_url",
+    "current_year",
+  ],
+  return_approved: [
+    "customer_name",
+    "order_number",
+    "ship_by_date",
+    "return_address",
+    "order_link",
+    "store_name",
+    "store_url",
+    "current_year",
+  ],
+  return_rejected: [
+    "customer_name",
+    "order_number",
+    "reason",
+    "order_link",
+    "support_email",
+    "store_name",
+    "store_url",
+    "current_year",
+  ],
+  return_received: [
+    "customer_name",
+    "order_number",
+    "order_link",
+    "store_name",
+    "store_url",
+    "current_year",
+  ],
+  return_expired: [
+    "customer_name",
+    "order_number",
+    "order_link",
+    "support_email",
+    "store_name",
+    "store_url",
     "current_year",
   ],
 };
