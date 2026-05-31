@@ -83,8 +83,21 @@ export type ShipmentTrackingView = {
     vehicle: string | null;
     plate: string | null;
   } | null;
-  /** Delyva live-map iframe URL. Populated only when we have a consignmentNo AND not delivered AND not cancelled. */
+  /**
+   * Live-map iframe URL. The map only renders a moving driver for on-demand
+   * couriers that emit live GPS (instant services / when the courier reports
+   * driver coordinates). For standard "drop" couriers there is no live GPS, so
+   * the embed would render blank — we leave this null in that case to avoid
+   * showing an empty map. Populated only when: consignmentNo present AND not
+   * delivered AND not cancelled AND the service is live-trackable.
+   */
   mapEmbedUrl: string | null;
+  /**
+   * Human-readable estimated delivery window (e.g. "1–3 days", "30–60 min").
+   * Null when the courier did not provide an ETA (common for drop couriers) or
+   * once the parcel is delivered/cancelled.
+   */
+  estimatedDelivery: string | null;
   /** Timestamp of the most recent timeline event (or DB row update when timeline is empty). */
   lastUpdatedAt: Date | null;
   /**
@@ -112,8 +125,24 @@ export function buildTrackingView(args: {
   shipment: ShipmentMirrorRow | null;
   live: OrderDetails | null;
   cachedNote: string | null;
+  /**
+   * Service type from the shipping catalog (e.g. "NDD", "NDD-DROP", "INSTANT").
+   * Used to decide whether the live map can show anything — only "INSTANT"
+   * (on-demand) services emit live GPS.
+   */
+  serviceType?: string | null;
+  /** Quote ETA window in minutes (from the shipping catalog), if known. */
+  etaMinMinutes?: number | null;
+  etaMaxMinutes?: number | null;
 }): ShipmentTrackingView {
-  const { shipment, live, cachedNote } = args;
+  const {
+    shipment,
+    live,
+    cachedNote,
+    serviceType = null,
+    etaMinMinutes = null,
+    etaMaxMinutes = null,
+  } = args;
 
   if (!shipment) {
     return {
@@ -128,6 +157,7 @@ export function buildTrackingView(args: {
       timeline: [],
       personnel: null,
       mapEmbedUrl: null,
+      estimatedDelivery: null,
       lastUpdatedAt: null,
       cachedNote: null,
       hasShipment: false,
@@ -183,9 +213,25 @@ export function buildTrackingView(args: {
       ? { name: pName, phone: pPhone, vehicle: pVehicle, plate: pPlate }
       : null;
 
+  // The live map only renders a moving driver when the courier emits live GPS.
+  // That happens for on-demand / instant services, or whenever the live
+  // response actually carries driver coordinates. For standard drop couriers
+  // (SPX, J&T, Ninja Van, Pos Laju, …) there is no GPS and the embed renders
+  // blank — so we suppress it entirely to avoid a confusing empty map.
+  const hasLiveDriverCoord =
+    typeof live?.personnel?.coord?.lat === "number" &&
+    typeof live?.personnel?.coord?.lon === "number";
+  const isInstantService = (serviceType ?? "").toUpperCase().includes("INSTANT");
+  const liveTrackable = isInstantService || hasLiveDriverCoord;
   const mapEmbedUrl =
-    consignmentNo && !delivered && !cancelled
+    consignmentNo && !delivered && !cancelled && liveTrackable
       ? `https://my.delyva.app/track/rmap?trackingNo=${encodeURIComponent(consignmentNo)}`
+      : null;
+
+  // Estimated delivery window — only meaningful while the parcel is in flight.
+  const estimatedDelivery =
+    !delivered && !cancelled
+      ? formatEtaWindow(etaMinMinutes, etaMaxMinutes)
       : null;
 
   const lastUpdatedAt =
@@ -206,10 +252,40 @@ export function buildTrackingView(args: {
     timeline,
     personnel,
     mapEmbedUrl,
+    estimatedDelivery,
     lastUpdatedAt,
     cachedNote,
     hasShipment: true,
   };
+}
+
+/**
+ * Format a Delyva ETA window (in minutes) into a friendly customer-facing
+ * string. Picks the unit from the larger bound: minutes < 1h, hours < 1 day,
+ * otherwise days. Returns null when no usable bound is present.
+ */
+function formatEtaWindow(
+  minMinutes: number | null,
+  maxMinutes: number | null,
+): string | null {
+  const lo = typeof minMinutes === "number" && minMinutes > 0 ? minMinutes : null;
+  const hi = typeof maxMinutes === "number" && maxMinutes > 0 ? maxMinutes : null;
+  if (lo === null && hi === null) return null;
+
+  const a = lo ?? (hi as number);
+  const b = hi ?? (lo as number);
+
+  if (b < 60) {
+    return a === b ? `${b} min` : `${a}–${b} min`;
+  }
+  if (b < 1440) {
+    const ha = Math.max(1, Math.round(a / 60));
+    const hb = Math.max(1, Math.round(b / 60));
+    return ha === hb ? `${hb} hour${hb > 1 ? "s" : ""}` : `${ha}–${hb} hours`;
+  }
+  const da = Math.max(1, Math.round(a / 1440));
+  const db = Math.max(1, Math.round(b / 1440));
+  return da === db ? `${db} day${db > 1 ? "s" : ""}` : `${da}–${db} days`;
 }
 
 // --------------------------- Status helpers ---------------------------
@@ -227,41 +303,18 @@ export type TrackingBucket =
   | "cancelled"
   | "exception";
 
-/**
- * Bucket Delyva's status into our UI category. Text takes priority over
- * the numeric code because Delyva reuses the same number across couriers
- * with different meanings (observed live 2026-05-29: SPX uses 500 for
- * "In Transit / received at dropoff point", not for failure). Numeric
- * fallback is intentionally permissive: only the well-known cancel code
- * (90) is treated as terminal-bad; everything else defaults to in_transit
- * so we never accidentally show "Delivery issue" or "Delivered" mid-flight.
- */
 export function bucketForStatusCode(
   code: number | null,
   hasShipment: boolean,
-  text?: string | null,
 ): TrackingBucket {
   if (!hasShipment) return "awaiting";
-  const t = (text ?? "").toLowerCase();
-  if (t) {
-    if (/cancel|return to sender|rts\b/.test(t)) return "cancelled";
-    if (/fail|undeliver|incident|exception|lost|damaged/.test(t)) return "exception";
-    if (/delivered|delivery successful|signed|received by recipient/.test(t)) return "delivered";
-    if (/out for delivery|with rider|with courier/.test(t)) return "out_for_delivery";
-    if (/in transit|in-transit|received at|arrived at|dropoff point|sorting/.test(t)) return "in_transit";
-    if (/picked up|collected|pickup completed/.test(t)) return "picked_up";
-    if (/created|preparing|order ready|booked|draft/.test(t)) return "awaiting";
-  }
   if (code === null) return "awaiting";
   if (code === 90) return "cancelled";
-  // Per Delyva docs: 400 = in transit to pickup, 600 = in transit for dropoff.
-  // 500 observed live as "In Transit / at dropoff point". Treat the 400-699
-  // range as in_transit, NOT delivered or exception.
-  if (code >= 400 && code <= 699) return "in_transit";
-  if (code >= 300 && code < 400) return "out_for_delivery";
-  if (code >= 200 && code < 300) return "picked_up";
-  if (code >= 100 && code < 200) return "awaiting";
-  if (code >= 700) return "delivered";
+  if (code === 500) return "exception";
+  if (code >= 400) return "delivered";
+  if (code >= 300) return "out_for_delivery";
+  if (code >= 200) return "in_transit";
+  if (code >= 100) return "picked_up";
   return "awaiting";
 }
 
