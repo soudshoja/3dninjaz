@@ -34,7 +34,12 @@ export default async function StoreLayout({ children }: { children: ReactNode })
     >
       <FontFaceLoader />
       <SiteNav categoryTree={categoryTree} />
-      <main className="flex-1 overflow-x-hidden">{children}</main>
+      {/* overflow-x: clip (NOT hidden) — clips horizontal overflow without
+          creating a scroll container, so storefront `position: sticky`
+          elements (e.g. the mobile PDP live-preview strip) still pin to the
+          viewport. `overflow-x: hidden` forces overflow-y to `auto` and breaks
+          sticky. Same reason SiteNav uses overflow-x-clip. */}
+      <main className="flex-1 overflow-x-clip">{children}</main>
       <SiteFooter />
       <CartDrawer />
     </div>
