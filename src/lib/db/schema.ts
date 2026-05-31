@@ -747,6 +747,9 @@ export const orderRequestStatusValues = [
   "pending",
   "approved",
   "rejected",
+  "shipped",
+  "received",
+  "expired",
 ] as const;
 
 export const orderRequests = mysqlTable(
@@ -767,6 +770,16 @@ export const orderRequests = mysqlTable(
       .notNull()
       .default("pending"),
     adminNotes: text("admin_notes"),
+    // Return-specific: per-item JSON [{orderItemId, qty}] (LONGTEXT, manual parse)
+    items: longtext("items"),
+    // Return-specific: 1–4 review photo paths JSON string[] (LONGTEXT, manual parse)
+    photos: longtext("photos"),
+    // Return-specific: customer-supplied courier and tracking number
+    returnCourier: varchar("return_courier", { length: 120 }),
+    returnTrackingNumber: varchar("return_tracking_number", { length: 160 }),
+    // Timestamps for the 3-day ship-by window (null for cancel requests)
+    approvedAt: timestamp("approved_at"),
+    shippedAt: timestamp("shipped_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     resolvedAt: timestamp("resolved_at"),
   },
@@ -778,6 +791,39 @@ export const orderRequests = mysqlTable(
     ),
   }),
 );
+
+// ============================================================================
+// Return-flow JSON parse helpers (MariaDB stores JSON columns as LONGTEXT —
+// mysql2 does NOT auto-parse; every read site must call these helpers).
+// ============================================================================
+
+export type ReturnItem = { orderItemId: string; qty: number };
+
+export function ensureReturnItems(raw: unknown): ReturnItem[] {
+  if (Array.isArray(raw)) return raw as ReturnItem[];
+  if (typeof raw === "string" && raw.length > 0) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed as ReturnItem[];
+    } catch {
+      // corrupt — return empty
+    }
+  }
+  return [];
+}
+
+export function ensurePhotoArray(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw as string[];
+  if (typeof raw === "string" && raw.length > 0) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed as string[];
+    } catch {
+      // corrupt — return empty
+    }
+  }
+  return [];
+}
 
 export const reviewStatusValues = ["pending", "approved", "hidden"] as const;
 
