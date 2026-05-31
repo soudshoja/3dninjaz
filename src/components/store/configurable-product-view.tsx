@@ -188,6 +188,9 @@ export function ConfigurableProductView({
 }: Props) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState(false);
+  // Mobile sticky preview strip is dismissed after Add-to-Bag; re-enabled the
+  // moment the customer edits anything again.
+  const [addedToBag, setAddedToBag] = useState(false);
   // Default to preview mode for keychain + vending products so the live preview
   // is the first thing the customer sees — not the admin's product photos.
   const [showPreview, setShowPreview] = useState(
@@ -282,6 +285,22 @@ export function ConfigurableProductView({
     ? ((textFields[0].config as { maxLength?: number }).maxLength ?? maxUnitCount ?? 8)
     : (maxUnitCount ?? 8);
 
+  // ── Mobile sticky preview strip visibility ────────────────────────────────
+  // Rules (mobile only): show ONLY once the customer has actually started
+  // typing; hide again when they clear the text; hide after Add-to-Bag.
+  // Text-less configurables (no text field) fall back to "any interaction".
+  const hasTextField = textFields.length > 0;
+  const showStickyPreview =
+    product.productType !== "vending" &&
+    !addedToBag &&
+    (hasTextField ? textValue.trim().length > 0 : touched);
+
+  // Wrap value changes so editing after an Add-to-Bag re-enables the strip.
+  function handleValuesChange(next: Record<string, string>) {
+    setValues(next);
+    if (addedToBag) setAddedToBag(false);
+  }
+
   // ── Handlers (first-touch-only — DO NOT change) ───────────────────────────
   function handleTouch() {
     if (!touched) {
@@ -319,6 +338,9 @@ export function ConfigurableProductView({
       addItem({ productId: product.id, configurationData: configData });
       setDrawerOpen(true);
     }
+
+    // Dismiss the mobile sticky preview strip once the item is in the bag.
+    setAddedToBag(true);
   }
 
   const material = product.materialType ?? "PLA";
@@ -467,7 +489,7 @@ export function ConfigurableProductView({
                 whose preview is a tall illustration that can't compress into a
                 strip. Reuses the SAME live colour/text state as the hero
                 preview, so both update together. */}
-            {touched && product.productType !== "vending" && (
+            {showStickyPreview && (
               <div className="lg:hidden sticky top-16 z-30 preview-strip-in">
                 <div
                   className="flex items-center gap-2 rounded-2xl px-3 py-2"
@@ -578,7 +600,7 @@ export function ConfigurableProductView({
               <ConfiguratorForm
                 fields={fields}
                 values={values}
-                onChange={setValues}
+                onChange={handleValuesChange}
                 onTouch={handleTouch}
                 basePrice={basePriceBeforeOverride ?? undefined}
               />
