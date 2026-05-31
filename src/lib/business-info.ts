@@ -29,8 +29,8 @@ export const BUSINESS = {
   contactEmail: "info@3dninjaz.com",
   // Data-protection officer / PDPA data-request inbox. D-04.
   dpoEmail: "info@3dninjaz.com",
-  whatsappNumber: "60167203048",
-  whatsappNumberDisplay: "+60 16 720 3048",
+  whatsappNumber: "601125434730",
+  whatsappNumberDisplay: "+60 11 2543 4730",
   socials: {
     instagram: "https://www.instagram.com/3dninjaz/",
     tiktok: "https://www.tiktok.com/@shojakidz",

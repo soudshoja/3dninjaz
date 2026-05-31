@@ -20,7 +20,7 @@ import { formatMYR } from "@/lib/format";
  * receiving the transfer screenshot via WhatsApp.
  */
 
-const WA_NUMBER = "60167203048";
+const WA_NUMBER = "601125434730";
 
 // WhatsApp SVG logo (official green brand mark, no external dependency)
 function WhatsAppIcon({ className }: { className?: string }) {

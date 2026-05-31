@@ -282,7 +282,7 @@ export default async function PaymentLinkPage({
   );
 
   // WhatsApp number from settings or fallback to business-info default.
-  const waNumber = settings.whatsappNumber || "60167203048";
+  const waNumber = settings.whatsappNumber || "601125434730";
 
   return (
     <main
