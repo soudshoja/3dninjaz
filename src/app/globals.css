@@ -159,14 +159,19 @@
   }
   html {
     /* Prevent accidental horizontal scroll on mobile — must be on html, not just
-       body, because fixed/absolute children can widen the html element too. */
-    overflow-x: hidden;
+       body, because fixed/absolute children can widen the html element too.
+       Use `clip` NOT `hidden`: `overflow-x: hidden` forces overflow-y to compute
+       to `auto`, which turns the root into a scroll container and silently breaks
+       `position: sticky` site-wide (nav + mobile PDP preview strip). `clip`
+       guards horizontal overflow without establishing a scroll container. */
+    overflow-x: clip;
   }
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-body), sans-serif;
-    /* Belt-and-braces: also clip body so no double-scroll on desktop. */
-    overflow-x: hidden;
+    /* Belt-and-braces: also clip body so no double-scroll on desktop. clip (not
+       hidden) so sticky positioning keeps working — see html rule above. */
+    overflow-x: clip;
   }
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-heading), sans-serif;
