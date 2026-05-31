@@ -348,6 +348,202 @@ export async function sendOrderCancelledEmail(opts: {
 }
 
 // ============================================================================
+// 260601-afs — Return-for-Replacement Process Emails
+// All fire-and-forget (skip @3dninjaz.local). The requestId/orderId are used
+// to look up the customer email from the orders table so no PII is passed in.
+// ============================================================================
+
+/**
+ * Fetch the customer email + name + order number for a return request.
+ * Used by all return email senders to avoid threading PII through action args.
+ */
+async function fetchReturnEmailContext(opts: {
+  requestId: string;
+  orderId: string;
+}): Promise<{
+  customerEmail: string;
+  customerName: string;
+  orderNumber: string;
+} | null> {
+  // Inline import avoids circular dependency (send-emails.ts -> db is fine;
+  // db -> send-emails must never happen).
+  const { db } = await import("@/lib/db");
+  const { orders, user } = await import("@/lib/db/schema");
+  const { eq } = await import("drizzle-orm");
+  const { formatOrderNumber } = await import("@/lib/orders");
+
+  const [order] = await db
+    .select({
+      id: orders.id,
+      customerEmail: orders.customerEmail,
+      userId: orders.userId,
+    })
+    .from(orders)
+    .where(eq(orders.id, opts.orderId))
+    .limit(1);
+  if (!order) return null;
+
+  let customerName = "Customer";
+  if (order.userId) {
+    const [u] = await db
+      .select({ name: user.name })
+      .from(user)
+      .where(eq(user.id, order.userId))
+      .limit(1);
+    if (u?.name) customerName = u.name;
+  }
+
+  return {
+    customerEmail: order.customerEmail,
+    customerName,
+    orderNumber: formatOrderNumber(order.id),
+  };
+}
+
+// TODO: Replace with store_settings.returnAddress when that field is added.
+const RETURN_ADDRESS_FOR_EMAIL =
+  "Please contact support@3dninjaz.com for the current return address.";
+
+function addDays(date: Date, days: number): Date {
+  return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
+}
+
+export async function sendReturnRequestedEmail(opts: {
+  requestId: string;
+  orderId: string;
+}): Promise<void> {
+  const ctx = await fetchReturnEmailContext(opts).catch(() => null);
+  if (!ctx) return;
+  if (ctx.customerEmail.endsWith("@3dninjaz.local")) return;
+
+  try {
+    const orderLink = `https://app.3dninjaz.com/orders/${opts.orderId}`;
+    const { subject, html, text } = await renderTemplate("return_requested", {
+      customer_name: ctx.customerName,
+      order_number: ctx.orderNumber,
+      order_link: orderLink,
+    });
+    await sendMail({ to: ctx.customerEmail, subject, html, text });
+  } catch (err) {
+    console.error("[sendReturnRequestedEmail] failed", err);
+  }
+}
+
+export async function sendReturnApprovedEmail(opts: {
+  requestId: string;
+  orderId: string;
+}): Promise<void> {
+  // Fetch approvedAt from the request row to compute ship-by date
+  let approvedAt: Date | null = null;
+  try {
+    const { db } = await import("@/lib/db");
+    const { orderRequests } = await import("@/lib/db/schema");
+    const { eq } = await import("drizzle-orm");
+    const [req] = await db
+      .select({ approvedAt: orderRequests.approvedAt })
+      .from(orderRequests)
+      .where(eq(orderRequests.id, opts.requestId))
+      .limit(1);
+    approvedAt = req?.approvedAt ?? null;
+  } catch {
+    // non-fatal
+  }
+
+  const ctx = await fetchReturnEmailContext(opts).catch(() => null);
+  if (!ctx) return;
+  if (ctx.customerEmail.endsWith("@3dninjaz.local")) return;
+
+  try {
+    const orderLink = `https://app.3dninjaz.com/orders/${opts.orderId}`;
+    const shipByDate = approvedAt
+      ? addDays(approvedAt, 3).toLocaleDateString("en-MY", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        })
+      : "within 3 days";
+
+    const { subject, html, text } = await renderTemplate("return_approved", {
+      customer_name: ctx.customerName,
+      order_number: ctx.orderNumber,
+      ship_by_date: shipByDate,
+      return_address: RETURN_ADDRESS_FOR_EMAIL,
+      order_link: orderLink,
+    });
+    await sendMail({ to: ctx.customerEmail, subject, html, text });
+  } catch (err) {
+    console.error("[sendReturnApprovedEmail] failed", err);
+  }
+}
+
+export async function sendReturnRejectedEmail(opts: {
+  requestId: string;
+  orderId: string;
+  reason: string;
+}): Promise<void> {
+  const ctx = await fetchReturnEmailContext(opts).catch(() => null);
+  if (!ctx) return;
+  if (ctx.customerEmail.endsWith("@3dninjaz.local")) return;
+
+  try {
+    const orderLink = `https://app.3dninjaz.com/orders/${opts.orderId}`;
+    const { subject, html, text } = await renderTemplate("return_rejected", {
+      customer_name: ctx.customerName,
+      order_number: ctx.orderNumber,
+      reason: opts.reason,
+      order_link: orderLink,
+    });
+    await sendMail({ to: ctx.customerEmail, subject, html, text });
+  } catch (err) {
+    console.error("[sendReturnRejectedEmail] failed", err);
+  }
+}
+
+export async function sendReturnReceivedEmail(opts: {
+  requestId: string;
+  orderId: string;
+}): Promise<void> {
+  const ctx = await fetchReturnEmailContext(opts).catch(() => null);
+  if (!ctx) return;
+  if (ctx.customerEmail.endsWith("@3dninjaz.local")) return;
+
+  try {
+    const orderLink = `https://app.3dninjaz.com/orders/${opts.orderId}`;
+    const { subject, html, text } = await renderTemplate("return_received", {
+      customer_name: ctx.customerName,
+      order_number: ctx.orderNumber,
+      order_link: orderLink,
+    });
+    await sendMail({ to: ctx.customerEmail, subject, html, text });
+  } catch (err) {
+    console.error("[sendReturnReceivedEmail] failed", err);
+  }
+}
+
+export async function sendReturnExpiredEmail(opts: {
+  requestId: string;
+  orderId: string;
+}): Promise<void> {
+  if (!opts.orderId) return; // guard: expireStaleReturns may call with empty orderId
+  const ctx = await fetchReturnEmailContext(opts).catch(() => null);
+  if (!ctx) return;
+  if (ctx.customerEmail.endsWith("@3dninjaz.local")) return;
+
+  try {
+    const orderLink = `https://app.3dninjaz.com/orders/${opts.orderId}`;
+    const { subject, html, text } = await renderTemplate("return_expired", {
+      customer_name: ctx.customerName,
+      order_number: ctx.orderNumber,
+      order_link: orderLink,
+    });
+    await sendMail({ to: ctx.customerEmail, subject, html, text });
+  } catch (err) {
+    console.error("[sendReturnExpiredEmail] failed", err);
+  }
+}
+
+// ============================================================================
 // Dispute Opened Emails (customer + admin)
 // ============================================================================
 

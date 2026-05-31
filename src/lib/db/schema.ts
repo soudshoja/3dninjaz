@@ -1739,6 +1739,120 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         "current_year",
       ],
     },
+    // ========================================================================
+    // 260601-afs — Return-for-replacement flow emails (5 new templates)
+    // ========================================================================
+    {
+      key: "return_requested",
+      subject: "Return request received for order #{{order_number}}",
+      html: brandedEmailTemplate(
+        "📦",
+        "Return request received",
+        `<p>Hi {{customer_name}},</p>
+        <p>We received your return / replacement request for order <strong>#{{order_number}}</strong>.</p>
+        <p>Our team will review your request and get back to you within 1 business day.</p>
+        <p style="margin-top:16px">You can track the status of your request on your order page.</p>`,
+        { text: "View Order", url: "order_link" }
+      ),
+      variables: [
+        "customer_name",
+        "order_number",
+        "order_link",
+        "store_name",
+        "store_url",
+        "current_year",
+      ],
+    },
+    {
+      key: "return_approved",
+      subject: "Return approved — ship your item back by {{ship_by_date}}",
+      html: brandedEmailTemplate(
+        "✅",
+        "Your return has been approved",
+        `<p>Hi {{customer_name}},</p>
+        <p>Great news! Your return / replacement request for order <strong>#{{order_number}}</strong> has been approved.</p>
+        <p><strong>Please ship your item back by: {{ship_by_date}}</strong></p>
+        <p style="margin-top:8px"><strong>Return address:</strong><br>
+        <span style="white-space:pre-line">{{return_address}}</span></p>
+        <p style="margin-top:16px">Once you have shipped, please visit your order page to submit your courier name and tracking number so we can confirm receipt and start your re-make.</p>
+        <p style="color:#6b7280;font-size:13px">If you do not submit tracking within 3 days, the request will expire and you will need to contact support.</p>`,
+        { text: "Submit Tracking Number", url: "order_link" }
+      ),
+      variables: [
+        "customer_name",
+        "order_number",
+        "ship_by_date",
+        "return_address",
+        "order_link",
+        "store_name",
+        "store_url",
+        "current_year",
+      ],
+    },
+    {
+      key: "return_rejected",
+      subject: "Update on your return request — order #{{order_number}}",
+      html: brandedEmailTemplate(
+        "❌",
+        "Return request update",
+        `<p>Hi {{customer_name}},</p>
+        <p>After reviewing your return request for order <strong>#{{order_number}}</strong>, we are unable to approve it at this time.</p>
+        <p><strong>Reason:</strong> {{reason}}</p>
+        <p style="margin-top:16px">If you believe this decision was made in error or you need further assistance, please contact us at <a href="mailto:{{support_email}}" style="color:#1877F2">{{support_email}}</a>.</p>`,
+        { text: "View Order", url: "order_link" }
+      ),
+      variables: [
+        "customer_name",
+        "order_number",
+        "reason",
+        "order_link",
+        "support_email",
+        "store_name",
+        "store_url",
+        "current_year",
+      ],
+    },
+    {
+      key: "return_received",
+      subject: "We received your return — re-making your order #{{order_number}}",
+      html: brandedEmailTemplate(
+        "🥷",
+        "Return received — re-make in progress",
+        `<p>Hi {{customer_name}},</p>
+        <p>We have received your returned item for order <strong>#{{order_number}}</strong>. Thank you for sending it back!</p>
+        <p style="margin-top:16px">Our team is now working on your replacement. We will email you again once it has been shipped.</p>`,
+        { text: "View Order", url: "order_link" }
+      ),
+      variables: [
+        "customer_name",
+        "order_number",
+        "order_link",
+        "store_name",
+        "store_url",
+        "current_year",
+      ],
+    },
+    {
+      key: "return_expired",
+      subject: "Your return window has expired — order #{{order_number}}",
+      html: brandedEmailTemplate(
+        "⏰",
+        "Return ship-by window expired",
+        `<p>Hi {{customer_name}},</p>
+        <p>Unfortunately the 3-day shipping window for your approved return on order <strong>#{{order_number}}</strong> has passed without a tracking number being submitted.</p>
+        <p style="margin-top:16px">If you still need help, please contact us at <a href="mailto:{{support_email}}" style="color:#1877F2">{{support_email}}</a> or via WhatsApp and we will do our best to assist you.</p>`,
+        { text: "View Order", url: "order_link" }
+      ),
+      variables: [
+        "customer_name",
+        "order_number",
+        "order_link",
+        "support_email",
+        "store_name",
+        "store_url",
+        "current_year",
+      ],
+    },
   ];
 }
 
