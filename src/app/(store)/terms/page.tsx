@@ -97,11 +97,25 @@ export default function TermsPage() {
 
         <div>
           <h2 className="font-heading text-2xl">
-            5. Cancellations and returns
+            5. Faulty items, replacements, and refunds
           </h2>
           <p className="mt-2 text-base leading-relaxed">
-            For defective or incorrect items, let us know within 3 working
-            days and we&rsquo;ll make it right.
+            We do <strong>not</strong> offer refunds. Because every piece is
+            custom-made to order, we instead remake and replace items that
+            arrive faulty or defective.
+          </p>
+          <p className="mt-2 text-base leading-relaxed">
+            If your item is faulty, let us know within{" "}
+            <strong>3 days of receiving your order</strong>. You&rsquo;ll need
+            to ship the faulty item back to us at your own cost; once we
+            receive it and confirm the fault, we&rsquo;ll remake your piece and
+            send you a replacement free of charge.
+          </p>
+          <p className="mt-2 text-base leading-relaxed">
+            This policy covers manufacturing or printing defects only. It does
+            not cover change-of-mind returns or damage caused after delivery.
+            Nothing here limits any rights you have as a consumer under
+            Malaysian law.
           </p>
         </div>
 
