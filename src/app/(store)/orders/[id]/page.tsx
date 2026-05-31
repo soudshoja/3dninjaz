@@ -1,6 +1,9 @@
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { orders as ordersTable, orderItems as orderItemsTable } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/auth-helpers";
 import { getMyOrder } from "@/actions/orders";
 import { ensureOrderItemConfigData } from "@/lib/config-fields";
@@ -19,6 +22,180 @@ import { listMyOrderRequests } from "@/actions/order-requests";
 // Phase 9 (09-02) — live courier tracking timeline (customer view).
 import { getMyOrderTracking } from "@/actions/shipping";
 import { OrderTracking } from "@/components/store/order-tracking";
+
+// ── Guest order row type ────────────────────────────────────────────────────
+type GuestOrderRow = typeof ordersTable.$inferSelect & {
+  items: Array<typeof orderItemsTable.$inferSelect>;
+};
+
+/**
+ * Read-only order view for guests accessing via tokenized email link.
+ * No cancel/return, no invoice download, no receipt resend — just the
+ * order details and progress so the guest can track their order.
+ */
+function GuestOrderView({
+  row,
+  justPaid,
+}: {
+  row: GuestOrderRow;
+  justPaid: boolean;
+}) {
+
+  return (
+    <main className="min-h-screen bg-white" style={{ color: BRAND.ink }}>
+      <div className="mx-auto max-w-3xl px-4 py-8 md:py-14">
+        {justPaid ? (
+          <div
+            className="rounded-2xl p-5 mb-6 flex items-center gap-4 flex-wrap"
+            style={{ backgroundColor: `${BRAND.green}30`, color: BRAND.ink }}
+            role="status"
+          >
+            <Image
+              src="/icons/ninja/emoji/success.png"
+              alt=""
+              width={72}
+              height={72}
+              priority
+              className="h-[72px] w-[72px] object-contain shrink-0"
+            />
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-lg">Payment confirmed. Thank you!</p>
+              <p className="text-slate-700 text-sm mt-0.5">
+                We&apos;ll email your receipt in a moment.
+              </p>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Guest account prompt */}
+        <div className="mb-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700">
+          <Link href="/register?next=/orders" className="font-medium underline text-zinc-900">
+            Create an account
+          </Link>{" "}
+          to manage your orders, reorder faster, and keep your history — all in one place.
+        </div>
+
+        <header className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="font-[var(--font-heading)] text-3xl md:text-4xl">
+              {formatOrderNumber(row.id)}
+            </h1>
+            <p className="text-slate-600 mt-1">
+              Placed {new Date(row.createdAt).toLocaleString("en-MY")}
+            </p>
+          </div>
+          <OrderStatusBadge status={row.status} />
+        </header>
+
+        {row.paypalCaptureId ? (
+          <p className="mb-4 text-xs text-slate-600">
+            Payment reference:{" "}
+            <span className="font-mono break-words">{row.paypalCaptureId}</span>
+          </p>
+        ) : null}
+
+        <section
+          aria-labelledby="g-progress"
+          className="rounded-2xl p-4 md:p-6 mb-6"
+          style={{ backgroundColor: "#ffffff" }}
+        >
+          <h2 id="g-progress" className="font-[var(--font-heading)] text-xl mb-4">
+            Progress
+          </h2>
+          <OrderTimeline status={row.status} />
+        </section>
+
+        <section
+          aria-labelledby="g-items"
+          className="rounded-2xl p-4 md:p-6 mb-6"
+          style={{ backgroundColor: "#ffffff" }}
+        >
+          <h2 id="g-items" className="font-[var(--font-heading)] text-xl mb-4">
+            Items
+          </h2>
+          <ul className="divide-y divide-black/10">
+            {row.items.map((i) => {
+              const cfg = ensureOrderItemConfigData(i.configurationData);
+              const summary = cfg?.computedSummary ?? i.variantLabel ?? (i.size ? `Size ${i.size}` : null);
+              return (
+                <li key={i.id} className="flex gap-4 py-4">
+                  <div
+                    className="h-16 w-16 md:h-20 md:w-20 rounded-xl overflow-hidden shrink-0"
+                    style={{ backgroundColor: `${BRAND.blue}15` }}
+                  >
+                    {i.productImage && !isManualLine(i) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={i.productImage}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : null}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="font-bold truncate block">{i.productName}</span>
+                    <p className="text-sm text-slate-600 mt-0.5">
+                      {summary ? `${summary} · ` : ""}Qty {i.quantity} · {formatMYR(i.unitPrice)} each
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-[var(--font-heading)] text-lg">{formatMYR(i.lineTotal)}</p>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="mt-4 space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-slate-600">Subtotal</span>
+              <span>{formatMYR(row.subtotal)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-600">Shipping</span>
+              <span>{formatMYR(row.shippingCost)}</span>
+            </div>
+            <div className="flex justify-between pt-2 border-t border-black/10 font-bold text-base">
+              <span>Total</span>
+              <span>{formatMYR(row.totalAmount)} {row.currency}</span>
+            </div>
+          </div>
+        </section>
+
+        <section
+          aria-labelledby="g-ship"
+          className="rounded-2xl p-4 md:p-6 mb-6"
+          style={{ backgroundColor: "#ffffff" }}
+        >
+          <h2 id="g-ship" className="font-[var(--font-heading)] text-xl mb-3">
+            Shipping to
+          </h2>
+          <address className="not-italic leading-relaxed text-slate-800">
+            {row.shippingName}<br />
+            {row.shippingLine1}<br />
+            {row.shippingLine2 ? <>{row.shippingLine2}<br /></> : null}
+            {row.shippingCity} {row.shippingPostcode}<br />
+            {row.shippingState}, {row.shippingCountry}<br />
+            {row.shippingPhone}
+          </address>
+        </section>
+
+        <section
+          aria-labelledby="g-receipt"
+          className="rounded-2xl p-4 md:p-6"
+          style={{ backgroundColor: "#ffffff" }}
+        >
+          <h2 id="g-receipt" className="font-[var(--font-heading)] text-xl mb-3">
+            Receipt
+          </h2>
+          <p className="text-slate-600">
+            Your order confirmation was emailed to{" "}
+            <strong>{row.customerEmail}</strong>.
+          </p>
+        </section>
+      </div>
+    </main>
+  );
+}
 
 /**
  * /orders/[id] — doubles as post-checkout confirmation (PAY-04) AND long-lived
@@ -44,15 +221,51 @@ export default async function OrderDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ from?: string }>;
+  searchParams: Promise<{ from?: string; t?: string }>;
 }) {
   const user = await getSessionUser();
   const { id } = await params;
+  const { from, t: tokenParam } = await searchParams;
+
+  // Guest order access: if the visitor is not logged in AND a `t` token is
+  // present in the URL, allow viewing without a session — but ONLY if the
+  // order's guestAccessToken is non-null and matches exactly.
   if (!user) {
+    if (tokenParam) {
+      // Token path: fetch the order and validate the token before rendering.
+      const [orderRow] = await db
+        .select()
+        .from(ordersTable)
+        .where(eq(ordersTable.id, id))
+        .limit(1);
+
+      // Security: token must be non-empty (guard against absent/empty tokenParam),
+      // at most 64 chars, non-null guestAccessToken on the row, and must match
+      // exactly. We allow this even when userId is set (phone-linking after
+      // checkout sets userId but the emailed link must still work).
+      if (
+        !orderRow ||
+        !tokenParam ||
+        tokenParam.length > 64 ||
+        !orderRow.guestAccessToken ||
+        orderRow.guestAccessToken !== tokenParam
+      ) {
+        notFound();
+      }
+
+      const items = await db
+        .select()
+        .from(orderItemsTable)
+        .where(eq(orderItemsTable.orderId, orderRow.id));
+
+      const row = { ...orderRow, items };
+      // Render a simplified view for the guest (no cancel/return, no review).
+      return <GuestOrderView row={row} justPaid={from === "checkout"} />;
+    }
+    // No token and no session — redirect to login.
     redirect(`/login?next=/orders/${id}`);
   }
 
-  const { from } = await searchParams;
   const row = await getMyOrder(id);
   if (!row) notFound();
 

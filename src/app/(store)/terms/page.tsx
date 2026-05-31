@@ -56,10 +56,13 @@ export default function TermsPage() {
             2. Accounts
           </h2>
           <p className="mt-2 text-base leading-relaxed">
-            You need a customer account to place an order. You&rsquo;re
-            responsible for keeping your sign-in details private and for
-            activity on your account. Let us know immediately if you suspect
-            your account has been used without permission.
+            An account is optional — you can check out as a guest using just
+            your email address. Creating an account lets you track orders,
+            reorder faster, and keep your full order history in one place.
+            If you do have an account, you&rsquo;re responsible for keeping
+            your sign-in details private and for activity on your account.
+            Let us know immediately if you suspect your account has been used
+            without permission.
           </p>
         </div>
 

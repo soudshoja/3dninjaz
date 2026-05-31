@@ -197,7 +197,8 @@ async function resolvePosCustomerId(
       .where(eq(orders.shippingPhone, phone))
       .orderBy(desc(orders.createdAt))
       .limit(1);
-    if (phoneOrder && phoneOrder.userId !== adminUserId) {
+    // phoneOrder.userId may be null for guest orders — skip those (no account to re-use).
+    if (phoneOrder && phoneOrder.userId !== null && phoneOrder.userId !== adminUserId) {
       return phoneOrder.userId;
     }
   }
@@ -975,9 +976,10 @@ export async function getPosCustomerSearch(
     .from(orders)
     .where(like(orders.shippingPhone, `%${trimmed}%`));
 
-  // Collect phone-derived userIds (unique, exclude duplicates)
+  // Collect phone-derived userIds (unique, exclude duplicates).
+  // Filter out null userIds (guest orders have no account to look up).
   const phoneUserIdSet = new Set<string>(
-    phoneOrderRows.map((r) => r.userId),
+    phoneOrderRows.map((r) => r.userId).filter((id): id is string => id !== null),
   );
 
   // ── Build union of candidate ids ─────────────────────────────────────────
@@ -1025,12 +1027,14 @@ export async function getPosCustomerSearch(
     .where(inArray(orders.userId, userIds))
     .orderBy(desc(orders.createdAt));
 
-  // Group orders in memory — pick most recent per user + count
+  // Group orders in memory — pick most recent per user + count.
+  // orderRows are filtered by inArray(orders.userId, userIds) so userId is
+  // always non-null here; cast is safe.
   const latestOrder = new Map<string, typeof orderRows[number]>();
   const orderCount = new Map<string, number>();
 
   for (const row of orderRows) {
-    const uid = row.userId;
+    const uid = row.userId as string; // non-null: WHERE userId IN (userIds)
     orderCount.set(uid, (orderCount.get(uid) ?? 0) + 1);
     if (!latestOrder.has(uid)) {
       latestOrder.set(uid, row); // Already sorted desc, so first seen = most recent

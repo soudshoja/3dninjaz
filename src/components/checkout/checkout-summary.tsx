@@ -25,12 +25,15 @@ export function CheckoutSummary({
   appliedCoupon,
   onCouponChange,
   shipping,
+  isGuest,
 }: {
   items: HydratedCartItem[];
   subtotal: number;
   appliedCoupon: AppliedCoupon | null;
   onCouponChange: (next: AppliedCoupon | null) => void;
   shipping: SelectedShipping | null;
+  /** When true, the coupon widget is hidden (guests can't use coupons). */
+  isGuest?: boolean;
 }) {
   const discounted = appliedCoupon ? appliedCoupon.finalTotal : subtotal;
   const shippingNum = shipping?.price ?? 0;
@@ -43,13 +46,15 @@ export function CheckoutSummary({
         ))}
       </div>
 
-      <div className="mt-4">
-        <CouponApply
-          subtotal={subtotal}
-          applied={appliedCoupon}
-          onChange={onCouponChange}
-        />
-      </div>
+      {!isGuest && (
+        <div className="mt-4">
+          <CouponApply
+            subtotal={subtotal}
+            applied={appliedCoupon}
+            onChange={onCouponChange}
+          />
+        </div>
+      )}
 
       <div className="mt-4 flex items-center justify-between">
         <span className="text-sm text-slate-600">Subtotal</span>

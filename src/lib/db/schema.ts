@@ -48,6 +48,8 @@ export const user = mysqlTable("user", {
   // MariaDB stores JSON as LONGTEXT; admin actions ensure-array on read.
   notes: text("notes"),
   tags: json("tags").$type<string[]>(),
+  // guest-order linking + contact (nullable — existing rows unaffected)
+  phone: varchar("phone", { length: 32 }),
 });
 
 export const session = mysqlTable("session", {
@@ -499,9 +501,12 @@ export const orders = mysqlTable("orders", {
   id: varchar("id", { length: 36 })
     .primaryKey()
     .default(sql`(UUID())`),
-  userId: varchar("user_id", { length: 36 })
-    .notNull()
-    .references(() => user.id), // NO cascade — keep orders if user is deleted (PDPA audit, D3-23)
+  // Nullable for guest checkout — userId is null when the order is placed
+  // without an account. DO NOT add .notNull() here.
+  // NO cascade — keep orders if user is deleted (PDPA audit, D3-23)
+  userId: varchar("user_id", { length: 36 }).references(() => user.id),
+  // Token for the emailed guest order-view link. Null for authenticated orders.
+  guestAccessToken: varchar("guest_access_token", { length: 64 }),
   status: mysqlEnum("status", orderStatusValues).notNull().default("pending"),
   // PayPal identifiers (nullable until each phase of the payment flow completes)
   paypalOrderId: varchar("paypal_order_id", { length: 64 }).unique(),

@@ -8,10 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+// Simple MY phone regex — permissive, same as validators.ts MY_PHONE.
+const MY_PHONE_RE = /^[+\d\s\-()]{7,20}$/;
+
 export function RegisterForm() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [pdpaChecked, setPdpaChecked] = useState(false);
@@ -31,6 +35,10 @@ export function RegisterForm() {
       setError("Passwords do not match.");
       return;
     }
+    if (phone && !MY_PHONE_RE.test(phone.trim())) {
+      setError("Enter a valid Malaysian phone number.");
+      return;
+    }
     if (!pdpaChecked) {
       setError("You must agree to the PDPA Privacy Policy to register.");
       return;
@@ -47,6 +55,7 @@ export function RegisterForm() {
         name,
         // additionalFields
         pdpaConsentAt: new Date().toISOString(),
+        ...(phone.trim() ? { phone: phone.trim() } : {}),
       } as Parameters<typeof authClient.signUp.email>[0]);
 
       if (result.error) {
@@ -106,6 +115,22 @@ export function RegisterForm() {
             placeholder="you@example.com"
             required
             autoComplete="email"
+            className="h-12"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="phone">
+            Phone number{" "}
+            <span className="text-xs font-normal text-[var(--color-brand-text-muted)]">(optional — links your guest orders on registration)</span>
+          </Label>
+          <Input
+            id="phone"
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="+60 11 2543 4730"
+            autoComplete="tel"
             className="h-12"
           />
         </div>

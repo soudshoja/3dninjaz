@@ -1,14 +1,14 @@
-import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth-helpers";
 import { listMyAddresses } from "@/actions/addresses";
 import { CheckoutIsland } from "@/components/checkout/paypal-provider";
 import { BRAND } from "@/lib/brand";
 
 /**
- * /checkout — server component auth gate + layout shell (D3-03, D3-04, T-03-16).
+ * /checkout — server component layout shell (D3-03, D3-04, T-03-16).
  *
- * - Unauthenticated visitors are redirected to /login?next=/checkout before
- *   any client code runs (PROJECT.md "Account required for purchases").
+ * - Guests (unauthenticated) may now proceed through checkout without an
+ *   account. The CheckoutIsland renders a guest-email input + banner.
+ * - Authenticated users see the same flow as before, with saved addresses.
  * - The bag-empty gate runs on the client island (Zustand + localStorage)
  *   after hydration; see paypal-provider.tsx.
  * - `force-dynamic` because we read the session cookie — never cache the
@@ -19,15 +19,11 @@ export const dynamic = "force-dynamic";
 
 export default async function CheckoutPage() {
   const user = await getSessionUser();
-  if (!user) {
-    redirect("/login?next=/checkout");
-  }
+  const isGuest = !user;
 
-  // Phase 6 06-03 — fetch saved addresses for the AddressPicker. Server-side
-  // listMyAddresses re-validates session via requireUser(), but we already
-  // know the user is authenticated (gate above). Returns [] if none saved —
-  // the picker hides itself and the existing form path is preserved.
-  const savedAddresses = await listMyAddresses();
+  // Phase 6 06-03 — fetch saved addresses for logged-in users only.
+  // Guests have no saved addresses; skip the DB call entirely.
+  const savedAddresses = user ? await listMyAddresses() : [];
 
   return (
     <main
@@ -44,10 +40,11 @@ export default async function CheckoutPage() {
           </p>
         </header>
         <CheckoutIsland
-          defaultName={user.name ?? ""}
-          defaultEmail={user.email}
+          defaultName={user?.name ?? ""}
+          defaultEmail={user?.email ?? ""}
           savedAddresses={savedAddresses}
-          userId={user.id}
+          userId={user?.id ?? null}
+          isGuest={isGuest}
         />
       </div>
     </main>

@@ -35,6 +35,7 @@ function baseUrl(): string {
   );
 }
 
+// The inferred type now includes guestAccessToken and nullable userId from schema.
 type OrderWithItems = typeof orders.$inferSelect & {
   items: Array<{
     productId: string;             // Phase 20 (20-13) — D-08 isManualLine guard
@@ -67,7 +68,10 @@ function escapeHtml(s: string | null | undefined): string {
 
 export function renderOrderConfirmationHtml(order: OrderWithItems): string {
   const orderNo = formatOrderNumber(order.id);
-  const orderUrl = `${baseUrl()}/orders/${order.id}`;
+  // Guest orders carry a guestAccessToken; authenticated orders use a plain URL.
+  const orderUrl = (order.guestAccessToken && !order.userId)
+    ? `${baseUrl()}/orders/${order.id}?t=${order.guestAccessToken}`
+    : `${baseUrl()}/orders/${order.id}`;
 
   const itemsHtml = order.items
     .map((i) => {
@@ -212,7 +216,10 @@ export function renderOrderConfirmationText(order: OrderWithItems): string {
   lines.push(`  ${order.shippingState}, ${order.shippingCountry}`);
   lines.push(`  ${order.shippingPhone}`);
   lines.push("");
-  lines.push(`View online: ${baseUrl()}/orders/${order.id}`);
+  const textOrderUrl = (order.guestAccessToken && !order.userId)
+    ? `${baseUrl()}/orders/${order.id}?t=${order.guestAccessToken}`
+    : `${baseUrl()}/orders/${order.id}`;
+  lines.push(`View online: ${textOrderUrl}`);
   lines.push("");
   lines.push("Questions? Reply to this email.");
   return lines.join("\n");
@@ -299,11 +306,16 @@ export async function sendOrderConfirmationEmail(
   let text: string;
   try {
     const { renderTemplate } = await import("@/lib/email/templates");
+    // Build the order link: guest orders include the access token so the
+    // recipient can view without logging in.
+    const orderLink = (row.guestAccessToken && !row.userId)
+      ? `${baseUrl()}/orders/${row.id}?t=${row.guestAccessToken}`
+      : `${baseUrl()}/orders/${row.id}`;
     const rendered = await renderTemplate("order_confirmation", {
       customer_name: row.shippingName,
       order_number: formatOrderNumber(row.id),
       order_total: `${formatMYRServer(row.totalAmount)} ${row.currency}`,
-      order_link: `${baseUrl()}/orders/${row.id}`,
+      order_link: orderLink,
       items_table: renderItemsTableFragment(row),
       // Optional template variable {{paypal_capture_id}} — empty when the
       // capture id isn't set yet (status !== "paid"); templates that include

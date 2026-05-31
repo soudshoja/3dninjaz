@@ -27,16 +27,27 @@ export function PayPalButton({
   appliedCouponCode,
   shipping,
   onPaid,
+  guestEmail,
+  guestEmailValid,
 }: {
   address: AddressFormValues | null;
   items: HydratedCartItem[];
   appliedCouponCode?: string | null;
   shipping: SelectedShipping | null;
   onPaid: (redirectTo: string) => void;
+  /** Guest checkout email. Undefined when the user is authenticated. */
+  guestEmail?: string;
+  /** When guestEmail is provided, this must be true before PayPal is enabled. */
+  guestEmailValid?: boolean;
 }) {
   // Phase 9b — require a shipping service selection before PayPal is usable.
+  // For guests, also require a valid email before allowing PayPal.
+  const isGuestEmailRequired = guestEmail !== undefined;
   const disabled =
-    address === null || items.length === 0 || shipping === null;
+    address === null ||
+    items.length === 0 ||
+    shipping === null ||
+    (isGuestEmailRequired && !guestEmailValid);
   const addressRef = useRef(address);
   addressRef.current = address;
   const itemsRef = useRef(items);
@@ -45,6 +56,8 @@ export function PayPalButton({
   couponRef.current = appliedCouponCode ?? null;
   const shippingRef = useRef(shipping);
   shippingRef.current = shipping;
+  const guestEmailRef = useRef(guestEmail ?? "");
+  guestEmailRef.current = guestEmail ?? "";
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -71,6 +84,9 @@ export function PayPalButton({
       // re-quotes with this serviceCode (and falls back to the cheapest if
       // it's no longer offered) — the client-supplied price is ignored.
       shippingServiceCode: shippingRef.current?.serviceCode ?? null,
+      // Guest checkout: pass the email the guest typed so the server can
+      // store it on the order row and send the confirmation.
+      customerEmail: guestEmailRef.current || undefined,
     });
     if (!res.ok) {
       setErrorMsg(res.error);
@@ -102,9 +118,11 @@ export function PayPalButton({
       ? "Your bag is empty."
       : address === null
         ? "Complete your shipping address (name, phone, street, city, state, 5-digit postcode) to see couriers and pay."
-        : shipping === null
-          ? "Pick a courier above to continue."
-          : null;
+        : isGuestEmailRequired && !guestEmailValid
+          ? "Enter a valid email address above to continue."
+          : shipping === null
+            ? "Pick a courier above to continue."
+            : null;
 
   return (
     <div aria-live="polite">

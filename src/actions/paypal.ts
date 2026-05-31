@@ -43,6 +43,9 @@ type CreateOrderInput = {
   // re-derives the price — the client never dictates shipping cost
   // (T-09-01-tampering). When null, falls back to the flat-rate table.
   shippingServiceCode?: string | null;
+  // Guest checkout — required when no session user is present. Must be a
+  // valid email address; this is where the order confirmation is sent.
+  customerEmail?: string | null;
 };
 
 type CreateOrderResult =
@@ -79,8 +82,20 @@ export async function createPayPalOrder(
   input: CreateOrderInput,
 ): Promise<CreateOrderResult> {
   const user = await getSessionUser();
-  if (!user) {
-    return { ok: false, error: "You must be signed in to check out." };
+  // Guest checkout: user may be null. Resolve the email to use for the order.
+  let resolvedEmail: string;
+  if (user) {
+    resolvedEmail = user.email;
+  } else {
+    // Require a valid guest email.
+    const guestEmail = typeof input.customerEmail === "string" ? input.customerEmail.trim() : "";
+    if (!guestEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail)) {
+      return { ok: false, error: "A valid email address is required to check out as a guest." };
+    }
+    if (guestEmail.length > 254) {
+      return { ok: false, error: "Email address is too long." };
+    }
+    resolvedEmail = guestEmail;
   }
 
   // Validate address shape server-side even though the client validated too.
@@ -489,17 +504,20 @@ export async function createPayPalOrder(
   // depend on MariaDB's $returningId behavior (which uses LAST_INSERT_ID
   // and does not round-trip non-integer UUIDs reliably on mysql2).
   const internalOrderId = randomUUID();
+  // For guest orders: generate a token for the emailed order-view link.
+  const guestAccessToken = user ? null : randomUUID();
   try {
     await db.insert(orders).values({
       id: internalOrderId,
-      userId: user.id,
+      userId: user?.id ?? null,
+      guestAccessToken,
       status: "pending",
       paypalOrderId,
       subtotal: subtotalStr,
       shippingCost: shippingStr,
       totalAmount: totalStr,
       currency: PAYPAL_CURRENCY,
-      customerEmail: user.email,
+      customerEmail: resolvedEmail,
       shippingName: addr.data.recipientName,
       shippingPhone: addr.data.phone,
       shippingLine1: addr.data.addressLine1,
@@ -569,13 +587,7 @@ export async function capturePayPalOrder({
 }: {
   paypalOrderId: string;
 }): Promise<CaptureOrderResult> {
-  const user = await getSessionUser();
-  if (!user) {
-    return {
-      ok: false,
-      error: "You must be signed in to complete your order.",
-    };
-  }
+  const user = await getSessionUser(); // may be null for guests
   if (!paypalOrderId || typeof paypalOrderId !== "string") {
     return { ok: false, error: "Missing PayPal order ID." };
   }
@@ -586,19 +598,28 @@ export async function capturePayPalOrder({
   if (!existing) {
     return { ok: false, error: "Order not found." };
   }
-  // Only the owner may capture; admins don't capture on behalf of customers.
-  if (existing.userId !== user.id) {
-    return { ok: false, error: "Order not found." };
+  // Ownership gate:
+  //   - Authenticated order (userId set): require the session user to own it.
+  //   - Guest order (userId null): allow capture by anyone holding the
+  //     unguessable paypalOrderId — PayPal approval already proves intent.
+  if (existing.userId !== null) {
+    if (!user || existing.userId !== user.id) {
+      return { ok: false, error: "Order not found." };
+    }
   }
+  // Guest orders (userId null) pass through — secured by the paypalOrderId.
 
   // Idempotency (D3-09): if we already captured, return existing result
   // without calling PayPal again.
   if (existing.paypalCaptureId) {
+    const tokenSuffix = (existing.guestAccessToken && !existing.userId)
+      ? `?t=${existing.guestAccessToken}`
+      : "";
     return {
       ok: true,
       orderId: existing.id,
       orderNumber: formatOrderNumber(existing.id),
-      redirectTo: `/orders/${existing.id}`,
+      redirectTo: `/orders/${existing.id}${tokenSuffix}`,
     };
   }
 
@@ -644,11 +665,14 @@ export async function capturePayPalOrder({
         where: eq(orders.paypalOrderId, paypalOrderId),
       });
       if (refetched?.paypalCaptureId) {
+        const tok = (refetched.guestAccessToken && !refetched.userId)
+          ? `?t=${refetched.guestAccessToken}`
+          : "";
         return {
           ok: true,
           orderId: refetched.id,
           orderNumber: formatOrderNumber(refetched.id),
-          redirectTo: `/orders/${refetched.id}`,
+          redirectTo: `/orders/${refetched.id}${tok}`,
         };
       }
     }
@@ -674,7 +698,11 @@ export async function capturePayPalOrder({
   // discount on the audit trail but the customer already paid the
   // discounted amount (it was sent to PayPal as the order total). This is
   // an acceptable failure mode — log it for the operator.
-  if (appliedCouponCode) {
+  // Plan 05-03 — atomic coupon redemption AFTER capture succeeds. Guest orders
+  // (userId null) cannot record a coupon_redemptions row because that table's
+  // userId is NOT NULL. The discount was already applied to the PayPal total;
+  // only the audit row is lost, which is acceptable for v1 guest flow.
+  if (appliedCouponCode && existing.userId) {
     try {
       const subtotalNum = parseFloat(existing.subtotal);
       const valid = await validateCoupon(appliedCouponCode, subtotalNum);
@@ -716,13 +744,18 @@ export async function capturePayPalOrder({
   revalidatePath(`/orders/${existing.id}`);
   revalidatePath("/orders");
 
+  // Build the redirect URL. Guest orders include ?t=<token> so the order
+  // detail page allows unauthenticated access via the tokenized link.
+  const guestTokenQS = (existing.guestAccessToken && !existing.userId)
+    ? `&t=${existing.guestAccessToken}`
+    : "";
   return {
     ok: true,
     orderId: existing.id,
     orderNumber: formatOrderNumber(existing.id),
     // `?from=checkout` toggles the success banner on /orders/[id] (Plan 03-03).
     // T-03-24: cosmetic only — no behavior change if the flag is spoofed.
-    redirectTo: `/orders/${existing.id}?from=checkout`,
+    redirectTo: `/orders/${existing.id}?from=checkout${guestTokenQS}`,
   };
 }
 

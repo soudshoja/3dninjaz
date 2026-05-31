@@ -40,6 +40,9 @@ export function MobileSummarySheet({
   onPaid,
   customerName,
   customerEmail,
+  isGuest,
+  guestEmail,
+  guestEmailValid,
 }: {
   items: HydratedCartItem[];
   subtotalMyr: number;
@@ -50,6 +53,12 @@ export function MobileSummarySheet({
   onPaid: (redirectTo: string) => void;
   customerName: string;
   customerEmail: string;
+  /** True when no session — hides coupon widget. */
+  isGuest?: boolean;
+  /** Guest checkout email — undefined when the user is authenticated. */
+  guestEmail?: string;
+  /** Whether the guest email input passes the format check. */
+  guestEmailValid?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const discountedSubtotal = appliedCoupon
@@ -98,6 +107,7 @@ export function MobileSummarySheet({
               appliedCoupon={appliedCoupon}
               onCouponChange={onCouponChange}
               shipping={shipping}
+              isGuest={isGuest}
             />
           </div>
 
@@ -109,12 +119,14 @@ export function MobileSummarySheet({
             <PayPalButton
               address={address}
               items={items}
-              appliedCouponCode={appliedCoupon?.code ?? null}
+              appliedCouponCode={isGuest ? null : (appliedCoupon?.code ?? null)}
               shipping={shipping}
               onPaid={(redirect) => {
                 setOpen(false);
                 onPaid(redirect);
               }}
+              guestEmail={guestEmail}
+              guestEmailValid={guestEmailValid}
             />
             <WhatsAppBankTransferButton
               items={items}
