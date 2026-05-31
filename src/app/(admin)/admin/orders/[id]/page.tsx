@@ -13,8 +13,9 @@ import { AdminOrderTimeline } from "@/components/admin/admin-order-timeline";
 import { AdminOrderStatusForm } from "@/components/admin/admin-order-status-form";
 import { AdminOrderNotesForm } from "@/components/admin/admin-order-notes-form";
 // Phase 6 06-06 — admin approval surface for cancel/return requests.
+// 260601-afs — listOrderRequestsForOrder now returns AdminOrderRequestRow[]
 import { listOrderRequestsForOrder } from "@/actions/admin-order-requests";
-import { OrderRequestsAdmin } from "@/components/admin/order-requests-admin";
+import { OrderRequestsAdmin, type AdminOrderRequestRow } from "@/components/admin/order-requests-admin";
 // Phase 7 (07-03) — manual order payment-link surface.
 import { listOrderPaymentLinks } from "@/actions/admin-manual-orders";
 import { PaymentLinkCard } from "@/components/admin/payment-link-card";
@@ -462,15 +463,7 @@ export default async function AdminOrderDetailPage({
               Cancel / return requests
             </h2>
             <OrderRequestsAdmin
-              requests={orderRequests.map((r) => ({
-                id: r.id,
-                type: r.type,
-                status: r.status,
-                reason: r.reason,
-                adminNotes: r.adminNotes ?? null,
-                createdAt: r.createdAt,
-                resolvedAt: r.resolvedAt ?? null,
-              }))}
+              requests={orderRequests as AdminOrderRequestRow[]}
             />
           </section>
 

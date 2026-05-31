@@ -2,6 +2,11 @@
 
 /**
  * Phase 6 06-06 — admin approve/reject for cancel/return requests (CUST-07).
+ * 260601-afs — extended with:
+ *   - approveOrderRequest: sets approvedAt, fires return_approved email
+ *   - rejectOrderRequest: fires return_rejected email
+ *   - markReturnReceived: terminal state, fires return_received email
+ *   - listOrderRequestsForOrder: runs lazy expiry on all rows
  *
  * THREAT MODEL:
  *  - T-06-06-admin-auth: requireAdmin() FIRST await on every export
@@ -15,18 +20,128 @@
 import { desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { orderRequests, orders } from "@/lib/db/schema";
+import {
+  orderRequests,
+  orders,
+  ensureReturnItems,
+  ensurePhotoArray,
+} from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { assertValidTransition, type OrderStatus } from "@/lib/orders";
+import { isReturnShipExpired } from "@/lib/order-windows";
+import {
+  sendReturnApprovedEmail,
+  sendReturnRejectedEmail,
+  sendReturnReceivedEmail,
+  sendReturnExpiredEmail,
+} from "@/actions/send-emails";
 
-export async function listOrderRequestsForOrder(orderId: string) {
+// ============================================================================
+// Shared admin row type
+// ============================================================================
+
+export type AdminOrderRequestRow = {
+  id: string;
+  orderId: string;
+  userId: string;
+  type: "cancel" | "return";
+  status:
+    | "pending"
+    | "approved"
+    | "rejected"
+    | "shipped"
+    | "received"
+    | "expired";
+  reason: string;
+  adminNotes: string | null;
+  items: Array<{ orderItemId: string; qty: number }>;
+  photos: string[];
+  returnCourier: string | null;
+  returnTrackingNumber: string | null;
+  approvedAt: Date | null;
+  shippedAt: Date | null;
+  createdAt: Date;
+  resolvedAt: Date | null;
+};
+
+// ============================================================================
+// Lazy expiry (admin-side mirror of the customer-side helper)
+// ============================================================================
+
+async function expireStaleReturnsAdmin(
+  rows: AdminOrderRequestRow[],
+): Promise<void> {
+  const stale = rows.filter(
+    (r) =>
+      r.type === "return" &&
+      isReturnShipExpired({
+        status: r.status,
+        approvedAt: r.approvedAt,
+        shippedAt: r.shippedAt,
+      }),
+  );
+  if (stale.length === 0) return;
+
+  const now = new Date();
+  for (const r of stale) {
+    r.status = "expired";
+    r.resolvedAt = now;
+
+    try {
+      await db
+        .update(orderRequests)
+        .set({ status: "expired", resolvedAt: now })
+        .where(eq(orderRequests.id, r.id));
+
+      // Fire email with full context available in admin list
+      void sendReturnExpiredEmail({ requestId: r.id, orderId: r.orderId }).catch(
+        (e) => console.error("[expireStaleReturnsAdmin] email failed", e),
+      );
+    } catch (e) {
+      console.error("[expireStaleReturnsAdmin] DB update failed for", r.id, e);
+    }
+  }
+}
+
+// ============================================================================
+// List
+// ============================================================================
+
+export async function listOrderRequestsForOrder(
+  orderId: string,
+): Promise<AdminOrderRequestRow[]> {
   await requireAdmin();
-  return db
+  const rows = await db
     .select()
     .from(orderRequests)
     .where(eq(orderRequests.orderId, orderId))
     .orderBy(desc(orderRequests.createdAt));
+
+  const result: AdminOrderRequestRow[] = rows.map((r) => ({
+    id: r.id,
+    orderId: r.orderId,
+    userId: r.userId,
+    type: r.type,
+    status: r.status as AdminOrderRequestRow["status"],
+    reason: r.reason,
+    adminNotes: r.adminNotes ?? null,
+    items: ensureReturnItems(r.items),
+    photos: ensurePhotoArray(r.photos),
+    returnCourier: r.returnCourier ?? null,
+    returnTrackingNumber: r.returnTrackingNumber ?? null,
+    approvedAt: r.approvedAt ?? null,
+    shippedAt: r.shippedAt ?? null,
+    createdAt: r.createdAt,
+    resolvedAt: r.resolvedAt ?? null,
+  }));
+
+  await expireStaleReturnsAdmin(result);
+  return result;
 }
+
+// ============================================================================
+// Approve
+// ============================================================================
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -66,29 +181,44 @@ export async function approveOrderRequest(
         .set({ status: "cancelled" })
         .where(eq(orders.id, req.orderId));
     }
-    // For 'return', order.status stays 'delivered' (Assumption 6); only the
-    // request transitions. Admin handles refund out-of-band in PayPal.
 
+    const now = new Date();
     await tx
       .update(orderRequests)
       .set({
         status: "approved",
         adminNotes: adminNotes ?? null,
-        resolvedAt: new Date(),
+        approvedAt: req.type === "return" ? now : null,
+        resolvedAt: req.type === "cancel" ? now : null,
       })
       .where(eq(orderRequests.id, requestId));
 
-    return { ok: true as const, orderId: req.orderId };
+    return { ok: true as const, orderId: req.orderId, type: req.type, requestId };
   });
 
   if (result.ok) {
     revalidatePath(`/admin/orders/${result.orderId}`);
     revalidatePath(`/admin/orders`);
     revalidatePath(`/orders/${result.orderId}`);
+
+    // Fire approval email for return requests (fire-and-forget)
+    if (result.type === "return") {
+      void sendReturnApprovedEmail({
+        requestId: result.requestId,
+        orderId: result.orderId,
+      }).catch((e) =>
+        console.error("[approveOrderRequest] return email failed", e),
+      );
+    }
+
     return { ok: true };
   }
   return result;
 }
+
+// ============================================================================
+// Reject
+// ============================================================================
 
 export async function rejectOrderRequest(
   requestId: string,
@@ -112,7 +242,65 @@ export async function rejectOrderRequest(
       resolvedAt: new Date(),
     })
     .where(eq(orderRequests.id, requestId));
+
   revalidatePath(`/admin/orders/${req.orderId}`);
   revalidatePath(`/orders/${req.orderId}`);
+
+  // Fire rejection email (fire-and-forget)
+  if (req.type === "return") {
+    void sendReturnRejectedEmail({
+      requestId: req.id,
+      orderId: req.orderId,
+      reason: adminNotes ?? "No reason provided.",
+    }).catch((e) =>
+      console.error("[rejectOrderRequest] return email failed", e),
+    );
+  }
+
+  return { ok: true };
+}
+
+// ============================================================================
+// 260601-afs — Mark received (terminal state)
+// ============================================================================
+
+export async function markReturnReceived(
+  requestId: string,
+): Promise<ActionResult> {
+  await requireAdmin();
+
+  const [req] = await db
+    .select()
+    .from(orderRequests)
+    .where(eq(orderRequests.id, requestId))
+    .limit(1);
+  if (!req) return { ok: false, error: "Request not found." };
+  if (req.type !== "return") {
+    return { ok: false, error: "Only return requests can be marked received." };
+  }
+  if (req.status !== "shipped") {
+    return {
+      ok: false,
+      error: "Request must be in 'shipped' status to mark as received.",
+    };
+  }
+
+  const now = new Date();
+  await db
+    .update(orderRequests)
+    .set({ status: "received", resolvedAt: now })
+    .where(eq(orderRequests.id, requestId));
+
+  revalidatePath(`/admin/orders/${req.orderId}`);
+  revalidatePath(`/orders/${req.orderId}`);
+
+  // Fire received email (fire-and-forget)
+  void sendReturnReceivedEmail({
+    requestId: req.id,
+    orderId: req.orderId,
+  }).catch((e) =>
+    console.error("[markReturnReceived] email failed", e),
+  );
+
   return { ok: true };
 }
