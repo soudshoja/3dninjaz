@@ -512,7 +512,11 @@ async function main() {
   console.log(`\nDone: ${ok}/${seeds.length} templates upserted.`);
 }
 
-main().catch((err) => {
-  console.error("Fatal:", err);
-  process.exit(1);
-});
+module.exports = { buildSeeds, brandedEmailTemplate };
+
+if (require.main === module) {
+  main().catch((err) => {
+    console.error("Fatal:", err);
+    process.exit(1);
+  });
+}
