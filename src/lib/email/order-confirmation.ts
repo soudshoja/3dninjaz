@@ -336,10 +336,14 @@ export async function sendOrderConfirmationEmail(
     text = renderOrderConfirmationText(row);
   }
 
-  try {
-    await sendMail({ to: row.customerEmail, subject, html, text });
-  } catch (err) {
-    console.error("[order-email] send failed:", err);
+  // Skip the customer send for internal/sentinel addresses (manual/POS orders
+  // without a real customer email). The admin notification below still fires.
+  if (!row.customerEmail.endsWith("@3dninjaz.local")) {
+    try {
+      await sendMail({ to: row.customerEmail, subject, html, text });
+    } catch (err) {
+      console.error("[order-email] send failed:", err);
+    }
   }
 
   // ── Owner/admin new-order notification ──────────────────────────────────
