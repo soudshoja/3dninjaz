@@ -492,7 +492,7 @@ export function ConfigurableProductView({
             {showStickyPreview && (
               <div className="lg:hidden sticky top-16 z-30 preview-strip-in">
                 <div
-                  className="flex items-center gap-2 rounded-2xl px-3 py-2"
+                  className="relative flex items-center justify-center rounded-2xl px-2 py-2 overflow-hidden"
                   style={{
                     background: "rgba(255,255,255,0.92)",
                     backdropFilter: "blur(10px)",
@@ -501,8 +501,11 @@ export function ConfigurableProductView({
                     boxShadow: `0 8px 22px ${BRAND.ink}1a, 0 2px 0 ${BRAND.green}40`,
                   }}
                 >
+                  {/* "Live" tag is overlaid (absolute) so it doesn't steal width
+                      from the preview — the preview is sized to the SAME ~306px
+                      container width as the hero so its cubes match (32px). */}
                   <span
-                    className="shrink-0 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider"
+                    className="absolute top-1.5 left-2 z-10 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider"
                     style={{
                       backgroundColor: BRAND.green,
                       color: BRAND.ink,
@@ -511,21 +514,19 @@ export function ConfigurableProductView({
                   >
                     <span aria-hidden="true">✦</span> Live
                   </span>
-                  <div className="flex-1 min-w-0 flex justify-center">
-                    <div className="w-full max-w-[260px]">
-                      <KeychainPreview
-                        text={textValue}
-                        baseHex={baseHex}
-                        clickerHex={clickerHex}
-                        letterHex={letterHex}
-                        maxLength={maxLength}
-                        placeholder={
-                          product.productType === "keychain" || textFields.length > 0
-                            ? "YOURTEXT"
-                            : ""
-                        }
-                      />
-                    </div>
+                  <div className="w-full max-w-[306px] mx-auto">
+                    <KeychainPreview
+                      text={textValue}
+                      baseHex={baseHex}
+                      clickerHex={clickerHex}
+                      letterHex={letterHex}
+                      maxLength={maxLength}
+                      placeholder={
+                        product.productType === "keychain" || textFields.length > 0
+                          ? "YOURTEXT"
+                          : ""
+                      }
+                    />
                   </div>
                 </div>
               </div>
