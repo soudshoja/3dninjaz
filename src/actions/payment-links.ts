@@ -10,7 +10,6 @@ import { revalidatePath } from "next/cache";
 import { writePaymentProof } from "@/lib/payment-proof-storage";
 import { assertValidTransition } from "@/lib/orders";
 import crypto from "node:crypto";
-import { autoBookShipmentAfterPayment } from "@/actions/shipping";
 
 /**
  * Phase 7 (07-03) — PUBLIC payment-link actions.
@@ -507,12 +506,8 @@ export async function capturePaymentLinkPayment({
     // PayPal already captured — webhook will reconcile if this was transient.
   }
 
-  // Auto-book the Delyva courier the customer selected at checkout.
-  // Fire-and-forget — booking failures must never block the payment
-  // response. Admin can manually retry from /admin/orders/[id] if needed.
-  void autoBookShipmentAfterPayment(orderRow.id).catch((err) =>
-    console.error("[payment-links] auto-book shipment failed:", err),
-  );
+  // Shipping is booked MANUALLY by an admin from /admin/orders/[id] when
+  // ready (ops decision 2026-06-01) — do NOT auto-book the courier on payment.
 
   // Await the order-confirmation email send. Previously fire-and-forget,
   // but Next.js on Node runtime may abort the pending promise after the
