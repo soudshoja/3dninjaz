@@ -631,10 +631,16 @@ export type ShippingRateInput = z.infer<typeof shippingRateSchema>;
  * applied separately in src/lib/email/sanitize.ts before persistence and
  * before render (defense-in-depth).
  */
-export const emailTemplateKeyEnum = z.enum([
-  "order_confirmation",
-  "password_reset",
-]);
+// Template keys are seeded server-side (seedEmailTemplates) and are only ever
+// EDITED here by an existing key — so validate the key's SHAPE rather than a
+// hardcoded list. The old 2-value enum drifted: newer templates
+// (dispute_*, order_shipped/processing/delivered/refunded/cancelled, return_*,
+// welcome, newsletter_*) were all rejected on save with "Invalid enum value".
+export const emailTemplateKeyEnum = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z0-9_]+$/, "Invalid template key");
 export type EmailTemplateKey = z.infer<typeof emailTemplateKeyEnum>;
 
 export const emailTemplateSchema = z.object({
