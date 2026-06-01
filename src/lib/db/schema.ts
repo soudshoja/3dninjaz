@@ -1400,80 +1400,109 @@ export const emailSubscribers = mysqlTable(
   }),
 );
 
-function brandedEmailTemplate(
-  headingEmoji: string,
-  heading: string,
-  body: string,
-  cta?: { text: string; url: string },
-  ctaColor: string = "#1877F2"
-): string {
+// ============================================================================
+// Neo-brutalist / claymorphism design system for all transactional emails.
+//
+// NOTE: The render-time sanitiser (src/lib/email/sanitize.ts) strips <html>,
+// <head>, <style>, and <body> tags entirely — they are not in ALLOWED_TAGS.
+// Mobile responsiveness is achieved via fluid width:100%/max-width on the
+// outer wrapper rather than @media queries. Inline styles only.
+// ============================================================================
+function brandedEmailTemplate(opts: {
+  icon: string;
+  title: string;
+  subtitle: string;
+  bodyHtml: string;
+  cta?: { text: string; url: string };
+}): string {
+  const { icon, title, subtitle, bodyHtml, cta } = opts;
+
   const ctaHtml = cta
-    ? `<tr><td align="center" style="padding:16px 32px 32px">
-        <a href="{{${cta.url}}}" style="display:inline-block;padding:12px 28px;background:${ctaColor};color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px">${cta.text}</a>
+    ? `<tr><td align="center" style="padding:0 28px 32px;border-collapse:collapse">
+        <a href="{{${cta.url}}}" style="display:inline-block;padding:15px 30px;background:#C7E56B;color:#111111;text-decoration:none;border:3px solid #111111;border-radius:999px;box-shadow:5px 5px 0 #111111;font-size:16px;font-weight:900;letter-spacing:0.3px">${cta.text}</a>
       </td></tr>`
     : "";
 
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{{subject}}</title>
-</head>
-<body style="margin:0;padding:0;background:#FAFAFA;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#3f3f46">
-<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#FAFAFA;border-collapse:collapse">
+  return `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#D8ECFF;border-collapse:collapse;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
   <tr>
-    <td align="center" style="padding:32px 16px">
-      <table role="presentation" cellpadding="0" cellspacing="0" width="560" style="max-width:100%;background:#ffffff;border:1px solid #e4e4e7;border-radius:12px;border-collapse:collapse">
+    <td align="center" style="padding:32px 12px">
+      <table role="presentation" cellpadding="0" cellspacing="0" width="640" style="width:100%;max-width:640px;background:#ffffff;border:3px solid #111111;border-radius:26px;box-shadow:8px 8px 0 #111111;border-collapse:collapse">
+        <!-- HEADER BAND -->
         <tr>
-          <td align="center" style="padding:32px 32px 16px;border-collapse:collapse">
-            <img src="https://app.3dninjaz.com/icons/ninja/logo.png" alt="3D Ninjaz" width="200" style="display:block;max-width:100%;height:auto">
+          <td align="center" style="background:#C7E56B;border-bottom:3px solid #111111;border-radius:23px 23px 0 0;padding:28px 24px 24px;border-collapse:collapse">
+            <div style="display:inline-block;background:#ffffff;color:#111111;font-size:13px;font-weight:900;letter-spacing:1px;padding:10px 20px;border:3px solid #111111;border-radius:999px;box-shadow:4px 4px 0 #111111;margin-bottom:16px">3D NINJAZ</div>
+            <div style="font-size:42px;line-height:1;margin-bottom:10px">${icon}</div>
+            <div style="color:#111111;font-size:32px;font-weight:900;line-height:1.1;margin-bottom:12px">${title}</div>
+            <div style="display:inline-block;background:#DCC3F3;color:#111111;border:3px solid #111111;border-radius:999px;font-size:14px;font-weight:800;padding:9px 16px">${subtitle}</div>
           </td>
         </tr>
+        <!-- BODY -->
         <tr>
-          <td align="center" style="padding:0 32px 16px;border-collapse:collapse">
-            <div style="font-size:80px">${headingEmoji}</div>
+          <td style="padding:34px 28px 24px;border-collapse:collapse">
+            ${bodyHtml}
           </td>
         </tr>
-        <tr>
-          <td style="padding:8px 32px 0;color:#0B1020;font-size:24px;font-weight:600;line-height:1.3;text-align:center;border-collapse:collapse">
-            ${heading}
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:16px 32px 32px;color:#3f3f46;font-size:15px;line-height:1.6;border-collapse:collapse">
-            ${body}
-          </td>
-        </tr>
+        <!-- CTA -->
         ${ctaHtml}
+        <!-- HELP STRIP -->
         <tr>
-          <td style="padding:16px 32px 32px;border-top:1px solid #f1f5f9;color:#71717a;font-size:13px;line-height:1.5;text-align:center;border-collapse:collapse">
-            <p style="margin:0 0 8px">© {{current_year}} 3D Ninjaz · Kuala Lumpur, Malaysia</p>
+          <td style="padding:0 28px 28px;border-collapse:collapse">
+            <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#DCC3F3;border:3px solid #111111;border-radius:18px;border-collapse:collapse">
+              <tr>
+                <td align="center" style="padding:16px 20px;color:#111111;font-size:14px;font-weight:700;border-collapse:collapse">
+                  Need help? Contact us at <a href="mailto:{{support_email}}" style="color:#111111;font-weight:900">{{support_email}}</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- FOOTER -->
+        <tr>
+          <td align="center" style="background:#111111;border-radius:0 0 23px 23px;padding:20px 24px;color:#ffffff;font-size:13px;font-weight:700;border-collapse:collapse">
+            © {{current_year}} 3D Ninjaz &nbsp;·&nbsp;
+            <a href="https://3dninjaz.com" style="color:#C7E56B;text-decoration:none;font-weight:700">3dninjaz.com</a>
           </td>
         </tr>
       </table>
     </td>
   </tr>
-</table>
-</body>
-</html>`;
+</table>`;
 }
 
 export function seedEmailTemplates(): EmailTemplateSeed[] {
+  // Shared body styles
+  const h = (text: string) =>
+    `<p style="font-size:28px;font-weight:900;color:#111111;margin:0 0 14px">${text}</p>`;
+  const p = (text: string) =>
+    `<p style="font-size:16px;line-height:26px;color:#334155;margin:0 0 12px">${text}</p>`;
+  const card = (rows: string) =>
+    `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#F8FBFF;border:3px solid #111111;border-radius:20px;box-shadow:5px 5px 0 #DCC3F3;border-collapse:collapse;margin-bottom:20px">${rows}</table>`;
+  const cardRow = (label: string, value: string, last = false) =>
+    `<tr><td style="padding:14px 18px;border-collapse:collapse${last ? "" : ";border-bottom:2px dashed #111111"}"><div style="font-size:12px;font-weight:900;letter-spacing:.8px;color:#111111;text-transform:uppercase;margin-bottom:4px">${label}</div><div style="font-size:15px;font-weight:900;color:#111111">${value}</div></td></tr>`;
+  const link = (href: string, text: string) =>
+    `<a href="${href}" style="color:#111111;font-weight:900">${text}</a>`;
+
   return [
+    // -----------------------------------------------------------------------
     {
       key: "order_confirmation",
       subject: "Order #{{order_number}} confirmed — thanks from 3D Ninjaz 🥷",
-      html: brandedEmailTemplate(
-        "✓",
-        "Your order is confirmed!",
-        `<p>Thanks, {{customer_name}}!</p>
-        <p>Your order <strong>#{{order_number}}</strong> is confirmed.</p>
-        <p><strong>Total:</strong> {{order_total}}</p>
-        {{items_table}}
-        <p style="margin-top:16px">We'll prepare your 3D printed items and ship them ASAP.</p>`,
-        { text: "View Order", url: "order_link" }
-      ),
+      html: brandedEmailTemplate({
+        icon: "✅",
+        title: "Order Confirmed!",
+        subtitle: "Your 3D Ninjaz order is locked in",
+        bodyHtml: `
+          ${h("Thanks, {{customer_name}}!")}
+          ${p("Your order <strong>#{{order_number}}</strong> has been confirmed and we are getting started right away.")}
+          ${card(
+            cardRow("Order Number", "#{{order_number}}") +
+            cardRow("Order Total", "{{order_total}}", true)
+          )}
+          <div style="margin-bottom:20px">{{items_table}}</div>
+          ${p("We will prepare your 3D printed items and ship them as soon as possible. You will receive a shipping notification the moment it leaves our hands.")}
+        `,
+        cta: { text: "View Your Order", url: "order_link" },
+      }),
       variables: [
         "customer_name",
         "order_number",
@@ -1485,38 +1514,47 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         "current_year",
       ],
     },
+    // -----------------------------------------------------------------------
     {
       key: "order_processing",
       subject: "Your 3D Ninjaz order is being printed ({{order_number}})",
-      html: brandedEmailTemplate(
-        "🖨️",
-        "We're printing your order!",
-        `<p>Hi {{customer_name}},</p>
-        <p>Great news — your 3D Ninjaz order <strong>#{{order_number}}</strong> is now in production. Our printers are warming up and your item will be ready to ship soon.</p>
-        <p style="margin-top:16px">You can check the latest status anytime at your order page.</p>
-        <p>We'll send another note the moment it ships.</p>`,
-        { text: "View Order", url: "order_url" }
-      ),
+      html: brandedEmailTemplate({
+        icon: "🖨️",
+        title: "Printing Your Order!",
+        subtitle: "Production is underway",
+        bodyHtml: `
+          ${h("Hi {{customer_name}},")}
+          ${p("Great news — your 3D Ninjaz order <strong>#{{order_number}}</strong> is now in production. Our printers are warming up and your item will be ready to ship soon.")}
+          ${p("You can check the latest status anytime on your order page. We will send another notification the moment it ships.")}
+        `,
+        cta: { text: "View Your Order", url: "order_url" },
+      }),
       variables: [
         "customer_name",
         "order_number",
         "order_url",
       ],
     },
+    // -----------------------------------------------------------------------
     {
       key: "order_shipped",
       subject: "Your 3D Ninjaz order is on its way! ({{courier_name}})",
-      html: brandedEmailTemplate(
-        "📦",
-        "Your order is shipped!",
-        `<p>Hey {{customer_name}},</p>
-        <p>Your order <strong>#{{order_number}}</strong> has been dispatched.</p>
-        <p><strong>Courier:</strong> {{courier_name}}<br>
-        <strong>Tracking:</strong> {{tracking_no}}<br>
-        <strong>Consignment:</strong> {{consignment_no}}</p>
-        <p style="margin-top:16px">Click below to track your delivery in real-time.</p>`,
-        { text: "Track Package", url: "tracking_link" }
-      ),
+      html: brandedEmailTemplate({
+        icon: "📦",
+        title: "Your Order Shipped!",
+        subtitle: "On its way to you",
+        bodyHtml: `
+          ${h("Hey {{customer_name}},")}
+          ${p("Your order <strong>#{{order_number}}</strong> has been dispatched and is on its way to you.")}
+          ${card(
+            cardRow("Courier", "{{courier_name}}") +
+            cardRow("Tracking Number", "{{tracking_no}}") +
+            cardRow("Consignment No.", "{{consignment_no}}", true)
+          )}
+          ${p("Click the button below to track your delivery in real-time.")}
+        `,
+        cta: { text: "Track Package", url: "tracking_link" },
+      }),
       variables: [
         "customer_name",
         "order_number",
@@ -1530,17 +1568,21 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         "current_year",
       ],
     },
+    // -----------------------------------------------------------------------
     {
       key: "order_delivered",
       subject: "Your 3D Ninjaz order has been delivered 🎉",
-      html: brandedEmailTemplate(
-        "🎉",
-        "Delivered!",
-        `<p>Hey {{customer_name}},</p>
-        <p>Your order <strong>#{{order_number}}</strong> has been delivered to your doorstep.</p>
-        <p style="margin-top:16px">We hope you love your 3D printed items! If you have any questions, feel free to reach out.</p>`,
-        { text: "View Order", url: "order_link" }
-      ),
+      html: brandedEmailTemplate({
+        icon: "🎉",
+        title: "Delivered!",
+        subtitle: "Your order has arrived",
+        bodyHtml: `
+          ${h("Hey {{customer_name}},")}
+          ${p("Your order <strong>#{{order_number}}</strong> has been delivered to your doorstep.")}
+          ${p("We hope you love your 3D printed items! If anything is not quite right, do not hesitate to reach out — we are always happy to help.")}
+        `,
+        cta: { text: "View Your Order", url: "order_link" },
+      }),
       variables: [
         "customer_name",
         "order_number",
@@ -1550,18 +1592,25 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         "current_year",
       ],
     },
+    // -----------------------------------------------------------------------
     {
       key: "order_refunded",
       subject: "Refund processed for order #{{order_number}}",
-      html: brandedEmailTemplate(
-        "💰",
-        "Your refund has been processed",
-        `<p>Hi {{customer_name}},</p>
-        <p>We've refunded <strong>{{refund_amount}}</strong> for order <strong>#{{order_number}}</strong>.</p>
-        <p style="margin-top:16px">The refund should appear in your account within 3-5 business days.</p>
-        <p>If you have questions, contact us at <a href="mailto:{{support_email}}" style="color:#1877F2">{{support_email}}</a></p>`,
-        { text: "View Order", url: "order_link" }
-      ),
+      html: brandedEmailTemplate({
+        icon: "💰",
+        title: "Refund Processed",
+        subtitle: "Your money is on its way back",
+        bodyHtml: `
+          ${h("Hi {{customer_name}},")}
+          ${p("We have processed a refund for your order.")}
+          ${card(
+            cardRow("Order Number", "#{{order_number}}") +
+            cardRow("Refund Amount", "{{refund_amount}}", true)
+          )}
+          ${p("The refund should appear in your account within 3–5 business days depending on your payment provider.")}
+        `,
+        cta: { text: "View Your Order", url: "order_link" },
+      }),
       variables: [
         "customer_name",
         "order_number",
@@ -1573,18 +1622,24 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         "current_year",
       ],
     },
+    // -----------------------------------------------------------------------
     {
       key: "order_cancelled",
       subject: "Order #{{order_number}} has been cancelled",
-      html: brandedEmailTemplate(
-        "❌",
-        "Order cancelled",
-        `<p>Hi {{customer_name}},</p>
-        <p>Your order <strong>#{{order_number}}</strong> has been cancelled.</p>
-        <p><strong>Reason:</strong> {{cancellation_reason}}</p>
-        <p style="margin-top:16px">If this was unexpected, please contact us at <a href="mailto:{{support_email}}" style="color:#1877F2">{{support_email}}</a></p>`,
-        { text: "Contact Support", url: "support_email" }
-      ),
+      html: brandedEmailTemplate({
+        icon: "❌",
+        title: "Order Cancelled",
+        subtitle: "Order #{{order_number}}",
+        bodyHtml: `
+          ${h("Hi {{customer_name}},")}
+          ${p("Your order <strong>#{{order_number}}</strong> has been cancelled.")}
+          ${card(
+            cardRow("Cancellation Reason", "{{cancellation_reason}}", true)
+          )}
+          ${p("If this cancellation was unexpected or you have questions, please reach out to us — we are here to help.")}
+        `,
+        cta: { text: "Contact Support", url: "support_email" },
+      }),
       variables: [
         "customer_name",
         "order_number",
@@ -1596,17 +1651,21 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         "current_year",
       ],
     },
+    // -----------------------------------------------------------------------
     {
       key: "password_reset",
       subject: "Reset your 3D Ninjaz password",
-      html: brandedEmailTemplate(
-        "🔑",
-        "Reset your password",
-        `<p>Hi {{customer_name}},</p>
-        <p>We received a request to reset your password. Click the link below to create a new password.</p>
-        <p style="margin-top:16px;font-size:13px;color:#666">This link expires in 1 hour. If you didn't request this, ignore this email.</p>`,
-        { text: "Reset Password", url: "reset_link" }
-      ),
+      html: brandedEmailTemplate({
+        icon: "🔑",
+        title: "Reset Your Password",
+        subtitle: "Action required within 1 hour",
+        bodyHtml: `
+          ${h("Hi {{customer_name}},")}
+          ${p("We received a request to reset your password. Click the button below to create a new password.")}
+          ${p("This link expires in <strong>1 hour</strong>. If you did not request a password reset, you can safely ignore this email — your account is still secure.")}
+        `,
+        cta: { text: "Reset Password", url: "reset_link" },
+      }),
       variables: [
         "customer_name",
         "reset_link",
@@ -1615,17 +1674,20 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         "current_year",
       ],
     },
+    // -----------------------------------------------------------------------
     {
       key: "password_changed",
       subject: "Your 3D Ninjaz password was changed",
-      html: brandedEmailTemplate(
-        "✓",
-        "Password updated",
-        `<p>Hi {{customer_name}},</p>
-        <p>Your password has been successfully changed.</p>
-        <p style="margin-top:16px">If you didn't make this change, please contact us immediately at <a href="mailto:{{support_email}}" style="color:#1877F2">{{support_email}}</a></p>`,
-        undefined
-      ),
+      html: brandedEmailTemplate({
+        icon: "🔒",
+        title: "Password Updated",
+        subtitle: "Your account is secure",
+        bodyHtml: `
+          ${h("Hi {{customer_name}},")}
+          ${p("Your password has been successfully changed.")}
+          ${p("If you did not make this change, please contact us immediately — your account security is our top priority.")}
+        `,
+      }),
       variables: [
         "customer_name",
         "store_name",
@@ -1634,17 +1696,21 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         "support_email",
       ],
     },
+    // -----------------------------------------------------------------------
     {
       key: "welcome",
       subject: "Welcome to 3D Ninjaz! 🥷",
-      html: brandedEmailTemplate(
-        "👋",
-        "Welcome to 3D Ninjaz!",
-        `<p>Hi {{customer_name}},</p>
-        <p>Your account is ready to go. Browse our collection of unique 3D printed items and start shopping.</p>
-        <p style="margin-top:16px">We can't wait to see what you'll love!</p>`,
-        { text: "Shop Now", url: "shop_link", }
-      ),
+      html: brandedEmailTemplate({
+        icon: "🥷",
+        title: "Welcome to 3D Ninjaz!",
+        subtitle: "Your account is ready",
+        bodyHtml: `
+          ${h("Hi {{customer_name}},")}
+          ${p("Your account is ready to go. Browse our collection of unique 3D printed items and find something you will love.")}
+          ${p("We print every item fresh — crafted just for you. No mass-produced stuff here.")}
+        `,
+        cta: { text: "Shop Now", url: "shop_link" },
+      }),
       variables: [
         "customer_name",
         "store_name",
@@ -1653,19 +1719,20 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         "shop_link",
       ],
     },
+    // -----------------------------------------------------------------------
     {
       key: "newsletter_welcome",
       subject: "You're in! News from the 3D Ninjaz crew",
-      html: brandedEmailTemplate(
-        "📬",
-        "Welcome to our newsletter!",
-        `<p>Thanks for subscribing to 3D Ninjaz news.</p>
-        <p>You'll be the first to hear about new products, exclusive deals, and behind-the-scenes 3D printing stories.</p>
-        <p style="margin-top:24px;font-size:13px;color:#71717a">
-          <a href="{{unsubscribe_link}}" style="color:#71717a">Unsubscribe</a>
-        </p>`,
-        undefined
-      ),
+      html: brandedEmailTemplate({
+        icon: "📬",
+        title: "You're Subscribed!",
+        subtitle: "Welcome to the crew",
+        bodyHtml: `
+          ${p("Thanks for subscribing to 3D Ninjaz news.")}
+          ${p("You will be the first to hear about new products, exclusive deals, and behind-the-scenes 3D printing stories. Stay tuned!")}
+          <p style="font-size:13px;color:#334155;margin-top:20px">${link("{{unsubscribe_link}}", "Unsubscribe anytime")}</p>
+        `,
+      }),
       variables: [
         "subscriber_email",
         "store_name",
@@ -1674,16 +1741,19 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         "unsubscribe_link",
       ],
     },
+    // -----------------------------------------------------------------------
     {
       key: "newsletter_unsubscribed",
       subject: "You've been unsubscribed from 3D Ninjaz updates",
-      html: brandedEmailTemplate(
-        "👋",
-        "You've unsubscribed",
-        `<p>Your email has been removed from our mailing list.</p>
-        <p>You won't receive any further emails from us, but you can always resubscribe anytime from our website.</p>`,
-        undefined
-      ),
+      html: brandedEmailTemplate({
+        icon: "👋",
+        title: "You've Unsubscribed",
+        subtitle: "We'll miss you!",
+        bodyHtml: `
+          ${p("Your email has been removed from our mailing list.")}
+          ${p("You will not receive any further marketing emails from us. You can resubscribe anytime from our website if you change your mind.")}
+        `,
+      }),
       variables: [
         "subscriber_email",
         "store_name",
@@ -1691,18 +1761,24 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         "current_year",
       ],
     },
+    // -----------------------------------------------------------------------
     {
       key: "dispute_opened_customer",
       subject: "Dispute opened for order #{{order_number}}",
-      html: brandedEmailTemplate(
-        "⚠️",
-        "Dispute notification",
-        `<p>Hi {{customer_name}},</p>
-        <p>A dispute has been opened on your order <strong>#{{order_number}}</strong>.</p>
-        <p><strong>Reason:</strong> {{dispute_reason}}</p>
-        <p style="margin-top:16px">We're investigating and will keep you updated. Contact us at <a href="mailto:{{support_email}}" style="color:#1877F2">{{support_email}}</a> if you have additional details.</p>`,
-        { text: "View Order", url: "order_link" }
-      ),
+      html: brandedEmailTemplate({
+        icon: "⚠️",
+        title: "Dispute Notification",
+        subtitle: "We're looking into it",
+        bodyHtml: `
+          ${h("Hi {{customer_name}},")}
+          ${p("A dispute has been opened on your order <strong>#{{order_number}}</strong>.")}
+          ${card(
+            cardRow("Dispute Reason", "{{dispute_reason}}", true)
+          )}
+          ${p("Our team is investigating and will keep you updated every step of the way. If you have additional details that may help, please reach out to us.")}
+        `,
+        cta: { text: "View Your Order", url: "order_link" },
+      }),
       variables: [
         "customer_name",
         "order_number",
@@ -1714,21 +1790,26 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         "current_year",
       ],
     },
+    // -----------------------------------------------------------------------
     {
       key: "dispute_opened_admin",
       subject: "ADMIN: Dispute opened on order #{{order_number}}",
-      html: brandedEmailTemplate(
-        "⚠️",
-        "New dispute alert",
-        `<p>A dispute has been opened.</p>
-        <p><strong>Customer:</strong> {{customer_name}}<br>
-        <strong>Order:</strong> #{{order_number}}<br>
-        <strong>Reason:</strong> {{dispute_reason}}<br>
-        <strong>Amount:</strong> {{dispute_amount}}</p>
-        <p style="margin-top:16px">Click below to view details and respond.</p>`,
-        { text: "Review Dispute", url: "admin_link" },
-        "#7360F2"
-      ),
+      html: brandedEmailTemplate({
+        icon: "🚨",
+        title: "New Dispute Alert",
+        subtitle: "Requires your attention",
+        bodyHtml: `
+          ${p("A new dispute has been opened and requires your review.")}
+          ${card(
+            cardRow("Customer", "{{customer_name}}") +
+            cardRow("Order Number", "#{{order_number}}") +
+            cardRow("Dispute Reason", "{{dispute_reason}}") +
+            cardRow("Dispute Amount", "{{dispute_amount}}", true)
+          )}
+          ${p("Click below to view the full dispute details and respond.")}
+        `,
+        cta: { text: "Review Dispute", url: "admin_link" },
+      }),
       variables: [
         "customer_name",
         "order_number",
@@ -1740,20 +1821,22 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
       ],
     },
     // ========================================================================
-    // 260601-afs — Return-for-replacement flow emails (5 new templates)
+    // 260601-afs — Return-for-replacement flow emails
     // ========================================================================
     {
       key: "return_requested",
       subject: "Return request received for order #{{order_number}}",
-      html: brandedEmailTemplate(
-        "📦",
-        "Return request received",
-        `<p>Hi {{customer_name}},</p>
-        <p>We received your return / replacement request for order <strong>#{{order_number}}</strong>.</p>
-        <p>Our team will review your request and get back to you within 1 business day.</p>
-        <p style="margin-top:16px">You can track the status of your request on your order page.</p>`,
-        { text: "View Order", url: "order_link" }
-      ),
+      html: brandedEmailTemplate({
+        icon: "📦",
+        title: "Return Request Received",
+        subtitle: "Under review",
+        bodyHtml: `
+          ${h("Hi {{customer_name}},")}
+          ${p("We have received your return / replacement request for order <strong>#{{order_number}}</strong>.")}
+          ${p("Our team will review your request and get back to you within 1 business day. You can track the status of your request on your order page.")}
+        `,
+        cta: { text: "View Your Order", url: "order_link" },
+      }),
       variables: [
         "customer_name",
         "order_number",
@@ -1763,21 +1846,26 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         "current_year",
       ],
     },
+    // -----------------------------------------------------------------------
     {
       key: "return_approved",
       subject: "Return approved — ship your item back by {{ship_by_date}}",
-      html: brandedEmailTemplate(
-        "✅",
-        "Your return has been approved",
-        `<p>Hi {{customer_name}},</p>
-        <p>Great news! Your return / replacement request for order <strong>#{{order_number}}</strong> has been approved.</p>
-        <p><strong>Please ship your item back by: {{ship_by_date}}</strong></p>
-        <p style="margin-top:8px"><strong>Return address:</strong><br>
-        <span style="white-space:pre-line">{{return_address}}</span></p>
-        <p style="margin-top:16px">Once you have shipped, please visit your order page to submit your courier name and tracking number so we can confirm receipt and start your re-make.</p>
-        <p style="color:#6b7280;font-size:13px">If you do not submit tracking within 3 days, the request will expire and you will need to contact support.</p>`,
-        { text: "Submit Tracking Number", url: "order_link" }
-      ),
+      html: brandedEmailTemplate({
+        icon: "✅",
+        title: "Return Approved!",
+        subtitle: "Next step: ship it back",
+        bodyHtml: `
+          ${h("Hi {{customer_name}},")}
+          ${p("Great news! Your return / replacement request for order <strong>#{{order_number}}</strong> has been approved.")}
+          ${card(
+            cardRow("Ship Back By", "{{ship_by_date}}") +
+            cardRow("Return Address", "{{return_address}}", true)
+          )}
+          ${p("Once you have shipped, please visit your order page to submit your courier name and tracking number so we can confirm receipt and start your re-make.")}
+          <p style="font-size:13px;color:#334155;margin:0">If you do not submit tracking within 3 days, the request will expire and you will need to contact support.</p>
+        `,
+        cta: { text: "Submit Tracking Number", url: "order_link" },
+      }),
       variables: [
         "customer_name",
         "order_number",
@@ -1789,18 +1877,24 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         "current_year",
       ],
     },
+    // -----------------------------------------------------------------------
     {
       key: "return_rejected",
       subject: "Update on your return request — order #{{order_number}}",
-      html: brandedEmailTemplate(
-        "❌",
-        "Return request update",
-        `<p>Hi {{customer_name}},</p>
-        <p>After reviewing your return request for order <strong>#{{order_number}}</strong>, we are unable to approve it at this time.</p>
-        <p><strong>Reason:</strong> {{reason}}</p>
-        <p style="margin-top:16px">If you believe this decision was made in error or you need further assistance, please contact us at <a href="mailto:{{support_email}}" style="color:#1877F2">{{support_email}}</a>.</p>`,
-        { text: "View Order", url: "order_link" }
-      ),
+      html: brandedEmailTemplate({
+        icon: "❌",
+        title: "Return Request Update",
+        subtitle: "Unable to approve at this time",
+        bodyHtml: `
+          ${h("Hi {{customer_name}},")}
+          ${p("After reviewing your return request for order <strong>#{{order_number}}</strong>, we are unable to approve it at this time.")}
+          ${card(
+            cardRow("Reason", "{{reason}}", true)
+          )}
+          ${p("If you believe this decision was made in error or you need further assistance, please contact us and we will do our best to help.")}
+        `,
+        cta: { text: "View Your Order", url: "order_link" },
+      }),
       variables: [
         "customer_name",
         "order_number",
@@ -1812,17 +1906,21 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         "current_year",
       ],
     },
+    // -----------------------------------------------------------------------
     {
       key: "return_received",
       subject: "We received your return — re-making your order #{{order_number}}",
-      html: brandedEmailTemplate(
-        "🥷",
-        "Return received — re-make in progress",
-        `<p>Hi {{customer_name}},</p>
-        <p>We have received your returned item for order <strong>#{{order_number}}</strong>. Thank you for sending it back!</p>
-        <p style="margin-top:16px">Our team is now working on your replacement. We will email you again once it has been shipped.</p>`,
-        { text: "View Order", url: "order_link" }
-      ),
+      html: brandedEmailTemplate({
+        icon: "🥷",
+        title: "Return Received!",
+        subtitle: "Re-make in progress",
+        bodyHtml: `
+          ${h("Hi {{customer_name}},")}
+          ${p("We have received your returned item for order <strong>#{{order_number}}</strong>. Thank you for sending it back!")}
+          ${p("Our team is now working on your replacement. We will email you again once it has been shipped.")}
+        `,
+        cta: { text: "View Your Order", url: "order_link" },
+      }),
       variables: [
         "customer_name",
         "order_number",
@@ -1832,17 +1930,21 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         "current_year",
       ],
     },
+    // -----------------------------------------------------------------------
     {
       key: "return_expired",
       subject: "Your return window has expired — order #{{order_number}}",
-      html: brandedEmailTemplate(
-        "⏰",
-        "Return ship-by window expired",
-        `<p>Hi {{customer_name}},</p>
-        <p>Unfortunately the 3-day shipping window for your approved return on order <strong>#{{order_number}}</strong> has passed without a tracking number being submitted.</p>
-        <p style="margin-top:16px">If you still need help, please contact us at <a href="mailto:{{support_email}}" style="color:#1877F2">{{support_email}}</a> or via WhatsApp and we will do our best to assist you.</p>`,
-        { text: "View Order", url: "order_link" }
-      ),
+      html: brandedEmailTemplate({
+        icon: "⏰",
+        title: "Return Window Expired",
+        subtitle: "Ship-by deadline passed",
+        bodyHtml: `
+          ${h("Hi {{customer_name}},")}
+          ${p("Unfortunately the 3-day shipping window for your approved return on order <strong>#{{order_number}}</strong> has passed without a tracking number being submitted.")}
+          ${p("If you still need help, please contact us or reach out via WhatsApp and we will do our best to assist you.")}
+        `,
+        cta: { text: "View Your Order", url: "order_link" },
+      }),
       variables: [
         "customer_name",
         "order_number",
