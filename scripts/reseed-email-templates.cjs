@@ -492,8 +492,8 @@ async function main() {
   for (const seed of seeds) {
     try {
       await conn.query(
-        `INSERT INTO email_templates (id, \`key\`, subject, html, variables, created_at, updated_at)
-         VALUES (UUID(), ?, ?, ?, ?, NOW(), NOW())
+        `INSERT INTO email_templates (\`key\`, subject, html, variables, updated_at)
+         VALUES (?, ?, ?, ?, NOW())
          ON DUPLICATE KEY UPDATE
            subject    = VALUES(subject),
            html       = VALUES(html),
