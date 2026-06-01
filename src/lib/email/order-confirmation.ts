@@ -341,4 +341,38 @@ export async function sendOrderConfirmationEmail(
   } catch (err) {
     console.error("[order-email] send failed:", err);
   }
+
+  // ── Owner/admin new-order notification ──────────────────────────────────
+  // Notify the team on every paid order. Fire-and-forget — must never block
+  // or fail the order flow (mirrors the customer-email contract above).
+  try {
+    const orderNo = formatOrderNumber(row.id);
+    const adminSubject = `🛎️ New order ${orderNo} — ${formatMYRServer(row.totalAmount)} ${row.currency}`;
+    const adminHtml = `<!doctype html><html><body style="font-family:Arial,Helvetica,sans-serif;color:#0B1020;">
+      <h2 style="margin:0 0 12px;">New order ${orderNo}</h2>
+      <p style="margin:4px 0;"><strong>Customer:</strong> ${escapeHtml(row.shippingName)} (${escapeHtml(row.customerEmail)})</p>
+      <p style="margin:4px 0;"><strong>Phone:</strong> ${escapeHtml(row.shippingPhone)}</p>
+      <p style="margin:4px 0;"><strong>Total:</strong> ${formatMYRServer(row.totalAmount)} ${escapeHtml(row.currency)}</p>
+      <p style="margin:4px 0;"><strong>Placed:</strong> ${escapeHtml(new Date(row.createdAt).toLocaleString("en-MY"))}</p>
+      <h3 style="margin:16px 0 4px;">Items</h3>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${renderItemsTableFragment(row)}</table>
+      <h3 style="margin:16px 0 4px;">Ship to</h3>
+      <p style="margin:0;line-height:1.5;">${escapeHtml(row.shippingName)}<br>${escapeHtml(row.shippingLine1)}<br>${row.shippingLine2 ? escapeHtml(row.shippingLine2) + "<br>" : ""}${escapeHtml(row.shippingCity)} ${escapeHtml(row.shippingPostcode)}<br>${escapeHtml(row.shippingState)}, ${escapeHtml(row.shippingCountry)}</p>
+      <p style="margin:20px 0;"><a href="${baseUrl()}/admin/orders/${row.id}" style="display:inline-block;padding:10px 20px;background:#0B1020;color:#fff;border-radius:8px;text-decoration:none;">Open in admin</a></p>
+    </body></html>`;
+    const adminText =
+      `New order ${orderNo}\n` +
+      `Customer: ${row.shippingName} (${row.customerEmail})\n` +
+      `Phone: ${row.shippingPhone}\n` +
+      `Total: ${formatMYRServer(row.totalAmount)} ${row.currency}\n` +
+      `Admin: ${baseUrl()}/admin/orders/${row.id}`;
+    await sendMail({
+      to: ["sumaiyaaniz@gmail.com", "info@3dninjaz.com"],
+      subject: adminSubject,
+      html: adminHtml,
+      text: adminText,
+    });
+  } catch (err) {
+    console.error("[order-email] admin notification failed:", err);
+  }
 }
