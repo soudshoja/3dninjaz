@@ -198,6 +198,9 @@ export async function sendOrderShippedEmail(opts: {
   consignmentNo: string;
   orderId: string;
 }): Promise<void> {
+  // Skip internal/sentinel addresses (manual/POS orders without a real email).
+  if (opts.customerEmail.endsWith("@3dninjaz.local")) return;
+
   try {
     const trackingLink = `https://app.3dninjaz.com/orders/${opts.orderId}`;
     const orderLink = `https://app.3dninjaz.com/orders/${opts.orderId}`;
@@ -240,6 +243,9 @@ export async function sendOrderDeliveredEmail(opts: {
   orderNumber: string;
   orderId: string;
 }): Promise<void> {
+  // Skip internal/sentinel addresses (manual/POS orders without a real email).
+  if (opts.customerEmail.endsWith("@3dninjaz.local")) return;
+
   try {
     const orderLink = `https://app.3dninjaz.com/orders/${opts.orderId}`;
 
@@ -278,6 +284,9 @@ export async function sendOrderRefundedEmail(opts: {
   refundAmount: string;
   orderId: string;
 }): Promise<void> {
+  // Skip internal/sentinel addresses (manual/POS orders without a real email).
+  if (opts.customerEmail.endsWith("@3dninjaz.local")) return;
+
   try {
     const orderLink = `https://app.3dninjaz.com/orders/${opts.orderId}`;
 
@@ -318,6 +327,9 @@ export async function sendOrderCancelledEmail(opts: {
   cancellationReason: string;
   orderId: string;
 }): Promise<void> {
+  // Skip internal/sentinel addresses (manual/POS orders without a real email).
+  if (opts.customerEmail.endsWith("@3dninjaz.local")) return;
+
   try {
     const orderLink = `https://app.3dninjaz.com/orders/${opts.orderId}`;
 
