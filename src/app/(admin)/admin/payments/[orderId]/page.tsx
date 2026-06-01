@@ -46,11 +46,11 @@ export default async function AdminPaymentDetailPage({
           <h1 className="font-[var(--font-heading)] text-3xl md:text-4xl">
             Payment {formatOrderNumber(detail.orderId)}
           </h1>
-          <p className="mt-1 text-xs text-slate-500 font-mono break-all">
+          <p className="mt-1 text-xs text-slate-500 font-mono break-words">
             Capture id: {detail.paypalCaptureId}
           </p>
           {detail.paypalOrderId ? (
-            <p className="text-xs text-slate-500 font-mono break-all">
+            <p className="text-xs text-slate-500 font-mono break-words">
               PayPal order id: {detail.paypalOrderId}
             </p>
           ) : null}

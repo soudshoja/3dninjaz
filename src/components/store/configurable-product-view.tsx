@@ -22,7 +22,7 @@ import Image from "next/image";
 import { ShoppingBag, Heart } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
-import { lookupTierPrice } from "@/lib/config-fields";
+import { lookupTierPrice, type SelectFieldConfig } from "@/lib/config-fields";
 import { useCartStore } from "@/stores/cart-store";
 import { ConfiguratorForm } from "@/components/store/configurator-form";
 import { ConfigurableImageGallery } from "@/components/store/configurable-image-gallery";
@@ -30,8 +30,11 @@ import { KeychainPreview } from "@/components/store/keychain-preview";
 import { VendingPreview } from "@/components/store/vending-preview";
 import { WishlistButton } from "@/components/store/wishlist-button";
 import { RatingBadge } from "@/components/store/rating-badge";
+import { DescriptionDisplay } from "@/components/store/description-display";
+import { PdpProductCare, PdpColourNote } from "@/components/store/pdp-info-blocks";
 import type { PublicConfigField } from "@/lib/configurable-product-data";
 import type { PictureData } from "@/lib/image-manifest";
+import type { PosAddToOrderLine } from "@/components/store/product-detail";
 
 // ============================================================================
 // Types
@@ -43,13 +46,15 @@ type Props = {
     name: string;
     slug: string;
     description: string;
+    /** Quick task 260430-kmr — pre-rendered (sanitised) HTML for description. */
+    descriptionHtml?: string;
     images: string[];
     imageCaptions?: (string | null | undefined)[];
     materialType: string | null;
     estimatedProductionDays: number | null;
     category: { name: string; slug: string } | null;
     pictures?: PictureData[];
-    productType?: "stocked" | "configurable" | "keychain" | "vending";
+    productType?: "stocked" | "configurable" | "keychain" | "vending" | "simple";
   };
   fields: PublicConfigField[];
   maxUnitCount: number | null;
@@ -58,6 +63,13 @@ type Props = {
   isWishlistedInitial?: boolean;
   ratingAvg?: number;
   ratingCount?: number;
+  /** Bug 3 — when true, hide the base-price pill until a select option resolves the price. */
+  hideBasePrice?: boolean;
+  /**
+   * POS-only: when set, "Add to bag" becomes "Add to order" and calls this
+   * callback instead of the Zustand cart store.
+   */
+  onAddToOrder?: (line: PosAddToOrderLine) => void;
 };
 
 // ============================================================================
@@ -72,6 +84,9 @@ function buildSummary(
   const parts: string[] = [];
 
   for (const f of fields) {
+    // Quick task 260430-icx — textarea is admin-authored content, never customer
+    // data. Skip in summary even if a stale row somehow ends up on a non-simple PDP.
+    if (f.fieldType === "textarea") continue;
     const v = values[f.id] ?? "";
     if (!v) continue;
     if (f.fieldType === "text") {
@@ -99,10 +114,15 @@ function PricePill({
   outOfTable,
   maxUnitCount,
   currentPrice,
+  hideBasePrice = false,
+  selectPriceOverride,
 }: {
   outOfTable: boolean;
   maxUnitCount: number | null;
   currentPrice: number | null;
+  /** Bug 3 — suppress base price until a select option resolves it. */
+  hideBasePrice?: boolean;
+  selectPriceOverride: number | null;
 }) {
   if (outOfTable) {
     return (
@@ -111,6 +131,18 @@ function PricePill({
         style={{ backgroundColor: "#fff1f2", color: "#be123c", border: "2px solid #fecdd3" }}
       >
         Max {maxUnitCount} characters
+      </span>
+    );
+  }
+  // Bug 3: hide flat base price pill when admin toggled hideBasePrice and no
+  // per-option select override has resolved yet.
+  if (hideBasePrice && selectPriceOverride === null) {
+    return (
+      <span
+        className="inline-flex self-start items-center rounded-full px-5 py-2 text-base font-semibold"
+        style={{ backgroundColor: "#f1f5f9", color: "#64748b", border: "2px solid #e2e8f0" }}
+      >
+        Select an option to see price
       </span>
     );
   }
@@ -151,9 +183,14 @@ export function ConfigurableProductView({
   isWishlistedInitial = false,
   ratingAvg = 0,
   ratingCount = 0,
+  hideBasePrice = false,
+  onAddToOrder,
 }: Props) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState(false);
+  // Mobile sticky preview strip is dismissed after Add-to-Bag; re-enabled the
+  // moment the customer edits anything again.
+  const [addedToBag, setAddedToBag] = useState(false);
   // Default to preview mode for keychain + vending products so the live preview
   // is the first thing the customer sees — not the admin's product photos.
   const [showPreview, setShowPreview] = useState(
@@ -176,7 +213,26 @@ export function ConfigurableProductView({
 
   const unitFieldValue = unitFieldId ? (values[unitFieldId] ?? "") : "";
 
-  const currentPrice: number | null = useMemo(() => {
+  // If any select field has a selected option with a `price` override, use it
+  // as the effective price (last one wins if multiple selects have overrides).
+  const selectPriceOverride: number | null = useMemo(() => {
+    const selectFields = fields.filter((f) => f.fieldType === "select");
+    let override: number | null = null;
+    for (const f of selectFields) {
+      const selectedValue = values[f.id];
+      if (!selectedValue) continue;
+      const cfg = f.config as SelectFieldConfig;
+      const opt = cfg.options.find((o) => o.value === selectedValue);
+      if (opt?.price !== undefined && opt.price >= 0) {
+        override = opt.price;
+      }
+    }
+    return override;
+  }, [fields, values]);
+
+  // Base price before any per-option select override — used as the reference
+  // price for VariantOptionPicker's diff pill (so customers see "+RM X / -RM X").
+  const basePriceBeforeOverride: number | null = useMemo(() => {
     if (unitField && unitFieldId) {
       return lookupTierPrice(priceTiers, unitFieldValue);
     }
@@ -186,6 +242,12 @@ export function ConfigurableProductView({
     }
     return null;
   }, [priceTiers, unitField, unitFieldId, unitFieldValue]);
+
+  const currentPrice: number | null = useMemo(() => {
+    // Per-option price override takes precedence over tier pricing.
+    if (selectPriceOverride !== null) return selectPriceOverride;
+    return basePriceBeforeOverride;
+  }, [basePriceBeforeOverride, selectPriceOverride]);
 
   const outOfTable =
     unitField !== null &&
@@ -223,6 +285,22 @@ export function ConfigurableProductView({
     ? ((textFields[0].config as { maxLength?: number }).maxLength ?? maxUnitCount ?? 8)
     : (maxUnitCount ?? 8);
 
+  // ── Mobile sticky preview strip visibility ────────────────────────────────
+  // Rules (mobile only): show ONLY once the customer has actually started
+  // typing; hide again when they clear the text; hide after Add-to-Bag.
+  // Text-less configurables (no text field) fall back to "any interaction".
+  const hasTextField = textFields.length > 0;
+  const showStickyPreview =
+    product.productType !== "vending" &&
+    !addedToBag &&
+    (hasTextField ? textValue.trim().length > 0 : touched);
+
+  // Wrap value changes so editing after an Add-to-Bag re-enables the strip.
+  function handleValuesChange(next: Record<string, string>) {
+    setValues(next);
+    if (addedToBag) setAddedToBag(false);
+  }
+
   // ── Handlers (first-touch-only — DO NOT change) ───────────────────────────
   function handleTouch() {
     if (!touched) {
@@ -239,13 +317,30 @@ export function ConfigurableProductView({
     if (!canAdd || currentPrice === null) return;
 
     const summary = buildSummary(fields, values, currentPrice);
-    const configurationData = {
+    const configData = {
       values,
       computedPrice: currentPrice,
       computedSummary: summary,
     };
-    addItem({ productId: product.id, configurationData });
-    setDrawerOpen(true);
+
+    if (onAddToOrder) {
+      onAddToOrder({
+        productId: product.id,
+        variantId: null,
+        qty: 1,
+        unitPrice: currentPrice,
+        productName: product.name,
+        productImageUrl: product.images[0] ?? null,
+        variantLabel: null,
+        configurationData: configData,
+      });
+    } else {
+      addItem({ productId: product.id, configurationData: configData });
+      setDrawerOpen(true);
+    }
+
+    // Dismiss the mobile sticky preview strip once the item is in the bag.
+    setAddedToBag(true);
   }
 
   const material = product.materialType ?? "PLA";
@@ -285,8 +380,9 @@ export function ConfigurableProductView({
   );
 
   // ── CTA button label ──────────────────────────────────────────────────────
+  const addLabel = onAddToOrder ? "Add to order" : "Add to Bag";
   const ctaLabel = canAdd
-    ? `Add to Bag · ${formatMYR(currentPrice!)}`
+    ? `${addLabel} · ${formatMYR(currentPrice!)}`
     : outOfTable
     ? "Too many characters"
     : !requiredFilled
@@ -318,10 +414,10 @@ export function ConfigurableProductView({
         ) : null}
 
         {/* ── Two-column layout ─────────────────────────────────────────── */}
-        <div className="grid lg:grid-cols-2 gap-6 lg:gap-12 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-12 items-start">
 
           {/* ── LEFT: Gallery card (sticky on desktop) ─────────────────── */}
-          <div className="lg:sticky lg:top-24">
+          <div className="min-w-0 lg:sticky lg:top-24">
             {/* Hero gallery card — Claymorphism: white bg + chunky shadow + thick border */}
             <div
               className="rounded-3xl overflow-hidden"
@@ -385,6 +481,57 @@ export function ConfigurableProductView({
           {/* ── RIGHT: Product info + form column ─────────────────────── */}
           <div className="flex flex-col gap-5 min-w-0">
 
+            {/* ── Mobile-only sticky live-preview strip ─────────────────
+                Pins a shrunk keychain preview just below the site-nav once the
+                customer starts editing, so the live result stays visible while
+                they fill the form below — no scroll up/down. Hidden on desktop
+                (the sticky side gallery already covers it) and for vending,
+                whose preview is a tall illustration that can't compress into a
+                strip. Reuses the SAME live colour/text state as the hero
+                preview, so both update together. */}
+            {showStickyPreview && (
+              <div className="lg:hidden sticky top-16 z-30 preview-strip-in">
+                <div
+                  className="relative flex items-center justify-center rounded-2xl px-2 py-2 overflow-hidden"
+                  style={{
+                    background: "rgba(255,255,255,0.92)",
+                    backdropFilter: "blur(10px)",
+                    WebkitBackdropFilter: "blur(10px)",
+                    border: `2px solid ${BRAND.green}55`,
+                    boxShadow: `0 8px 22px ${BRAND.ink}1a, 0 2px 0 ${BRAND.green}40`,
+                  }}
+                >
+                  {/* "Live" tag is overlaid (absolute) so it doesn't steal width
+                      from the preview — the preview is sized to the SAME ~306px
+                      container width as the hero so its cubes match (32px). */}
+                  <span
+                    className="absolute top-1.5 left-2 z-10 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider"
+                    style={{
+                      backgroundColor: BRAND.green,
+                      color: BRAND.ink,
+                      boxShadow: `0 2px 0 ${BRAND.greenDark}`,
+                    }}
+                  >
+                    <span aria-hidden="true">✦</span> Live
+                  </span>
+                  <div className="w-full max-w-[306px] mx-auto">
+                    <KeychainPreview
+                      text={textValue}
+                      baseHex={baseHex}
+                      clickerHex={clickerHex}
+                      letterHex={letterHex}
+                      maxLength={maxLength}
+                      placeholder={
+                        product.productType === "keychain" || textFields.length > 0
+                          ? "YOURTEXT"
+                          : ""
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* ── Product header card ─────────────────────────────────── */}
             <div
               className="rounded-3xl p-5 sm:p-6"
@@ -413,12 +560,18 @@ export function ConfigurableProductView({
                   outOfTable={outOfTable}
                   maxUnitCount={maxUnitCount}
                   currentPrice={currentPrice}
+                  hideBasePrice={hideBasePrice}
+                  selectPriceOverride={selectPriceOverride}
                 />
               </div>
 
-              <p className="text-base leading-relaxed" style={{ color: "#374151" }}>
-                {product.description}
-              </p>
+              {product.descriptionHtml ? (
+                <DescriptionDisplay html={product.descriptionHtml} />
+              ) : (
+                <p className="text-base leading-relaxed" style={{ color: "#374151" }}>
+                  {product.description}
+                </p>
+              )}
             </div>
 
             {/* ── Personalise section card ────────────────────────────── */}
@@ -448,8 +601,9 @@ export function ConfigurableProductView({
               <ConfiguratorForm
                 fields={fields}
                 values={values}
-                onChange={setValues}
+                onChange={handleValuesChange}
                 onTouch={handleTouch}
+                basePrice={basePriceBeforeOverride ?? undefined}
               />
             </div>
 
@@ -593,9 +747,10 @@ export function ConfigurableProductView({
                 Material: <span className="font-normal text-zinc-600">{material}</span>
               </p>
               <p className="text-sm leading-relaxed" style={{ color: "#374151" }}>
-                Every piece is printed to order on our Kuala Lumpur printers, layer by ninja layer.
-                Hand-finished, inspected, then shipped straight to your door.
+                Every product is made to order in our Kuala Lumpur Ninja Hideout! We inspect every item before we ship each product straight to your door!
               </p>
+              <PdpProductCare />
+              <PdpColourNote />
             </div>
 
           </div>

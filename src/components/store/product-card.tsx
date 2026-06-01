@@ -63,7 +63,7 @@ export async function ProductCard({
   // Phase 19 (19-07) — configurable/keychain products use tier-based "From MYR X" label.
   // Stocked products use the existing priceRangeMYR flow — UNTOUCHED.
   let priceLabel: string;
-  if (product.productType === "configurable" || product.productType === "keychain" || product.productType === "vending") {
+  if (product.productType === "configurable" || product.productType === "keychain" || product.productType === "vending" || product.productType === "simple") {
     priceLabel = formatFromTier(product.priceTiers);
   } else if (allHydrated.length === 0) {
     priceLabel = priceRangeMYR(product.variants);
@@ -135,7 +135,7 @@ export async function ProductCard({
           style={{ borderColor: accent }}
         >
           <h3
-            className="font-[var(--font-heading)] text-[15px] md:text-base leading-snug font-extrabold uppercase tracking-tight line-clamp-2"
+            className="font-[var(--font-heading)] text-[15px] md:text-base leading-snug font-extrabold uppercase tracking-tight line-clamp-2 min-h-[40px]"
             style={{ color: BRAND.ink }}
           >
             {product.name}
@@ -144,7 +144,7 @@ export async function ProductCard({
             className="mt-1 text-sm font-bold"
             style={{ color: allSoldOut ? "#9ca3af" : accent }}
           >
-            {allSoldOut ? "Sold out" : (product.productType === "configurable" || product.productType === "keychain" || product.productType === "vending") ? priceLabel : `from ${priceLabel}`}
+            {allSoldOut ? "Sold out" : (product.productType === "configurable" || product.productType === "keychain" || product.productType === "vending" || product.productType === "simple") ? priceLabel : `from ${priceLabel}`}
           </p>
         </div>
       </Link>

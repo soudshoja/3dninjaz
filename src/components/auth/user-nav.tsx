@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { LogOut, User } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -63,39 +62,23 @@ export function UserNav({
   if (!data?.user) {
     if (variant === "mobile") {
       return (
-        <div className="flex flex-col gap-2">
-          <Link
-            href="/login"
-            className="block min-h-[48px] rounded-md border border-[var(--color-brand-border)] px-4 py-3 text-center text-sm font-semibold"
-          >
-            Sign In
-          </Link>
-          <Link
-            href="/register"
-            className="block min-h-[48px] rounded-md bg-[var(--color-brand-cta)] px-4 py-3 text-center text-sm font-semibold text-white"
-          >
-            Register
-          </Link>
-        </div>
+        <Link
+          href="/login"
+          className="inline-flex items-center gap-2 min-h-[48px] px-1 text-sm font-semibold hover:opacity-70 transition-opacity"
+        >
+          <User className="h-5 w-5" aria-hidden />
+          Sign In
+        </Link>
       );
     }
     return (
-      <div className="flex items-center gap-2">
-        <Link
-          href="/login"
-          className="text-sm font-medium text-[var(--color-brand-text-primary)] hover:text-[var(--color-brand-primary)]"
-        >
-          Sign In
-        </Link>
-        <Link href="/register">
-          <Button
-            size="sm"
-            className="h-9 bg-[var(--color-brand-cta)] px-3 text-white hover:bg-[var(--color-brand-cta)]/90"
-          >
-            Register
-          </Button>
-        </Link>
-      </div>
+      <Link
+        href="/login"
+        aria-label="Sign in"
+        className="inline-flex items-center justify-center min-h-[48px] min-w-[48px] rounded-full hover:bg-black/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+      >
+        <User className="h-5 w-5" aria-hidden />
+      </Link>
     );
   }
 

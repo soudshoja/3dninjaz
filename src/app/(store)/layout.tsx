@@ -4,6 +4,7 @@ import { SiteFooter } from "@/components/store/site-footer";
 import { CartDrawer } from "@/components/store/cart-drawer";
 import { BRAND } from "@/lib/brand";
 import { getActiveCategoryTree } from "@/lib/catalog";
+import { FontFaceLoader } from "@/components/store/font-face-loader";
 
 /**
  * Customer-facing route-group layout. Lightened (2026-04-20): mostly-white
@@ -31,8 +32,14 @@ export default async function StoreLayout({ children }: { children: ReactNode })
       style={{ backgroundColor: "#FFFFFF", color: BRAND.ink }}
       className="min-h-screen flex flex-col"
     >
+      <FontFaceLoader />
       <SiteNav categoryTree={categoryTree} />
-      <main className="flex-1">{children}</main>
+      {/* overflow-x: clip (NOT hidden) — clips horizontal overflow without
+          creating a scroll container, so storefront `position: sticky`
+          elements (e.g. the mobile PDP live-preview strip) still pin to the
+          viewport. `overflow-x: hidden` forces overflow-y to `auto` and breaks
+          sticky. Same reason SiteNav uses overflow-x-clip. */}
+      <main className="flex-1 overflow-x-clip">{children}</main>
       <SiteFooter />
       <CartDrawer />
     </div>

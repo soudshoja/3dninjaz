@@ -4,7 +4,8 @@ import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 import { categories, subcategories, products } from "@/lib/db/schema";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { CATEGORY_TREE_TAG } from "@/lib/catalog";
 import { categorySchema, subcategorySchema } from "@/lib/validators";
 import { requireAdmin } from "@/lib/auth-helpers";
 
@@ -77,6 +78,13 @@ export async function createCategory(
   try {
     await db.insert(categories).values({ id, name, slug, position });
   } catch (e) {
+    const err = e as { code?: string; errno?: number; sqlMessage?: string };
+    if (err?.code === "ER_DUP_ENTRY" || err?.errno === 1062) {
+      if (err.sqlMessage?.includes("slug")) {
+        return { error: "A category with this slug already exists. Try a different name." };
+      }
+      return { error: "A duplicate entry exists." };
+    }
     const msg = e instanceof Error ? e.message : String(e);
     if (msg.includes("Duplicate") || msg.includes("unique")) {
       return { error: { name: ["Category name or slug already exists"] } };
@@ -87,6 +95,8 @@ export async function createCategory(
   revalidatePath("/admin/categories");
   revalidatePath("/admin/products");
   revalidatePath("/shop");
+  revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true, id };
 }
 
@@ -115,6 +125,13 @@ export async function updateCategory(
       .set({ name, slug })
       .where(eq(categories.id, id));
   } catch (e) {
+    const err = e as { code?: string; errno?: number; sqlMessage?: string };
+    if (err?.code === "ER_DUP_ENTRY" || err?.errno === 1062) {
+      if (err.sqlMessage?.includes("slug")) {
+        return { error: "A category with this slug already exists. Try a different name." };
+      }
+      return { error: "A duplicate entry exists." };
+    }
     const msg = e instanceof Error ? e.message : String(e);
     if (msg.includes("Duplicate") || msg.includes("unique")) {
       return { error: { name: ["Category name or slug already exists"] } };
@@ -125,6 +142,8 @@ export async function updateCategory(
   revalidatePath("/admin/categories");
   revalidatePath("/admin/products");
   revalidatePath("/shop");
+  revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true };
 }
 
@@ -142,6 +161,8 @@ export async function deleteCategory(
   revalidatePath("/admin/categories");
   revalidatePath("/admin/products");
   revalidatePath("/shop");
+  revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true };
 }
 
@@ -172,6 +193,8 @@ export async function moveCategory(
 
   revalidatePath("/admin/categories");
   revalidatePath("/shop");
+  revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true };
 }
 
@@ -210,6 +233,13 @@ export async function createSubcategory(
       position,
     });
   } catch (e) {
+    const err = e as { code?: string; errno?: number; sqlMessage?: string };
+    if (err?.code === "ER_DUP_ENTRY" || err?.errno === 1062) {
+      if (err.sqlMessage?.includes("slug")) {
+        return { error: "A subcategory with this slug already exists. Try a different name." };
+      }
+      return { error: "A duplicate entry exists." };
+    }
     const msg = e instanceof Error ? e.message : String(e);
     if (msg.includes("Duplicate") || msg.includes("unique")) {
       return { error: { slug: ["Subcategory slug already used in this category"] } };
@@ -220,6 +250,8 @@ export async function createSubcategory(
   revalidatePath("/admin/categories");
   revalidatePath("/admin/products");
   revalidatePath("/shop");
+  revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true, id };
 }
 
@@ -253,6 +285,13 @@ export async function updateSubcategory(
       })
       .where(eq(subcategories.id, id));
   } catch (e) {
+    const err = e as { code?: string; errno?: number; sqlMessage?: string };
+    if (err?.code === "ER_DUP_ENTRY" || err?.errno === 1062) {
+      if (err.sqlMessage?.includes("slug")) {
+        return { error: "A subcategory with this slug already exists. Try a different name." };
+      }
+      return { error: "A duplicate entry exists." };
+    }
     const msg = e instanceof Error ? e.message : String(e);
     if (msg.includes("Duplicate") || msg.includes("unique")) {
       return { error: { slug: ["Subcategory slug already used in this category"] } };
@@ -263,6 +302,8 @@ export async function updateSubcategory(
   revalidatePath("/admin/categories");
   revalidatePath("/admin/products");
   revalidatePath("/shop");
+  revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true };
 }
 
@@ -288,6 +329,8 @@ export async function deleteSubcategory(
   revalidatePath("/admin/categories");
   revalidatePath("/admin/products");
   revalidatePath("/shop");
+  revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true };
 }
 
@@ -323,6 +366,8 @@ export async function moveSubcategory(
 
   revalidatePath("/admin/categories");
   revalidatePath("/shop");
+  revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true };
 }
 

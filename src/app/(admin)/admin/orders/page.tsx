@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { listAdminOrders } from "@/actions/admin-orders";
+import { getPaymentProofsAwaitingReviewCount } from "@/actions/admin-payment-proofs";
+import { db } from "@/lib/db";
+import { paymentProofs } from "@/lib/db/schema";
+import { eq, inArray, desc } from "drizzle-orm";
 import { BRAND } from "@/lib/brand";
 import { AdminOrderRow } from "@/components/admin/admin-order-row";
 import { AdminOrderFilter } from "@/components/admin/admin-order-filter";
@@ -18,6 +22,8 @@ type StatusFilter = "all" | OrderStatus;
 const VALID: StatusFilter[] = [
   "all",
   "pending",
+  "awaiting_customer",
+  "awaiting_payment_review",
   "paid",
   "processing",
   "shipped",
@@ -32,6 +38,12 @@ const VALID: StatusFilter[] = [
  *
  * requireAdmin() is called here at the top even though (admin)/layout.tsx also
  * redirects unauthenticated users — belt-and-braces, CVE-2025-29927.
+ *
+ * Phase 20 (20-10):
+ *   - Passes pendingProofCount to AdminOrderFilter for the amber badge.
+ *   - When filter = awaiting_payment_review, hydrates the latest pending
+ *     payment_proofs row per order (manual hydration — MariaDB has no LATERAL).
+ *     Slip thumbnail shown at left edge of each row per UI-SPEC §Surface 4.
  */
 export default async function AdminOrdersPage({
   searchParams,
@@ -42,6 +54,36 @@ export default async function AdminOrdersPage({
   const { status } = await searchParams;
   const filter = (VALID.includes(status as StatusFilter) ? status : "all") as StatusFilter;
   const rows = await listAdminOrders(filter);
+
+  // Count of awaiting_payment_review orders — drives filter chip badge + sidebar badge.
+  const pendingProofCount = await getPaymentProofsAwaitingReviewCount();
+
+  // When the awaiting_payment_review filter is active, hydrate the latest
+  // pending slip thumbnail per order. Manual multi-query hydration (no LATERAL).
+  const slipThumbnailByOrder = new Map<string, string | null>();
+  if (filter === "awaiting_payment_review" && rows.length > 0) {
+    const orderIds = rows.map((r) => r.id);
+    const proofRows = await db
+      .select({
+        orderId: paymentProofs.orderId,
+        thumbnailUrl: paymentProofs.thumbnailUrl,
+        imageUrl: paymentProofs.imageUrl,
+        createdAt: paymentProofs.createdAt,
+      })
+      .from(paymentProofs)
+      .where(
+        inArray(paymentProofs.orderId, orderIds),
+      )
+      .orderBy(desc(paymentProofs.createdAt));
+
+    // Pick the latest proof per order (first match after ORDER BY DESC createdAt).
+    for (const p of proofRows) {
+      if (!slipThumbnailByOrder.has(p.orderId)) {
+        // Prefer thumbnail; fall back to full imageUrl if thumbnail is null (PDFs).
+        slipThumbnailByOrder.set(p.orderId, p.thumbnailUrl ?? p.imageUrl ?? null);
+      }
+    }
+  }
 
   return (
     <main className="min-h-screen" style={{ backgroundColor: BRAND.cream, color: BRAND.ink }}>
@@ -55,7 +97,7 @@ export default async function AdminOrdersPage({
         </header>
 
         <div className="mb-4">
-          <AdminOrderFilter />
+          <AdminOrderFilter pendingProofCount={pendingProofCount} />
         </div>
 
         {rows.length === 0 ? (
@@ -95,7 +137,13 @@ export default async function AdminOrdersPage({
                 </thead>
                 <tbody>
                   {rows.map((o) => (
-                    <AdminOrderRow key={o.id} order={o} />
+                    <AdminOrderRow
+                      key={o.id}
+                      order={{
+                        ...o,
+                        slipThumbnailUrl: slipThumbnailByOrder.get(o.id) ?? null,
+                      }}
+                    />
                   ))}
                 </tbody>
               </table>

@@ -6,15 +6,16 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import { getAdminOrder } from "@/actions/admin-orders";
 import { ensureOrderItemConfigData } from "@/lib/config-fields";
 import { BRAND } from "@/lib/brand";
-import { formatOrderNumber } from "@/lib/orders";
+import { formatOrderNumber, isManualLine } from "@/lib/orders";
 import { formatMYR } from "@/lib/format";
 import { AdminOrderStatusBadge } from "@/components/admin/admin-order-status-badge";
 import { AdminOrderTimeline } from "@/components/admin/admin-order-timeline";
 import { AdminOrderStatusForm } from "@/components/admin/admin-order-status-form";
 import { AdminOrderNotesForm } from "@/components/admin/admin-order-notes-form";
 // Phase 6 06-06 — admin approval surface for cancel/return requests.
+// 260601-afs — listOrderRequestsForOrder now returns AdminOrderRequestRow[]
 import { listOrderRequestsForOrder } from "@/actions/admin-order-requests";
-import { OrderRequestsAdmin } from "@/components/admin/order-requests-admin";
+import { OrderRequestsAdmin, type AdminOrderRequestRow } from "@/components/admin/order-requests-admin";
 // Phase 7 (07-03) — manual order payment-link surface.
 import { listOrderPaymentLinks } from "@/actions/admin-manual-orders";
 import { PaymentLinkCard } from "@/components/admin/payment-link-card";
@@ -27,6 +28,13 @@ import { getOrderShipment, getAdminOrderTracking } from "@/actions/shipping";
 import { OrderShipmentPanel } from "@/components/admin/order-shipment-panel";
 // Phase 10 (10-01) — cost + profit panel with inline edits.
 import { OrderCostsPanel } from "@/components/admin/order-costs-panel";
+// Phase 20 (20-11) — payment proof review surface + Download Invoice button.
+import { db } from "@/lib/db";
+import { paymentProofs } from "@/lib/db/schema";
+import { eq, desc } from "drizzle-orm";
+import { FileDown } from "lucide-react";
+import { PaymentProofSection } from "@/components/admin/payment-proof-section";
+import { AdminUploadProofForm } from "@/components/admin/admin-upload-proof-form";
 
 export const dynamic = "force-dynamic";
 
@@ -87,6 +95,23 @@ export default async function AdminOrderDetailPage({
     console.warn("getAdminOrderTracking failed", (e as Error).message);
   }
 
+  // Phase 20 (20-11) — manual multi-query hydration (no LATERAL joins per
+  // MariaDB 10.11 quirk). Fetches payment proofs for this order ordered by
+  // created_at DESC (latest first).
+  const proofRows = await db
+    .select()
+    .from(paymentProofs)
+    .where(eq(paymentProofs.orderId, id))
+    .orderBy(desc(paymentProofs.createdAt));
+
+  // Mount admin upload form when order is still awaiting payment confirmation
+  // or is an unconfirmed bank-transfer order (no PayPal capture yet and not paid).
+  // Status-based guard: show for pending / awaiting_customer / awaiting_payment_review.
+  const showAdminUploadForm =
+    row.status === "awaiting_customer" ||
+    row.status === "awaiting_payment_review" ||
+    (row.status === "pending" && !row.paypalCaptureId);
+
   return (
     <main
       className="min-h-screen"
@@ -107,15 +132,28 @@ export default async function AdminOrderDetailPage({
             <p className="text-slate-600 mt-1">
               Placed {new Date(row.createdAt).toLocaleString("en-MY")}
             </p>
-            <p className="text-xs text-slate-500 font-mono mt-1 break-all">{row.id}</p>
+            <p className="text-xs text-slate-500 font-mono mt-1 break-words">{row.id}</p>
             {row.paypalCaptureId ? (
               <p className="text-xs text-slate-600 mt-2">
                 Payment reference:{" "}
-                <span className="font-mono break-all">{row.paypalCaptureId}</span>
+                <span className="font-mono break-words">{row.paypalCaptureId}</span>
               </p>
             ) : null}
           </div>
-          <AdminOrderStatusBadge status={row.status} />
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Phase 20 (20-11) — Download Invoice PDF button */}
+            <a
+              href={`/orders/${row.id}/invoice.pdf`}
+              target="_blank"
+              rel="noopener"
+              className="inline-flex items-center gap-2 px-4 font-semibold rounded-[4px] border-2 border-slate-700 text-slate-700 hover:bg-slate-100 transition-colors duration-150"
+              style={{ minHeight: 48 }}
+            >
+              <FileDown size={20} />
+              Download Invoice (PDF)
+            </a>
+            <AdminOrderStatusBadge status={row.status} />
+          </div>
         </header>
 
         <div className="grid gap-6 md:grid-cols-2">
@@ -125,11 +163,11 @@ export default async function AdminOrderDetailPage({
           >
             <h2 className="font-[var(--font-heading)] text-xl mb-3">Customer</h2>
             <p className="font-semibold">{row.user?.name ?? row.shippingName}</p>
-            <p className="text-slate-700 break-all">
+            <p className="text-slate-700 break-words">
               {row.user?.email ?? row.customerEmail}
             </p>
             {row.user ? (
-              <p className="text-xs text-slate-500 font-mono mt-2 break-all">
+              <p className="text-xs text-slate-500 font-mono mt-2 break-words">
                 user id: {row.user.id}
               </p>
             ) : (
@@ -153,6 +191,37 @@ export default async function AdminOrderDetailPage({
               {row.shippingPhone}
             </address>
           </section>
+
+          {/* Phase 20 (20-11) — Payment Proof review section.
+              Rendered between Customer/Shipping cards and Order timeline.
+              PaymentProofSection early-returns null when proofRows is empty. */}
+          <div className="md:col-span-2 flex flex-col gap-4">
+            <PaymentProofSection
+              orderId={row.id}
+              proofs={proofRows.map((p) => ({
+                id: p.id,
+                imageUrl: p.imageUrl,
+                thumbnailUrl: p.thumbnailUrl ?? null,
+                mimeType: p.mimeType,
+                sizeBytes: p.sizeBytes,
+                uploadedBy: p.uploadedBy,
+                uploadedByUserId: p.uploadedByUserId ?? null,
+                status: p.status,
+                adminNote: p.adminNote ?? null,
+                createdAt: p.createdAt instanceof Date ? p.createdAt : new Date(p.createdAt),
+              }))}
+              orderTotal={row.totalAmount}
+            />
+
+            {/* Admin slip upload — shown when order is still awaiting payment.
+                onSuccess is intentionally omitted: revalidatePath inside
+                adminUploadPaymentProof triggers the RSC re-render automatically.
+                Passing a function prop across the Server→Client boundary would
+                cause a runtime crash on force-dynamic pages (RSC boundary rule). */}
+            {showAdminUploadForm && (
+              <AdminUploadProofForm orderId={row.id} />
+            )}
+          </div>
 
           <section
             className="rounded-2xl p-4 md:p-6 md:col-span-2"
@@ -239,7 +308,8 @@ export default async function AdminOrderDetailPage({
                       className="h-14 w-14 md:h-16 md:w-16 rounded-xl overflow-hidden shrink-0 relative"
                       style={{ backgroundColor: `${BRAND.blue}15` }}
                     >
-                      {i.productImage ? (
+                      {/* D-08 (Phase 20): manual lines have no product image — skip fetch */}
+                      {i.productImage && !isManualLine(i) ? (
                         <Image
                           src={i.productImage}
                           alt=""
@@ -251,15 +321,22 @@ export default async function AdminOrderDetailPage({
                       ) : null}
                     </div>
                     <div className="flex-1 min-w-0">
+                      {/* D-08: manual lines render name directly — no Link to /products/<id> */}
                       <p className="font-semibold truncate">{i.productName}</p>
                       <p className="text-sm text-slate-600">
                         {(() => {
+                          // D-08: manual lines have no variant/config data
+                          if (isManualLine(i)) {
+                            return <>Qty {i.quantity} · {formatMYR(i.unitPrice)} each</>;
+                          }
                           const cfg = ensureOrderItemConfigData(i.configurationData);
                           const summary = cfg?.computedSummary ?? i.variantLabel ?? (i.size ? `Size ${i.size}` : null);
                           return <>{summary ? `${summary} · ` : ""}Qty {i.quantity} · {formatMYR(i.unitPrice)} each</>;
                         })()}
                       </p>
                       {(() => {
+                        // D-08: skip configuration JSON block for manual lines
+                        if (isManualLine(i)) return null;
                         const cfg = ensureOrderItemConfigData(i.configurationData);
                         if (!cfg) return null;
                         return (
@@ -367,12 +444,12 @@ export default async function AdminOrderDetailPage({
             <h2 className="font-[var(--font-heading)] text-xl mb-3">Update status</h2>
             <AdminOrderStatusForm orderId={row.id} current={row.status} />
             {row.paypalOrderId ? (
-              <p className="text-xs text-slate-500 mt-3 font-mono break-all">
+              <p className="text-xs text-slate-500 mt-3 font-mono break-words">
                 PayPal order ID: {row.paypalOrderId}
               </p>
             ) : null}
             {row.paypalCaptureId ? (
-              <p className="text-xs text-slate-500 mt-1 font-mono break-all">
+              <p className="text-xs text-slate-500 mt-1 font-mono break-words">
                 PayPal capture ID: {row.paypalCaptureId}
               </p>
             ) : null}
@@ -386,15 +463,7 @@ export default async function AdminOrderDetailPage({
               Cancel / return requests
             </h2>
             <OrderRequestsAdmin
-              requests={orderRequests.map((r) => ({
-                id: r.id,
-                type: r.type,
-                status: r.status,
-                reason: r.reason,
-                adminNotes: r.adminNotes ?? null,
-                createdAt: r.createdAt,
-                resolvedAt: r.resolvedAt ?? null,
-              }))}
+              requests={orderRequests as AdminOrderRequestRow[]}
             />
           </section>
 

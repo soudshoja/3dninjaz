@@ -1,15 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Save } from "lucide-react";
+import { Save, Check } from "lucide-react";
 import { createProduct, updateProduct } from "@/actions/products";
 import { updateProductType } from "@/actions/configurator";
 import { ProductTypeRadio } from "@/components/admin/product-type-radio";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
   Card,
@@ -25,6 +24,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ImageUploader } from "@/components/admin/image-uploader";
+// Quick task 260430-kmr — Quill rich-text editor for description (universal — all product types).
+import { NovelRichTextEditor } from "@/components/admin/novel-rich-text-editor";
+// Quick task 260430-kmr — inline fields editor for simple + configurable productTypes.
+import { InlineFieldsEditor, type PendingField } from "@/components/admin/inline-fields-editor";
+import { DraftRestoredBanner } from "@/components/admin/draft-restored-banner";
+import { useProductDraft } from "@/hooks/use-product-draft";
+import type { ConfigField } from "@/actions/configurator";
+import { VariantEditor } from "@/components/admin/variant-editor";
+import type { HydratedOption, HydratedVariant } from "@/lib/variants";
 
 export type ProductFormInitial = {
   id: string;
@@ -41,8 +49,31 @@ export type ProductFormInitial = {
   categoryId: string | null;
   subcategoryId: string | null;
   // Phase 19 (19-03) — product type + lock state
-  productType?: "stocked" | "configurable" | "keychain" | "vending";
+  // Quick task 260430-icx — `simple` added.
+  productType?: "stocked" | "configurable" | "keychain" | "vending" | "simple";
   lockedReason?: string;
+  /**
+   * Optional info note shown UNDER the radio grid — e.g. "X variants stay in
+   * DB after switching". Per "keep all data and switch" directive: switches
+   * never destroy data, so this is informational only (never blocks).
+   */
+  switchInfo?: string;
+  /** Quick task 260430-icx — flat MYR price for `simple` products only. */
+  simplePrice?: string | null;
+  /**
+   * Quick task 260430-kmr — config fields for simple + configurable productTypes.
+   * Server hydrates this in the edit page via getConfiguratorData(id).fields.
+   * Undefined for keychain/vending/stocked — those manage fields elsewhere.
+   */
+  initialFields?: ConfigField[];
+  /**
+   * Inline variants — pre-hydrated options + variants for stocked/simple products.
+   * When provided, VariantEditor renders inline instead of showing a "Manage variants →" link.
+   */
+  initialOptions?: HydratedOption[];
+  initialVariants?: HydratedVariant[];
+  /** Bug 3 — when true, hides the flat-rate base-price pill on the storefront PDP. */
+  hideBasePrice?: boolean;
 };
 
 export type CategoryOption = { id: string; name: string };
@@ -54,17 +85,56 @@ export type SubcategoryOption = {
 
 const NO_CATEGORY = "none";
 
+// Quick task 260430-kmr — convert a server-shaped ConfigField to the local
+// PendingField shape used by InlineFieldsEditor.
+function asPending(f: ConfigField): PendingField {
+  return { ...f, __pending: "untouched" } as PendingField;
+}
+
+// Quick task 260430-kmr — convert a PendingField back to the wire shape sent
+// to updateProduct. New fields (tmp- ids) emit id: undefined so the server
+// inserts a new row; existing rows keep their UUID.
+function stripPendingFlag(f: PendingField) {
+  const isNew = f.__pending === "new" || f.id.startsWith("tmp-");
+  return {
+    id: isNew ? undefined : f.id,
+    fieldType: f.fieldType,
+    label: f.label,
+    helpText: f.helpText ?? null,
+    required: f.required,
+    config: f.config,
+  };
+}
+
 export function ProductForm({
   initialData,
   categories,
   subcategories,
+  customFonts,
+  productSlug,
 }: {
   initialData?: ProductFormInitial;
   categories: CategoryOption[];
   subcategories: SubcategoryOption[];
+  /** Custom uploaded fonts to surface in the Quill font picker. */
+  customFonts?: { familySlug: string; displayName: string }[];
+  /** Product slug — passed through to VariantEditor for auto-SKU generation. */
+  productSlug?: string;
 }) {
   const router = useRouter();
   const editing = !!initialData;
+
+  // Pre-generate the product UUID on the client for the create flow so that
+  // image uploads go straight to /uploads/products/<productId>/<imageUuid>
+  // without any intermediate /new/ bucket. The UUID is stable across re-renders
+  // via useRef so multiple images uploaded before Save all share the same
+  // product folder. On the edit path we use initialData.id directly.
+  const preGeneratedId = useRef(
+    typeof crypto !== "undefined" ? crypto.randomUUID() : ""
+  );
+  const effectiveProductId = editing
+    ? initialData!.id
+    : preGeneratedId.current;
 
   const [name, setName] = useState(initialData?.name ?? "");
   const [description, setDescription] = useState(
@@ -96,19 +166,123 @@ export function ProductForm({
   );
   const [isActive, setIsActive] = useState(initialData?.isActive ?? true);
   const [isFeatured, setIsFeatured] = useState(initialData?.isFeatured ?? false);
+  // Bug 3 — hide flat-rate price pill on storefront PDP.
+  const [hideBasePrice, setHideBasePrice] = useState(initialData?.hideBasePrice ?? false);
   // Phase 19 (19-03) — product type state
-  const [productType, setProductType] = useState<"stocked" | "configurable" | "keychain" | "vending">(
+  // Quick task 260430-icx — `simple` added.
+  const [productType, setProductType] = useState<"stocked" | "configurable" | "keychain" | "vending" | "simple">(
     initialData?.productType ?? "stocked"
+  );
+  // Quick task 260430-icx — flat price for `simple` productType.
+  const [simplePrice, setSimplePrice] = useState<string>(
+    initialData?.simplePrice ?? ""
+  );
+
+  // Quick task 260430-kmr — inline fields state for simple + configurable.
+  // For other product types initialFields is undefined; we keep an empty
+  // array locally but only mount InlineFieldsEditor for simple/configurable.
+  const [fields, setFields] = useState<PendingField[]>(
+    () => (initialData?.initialFields ?? []).map(asPending)
   );
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const [pending, startTransition] = useTransition();
+
+  // Auto-hide success indicator after 2.5s.
+  useEffect(() => {
+    if (!saveSuccess) return;
+    const t = setTimeout(() => setSaveSuccess(false), 2500);
+    return () => clearTimeout(t);
+  }, [saveSuccess]);
+
+  // Quick task 260430-kmr — autosave draft. The form-state object is the
+  // single source of truth bubbled into useProductDraft; on Save success we
+  // call draft.discard() so the next mount sees no banner.
+  const formState = useMemo(
+    () => ({
+      name,
+      description,
+      images,
+      captions,
+      thumbnailIndex,
+      categoryId,
+      subcategoryId,
+      materialType,
+      productionDays,
+      isActive,
+      isFeatured,
+      productType,
+      simplePrice,
+      fields,
+      hideBasePrice,
+    }),
+    [
+      name,
+      description,
+      images,
+      captions,
+      thumbnailIndex,
+      categoryId,
+      subcategoryId,
+      materialType,
+      productionDays,
+      isActive,
+      isFeatured,
+      productType,
+      simplePrice,
+      fields,
+      hideBasePrice,
+    ],
+  );
+
+  const draftKey = initialData?.id ?? "new";
+  const draft = useProductDraft(draftKey, formState);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+
+  function restoreDraft() {
+    const v = draft.restore();
+    if (!v) {
+      setBannerDismissed(true);
+      return;
+    }
+    // Hydrate every field from the snapshot. Be defensive about missing keys
+    // (older drafts may not contain newer fields).
+    if (typeof v.name === "string") setName(v.name);
+    if (typeof v.description === "string") setDescription(v.description);
+    if (Array.isArray(v.images)) setImages(v.images);
+    if (Array.isArray(v.captions)) setCaptions(v.captions);
+    if (typeof v.thumbnailIndex === "number") setThumbnailIndex(v.thumbnailIndex);
+    if (typeof v.categoryId === "string") setCategoryId(v.categoryId);
+    if (typeof v.subcategoryId === "string") setSubcategoryId(v.subcategoryId);
+    if (typeof v.materialType === "string") setMaterialType(v.materialType);
+    if (typeof v.productionDays === "string") setProductionDays(v.productionDays);
+    if (typeof v.isActive === "boolean") setIsActive(v.isActive);
+    if (typeof v.isFeatured === "boolean") setIsFeatured(v.isFeatured);
+    if (typeof v.productType === "string") {
+      setProductType(v.productType as typeof productType);
+    }
+    if (typeof v.simplePrice === "string") setSimplePrice(v.simplePrice);
+    if (Array.isArray(v.fields)) setFields(v.fields as PendingField[]);
+    if (typeof v.hideBasePrice === "boolean") setHideBasePrice(v.hideBasePrice);
+    setBannerDismissed(true);
+  }
+
+  function discardDraft() {
+    draft.discard();
+    setBannerDismissed(true);
+  }
 
   function validate(): string | null {
     const next: Record<string, string> = {};
     if (!name.trim()) next.name = "Product name is required";
-    if (!description.trim()) next.description = "Description is required";
+    // Quick task 260430-kmr — Quill emits "<p><br></p>" for an empty editor.
+    // Reject when the sanitised plain-text equivalent is empty so admin can't
+    // ship an empty description by tabbing through the editor.
+    const descriptionPlain = description.replace(/<[^>]*>/g, "").trim();
+    if (!descriptionPlain) next.description = "Description is required";
     // Phase 19 (19-10) — no image count cap (REQ-6)
 
     if (
@@ -116,6 +290,20 @@ export function ProductForm({
       (!/^\d+$/.test(productionDays) || Number(productionDays) <= 0)
     ) {
       next.productionDays = "Must be a positive whole number";
+    }
+
+    // Quick task 260430-icx — simplePrice required + numeric for `simple` products.
+    // Edit flow: empty = "no change" (action keeps existing tier). Only validate
+    // when the admin has actually typed something, or on create where it is required.
+    if (productType === "simple") {
+      const trimmed = simplePrice.trim();
+      if (!trimmed && !editing) {
+        // Create flow — price is required.
+        next.simplePrice = "Valid price required (e.g. 19.99)";
+      } else if (trimmed && !/^\d+(\.\d{1,2})?$/.test(trimmed)) {
+        // Any flow — if non-empty, format must be valid.
+        next.simplePrice = "Price must be a number with up to 2 decimal places";
+      }
     }
 
     setErrors(next);
@@ -126,10 +314,15 @@ export function ProductForm({
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitError(null);
+    setSubmitAttempted(true);
 
     const problem = validate();
     if (problem) {
       setSubmitError(problem);
+      // Scroll to the error summary banner
+      setTimeout(() => {
+        document.getElementById("form-error-summary")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 50);
       return;
     }
 
@@ -161,6 +354,32 @@ export function ProductForm({
       // Phase 19 (19-03) — include productType in every save
       productType,
       variants: [],
+      // Bug 3 — hide flat-rate price pill on storefront PDP.
+      hideBasePrice,
+      // Quick task 260430-icx — only include simplePrice when relevant.
+      // Edit flow: omit entirely when field is empty so the action preserves
+      // the existing tier. Create flow: always include (validate() guards above).
+      ...(productType === "simple" && (simplePrice.trim() !== "" || !editing)
+        ? { simplePrice: simplePrice.trim() }
+        : {}),
+      // Quick task 260430-kmr — single Save commits inline fields atomically
+      // for simple + configurable. Server-side updateProduct fans out to
+      // addConfigField/updateConfigField/deleteConfigField/reorderConfigFields.
+      //
+      // Bug fix (Bug 1): when the admin switches type in the same session
+      // (stocked → simple) WITHOUT a page reload, initialData.initialFields is
+      // undefined (it was server-rendered for a different type). In that case
+      // fields[] starts empty and reconcileInlineFields would DELETE every
+      // existing config field that's already in the DB. Guard: only send the
+      // fields payload when the page was loaded in the target type, i.e.
+      // initialData.productType === productType OR initialData.initialFields
+      // was explicitly provided (truthy). For pure in-session switches, skip
+      // reconciliation — the fields survive the type change and will be
+      // editable on the next page load when the edit page re-hydrates them.
+      ...((productType === "simple" || productType === "configurable") &&
+        (initialData?.initialFields !== undefined || !editing)
+        ? { fields: fields.map(stripPendingFlag) }
+        : {}),
     };
 
     startTransition(async () => {
@@ -176,7 +395,7 @@ export function ProductForm({
 
       const result = editing
         ? await updateProduct(initialData!.id, payload)
-        : await createProduct(payload);
+        : await createProduct(payload, effectiveProductId);
 
       if ("error" in result) {
         if (typeof result.error === "string") {
@@ -192,23 +411,95 @@ export function ProductForm({
         return;
       }
 
+      // Quick task 260430-kmr — successful save clears the autosave snapshot.
+      draft.discard();
+
       if (!editing && "productId" in result && result.productId) {
         // Phase 19 (19-03) — new configurable + keychain products go to configurator,
         // stocked to variants. Keychain is pre-seeded but fully editable.
+        // Quick task 260430-icx — `simple` redirects to its own /fields editor
+        // (no auto-seed; admin curates fields freely).
+        // Quick task 260430-kmr — `simple` now lands directly on the unified
+        // /edit page since fields are managed inline (no /fields hop).
         if (productType === "configurable" || productType === "keychain" || productType === "vending") {
           router.push(`/admin/products/${result.productId}/configurator`);
         } else {
-          router.push(`/admin/products/${result.productId}/variants`);
+          // stocked + simple — variants are now inline on /edit#variants
+          router.push(`/admin/products/${result.productId}/edit#variants`);
         }
+        router.refresh();
       } else {
-        router.push("/admin/products");
+        // Edit flow — stay on the page so admin can keep editing without
+        // bouncing to the products list. Show a transient "Saved" indicator
+        // and refresh server data in place.
+        setSaveSuccess(true);
+        router.refresh();
       }
-      router.refresh();
     });
   }
 
+  // Build ordered list of error entries for the summary banner.
+  const errorEntries = Object.entries(errors).filter(([, msg]) => !!msg);
+  // Map field keys to anchor ids and human labels for the summary banner.
+  const fieldMeta: Record<string, { label: string; anchorId: string }> = {
+    name: { label: "Product Name", anchorId: "field-name" },
+    description: { label: "Description", anchorId: "field-description" },
+    productionDays: { label: "Estimated Production Days", anchorId: "field-productionDays" },
+    simplePrice: { label: "Price", anchorId: "field-simplePrice" },
+    images: { label: "Images", anchorId: "field-images" },
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Quick task 260430-kmr — autosave restore banner. Renders only when a
+          snapshot exists for this product (or for "new" in the create flow)
+          and the admin hasn't already chosen Restore/Discard this session. */}
+      {draft.draft && !bannerDismissed && (
+        <DraftRestoredBanner
+          savedAt={draft.draft.savedAt}
+          onRestore={restoreDraft}
+          onDiscard={discardDraft}
+        />
+      )}
+
+      {/* Red error summary banner — shown after first submit attempt when errors exist */}
+      {submitAttempted && errorEntries.length > 0 && (
+        <div
+          id="form-error-summary"
+          role="alert"
+          className="rounded-lg border border-red-300 bg-red-50 p-4"
+        >
+          <p className="mb-2 text-sm font-semibold text-red-700">
+            Please fix {errorEntries.length} error{errorEntries.length !== 1 ? "s" : ""} before saving:
+          </p>
+          <ul className="list-disc space-y-1 pl-5">
+            {errorEntries.map(([key, msg]) => {
+              const meta = fieldMeta[key];
+              return (
+                <li key={key} className="text-sm text-red-600">
+                  {meta ? (
+                    <button
+                      type="button"
+                      className="underline hover:no-underline text-left"
+                      onClick={() => {
+                        const el = document.getElementById(meta.anchorId);
+                        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                        el?.focus();
+                      }}
+                    >
+                      {meta.label}
+                    </button>
+                  ) : (
+                    <span className="font-medium">{key}</span>
+                  )}
+                  {": "}
+                  {msg}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
       {/* Phase 19 (19-03) — Product type radio: must be first child of form */}
       <Card>
         <CardHeader>
@@ -223,6 +514,7 @@ export function ProductForm({
             onChange={setProductType}
             locked={!!initialData?.lockedReason}
             lockedReason={initialData?.lockedReason}
+            switchInfo={initialData?.switchInfo}
           />
         </CardContent>
       </Card>
@@ -233,31 +525,51 @@ export function ProductForm({
           <CardTitle>Basic Info</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Product Name</Label>
+          <div id="field-name" className="space-y-2">
+            <Label
+              htmlFor="name"
+              className={errors.name ? "text-red-600" : ""}
+            >
+              Product Name
+              <span className="ml-0.5 text-red-500" aria-hidden="true"> *</span>
+            </Label>
             <Input
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
               maxLength={100}
-              className="h-10"
+              aria-invalid={!!errors.name}
+              className={
+                errors.name
+                  ? "h-10 border-red-500 ring-2 ring-red-500/30 focus-visible:ring-red-500/40"
+                  : "h-10"
+              }
             />
             {errors.name && (
-              <p className="text-sm text-red-500">{errors.name}</p>
+              <p className="text-sm text-red-600" role="alert">{errors.name}</p>
             )}
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
-            <Textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={4}
-              required
-            />
+          <div id="field-description" className="space-y-2">
+            <Label
+              htmlFor="description"
+              className={errors.description ? "text-red-600" : ""}
+            >
+              Description
+              <span className="ml-0.5 text-red-500" aria-hidden="true"> *</span>
+            </Label>
+            {/* Quick task 260430-kmr — Quill rich-text editor for description on
+                ALL product types. Output is HTML; sanitised server-side via
+                sanitizeRichText() in src/actions/products.ts on every save. */}
+            <div className={errors.description ? "rounded-md ring-2 ring-red-500/30" : ""}>
+              <NovelRichTextEditor
+                value={description}
+                onChange={setDescription}
+                customFonts={customFonts}
+              />
+            </div>
             {errors.description && (
-              <p className="text-sm text-red-500">{errors.description}</p>
+              <p className="text-sm text-red-600" role="alert">{errors.description}</p>
             )}
           </div>
           <div className="grid gap-4 md:grid-cols-2">
@@ -345,103 +657,96 @@ export function ProductForm({
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <ImageUploader
-            images={images}
-            onImagesChange={(next) => {
-              // Keep captions array in sync: prune removed entries, pad new ones.
-              setCaptions((prev) => {
-                const next2 = next.map((url) => {
-                  const idx = images.indexOf(url);
-                  return idx >= 0 ? (prev[idx] ?? "") : "";
+          <div id="field-images">
+            <ImageUploader
+              images={images}
+              onImagesChange={(nextOrUpdater) => {
+                // nextOrUpdater may be a plain array (remove / foreground upload)
+                // or a functional updater (background parallel uploads).
+                setImages((prev) => {
+                  const next =
+                    typeof nextOrUpdater === "function"
+                      ? nextOrUpdater(prev)
+                      : nextOrUpdater;
+                  // Keep captions array in sync: prune removed entries, pad new ones.
+                  setCaptions((prevCaptions) =>
+                    next.map((url) => {
+                      const idx = prev.indexOf(url);
+                      return idx >= 0 ? (prevCaptions[idx] ?? "") : "";
+                    }),
+                  );
+                  return next;
                 });
-                return next2;
-              });
-              setImages(next);
-            }}
-            productId={initialData?.id}
-            maxImages={999}
-            thumbnailIndex={thumbnailIndex}
-            onThumbnailChange={setThumbnailIndex}
-          />
-          {/* Phase 19 (19-10) — caption input per image */}
-          {images.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-[var(--color-brand-text-muted)]">
-                Captions (shown under each image on the product page — optional)
-              </p>
-              {images.map((url, idx) => (
-                <div key={url + idx} className="flex items-center gap-2">
-                  <span className="min-w-[24px] text-xs text-[var(--color-brand-text-muted)]">
-                    {idx + 1}.
-                  </span>
-                  <input
-                    type="text"
-                    value={captions[idx] ?? ""}
-                    onChange={(e) =>
-                      setCaptions((prev) => {
-                        const next = [...prev];
-                        next[idx] = e.target.value;
-                        return next;
-                      })
-                    }
-                    placeholder={`Caption for image ${idx + 1}`}
-                    maxLength={200}
-                    className="h-8 flex-1 rounded-md border border-[var(--color-brand-border)] bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-brand-blue)]"
-                  />
-                </div>
-              ))}
-            </div>
-          )}
+              }}
+              productId={effectiveProductId}
+              maxImages={999}
+              thumbnailIndex={thumbnailIndex}
+              onThumbnailChange={setThumbnailIndex}
+              captions={captions}
+              onCaptionsChange={setCaptions}
+            />
+          </div>
           {errors.images && (
-            <p className="mt-2 text-sm text-red-500">{errors.images}</p>
+            <p className="mt-2 text-sm text-red-600" role="alert">{errors.images}</p>
           )}
         </CardContent>
       </Card>
 
-      {/* Variants — only shown for stocked products; configurator link shown for configurable */}
-      {productType === "stocked" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Variants</CardTitle>
-            <p className="text-sm text-[var(--color-brand-text-muted)]">
-              Sizes, colors, parts, prices, stock, and images are managed on the
-              dedicated variants page.
-            </p>
-          </CardHeader>
-          <CardContent>
-            {initialData?.id ? (
-              <a
-                href={`/admin/products/${initialData.id}/variants`}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
-              >
-                Manage variants →
-              </a>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Save the product first, then manage its variants.
+      {/* Variants — inline editor for stocked + simple products.
+          Shown when the product already exists (edit flow) with pre-hydrated data,
+          or as a "save first" placeholder on the create flow. */}
+      {(productType === "stocked" || productType === "simple") && (
+        <div id="variants" className="rounded-2xl border border-[var(--color-brand-border)] bg-white p-5 md:p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-bold text-[var(--color-brand-text-primary)]">Variants</h2>
+              <p className="text-sm text-[var(--color-brand-text-muted)] mt-0.5">
+                {productType === "simple"
+                  ? "Optional single-axis variants (e.g. Size OR Colour) for this product."
+                  : "Manage sizes, colours, prices, stock, and images per variant."}
               </p>
-            )}
-          </CardContent>
-        </Card>
-      )}
-      {/* Phase 19 (19-03) — Configurator link for made-to-order products */}
-      {productType === "configurable" && initialData?.id && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Configurator</CardTitle>
+            </div>
+          </div>
+          {initialData?.id && productSlug ? (
+            <VariantEditor
+              productId={initialData.id}
+              productSlug={productSlug}
+              initialOptions={initialData.initialOptions ?? []}
+              initialVariants={initialData.initialVariants ?? []}
+              productType={productType === "simple" ? "simple" : "stocked"}
+            />
+          ) : (
             <p className="text-sm text-[var(--color-brand-text-muted)]">
-              Define the customisation fields customers fill in (name, colours, etc.) and set tier pricing.
+              Save the product first, then manage its variants here.
             </p>
-          </CardHeader>
-          <CardContent>
-            <a
-              href={`/admin/products/${initialData.id}/configurator`}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
-            >
-              Manage Configurator →
-            </a>
-          </CardContent>
-        </Card>
+          )}
+        </div>
+      )}
+      {/* Quick task 260430-kmr — unified inline fields editor for simple AND
+          configurable products. Description editor (Quill) is universal in
+          Basic Info above; this card adds price-as-first-row + accordion
+          field rows + Up/Down reorder + Add field popover. Single Save below
+          commits everything atomically via updateProduct.
+
+          Tier-pricing for configurable products remains on /configurator —
+          the editor renders a read-only summary + link for the price row. */}
+      {(productType === "simple" || productType === "configurable") && (
+        <InlineFieldsEditor
+          productId={initialData?.id ?? null}
+          productType={productType as "simple" | "configurable"}
+          initialFields={fields}
+          initialPrice={simplePrice}
+          onPriceChange={setSimplePrice}
+          onFieldsChange={setFields}
+          productSlug={productSlug}
+        />
+      )}
+      {/* Surface the simple-product price validation error inline (the editor
+          owns the input but errors flow through the form's errors map). */}
+      {productType === "simple" && errors.simplePrice && (
+        <p id="field-simplePrice" className="text-sm text-red-600" role="alert">
+          {errors.simplePrice}
+        </p>
       )}
       {/* Keyboard Clicker — pre-seeded but editable */}
       {productType === "keychain" && initialData?.id && (
@@ -498,8 +803,13 @@ export function ProductForm({
               className="h-10"
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="productionDays">Estimated Production Days</Label>
+          <div id="field-productionDays" className="space-y-2">
+            <Label
+              htmlFor="productionDays"
+              className={errors.productionDays ? "text-red-600" : ""}
+            >
+              Estimated Production Days
+            </Label>
             <Input
               id="productionDays"
               type="text"
@@ -507,10 +817,15 @@ export function ProductForm({
               value={productionDays}
               onChange={(e) => setProductionDays(e.target.value)}
               placeholder="e.g. 3"
-              className="h-10"
+              aria-invalid={!!errors.productionDays}
+              className={
+                errors.productionDays
+                  ? "h-10 border-red-500 ring-2 ring-red-500/30 focus-visible:ring-red-500/40"
+                  : "h-10"
+              }
             />
             {errors.productionDays && (
-              <p className="text-sm text-red-500">{errors.productionDays}</p>
+              <p className="text-sm text-red-600" role="alert">{errors.productionDays}</p>
             )}
           </div>
         </CardContent>
@@ -540,37 +855,66 @@ export function ProductForm({
             </div>
             <Switch checked={isFeatured} onCheckedChange={setIsFeatured} />
           </label>
+          {/* Bug 3 — only relevant when product has Select fields with per-option
+              prices. Hides the top flat-rate price pill on the PDP so customers
+              see only the resolved per-selection price. */}
+          {(productType === "simple" || productType === "configurable") && (
+            <label className="flex items-center justify-between rounded-md border border-[var(--color-brand-border)] p-3">
+              <div>
+                <p className="text-sm font-medium">Hide flat-rate price</p>
+                <p className="text-xs text-[var(--color-brand-text-muted)]">
+                  When using Select fields with per-option prices, hide the base price pill at the top of the product page. Customers will see only the price resolved from their selection.
+                </p>
+              </div>
+              <Switch checked={hideBasePrice} onCheckedChange={setHideBasePrice} />
+            </label>
+          )}
         </CardContent>
       </Card>
 
-      {submitError && (
-        <p className="text-sm text-red-500" role="alert">
+      {submitError && !errorEntries.length && (
+        <p className="text-sm text-red-600" role="alert">
           {submitError}
         </p>
       )}
 
       <div className="flex flex-wrap items-center justify-end gap-3">
+        {saveSuccess && (
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-3 py-1 text-sm font-medium text-green-700 ring-1 ring-green-200"
+            role="status"
+          >
+            <Check className="h-4 w-4" />
+            Saved
+          </span>
+        )}
         <Button
           type="button"
           variant="outline"
           onClick={() => router.push("/admin/products")}
           disabled={pending}
         >
-          Cancel
+          {editing ? "Back to Products" : "Cancel"}
         </Button>
         <Button
           type="submit"
           disabled={pending}
-          className="h-10 gap-2 bg-[var(--color-brand-cta)] px-5 text-white hover:bg-[var(--color-brand-cta)]/90"
+          className={
+            submitAttempted && errorEntries.length > 0
+              ? "h-10 gap-2 bg-red-600 px-5 text-white hover:bg-red-700"
+              : "h-10 gap-2 bg-[var(--color-brand-cta)] px-5 text-white hover:bg-[var(--color-brand-cta)]/90"
+          }
         >
           <Save className="h-4 w-4" />
           {pending
             ? editing
               ? "Updating..."
               : "Creating..."
-            : editing
-              ? "Update Product"
-              : "Create Product"}
+            : submitAttempted && errorEntries.length > 0
+              ? "Fix errors first"
+              : editing
+                ? "Update Product"
+                : "Create Product"}
         </Button>
       </div>
     </form>

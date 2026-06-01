@@ -102,7 +102,7 @@ function ResetPasswordFormInner() {
               required
               minLength={8}
               autoComplete="new-password"
-              className="h-10"
+              className="h-12"
             />
             <p className="text-xs text-[var(--color-brand-text-muted)]">
               Minimum 8 characters.
@@ -119,7 +119,7 @@ function ResetPasswordFormInner() {
               required
               minLength={8}
               autoComplete="new-password"
-              className="h-10"
+              className="h-12"
             />
           </div>
 
@@ -132,7 +132,7 @@ function ResetPasswordFormInner() {
           <Button
             type="submit"
             disabled={submitting || !token}
-            className="h-10 w-full bg-[var(--color-brand-cta)] text-white hover:bg-[var(--color-brand-cta)]/90"
+            className="h-12 w-full bg-[var(--color-brand-cta)] text-white hover:bg-[var(--color-brand-cta)]/90"
           >
             {submitting ? "Resetting..." : "Reset Password"}
           </Button>

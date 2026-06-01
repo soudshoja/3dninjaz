@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Phase 19 COMPLETE + post-shipment upload hotfix sweep — 27 commits on dev (head c118ae6). 50 MB caps, HEIC support, XHR progress UI, manifest-redirect route handler. WhatsApp alerting LIVE via Resayil + 1-min cron on prod log.
-last_updated: "2026-04-29T09:15:00.000Z"
-last_activity: 2026-04-29
+status: c118ae6 on dev. CI auto-deploying. Server-side log monitor LIVE (1-min cron WhatsApp alerts to +96599800027). Awaiting human smoke on app.3dninjaz.com
+stopped_at: Phase 20 SHIPPED — 13 plans + verifier PASS — pending push
+last_updated: "2026-05-17T15:47:06.976Z"
+last_activity: "2026-04-30 — Completed quick task 260430-icx: simple productType + textarea field type"
 progress:
   total_phases: 20
   completed_phases: 9
-  total_plans: 84
-  completed_plans: 64
-  percent: 76
+  total_plans: 86
+  completed_plans: 68
+  percent: 45
 ---
 
 # Project State
@@ -45,7 +45,7 @@ Phase: 19 (Made-to-Order Product Type) — COMPLETE + post-shipment hotfix sweep
 Plans: 11/11 shipped + 5 hotfix commits applied (e5b55bd → c118ae6) addressing pre-existing Phase 7 upload bug, 50MB cap lift, XHR progress UI, server log monitor
 Next Phase: 20 (User & Role Management) — backlog, awaiting /gsd-spec-phase 20
 Status: c118ae6 on dev. CI auto-deploying. Server-side log monitor LIVE (1-min cron WhatsApp alerts to +96599800027). Awaiting human smoke on app.3dninjaz.com
-Last activity: 2026-04-27
+Last activity: 2026-04-30 — Completed quick task 260430-icx: simple productType + textarea field type
 
 Progress: [██████████] 100% (code) | Pre-launch admin actions pending
 
@@ -170,6 +170,8 @@ Recent decisions affecting current work:
   - `git tag v1.0.0 && git push --tags`
 - PayPal Reporting API enablement — contact PayPal support (Q-07-08 NOT_AUTHORIZED).
 - 24h cleanup cron for `public/uploads/imports/` (deferred from 05-05).
+- 2026-05-02 — `.planning/todos/pending/2026-05-02-publish-time-guard-for-empty-colour-palettes.md` — re-add `.min(1)` guard at publish-time after `41ecc00` lifted it for save-time admin UX.
+- 2026-05-02 — `.planning/todos/pending/2026-05-02-customer-side-pdp-draft-autosave.md` — 1s localStorage draft for in-progress configurator-form + variant-selector input on customer PDP (mirror admin `e9edd4b` pattern under separate namespace).
 - `order_cancelled` email send trigger (template exists; admin cancel action not yet built).
 - `review_request` scheduled send 3 days post-delivery (template exists; cron task not built).
 - Auto stock decrement on order capture (Phase 13 deferred item).
@@ -191,6 +193,10 @@ Recent decisions affecting current work:
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260429-nuu | Fix stale RSC cache in configurator — revalidatePath PDP on color/option field changes | 2026-04-29 | 2056a11 | [260429-nuu-fix-stale-rsc-cache-in-configurator-reva](./quick/260429-nuu-fix-stale-rsc-cache-in-configurator-reva/) |
+| 260430-icx | New productType `simple` + new field type `textarea` (Novel rich text) — 5th admin radio card, /fields editor, server-sanitized HTML rendering on PDP | 2026-04-30 | e02fd3b | [260430-icx-build-new-producttype-simple-new-field-t](./quick/260430-icx-build-new-producttype-simple-new-field-t/) |
+| 260525-xbb | Per-SKU (Select-option) shipping weight — optional `weight` (g) on each Select option + admin Weight(g) input; Tier 0 weight resolution in quoteForCart (checkout+POS) & sumOrderWeight (admin booking); server re-reads from DB (T-17-09). Fixes 1kg-fallback wrong shipping. Generic across all products + future-proof. tsc clean, 15/15 tests. Merged to dev (PR #29), deployed. | 2026-05-25 | 497fefb..20113be | [260525-xbb-add-per-sku-select-option-shipping-weigh](./quick/260525-xbb-add-per-sku-select-option-shipping-weigh/) |
+| 260526-iw4 | POS creates/links customer records — `resolvePosCustomerId` (find-by-email merge w/ logins → find-by-phone via prior orders → create customer `user` row) inside createPosOrder tx; attributes order + coupon to the customer not admin; admin-guarded on every path; `getPosCustomerSearch` widened to match phone via orders.shippingPhone. Fixes returning-customer autofill + POS customers now appear in /admin/users. No schema change. tsc clean, verify a–e satisfied. Branch `feat/pos-customer-records` (off origin/dev). Optional follow-up: backfill historical admin-attributed POS orders. | 2026-05-26 | b726840..9edffc6 | [260526-iw4-pos-creates-and-links-customer-records-r](./quick/260526-iw4-pos-creates-and-links-customer-records-r/) |
+| fast-260526 | fix(nav): Shop dropdown clipped on homepage — `overflow-hidden` → `overflow-x-clip` on sticky nav (keeps mobile x-scroll guard, unclips dropdown vertically). Branch `fix/nav-shop-dropdown-clipped` off origin/dev. | 2026-05-26 | 5ae791e | — |
 
 ### Roadmap Evolution
 
@@ -199,6 +205,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-27T02:28:31.739Z
-Stopped at: Phase 19 Wave 1 complete (19-01 + 19-02) — 4 commits; Waves 2-5 unblocked
-Resume file: None
+Last session: 2026-05-17T15:47:06.966Z
+Stopped at: Phase 20 SHIPPED — 13 plans + verifier PASS — pending push
+Resume file: .planning/phases/20-admin-pos-draft-order-flow/20-VERIFICATION.md

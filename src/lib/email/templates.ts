@@ -6,6 +6,27 @@ import {
 } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { sanitiseEmailHtml, escapeHtml } from "@/lib/email/sanitize";
+import { BUSINESS } from "@/lib/business-info";
+
+// ----------------------------------------------------------------------------
+// Common branding variables injected into EVERY template render.
+//
+// Background: renderTemplate substitutes {{var}} with the empty string when a
+// caller omits it. Several senders (password_reset via mailer.ts,
+// order_confirmation via order-confirmation.ts) historically forgot
+// store_name / store_url / current_year / support_email, so emails shipped
+// with blanks ("© ", "for your  account", "contact ."). Injecting these
+// centrally means no caller can starve a template of its branding/footer.
+//
+// Callers may still override any of these by passing the same key.
+// current_year is computed per-render (not a static const) so the footer year
+// stays correct across the New Year without a redeploy.
+// ----------------------------------------------------------------------------
+const BASE_TEMPLATE_VARS: Record<string, string> = {
+  store_name: "3D Ninjaz",
+  store_url: "https://app.3dninjaz.com",
+  support_email: BUSINESS.contactEmail,
+};
 
 // ============================================================================
 // Plan 05-06 — DB-backed email template renderer.
@@ -25,6 +46,7 @@ import { sanitiseEmailHtml, escapeHtml } from "@/lib/email/sanitize";
 
 export type TemplateKey =
   | "order_confirmation"
+  | "order_processing"
   | "order_shipped"
   | "order_delivered"
   | "order_refunded"
@@ -35,9 +57,20 @@ export type TemplateKey =
   | "newsletter_welcome"
   | "newsletter_unsubscribed"
   | "dispute_opened_customer"
-  | "dispute_opened_admin";
+  | "dispute_opened_admin"
+  // 260601-afs — return-for-replacement flow emails
+  | "return_requested"
+  | "return_approved"
+  | "return_rejected"
+  | "return_received"
+  | "return_expired";
 
 export const availableVariables: Record<TemplateKey, string[]> = {
+  order_processing: [
+    "customer_name",
+    "order_number",
+    "order_url",
+  ],
   order_confirmation: [
     "customer_name",
     "order_number",
@@ -142,6 +175,52 @@ export const availableVariables: Record<TemplateKey, string[]> = {
     "store_name",
     "current_year",
   ],
+  // 260601-afs — return-for-replacement flow emails
+  return_requested: [
+    "customer_name",
+    "order_number",
+    "order_link",
+    "store_name",
+    "store_url",
+    "current_year",
+  ],
+  return_approved: [
+    "customer_name",
+    "order_number",
+    "ship_by_date",
+    "return_address",
+    "order_link",
+    "store_name",
+    "store_url",
+    "current_year",
+  ],
+  return_rejected: [
+    "customer_name",
+    "order_number",
+    "reason",
+    "order_link",
+    "support_email",
+    "store_name",
+    "store_url",
+    "current_year",
+  ],
+  return_received: [
+    "customer_name",
+    "order_number",
+    "order_link",
+    "store_name",
+    "store_url",
+    "current_year",
+  ],
+  return_expired: [
+    "customer_name",
+    "order_number",
+    "order_link",
+    "support_email",
+    "store_name",
+    "store_url",
+    "current_year",
+  ],
 };
 
 // Variables whose value is a pre-built HTML fragment — they go through
@@ -181,12 +260,20 @@ export async function renderTemplate(
 ): Promise<{ subject: string; html: string; text: string }> {
   const tpl = await getOrSeed(key);
 
+  // Merge common branding/footer vars under the caller's values. Caller wins
+  // on conflict; current_year is stamped per-render so it never goes stale.
+  const merged: Record<string, unknown> = {
+    ...BASE_TEMPLATE_VARS,
+    current_year: new Date().getFullYear(),
+    ...variables,
+  };
+
   // Defense-in-depth — sanitise stored HTML again at render time.
   const safeHtml = sanitiseEmailHtml(tpl.html);
 
   const substituteHtml = (src: string): string =>
     src.replace(/\{\{(\w+)\}\}/g, (_, name: string) => {
-      const val = variables[name];
+      const val = merged[name];
       if (val === undefined || val === null) return "";
       if (HTML_VARS.has(name)) {
         return sanitiseEmailHtml(String(val));
@@ -196,11 +283,15 @@ export async function renderTemplate(
 
   const substituteSubject = (src: string): string =>
     src.replace(/\{\{(\w+)\}\}/g, (_, name: string) =>
-      String(variables[name] ?? ""),
+      String(merged[name] ?? ""),
     );
 
-  const html = substituteHtml(safeHtml);
+  // Render the subject first, then expose it to the HTML pass so the
+  // seed templates' <title>{{subject}}</title> resolves instead of
+  // leaving an empty <title></title>.
   const subject = substituteSubject(tpl.subject);
+  merged.subject = subject;
+  const html = substituteHtml(safeHtml);
   const text = htmlToText(html);
   return { subject, html, text };
 }

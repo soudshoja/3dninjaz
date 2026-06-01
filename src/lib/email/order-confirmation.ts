@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { orders, orderItems } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { sendMail } from "@/lib/mailer";
-import { formatOrderNumber } from "@/lib/orders";
+import { formatOrderNumber, isManualLine } from "@/lib/orders";
 import { ensureOrderItemConfigData } from "@/lib/config-fields";
 
 /**
@@ -35,8 +35,11 @@ function baseUrl(): string {
   );
 }
 
+// The inferred type now includes guestAccessToken and nullable userId from schema.
 type OrderWithItems = typeof orders.$inferSelect & {
   items: Array<{
+    productId: string;             // Phase 20 (20-13) — D-08 isManualLine guard
+    variantId: string;             // Phase 20 (20-13) — D-08 isManualLine guard
     productName: string;
     size: string | null;
     variantLabel?: string | null;
@@ -65,10 +68,28 @@ function escapeHtml(s: string | null | undefined): string {
 
 export function renderOrderConfirmationHtml(order: OrderWithItems): string {
   const orderNo = formatOrderNumber(order.id);
-  const orderUrl = `${baseUrl()}/orders/${order.id}`;
+  // Guest orders carry a guestAccessToken; authenticated orders use a plain URL.
+  const orderUrl = (order.guestAccessToken && !order.userId)
+    ? `${baseUrl()}/orders/${order.id}?t=${order.guestAccessToken}`
+    : `${baseUrl()}/orders/${order.id}`;
 
   const itemsHtml = order.items
     .map((i) => {
+      // D-08 (Phase 20): manual lines have no variant/config — render name + qty only.
+      // No product link in email HTML (email items never linked anyway).
+      if (isManualLine(i)) {
+        return `
+      <tr>
+        <td style="padding:12px 0;border-bottom:1px solid #eee;">
+          <strong>${escapeHtml(i.productName)}</strong><br>
+          <span style="color:#666;font-size:13px;">Qty ${i.quantity}</span>
+        </td>
+        <td style="padding:12px 0;border-bottom:1px solid #eee;text-align:right;white-space:nowrap;">
+          ${formatMYRServer(i.lineTotal)}
+        </td>
+      </tr>
+    `;
+      }
       const cfg = ensureOrderItemConfigData(i.configurationData);
       const summary = cfg?.computedSummary ?? i.variantLabel ?? (i.size ? `Size ${i.size}` : "");
       return `
@@ -107,7 +128,7 @@ export function renderOrderConfirmationHtml(order: OrderWithItems): string {
       ${order.paypalCaptureId ? `
       <tr>
         <td style="padding:8px 0;color:#666;">Payment reference</td>
-        <td style="padding:8px 0;text-align:right;font-family:monospace;word-break:break-all;">${escapeHtml(order.paypalCaptureId)}</td>
+        <td style="padding:8px 0;text-align:right;font-family:monospace;word-break:break-word;">${escapeHtml(order.paypalCaptureId)}</td>
       </tr>` : ""}
     </table>
 
@@ -171,6 +192,11 @@ export function renderOrderConfirmationText(order: OrderWithItems): string {
   lines.push("");
   lines.push("Items:");
   for (const i of order.items) {
+    // D-08 (Phase 20): manual lines have no variant/config data
+    if (isManualLine(i)) {
+      lines.push(`  - ${i.productName} x${i.quantity} — ${formatMYRServer(i.lineTotal)}`);
+      continue;
+    }
     const cfg = ensureOrderItemConfigData(i.configurationData);
     const summary = cfg?.computedSummary ?? i.variantLabel ?? (i.size ? `Size ${i.size}` : null);
     lines.push(
@@ -190,7 +216,10 @@ export function renderOrderConfirmationText(order: OrderWithItems): string {
   lines.push(`  ${order.shippingState}, ${order.shippingCountry}`);
   lines.push(`  ${order.shippingPhone}`);
   lines.push("");
-  lines.push(`View online: ${baseUrl()}/orders/${order.id}`);
+  const textOrderUrl = (order.guestAccessToken && !order.userId)
+    ? `${baseUrl()}/orders/${order.id}?t=${order.guestAccessToken}`
+    : `${baseUrl()}/orders/${order.id}`;
+  lines.push(`View online: ${textOrderUrl}`);
   lines.push("");
   lines.push("Questions? Reply to this email.");
   return lines.join("\n");
@@ -204,6 +233,20 @@ export function renderOrderConfirmationText(order: OrderWithItems): string {
 function renderItemsTableFragment(order: OrderWithItems): string {
   return order.items
     .map((i) => {
+      // D-08 (Phase 20): manual lines have no variant/config — render name + qty only.
+      if (isManualLine(i)) {
+        return `
+      <tr>
+        <td style="padding:12px 0;border-bottom:1px solid #eee;">
+          <strong>${escapeHtml(i.productName)}</strong><br>
+          <span style="color:#666;font-size:13px;">Qty ${i.quantity}</span>
+        </td>
+        <td style="padding:12px 0;border-bottom:1px solid #eee;text-align:right;white-space:nowrap;">
+          ${formatMYRServer(i.lineTotal)}
+        </td>
+      </tr>
+    `;
+      }
       const cfg = ensureOrderItemConfigData(i.configurationData);
       const summary = cfg?.computedSummary ?? i.variantLabel ?? (i.size ? `Size ${i.size}` : "");
       return `
@@ -263,11 +306,16 @@ export async function sendOrderConfirmationEmail(
   let text: string;
   try {
     const { renderTemplate } = await import("@/lib/email/templates");
+    // Build the order link: guest orders include the access token so the
+    // recipient can view without logging in.
+    const orderLink = (row.guestAccessToken && !row.userId)
+      ? `${baseUrl()}/orders/${row.id}?t=${row.guestAccessToken}`
+      : `${baseUrl()}/orders/${row.id}`;
     const rendered = await renderTemplate("order_confirmation", {
       customer_name: row.shippingName,
       order_number: formatOrderNumber(row.id),
       order_total: `${formatMYRServer(row.totalAmount)} ${row.currency}`,
-      order_link: `${baseUrl()}/orders/${row.id}`,
+      order_link: orderLink,
       items_table: renderItemsTableFragment(row),
       // Optional template variable {{paypal_capture_id}} — empty when the
       // capture id isn't set yet (status !== "paid"); templates that include

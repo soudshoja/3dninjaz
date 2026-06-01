@@ -153,11 +153,43 @@ export const productSchema = z.object({
   // Phase 19 (19-03) — product type discriminator. Defaults to 'stocked' for
   // backwards compat with existing forms that don't send this field.
   productType: z
-    .enum(["stocked", "configurable", "keychain", "vending"])
+    .enum(["stocked", "configurable", "keychain", "vending", "simple"])
     .default("stocked"),
   variants: z
     .array(productVariantSchema)
     .default([]),
+  // Quick task 260430-icx — flat price for `simple` productType.
+  // Consumed only when productType === "simple" (Wave 4 Task 4.1 in
+  // src/actions/products.ts wires it into the priceTiers JSON). Other
+  // product types ignore this field. Truly optional in the input — the
+  // action layer enforces non-empty + numeric when productType === "simple".
+  simplePrice: z
+    .union([
+      z.literal(""),
+      z
+        .string()
+        .regex(/^\d+(\.\d{1,2})?$/, "Price must be a valid number with up to 2 decimal places"),
+    ])
+    .optional(),
+  // Quick task 260430-kmr — inline fields payload for simple + configurable
+  // productTypes. Each entry's per-fieldType config validation continues to
+  // happen inside addConfigField/updateConfigField via pickSchemaByFieldType
+  // + Zod parse — we don't duplicate it here (z.unknown() at this layer).
+  // Undefined when productType is keychain/vending/stocked.
+  fields: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        fieldType: z.enum(["text", "number", "colour", "select", "textarea"]),
+        label: z.string().min(1).max(80),
+        helpText: z.string().max(200).nullable().optional(),
+        required: z.boolean(),
+        config: z.unknown(),
+      }),
+    )
+    .optional(),
+  // Bug 3 — hide flat-rate price pill on storefront PDP. Default false.
+  hideBasePrice: z.boolean().optional().default(false),
 });
 
 export type ProductInput = z.infer<typeof productSchema>;
@@ -207,13 +239,15 @@ export const orderStatusEnum = z.enum([
 export type OrderStatus = z.infer<typeof orderStatusEnum>;
 
 /**
- * Malaysian phone regex. Accepts:
- *   - optional +60 or leading 0 prefix
- *   - 9-11 digit body split by spaces or dashes for copy-paste robustness
+ * Malaysian phone regex — permissive allowlist rather than structural parser.
+ * Accepts any combination of digits, +, spaces, hyphens, and parentheses
+ * between 7 and 20 characters long. This covers all common MY formats:
+ *   012-3456789  |  +60 12-3456789  |  +6012-3456789  |  03-12345678
+ *   +60-3-1234-5678  |  (03) 1234 5678  |  011-12345678
  *
  * Caller should strip non-digits before storing so search/compare is stable.
  */
-const MY_PHONE = /^(\+?60|0)?[\s-]?\d{2,3}[\s-]?\d{3,4}[\s-]?\d{3,4}$/;
+const MY_PHONE = /^[+\d\s\-()]{7,20}$/;
 
 export const orderAddressSchema = z.object({
   recipientName: z.string().min(2, "Name is required").max(200),
@@ -317,6 +351,33 @@ export const orderRequestSchema = z.object({
     .max(1000, "Reason too long (max 1000 chars)"),
 });
 export type OrderRequestInput = z.infer<typeof orderRequestSchema>;
+
+/**
+ * 260601-afs — Return-for-replacement request (type="return" branch).
+ * Validates per-item selection and 1–4 review photo paths.
+ * Photos are paths already persisted via the return-upload action (strings).
+ */
+export const returnItemSchema = z.object({
+  orderItemId: z.string().uuid("Invalid order item id"),
+  qty: z.number().int().min(1, "Quantity must be at least 1"),
+});
+export type ReturnItemInput = z.infer<typeof returnItemSchema>;
+
+export const returnRequestSchema = z.object({
+  orderId: z.string().uuid(),
+  reason: z
+    .string()
+    .min(10, "Please provide at least 10 characters of context")
+    .max(1000, "Reason too long (max 1000 chars)"),
+  items: z
+    .array(returnItemSchema)
+    .min(1, "Select at least one item to return"),
+  photos: z
+    .array(z.string().min(1))
+    .min(1, "At least 1 photo is required")
+    .max(4, "Maximum 4 photos allowed"),
+});
+export type ReturnRequestInput = z.infer<typeof returnRequestSchema>;
 
 /**
  * Account closure consent gate — typed-literal check (T-06-01-PDPA).
@@ -789,6 +850,8 @@ export const colourSchema = z.object({
     .optional()
     .or(z.literal(""))
     .nullable(),
+  // Phase 20-xx — admin-marked "My Colour"
+  isMyColour: z.boolean().default(false),
   isActive: z.boolean().default(true),
 });
 export type ColourInput = z.infer<typeof colourSchema>;

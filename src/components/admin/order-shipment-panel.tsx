@@ -208,10 +208,12 @@ export function OrderShipmentPanel({ orderId, shipment, tracking }: Props) {
   // Treat "delivered" as statusCode >= 400, "cancelled" as 90.
   const delivered = typeof status === "number" && status >= 400 && status !== 500;
   const cancelled = status === 90;
-  // Fallback live-map when the server did not hydrate the tracking view —
-  // keeps the old behaviour if the Delyva call errored out before render.
-  const showLegacyMap =
-    !tracking && !!shipment.consignmentNo && !delivered && !cancelled;
+  // External courier customer-tracking page — works for every courier
+  // (including drop couriers with no live GPS) since it keys on the public
+  // consignment number. Admin-only affordance.
+  const trackUrl = shipment.consignmentNo
+    ? `https://my.delyva.app/customer/strack?trackingNo=${encodeURIComponent(shipment.consignmentNo)}`
+    : null;
 
   return (
     <div className="space-y-4">
@@ -245,6 +247,21 @@ export function OrderShipmentPanel({ orderId, shipment, tracking }: Props) {
         >
           Print label (PDF)
         </a>
+        {trackUrl ? (
+          <a
+            href={trackUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-full px-4 py-2 text-sm font-semibold"
+            style={{
+              backgroundColor: "transparent",
+              color: BRAND.ink,
+              border: `2px solid ${BRAND.ink}33`,
+            }}
+          >
+            Track parcel
+          </a>
+        ) : null}
         <button
           type="button"
           onClick={refresh}
@@ -276,19 +293,7 @@ export function OrderShipmentPanel({ orderId, shipment, tracking }: Props) {
           className="mt-2 pt-4 border-t"
           style={{ borderColor: `${BRAND.ink}15` }}
         >
-          <OrderTrackingTimeline view={tracking} dense />
-        </div>
-      ) : showLegacyMap ? (
-        <div
-          className="rounded-xl overflow-hidden border"
-          style={{ borderColor: `${BRAND.ink}22` }}
-        >
-          <iframe
-            src={`https://my.delyva.app/track/rmap?trackingNo=${encodeURIComponent(shipment.consignmentNo!)}`}
-            style={{ width: "100%", height: 420, border: 0 }}
-            loading="lazy"
-            title="Delyva live tracking"
-          />
+          <OrderTrackingTimeline view={tracking} dense audience="admin" />
         </div>
       ) : null}
 
@@ -313,7 +318,7 @@ function InfoLine({
   return (
     <div>
       <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-      <p className={mono ? "font-mono break-all" : "break-words"}>
+      <p className={mono ? "font-mono break-words" : "break-words"}>
         {value ?? <span className="text-slate-400">—</span>}
       </p>
     </div>

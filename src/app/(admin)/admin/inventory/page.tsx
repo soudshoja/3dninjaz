@@ -195,7 +195,7 @@ export default async function AdminInventoryPage() {
                 >
                   <h2 className="font-semibold text-sm">{product.name}</h2>
                   <Link
-                    href={`/admin/products/${product.id}/variants`}
+                    href={`/admin/products/${product.id}/edit#variants`}
                     className="text-xs underline decoration-dotted"
                     style={{ color: BRAND.purple }}
                   >

@@ -60,12 +60,12 @@
   /* Unified 3D Ninjaz palette — D-01 (Phase 2 DECISIONS.md).
      Single source of truth across storefront AND admin surfaces.
      Keep these in lockstep with src/lib/brand.ts. */
-  --brand-blue: #0080ff;
-  --brand-green: #03C03C;
-  --brand-purple: #8A00C2;
-  --brand-blue-dark: #0061C2;
-  --brand-green-dark: #018A29;
-  --brand-purple-dark: #62008C;
+  --brand-blue: #1877F2;
+  --brand-green: #25D366;
+  --brand-purple: #7360F2;
+  --brand-blue-dark: #0B5ED7;
+  --brand-green-dark: #1AAE54;
+  --brand-purple-dark: #5546B3;
   --brand-ink: #0B1020;
   --brand-cream: #F7FAF4;
 
@@ -157,11 +157,21 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    /* Prevent accidental horizontal scroll on mobile — must be on html, not just
+       body, because fixed/absolute children can widen the html element too.
+       Use `clip` NOT `hidden`: `overflow-x: hidden` forces overflow-y to compute
+       to `auto`, which turns the root into a scroll container and silently breaks
+       `position: sticky` site-wide (nav + mobile PDP preview strip). `clip`
+       guards horizontal overflow without establishing a scroll container. */
+    overflow-x: clip;
+  }
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-body), sans-serif;
-    /* Prevent accidental horizontal scroll on mobile */
-    overflow-x: hidden;
+    /* Belt-and-braces: also clip body so no double-scroll on desktop. clip (not
+       hidden) so sticky positioning keeps working — see html rule above. */
+    overflow-x: clip;
   }
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-heading), sans-serif;
@@ -200,6 +210,15 @@
   animation: fade-in-out 1500ms ease-out forwards;
 }
 
+/* Mobile sticky live-preview strip entrance (configurable/keychain PDP) */
+@keyframes preview-strip-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.preview-strip-in {
+  animation: preview-strip-in 240ms ease both;
+}
+
 /* Typewriter caret blink */
 @keyframes caret-blink {
   0%, 49% { opacity: 1; }
@@ -230,5 +249,6 @@
   .animate-spin-slow { animation: none; }
   .animate-marquee { animation: none; }
   .animate-caret { animation: none; opacity: 1 !important; }
+  .preview-strip-in { animation: none; }
   .stagger-item { opacity: 1 !important; transform: none !important; transition: none !important; }
 }

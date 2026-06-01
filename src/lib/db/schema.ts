@@ -1,6 +1,7 @@
 import {
   mysqlTable,
   varchar,
+  char,
   text,
   mediumtext,
   longtext,
@@ -8,6 +9,7 @@ import {
   int,
   decimal,
   timestamp,
+  datetime,
   mysqlEnum,
   json,
   index,
@@ -41,6 +43,13 @@ export const user = mysqlTable("user", {
   // Phase 6 06-01 — soft-delete marker for /account/close (T-06-01-PDPA, D-06)
   // Set by /account/close action; requireUser() rejects sessions whose row has this set.
   deletedAt: timestamp("deleted_at"),
+  // Admin mini-CRM (2026-05-29) — free-text notes admin-only, plus a tag
+  // array for segmentation. Both nullable so existing rows stay valid.
+  // MariaDB stores JSON as LONGTEXT; admin actions ensure-array on read.
+  notes: text("notes"),
+  tags: json("tags").$type<string[]>(),
+  // guest-order linking + contact (nullable — existing rows unaffected)
+  phone: varchar("phone", { length: 32 }),
 });
 
 export const session = mysqlTable("session", {
@@ -150,7 +159,7 @@ export const products = mysqlTable("products", {
   // 'stocked' = existing variant flow; 'configurable' = made-to-order with
   // configurator builder + tier table. All existing rows DEFAULT to 'stocked'
   // so the variant code path is untouched (D-14 backwards compat).
-  productType: mysqlEnum("productType", ["stocked", "configurable", "keychain", "vending"]).notNull().default("stocked"),
+  productType: mysqlEnum("productType", ["stocked", "configurable", "keychain", "vending", "simple"]).notNull().default("stocked"),
   // Tier-pricing trio (NULL for stocked products):
   //   maxUnitCount = highest count the admin wants to price (e.g., 8 for keychain)
   //   priceTiers   = JSON object {"1":7,"2":9,...} stored as LONGTEXT — round-trip via ensureTiers()
@@ -179,6 +188,10 @@ export const products = mysqlTable("products", {
   shippingLengthCm: int("shipping_length_cm"),
   shippingWidthCm: int("shipping_width_cm"),
   shippingHeightCm: int("shipping_height_cm"),
+  // Bug 3 — hide the flat-rate price pill on the storefront PDP when a
+  // product uses multi-option Select fields whose prices determine cost.
+  // Default FALSE = existing behaviour (always show the top price pill).
+  hideBasePrice: boolean("hide_base_price").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at")
     .notNull()
@@ -258,7 +271,7 @@ export const productConfigFields = mysqlTable(
       .notNull()
       .references(() => products.id, { onDelete: "cascade" }),
     position: int("position").notNull().default(0),
-    fieldType: mysqlEnum("fieldType", ["text", "number", "colour", "select"]).notNull(),
+    fieldType: mysqlEnum("fieldType", ["text", "number", "colour", "select", "textarea"]).notNull(),
     label: varchar("label", { length: 80 }).notNull(),
     helpText: varchar("helpText", { length: 200 }),
     required: boolean("required").notNull().default(true),
@@ -465,8 +478,13 @@ export const productVariantsRelations = relations(
 //   rows (PDPA audit requirement; customerEmail is snapshotted for contact).
 // ============================================================================
 
+// Phase 20 (20-01) — extended from 6 to 8 values. New statuses support the
+// POS draft-order flow (D-19, D-20). Order MUST stay in sync with OrderStatus
+// in src/lib/orders.ts. Live DB ENUM extended via scripts/phase20-migrate.cjs.
 export const orderStatusValues = [
   "pending",
+  "awaiting_customer",
+  "awaiting_payment_review",
   "paid",
   "processing",
   "shipped",
@@ -483,13 +501,20 @@ export const orders = mysqlTable("orders", {
   id: varchar("id", { length: 36 })
     .primaryKey()
     .default(sql`(UUID())`),
-  userId: varchar("user_id", { length: 36 })
-    .notNull()
-    .references(() => user.id), // NO cascade — keep orders if user is deleted (PDPA audit, D3-23)
+  // Nullable for guest checkout — userId is null when the order is placed
+  // without an account. DO NOT add .notNull() here.
+  // NO cascade — keep orders if user is deleted (PDPA audit, D3-23)
+  userId: varchar("user_id", { length: 36 }).references(() => user.id),
+  // Token for the emailed guest order-view link. Null for authenticated orders.
+  guestAccessToken: varchar("guest_access_token", { length: 64 }),
   status: mysqlEnum("status", orderStatusValues).notNull().default("pending"),
   // PayPal identifiers (nullable until each phase of the payment flow completes)
   paypalOrderId: varchar("paypal_order_id", { length: 64 }).unique(),
   paypalCaptureId: varchar("paypal_capture_id", { length: 64 }),
+  // Phase 20 (20-01) — payment method used (NULL for legacy rows, 'paypal' for
+  // existing captured orders after back-fill in scripts/phase20-migrate.cjs).
+  // D-21: set at status-transition time by the checkout/slip-upload actions.
+  paymentMethod: mysqlEnum("payment_method", ["paypal", "bank_transfer"]),
   // Money (MYR) — decimal(10,2) stores up to 99,999,999.99
   subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
   shippingCost: decimal("shipping_cost", { precision: 10, scale: 2 })
@@ -586,10 +611,70 @@ export const orderItems = mysqlTable("order_items", {
 export const ordersRelations = relations(orders, ({ one, many }) => ({
   user: one(user, { fields: [orders.userId], references: [user.id] }),
   items: many(orderItems),
+  paymentProofs: many(paymentProofs),
 }));
 
 export const orderItemsRelations = relations(orderItems, ({ one }) => ({
   order: one(orders, { fields: [orderItems.orderId], references: [orders.id] }),
+}));
+
+// ============================================================================
+// Phase 20 (20-01) — payment_proofs table
+//
+// Stores customer- and admin-uploaded payment slips for bank-transfer orders.
+// One-to-many on order_id; each rejected slip is preserved (D-13).
+// UUIDs are app-generated (randomUUID) per CLAUDE.md MariaDB quirk.
+// No JSON columns — no ensureXxx helper needed for this table.
+// Live table created via scripts/phase20-migrate.cjs.
+//
+// D-22 shape:
+//   id                  CHAR(36) PK
+//   orderId             CHAR(36) NOT NULL (FK enforced at live DB level)
+//   imageUrl            VARCHAR(500) NOT NULL
+//   thumbnailUrl        VARCHAR(500) NULL (NULL for PDFs)
+//   mimeType            VARCHAR(64) NOT NULL
+//   sizeBytes           INT NOT NULL
+//   uploadedBy          ENUM('customer','admin') NOT NULL
+//   uploadedByUserId    CHAR(36) NULL
+//   status              ENUM('pending','approved','rejected') DEFAULT 'pending'
+//   adminNote           TEXT NULL
+//   reviewedBy          CHAR(36) NULL
+//   reviewedAt          DATETIME NULL
+//   createdAt           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+//   KEY idx_pp_order_status(order_id, status)
+//   KEY idx_pp_status_created(status, created_at)
+// ============================================================================
+
+export const paymentProofs = mysqlTable(
+  "payment_proofs",
+  {
+    id: char("id", { length: 36 }).notNull().primaryKey(),
+    orderId: char("order_id", { length: 36 }).notNull(),
+    imageUrl: varchar("image_url", { length: 500 }).notNull(),
+    thumbnailUrl: varchar("thumbnail_url", { length: 500 }),
+    mimeType: varchar("mime_type", { length: 64 }).notNull(),
+    sizeBytes: int("size_bytes").notNull(),
+    uploadedBy: mysqlEnum("uploaded_by", ["customer", "admin"]).notNull(),
+    uploadedByUserId: char("uploaded_by_user_id", { length: 36 }),
+    status: mysqlEnum("status", ["pending", "approved", "rejected"])
+      .notNull()
+      .default("pending"),
+    adminNote: text("admin_note"),
+    reviewedBy: char("reviewed_by", { length: 36 }),
+    reviewedAt: datetime("reviewed_at"),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => ({
+    orderStatusIdx: index("idx_pp_order_status").on(t.orderId, t.status),
+    statusCreatedIdx: index("idx_pp_status_created").on(t.status, t.createdAt),
+  }),
+);
+
+export const paymentProofsRelations = relations(paymentProofs, ({ one }) => ({
+  order: one(orders, {
+    fields: [paymentProofs.orderId],
+    references: [orders.id],
+  }),
 }));
 
 // ============================================================================
@@ -662,6 +747,9 @@ export const orderRequestStatusValues = [
   "pending",
   "approved",
   "rejected",
+  "shipped",
+  "received",
+  "expired",
 ] as const;
 
 export const orderRequests = mysqlTable(
@@ -682,6 +770,16 @@ export const orderRequests = mysqlTable(
       .notNull()
       .default("pending"),
     adminNotes: text("admin_notes"),
+    // Return-specific: per-item JSON [{orderItemId, qty}] (LONGTEXT, manual parse)
+    items: longtext("items"),
+    // Return-specific: 1–4 review photo paths JSON string[] (LONGTEXT, manual parse)
+    photos: longtext("photos"),
+    // Return-specific: customer-supplied courier and tracking number
+    returnCourier: varchar("return_courier", { length: 120 }),
+    returnTrackingNumber: varchar("return_tracking_number", { length: 160 }),
+    // Timestamps for the 3-day ship-by window (null for cancel requests)
+    approvedAt: timestamp("approved_at"),
+    shippedAt: timestamp("shipped_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     resolvedAt: timestamp("resolved_at"),
   },
@@ -693,6 +791,39 @@ export const orderRequests = mysqlTable(
     ),
   }),
 );
+
+// ============================================================================
+// Return-flow JSON parse helpers (MariaDB stores JSON columns as LONGTEXT —
+// mysql2 does NOT auto-parse; every read site must call these helpers).
+// ============================================================================
+
+export type ReturnItem = { orderItemId: string; qty: number };
+
+export function ensureReturnItems(raw: unknown): ReturnItem[] {
+  if (Array.isArray(raw)) return raw as ReturnItem[];
+  if (typeof raw === "string" && raw.length > 0) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed as ReturnItem[];
+    } catch {
+      // corrupt — return empty
+    }
+  }
+  return [];
+}
+
+export function ensurePhotoArray(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw as string[];
+  if (typeof raw === "string" && raw.length > 0) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed as string[];
+    } catch {
+      // corrupt — return empty
+    }
+  }
+  return [];
+}
 
 export const reviewStatusValues = ["pending", "approved", "hidden"] as const;
 
@@ -876,6 +1007,15 @@ export const storeSettings = mysqlTable("store_settings", {
   defaultElectricityKwhPerHour: decimal("default_electricity_kwh_per_hour", { precision: 6, scale: 3 }),
   defaultLaborRatePerHour: decimal("default_labor_rate_per_hour", { precision: 8, scale: 2 }),
   defaultOverheadPercent: decimal("default_overhead_percent", { precision: 5, scale: 2 }).notNull().default("0"),
+  // Phase 20 (20-01) — bank transfer details surfaced on the customer draft page.
+  // D-16: if any of bankName/bankAccountNumber/bankAccountHolder is NULL/empty,
+  // the Bank Transfer card is hidden entirely from the draft page (server guard).
+  // D-18: draftLinkTemplate is a Mustache-style body for WhatsApp/email deeplinks.
+  // Live DB columns added via scripts/phase20-migrate.cjs.
+  bankName: varchar("bank_name", { length: 100 }),
+  bankAccountNumber: varchar("bank_account_number", { length: 50 }),
+  bankAccountHolder: varchar("bank_account_holder", { length: 200 }),
+  draftLinkTemplate: text("draft_link_template"),
   updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
 });
 
@@ -958,8 +1098,8 @@ export function seedStoreSettings(): StoreSettingsSeed {
     businessName: "3D Ninjaz",
     contactEmail: "info@3dninjaz.com",
     contactPhone: "",
-    whatsappNumber: "60000000000",
-    whatsappNumberDisplay: "+60 00 000 0000",
+    whatsappNumber: "60167203048",
+    whatsappNumberDisplay: "+60 16 720 3048",
     instagramUrl: "#",
     tiktokUrl: "#",
     twitterUrl: "",
@@ -1265,7 +1405,7 @@ function brandedEmailTemplate(
   heading: string,
   body: string,
   cta?: { text: string; url: string },
-  ctaColor: string = "#0080ff"
+  ctaColor: string = "#1877F2"
 ): string {
   const ctaHtml = cta
     ? `<tr><td align="center" style="padding:16px 32px 32px">
@@ -1346,6 +1486,24 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
       ],
     },
     {
+      key: "order_processing",
+      subject: "Your 3D Ninjaz order is being printed ({{order_number}})",
+      html: brandedEmailTemplate(
+        "🖨️",
+        "We're printing your order!",
+        `<p>Hi {{customer_name}},</p>
+        <p>Great news — your 3D Ninjaz order <strong>#{{order_number}}</strong> is now in production. Our printers are warming up and your item will be ready to ship soon.</p>
+        <p style="margin-top:16px">You can check the latest status anytime at your order page.</p>
+        <p>We'll send another note the moment it ships.</p>`,
+        { text: "View Order", url: "order_url" }
+      ),
+      variables: [
+        "customer_name",
+        "order_number",
+        "order_url",
+      ],
+    },
+    {
       key: "order_shipped",
       subject: "Your 3D Ninjaz order is on its way! ({{courier_name}})",
       html: brandedEmailTemplate(
@@ -1401,7 +1559,7 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         `<p>Hi {{customer_name}},</p>
         <p>We've refunded <strong>{{refund_amount}}</strong> for order <strong>#{{order_number}}</strong>.</p>
         <p style="margin-top:16px">The refund should appear in your account within 3-5 business days.</p>
-        <p>If you have questions, contact us at <a href="mailto:{{support_email}}" style="color:#0080ff">{{support_email}}</a></p>`,
+        <p>If you have questions, contact us at <a href="mailto:{{support_email}}" style="color:#1877F2">{{support_email}}</a></p>`,
         { text: "View Order", url: "order_link" }
       ),
       variables: [
@@ -1424,7 +1582,7 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         `<p>Hi {{customer_name}},</p>
         <p>Your order <strong>#{{order_number}}</strong> has been cancelled.</p>
         <p><strong>Reason:</strong> {{cancellation_reason}}</p>
-        <p style="margin-top:16px">If this was unexpected, please contact us at <a href="mailto:{{support_email}}" style="color:#0080ff">{{support_email}}</a></p>`,
+        <p style="margin-top:16px">If this was unexpected, please contact us at <a href="mailto:{{support_email}}" style="color:#1877F2">{{support_email}}</a></p>`,
         { text: "Contact Support", url: "support_email" }
       ),
       variables: [
@@ -1465,7 +1623,7 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         "Password updated",
         `<p>Hi {{customer_name}},</p>
         <p>Your password has been successfully changed.</p>
-        <p style="margin-top:16px">If you didn't make this change, please contact us immediately at <a href="mailto:{{support_email}}" style="color:#0080ff">{{support_email}}</a></p>`,
+        <p style="margin-top:16px">If you didn't make this change, please contact us immediately at <a href="mailto:{{support_email}}" style="color:#1877F2">{{support_email}}</a></p>`,
         undefined
       ),
       variables: [
@@ -1542,7 +1700,7 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         `<p>Hi {{customer_name}},</p>
         <p>A dispute has been opened on your order <strong>#{{order_number}}</strong>.</p>
         <p><strong>Reason:</strong> {{dispute_reason}}</p>
-        <p style="margin-top:16px">We're investigating and will keep you updated. Contact us at <a href="mailto:{{support_email}}" style="color:#0080ff">{{support_email}}</a> if you have additional details.</p>`,
+        <p style="margin-top:16px">We're investigating and will keep you updated. Contact us at <a href="mailto:{{support_email}}" style="color:#1877F2">{{support_email}}</a> if you have additional details.</p>`,
         { text: "View Order", url: "order_link" }
       ),
       variables: [
@@ -1569,7 +1727,7 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         <strong>Amount:</strong> {{dispute_amount}}</p>
         <p style="margin-top:16px">Click below to view details and respond.</p>`,
         { text: "Review Dispute", url: "admin_link" },
-        "#8A00C2"
+        "#7360F2"
       ),
       variables: [
         "customer_name",
@@ -1578,6 +1736,120 @@ export function seedEmailTemplates(): EmailTemplateSeed[] {
         "dispute_amount",
         "admin_link",
         "store_name",
+        "current_year",
+      ],
+    },
+    // ========================================================================
+    // 260601-afs — Return-for-replacement flow emails (5 new templates)
+    // ========================================================================
+    {
+      key: "return_requested",
+      subject: "Return request received for order #{{order_number}}",
+      html: brandedEmailTemplate(
+        "📦",
+        "Return request received",
+        `<p>Hi {{customer_name}},</p>
+        <p>We received your return / replacement request for order <strong>#{{order_number}}</strong>.</p>
+        <p>Our team will review your request and get back to you within 1 business day.</p>
+        <p style="margin-top:16px">You can track the status of your request on your order page.</p>`,
+        { text: "View Order", url: "order_link" }
+      ),
+      variables: [
+        "customer_name",
+        "order_number",
+        "order_link",
+        "store_name",
+        "store_url",
+        "current_year",
+      ],
+    },
+    {
+      key: "return_approved",
+      subject: "Return approved — ship your item back by {{ship_by_date}}",
+      html: brandedEmailTemplate(
+        "✅",
+        "Your return has been approved",
+        `<p>Hi {{customer_name}},</p>
+        <p>Great news! Your return / replacement request for order <strong>#{{order_number}}</strong> has been approved.</p>
+        <p><strong>Please ship your item back by: {{ship_by_date}}</strong></p>
+        <p style="margin-top:8px"><strong>Return address:</strong><br>
+        <span style="white-space:pre-line">{{return_address}}</span></p>
+        <p style="margin-top:16px">Once you have shipped, please visit your order page to submit your courier name and tracking number so we can confirm receipt and start your re-make.</p>
+        <p style="color:#6b7280;font-size:13px">If you do not submit tracking within 3 days, the request will expire and you will need to contact support.</p>`,
+        { text: "Submit Tracking Number", url: "order_link" }
+      ),
+      variables: [
+        "customer_name",
+        "order_number",
+        "ship_by_date",
+        "return_address",
+        "order_link",
+        "store_name",
+        "store_url",
+        "current_year",
+      ],
+    },
+    {
+      key: "return_rejected",
+      subject: "Update on your return request — order #{{order_number}}",
+      html: brandedEmailTemplate(
+        "❌",
+        "Return request update",
+        `<p>Hi {{customer_name}},</p>
+        <p>After reviewing your return request for order <strong>#{{order_number}}</strong>, we are unable to approve it at this time.</p>
+        <p><strong>Reason:</strong> {{reason}}</p>
+        <p style="margin-top:16px">If you believe this decision was made in error or you need further assistance, please contact us at <a href="mailto:{{support_email}}" style="color:#1877F2">{{support_email}}</a>.</p>`,
+        { text: "View Order", url: "order_link" }
+      ),
+      variables: [
+        "customer_name",
+        "order_number",
+        "reason",
+        "order_link",
+        "support_email",
+        "store_name",
+        "store_url",
+        "current_year",
+      ],
+    },
+    {
+      key: "return_received",
+      subject: "We received your return — re-making your order #{{order_number}}",
+      html: brandedEmailTemplate(
+        "🥷",
+        "Return received — re-make in progress",
+        `<p>Hi {{customer_name}},</p>
+        <p>We have received your returned item for order <strong>#{{order_number}}</strong>. Thank you for sending it back!</p>
+        <p style="margin-top:16px">Our team is now working on your replacement. We will email you again once it has been shipped.</p>`,
+        { text: "View Order", url: "order_link" }
+      ),
+      variables: [
+        "customer_name",
+        "order_number",
+        "order_link",
+        "store_name",
+        "store_url",
+        "current_year",
+      ],
+    },
+    {
+      key: "return_expired",
+      subject: "Your return window has expired — order #{{order_number}}",
+      html: brandedEmailTemplate(
+        "⏰",
+        "Return ship-by window expired",
+        `<p>Hi {{customer_name}},</p>
+        <p>Unfortunately the 3-day shipping window for your approved return on order <strong>#{{order_number}}</strong> has passed without a tracking number being submitted.</p>
+        <p style="margin-top:16px">If you still need help, please contact us at <a href="mailto:{{support_email}}" style="color:#1877F2">{{support_email}}</a> or via WhatsApp and we will do our best to assist you.</p>`,
+        { text: "View Order", url: "order_link" }
+      ),
+      variables: [
+        "customer_name",
+        "order_number",
+        "order_link",
+        "support_email",
+        "store_name",
+        "store_url",
         "current_year",
       ],
     },
@@ -1612,6 +1884,8 @@ export const colors = mysqlTable(
       "Other",
     ]).notNull(),
     familySubtype: varchar("family_subtype", { length: 48 }).notNull(),
+    // Phase 20-xx — admin-marked "My Colour" (considered by admin for their use)
+    isMyColour: boolean("is_my_colour").notNull().default(false),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
@@ -1622,5 +1896,26 @@ export const colors = mysqlTable(
     brandCodeUnique: unique("uq_colors_brand_code").on(t.brand, t.code),
     brandIdx: index("idx_colors_brand").on(t.brand),
     activeIdx: index("idx_colors_active").on(t.isActive),
+    myColourIdx: index("idx_colors_my_colour").on(t.isMyColour),
   }),
 );
+
+// ============================================================================
+// Custom Fonts — admin-uploaded .woff2/.woff brand fonts
+//
+// Stored at public/uploads/fonts/<id>/<filename>.
+// familySlug is the CSS class suffix (ql-font-<slug>) and font-family name.
+// isActive toggle lets admin hide a font without deleting it.
+// ============================================================================
+
+export const customFonts = mysqlTable("custom_fonts", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  displayName: varchar("display_name", { length: 64 }).notNull(),
+  familySlug: varchar("family_slug", { length: 32 }).notNull().unique(),
+  fileUrl: varchar("file_url", { length: 255 }).notNull(),
+  mimeType: varchar("mime_type", { length: 64 }).notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
+});
+
+export type CustomFont = typeof customFonts.$inferSelect;

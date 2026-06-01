@@ -70,6 +70,13 @@ export function PaymentLinkIsland({
           clientId,
           currency: currency || "MYR",
           intent: "capture",
+          // Malaysian PayPal merchant accounts do NOT have Advanced Card
+          // capability — the default "Debit or Credit Card" button renders a
+          // hosted-fields form that PayPal then rejects ("This card can't be
+          // used for your payment"). Disable the unsupported funding sources
+          // so customers only see the PayPal wallet button that actually
+          // works for MY merchants.
+          disableFunding: "card,credit,paylater,venmo",
         }}
       >
         <PayPalButtons
@@ -93,7 +100,8 @@ export function PaymentLinkIsland({
               return;
             }
             setDone(true);
-            // Force refresh so re-loading the page renders the 410.
+            // Force refresh after brief toast so the page re-renders into the
+            // Thank You branch (view.paid === true) instead of this island.
             setTimeout(() => router.refresh(), 1500);
           }}
           onError={(err) => {

@@ -52,7 +52,7 @@ export default function AboutPage() {
           >
             About Us
           </h1>
-          <p className="mt-6 mx-auto max-w-2xl text-lg sm:text-xl leading-relaxed text-zinc-700">
+          <p className="mt-6 mx-auto max-w-2xl text-lg sm:text-xl leading-relaxed text-zinc-700 text-justify">
             We are three siblings Idrees (11), Ishaq (10), and Alaina (3) based
             in Malaysia, who love creating fun things for kids just like us.
           </p>
@@ -74,7 +74,7 @@ export default function AboutPage() {
             >
               Our <span style={{ color: BRAND.green }}>story</span>.
             </h2>
-            <div className="mt-6 space-y-5 text-base sm:text-lg leading-relaxed text-zinc-700">
+            <div className="mt-6 space-y-5 text-base sm:text-lg leading-relaxed text-zinc-700 text-justify">
               <p>
                 What started as curiosity quickly turned into something bigger.
                 With the help of our mum and dad, we began designing, creating,
@@ -217,7 +217,7 @@ export default function AboutPage() {
             <span style={{ color: BRAND.blue }}>kids</span>, for{" "}
             <span style={{ color: BRAND.green }}>kids</span>.
           </h2>
-          <p className="mt-4 text-base sm:text-lg leading-relaxed text-zinc-700">
+          <p className="mt-4 text-base sm:text-lg leading-relaxed text-zinc-700 text-justify">
             We started this little business because we wanted to do something
             fun! What&rsquo;s better than making things by kids, for kids.
           </p>

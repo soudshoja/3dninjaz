@@ -8,12 +8,13 @@ import {
   products,
   productVariants,
 } from "@/lib/db/schema";
-import { eq, desc, asc, and, inArray, count } from "drizzle-orm";
+import { eq, desc, and, inArray, count } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { colourSchema } from "@/lib/validators";
 import type { ColourAdmin } from "@/lib/colours";
+import { sortByShade } from "@/lib/colour-sort";
 
 // ============================================================================
 // Plan 18-03 admin colour CRUD.
@@ -48,11 +49,11 @@ export type MutateResult =
 
 export async function listColours(): Promise<ColourAdmin[]> {
   await requireAdmin();
-  const rows = await db
-    .select()
-    .from(colors)
-    .orderBy(desc(colors.isActive), asc(colors.brand), asc(colors.name));
-  return rows.map((r) => ({
+  // Active rows first (preserved as a primary sort), then shade-aware order.
+  // We split the rows in two groups so archived colours always sit below
+  // active ones, matching the prior UX contract.
+  const rows = await db.select().from(colors).orderBy(desc(colors.isActive));
+  const mapped: ColourAdmin[] = rows.map((r) => ({
     id: r.id,
     name: r.name,
     hex: r.hex,
@@ -61,8 +62,12 @@ export async function listColours(): Promise<ColourAdmin[]> {
     code: r.code ?? null,
     familyType: r.familyType,
     familySubtype: r.familySubtype,
+    isMyColour: r.isMyColour,
     isActive: r.isActive,
   }));
+  const active = sortByShade(mapped.filter((r) => r.isActive));
+  const archived = sortByShade(mapped.filter((r) => !r.isActive));
+  return [...active, ...archived];
 }
 
 export async function getColour(id: string): Promise<ColourAdmin | null> {
@@ -78,6 +83,7 @@ export async function getColour(id: string): Promise<ColourAdmin | null> {
     code: r.code ?? null,
     familyType: r.familyType,
     familySubtype: r.familySubtype,
+    isMyColour: r.isMyColour,
     isActive: r.isActive,
   };
 }
@@ -90,6 +96,7 @@ function parseColourForm(formData: FormData) {
   const previousHexRaw = String(formData.get("previousHex") ?? "").trim();
   const codeRaw = String(formData.get("code") ?? "").trim();
   const familySubtypeRaw = String(formData.get("familySubtype") ?? "").trim();
+  const isMyColourRaw = formData.get("isMyColour");
   const isActiveRaw = formData.get("isActive");
   return colourSchema.safeParse({
     name: String(formData.get("name") ?? "").trim(),
@@ -100,6 +107,7 @@ function parseColourForm(formData: FormData) {
     familySubtype: familySubtypeRaw === "" ? null : familySubtypeRaw,
     code: codeRaw === "" ? null : codeRaw,
     // checkbox: present (=on/true) when checked, absent when not
+    isMyColour: isMyColourRaw === "on" || isMyColourRaw === "true",
     isActive: isActiveRaw === "on" || isActiveRaw === "true",
   });
 }
@@ -128,6 +136,7 @@ export async function createColour(
       code: data.code ?? null,
       familyType: data.familyType,
       familySubtype: data.familySubtype ?? "",
+      isMyColour: data.isMyColour ?? false,
       isActive: data.isActive ?? true,
     });
   } catch (err: unknown) {
@@ -170,6 +179,7 @@ export async function updateColour(
         code: data.code ?? null,
         familyType: data.familyType,
         familySubtype: data.familySubtype ?? "",
+        isMyColour: data.isMyColour ?? false,
         isActive: data.isActive ?? true,
       })
       .where(eq(colors.id, id));
@@ -205,6 +215,31 @@ export async function reactivateColour(id: string): Promise<MutateResult> {
   revalidatePath("/shop");
   return { ok: true, id };
 }
+
+export async function toggleMyColour(id: string): Promise<MutateResult> {
+  await requireAdmin();
+  try {
+    // Read current value first to toggle
+    const [r] = await db.select().from(colors).where(eq(colors.id, id)).limit(1);
+    if (!r) {
+      return { ok: false, error: "Colour not found." };
+    }
+    const newValue = !r.isMyColour;
+    await db.update(colors).set({ isMyColour: newValue }).where(eq(colors.id, id));
+    revalidatePath("/admin/colours");
+    return { ok: true, id };
+  } catch (err: unknown) {
+    console.error("[admin-colours] toggleMyColour failed:", err);
+    return { ok: false, error: "Unable to update colour." };
+  }
+}
+
+// ============================================================================
+// Phase 20-xx — toggle "My Colour" status
+// ============================================================================
+
+// Old toggleMyColour (kept for backwards compatibility)
+// New version uses isMyColour field
 
 // ============================================================================
 // Plan 18-04 — hard-delete (with IN_USE guard) + cascade rename mechanics.
@@ -468,16 +503,15 @@ export type ColourPickerRow = ColourAdmin; // alias — picker shows full admin 
 /**
  * Fetch the entire active library for the picker.
  * Per D-06 — single call on open. ~100 rows ≈ 30 KB JSON.
- * Sorted brand → name for predictable picker ordering.
+ * Sorted shade-wise (hue family + lightness) so related shades sit together.
  */
 export async function getActiveColoursForPicker(): Promise<ColourPickerRow[]> {
   await requireAdmin();
   const rows = await db
     .select()
     .from(colors)
-    .where(eq(colors.isActive, true))
-    .orderBy(asc(colors.brand), asc(colors.name));
-  return rows.map((r) => ({
+    .where(eq(colors.isActive, true));
+  const mapped: ColourPickerRow[] = rows.map((r) => ({
     id: r.id,
     name: r.name,
     hex: r.hex,
@@ -486,8 +520,35 @@ export async function getActiveColoursForPicker(): Promise<ColourPickerRow[]> {
     code: r.code ?? null,
     familyType: r.familyType,
     familySubtype: r.familySubtype,
+    isMyColour: r.isMyColour,
     isActive: r.isActive,
   }));
+  return sortByShade(mapped);
+}
+
+/**
+ * Fetch only colours where isMyColour = true.
+ * Used to offer admins a "Load My Colours" prompt when opening the picker.
+ */
+export async function getMyColoursForPicker(): Promise<ColourPickerRow[]> {
+  await requireAdmin();
+  const rows = await db
+    .select()
+    .from(colors)
+    .where(and(eq(colors.isActive, true), eq(colors.isMyColour, true)));
+  const mapped: ColourPickerRow[] = rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    hex: r.hex,
+    previousHex: r.previousHex ?? null,
+    brand: r.brand,
+    code: r.code ?? null,
+    familyType: r.familyType,
+    familySubtype: r.familySubtype,
+    isMyColour: r.isMyColour,
+    isActive: r.isActive,
+  }));
+  return sortByShade(mapped);
 }
 
 export type AttachResult =

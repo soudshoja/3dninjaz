@@ -69,7 +69,7 @@ export async function ProductReviews({ productId }: { productId: string }) {
                 {new Date(r.createdAt).toLocaleDateString("en-MY")}
               </span>
             </header>
-            <p className="whitespace-pre-wrap leading-relaxed">{r.body}</p>
+            <p className="whitespace-pre-wrap leading-relaxed break-words">{r.body}</p>
           </li>
         ))}
       </ul>

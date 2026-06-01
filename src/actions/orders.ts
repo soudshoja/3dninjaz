@@ -73,6 +73,8 @@ export async function getMyOrder(orderId: string) {
   const row = rows[0];
   // T-03-21 (D3-22): only owner OR admin may read. Same null return for both
   // "not found" and "not yours" — blocks email enumeration.
+  // Note: guest orders have userId=null; null !== user.id so they are
+  // naturally excluded here (guests use the token path in the page instead).
   const userWithRole = user as unknown as { id: string; role: string };
   if (row.userId !== userWithRole.id && userWithRole.role !== "admin") return null;
   const items = await db
@@ -93,6 +95,8 @@ export async function resendOrderConfirmationEmail(
 
   const row = await db.query.orders.findFirst({ where: eq(orders.id, orderId) });
   const userWithRole = user as unknown as { id: string; role: string };
+  // Guest orders (userId null) are excluded: null !== user.id, so they
+  // naturally fall through to "not found" unless the user is admin.
   if (!row || (row.userId !== userWithRole.id && userWithRole.role !== "admin")) {
     // Same response shape for "not found" and "not yours" (T-03-21).
     return { ok: false, error: "Order not found." };

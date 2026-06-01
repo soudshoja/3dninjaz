@@ -64,7 +64,7 @@ export function DisputeListTable({ rows }: { rows: DisputeRow[] }) {
                 <td className="p-3">
                   <Link
                     href={`/admin/disputes/${encodeURIComponent(d.disputeId)}`}
-                    className="font-mono text-xs underline decoration-dotted break-all"
+                    className="font-mono text-xs underline decoration-dotted break-words"
                   >
                     {d.disputeId}
                   </Link>

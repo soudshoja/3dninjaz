@@ -56,10 +56,13 @@ export default function TermsPage() {
             2. Accounts
           </h2>
           <p className="mt-2 text-base leading-relaxed">
-            You need a customer account to place an order. You&rsquo;re
-            responsible for keeping your sign-in details private and for
-            activity on your account. Let us know immediately if you suspect
-            your account has been used without permission.
+            An account is optional — you can check out as a guest using just
+            your email address. Creating an account lets you track orders,
+            reorder faster, and keep your full order history in one place.
+            If you do have an account, you&rsquo;re responsible for keeping
+            your sign-in details private and for activity on your account.
+            Let us know immediately if you suspect your account has been used
+            without permission.
           </p>
         </div>
 
@@ -68,9 +71,9 @@ export default function TermsPage() {
             3. Ordering and payment
           </h2>
           <p className="mt-2 text-base leading-relaxed">
-            Products are available in three sizes: Small, Medium, and Large.
-            Prices are displayed in MYR (Malaysian Ringgit). Payment is
-            processed by PayPal; we never see or store your card details.
+            Pick a 3D-printed piece, personalise it where available, and check
+            out in seconds. All prices are in MYR (Malaysian Ringgit). Payment
+            is processed by PayPal — we never see or store your card details.
             Your order is confirmed only after PayPal returns a successful
             payment capture; if payment fails, the order is cancelled
             automatically.
@@ -80,37 +83,43 @@ export default function TermsPage() {
         <div>
           <h2 className="font-heading text-2xl">4. Delivery</h2>
           <p className="mt-2 text-base leading-relaxed">
-            Every piece is printed to order on our {BUSINESS.city} printers,
-            so expect a short lead time before your parcel ships. Typical
-            production and shipping timeframes appear on each product page
-            and in your order confirmation email. We ship within Malaysia.
+            Every piece is made to order in our Ninja Studio, so expect a
+            short lead time before your parcel ships. Typical production and
+            shipping time frames appear on each product page and in your
+            order confirmation email. We ship all over Malaysia. For
+            international orders please{" "}
+            <Link
+              href="/contact"
+              className="text-[#1877F2] underline underline-offset-2 hover:opacity-80"
+            >
+              contact us
+            </Link>
+            .
           </p>
         </div>
 
         <div>
           <h2 className="font-heading text-2xl">
-            5. Cancellations and returns
+            5. Faulty items, replacements, and refunds
           </h2>
-          <ul className="mt-2 space-y-2 text-base leading-relaxed">
-            <li>
-              <strong>Before production:</strong> contact us as soon as
-              possible and we&rsquo;ll do our best to cancel or amend the
-              order free of charge.
-            </li>
-            <li>
-              <strong>After production starts:</strong> because each item
-              is made to order, cancellations are at our discretion.
-            </li>
-            <li>
-              <strong>Defective or incorrect items:</strong> notify us within
-              14 days of delivery with photos and your order number. We will
-              replace or refund the affected item and cover return shipping.
-            </li>
-            <li>
-              <strong>Change of mind:</strong> return shipping is at your
-              cost; items must be unused and in their original condition.
-            </li>
-          </ul>
+          <p className="mt-2 text-base leading-relaxed">
+            We do <strong>not</strong> offer refunds. Because every piece is
+            custom-made to order, we instead remake and replace items that
+            arrive faulty or defective.
+          </p>
+          <p className="mt-2 text-base leading-relaxed">
+            If your item is faulty, let us know within{" "}
+            <strong>3 days of receiving your order</strong>. You&rsquo;ll need
+            to ship the faulty item back to us at your own cost; once we
+            receive it and confirm the fault, we&rsquo;ll remake your piece and
+            send you a replacement free of charge.
+          </p>
+          <p className="mt-2 text-base leading-relaxed">
+            This policy covers manufacturing or printing defects only. It does
+            not cover change-of-mind returns or damage caused after delivery.
+            Nothing here limits any rights you have as a consumer under
+            Malaysian law.
+          </p>
         </div>
 
         <div>
@@ -124,20 +133,7 @@ export default function TermsPage() {
         </div>
 
         <div>
-          <h2 className="font-heading text-2xl">
-            7. Intellectual property and acceptable use
-          </h2>
-          <p className="mt-2 text-base leading-relaxed">
-            Our product designs, photos, logos, and website content are
-            owned by {BUSINESS.legalName}. You may not copy, resell, or
-            reproduce our designs &mdash; whether digitally or physically
-            &mdash; without our written permission. Purchasing a product
-            gives you the physical item, not the design rights.
-          </p>
-        </div>
-
-        <div>
-          <h2 className="font-heading text-2xl">8. Liability</h2>
+          <h2 className="font-heading text-2xl">7. Liability</h2>
           <p className="mt-2 text-base leading-relaxed">
             Our products are supplied &ldquo;as is&rdquo;. We take care to
             describe items accurately and print them to a good standard, but
@@ -149,7 +145,7 @@ export default function TermsPage() {
         </div>
 
         <div>
-          <h2 className="font-heading text-2xl">9. Governing law</h2>
+          <h2 className="font-heading text-2xl">8. Governing law</h2>
           <p className="mt-2 text-base leading-relaxed">
             These terms are governed by the laws of Malaysia. Any dispute
             will be handled by the courts of Malaysia.
@@ -158,7 +154,7 @@ export default function TermsPage() {
 
         <div>
           <h2 className="font-heading text-2xl">
-            10. Changes to these terms
+            9. Changes to these terms
           </h2>
           <p className="mt-2 text-base leading-relaxed">
             We may update these terms from time to time. The &ldquo;Last
@@ -169,12 +165,12 @@ export default function TermsPage() {
         </div>
 
         <div>
-          <h2 className="font-heading text-2xl">11. Contact</h2>
+          <h2 className="font-heading text-2xl">10. Contact</h2>
           <p className="mt-2 text-base leading-relaxed">
             Questions about these terms?{" "}
             <Link
               href={`mailto:${BUSINESS.contactEmail}`}
-              className="text-[#0080ff] underline underline-offset-2 hover:opacity-80"
+              className="text-[#1877F2] underline underline-offset-2 hover:opacity-80"
             >
               {BUSINESS.contactEmail}
             </Link>{" "}

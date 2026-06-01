@@ -2,14 +2,10 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { BRAND } from "@/lib/brand";
-import { Shuriken } from "@/components/brand/shuriken";
 import { Hero } from "@/components/store/hero";
 import { FeaturedRail } from "@/components/store/featured-rail";
 import { Logo } from "@/components/brand/logo";
-import {
-  getActiveFeaturedProducts,
-  getActiveCategories,
-} from "@/lib/catalog";
+import { getActiveFeaturedProducts } from "@/lib/catalog";
 
 export const metadata: Metadata = {
   // Omit title so the root layout's default ("3D Ninjaz — 3D Printed
@@ -24,23 +20,10 @@ export default async function HomePage({
 }: {
   searchParams?: Promise<{ closed?: string }>;
 }) {
-  // Phase 8 — getActiveCategories now ORDER BYs the new position column.
-  // During the first deploy window the prod DB may not yet have the column
-  // (migration runs before build on the server, but static build caches and
-  // CI can race). Fall back to an empty list rather than failing the home
-  // prerender; the SHOP BY SQUAD rail just hides until the query recovers.
-  const [featured, categories] = await Promise.all([
-    getActiveFeaturedProducts(4).catch((err) => {
-      console.warn("[home] getActiveFeaturedProducts failed:", err);
-      return [];
-    }),
-    getActiveCategories().catch((err) => {
-      console.warn("[home] getActiveCategories failed:", err);
-      return [];
-    }),
-  ]);
-
-  const accents = [BRAND.blue, BRAND.green, BRAND.purple] as const;
+  const featured = await getActiveFeaturedProducts(4).catch((err) => {
+    console.warn("[home] getActiveFeaturedProducts failed:", err);
+    return [];
+  });
   const sp = searchParams ? await searchParams : {};
   const closed = sp.closed === "1";
 
@@ -59,36 +42,6 @@ export default async function HomePage({
       <Hero />
       <FeaturedRail products={featured} />
 
-      {/* Category preview */}
-      {categories.length > 0 ? (
-        <section className="py-16 md:py-24 bg-white">
-          <div className="max-w-5xl mx-auto px-6">
-            <div className="flex items-center justify-center gap-4 mb-10">
-              <Shuriken className="w-8 h-8" fill={BRAND.blue} />
-              <h2
-                className="font-[var(--font-heading)] text-3xl md:text-5xl tracking-tight text-center text-zinc-900"
-              >
-                SHOP BY <span style={{ color: BRAND.purple }}>SQUAD</span>
-              </h2>
-              <Shuriken className="w-8 h-8" fill={BRAND.green} />
-            </div>
-            <ul className="flex flex-col gap-5 items-center">
-              {categories.slice(0, 6).map((c, i) => (
-                <li key={c.id} className="w-full md:w-[min(640px,90%)]">
-                  <Link
-                    href={`/shop?category=${encodeURIComponent(c.slug)}`}
-                    className="block rounded-full px-8 py-5 text-center font-[var(--font-heading)] text-2xl md:text-4xl text-white shadow-[0_6px_0_rgba(11,16,32,0.12)] hover:translate-y-[3px] hover:shadow-[0_3px_0_rgba(11,16,32,0.12)] transition min-h-[60px]"
-                    style={{ backgroundColor: accents[i % accents.length] }}
-                  >
-                    {c.name}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-      ) : null}
-
       {/* How it works */}
       <section
         id="how"
@@ -99,28 +52,28 @@ export default async function HomePage({
           <h2
             className="font-[var(--font-heading)] text-3xl md:text-5xl text-center mb-12 text-zinc-900"
           >
-            3 STEPS. <span style={{ color: BRAND.green }}>NO JUTSU REQUIRED.</span>
+            3 STEPS. <span style={{ color: BRAND.green }}>NO NINJA SKILLS NEEDED.</span>
           </h2>
           <ol className="grid md:grid-cols-3 gap-6">
             {[
               {
                 n: "01",
                 t: "Browse",
-                d: "Scroll and checkout all our latest products",
+                d: "Explore our collection of unique 3D printed products.",
                 c: BRAND.blue,
                 icon: "/icons/ninja/nav/shop@128.png",
               },
               {
                 n: "02",
                 t: "Select",
-                d: "choose your favourite products or customise and add to cart",
+                d: "Pick your favourite, choose your options, and add it to your bag.",
                 c: BRAND.green,
                 icon: "/icons/ninja/emoji/tip@128.png",
               },
               {
                 n: "03",
                 t: "Checkout",
-                d: "pay using PayPal safe and secure and shipping across malaysia",
+                d: "Pay securely with PayPal. We ship across Malaysia.",
                 c: BRAND.purple,
                 icon: "/icons/ninja/nav/download@128.png",
               },
@@ -159,7 +112,7 @@ export default async function HomePage({
         <h2
           className="font-[var(--font-heading)] text-3xl md:text-5xl mb-6 text-zinc-900"
         >
-          READY TO <span style={{ color: BRAND.purple }}>STRIKE?</span>
+          READY TO <span style={{ color: BRAND.purple }}>SHOP?</span>
         </h2>
         <Link
           href="/shop"

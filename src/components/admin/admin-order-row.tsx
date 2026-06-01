@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { BRAND } from "@/lib/brand";
 import { formatOrderNumber, type OrderStatus } from "@/lib/orders";
@@ -13,24 +14,43 @@ type AdminOrderRowData = {
   shippingName: string;
   user: { email: string; name: string } | null;
   itemCount: number;
+  /** Phase 20 (20-10) — 24×24 slip thumbnail shown when row is in awaiting_payment_review filter. */
+  slipThumbnailUrl?: string | null;
 };
 
 /**
  * Single <tr> for /admin/orders. Presentational — all data arrives in props.
  * Uses the customer email/name snapshot fields on the orders row when the
  * user FK has been nullified or the buyer was deleted (PDPA, D3-23).
+ *
+ * Phase 20 (20-10): When slipThumbnailUrl is provided, renders a 24×24 slip
+ * thumbnail at the left edge of the Order # cell (UI-SPEC §Surface 4 row enhancement).
  */
 export function AdminOrderRow({ order }: { order: AdminOrderRowData }) {
   return (
     <tr className="border-t border-black/10">
       <td className="p-3 font-mono text-xs">
-        <Link
-          href={`/admin/orders/${order.id}`}
-          className="underline decoration-dotted"
-          style={{ color: BRAND.ink }}
-        >
-          {formatOrderNumber(order.id)}
-        </Link>
+        <div className="flex items-center gap-2">
+          {order.slipThumbnailUrl && (
+            <Link href={`/admin/orders/${order.id}`} tabIndex={-1} aria-hidden>
+              <Image
+                src={order.slipThumbnailUrl}
+                alt="Payment slip"
+                width={24}
+                height={24}
+                className="rounded object-cover shrink-0"
+                style={{ width: 24, height: 24 }}
+              />
+            </Link>
+          )}
+          <Link
+            href={`/admin/orders/${order.id}`}
+            className="underline decoration-dotted"
+            style={{ color: BRAND.ink }}
+          >
+            {formatOrderNumber(order.id)}
+          </Link>
+        </div>
       </td>
       <td className="p-3">
         <p className="font-semibold truncate max-w-[200px]">{order.shippingName}</p>

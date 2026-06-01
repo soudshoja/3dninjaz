@@ -39,7 +39,7 @@ export function Hero() {
           className="inline-block rounded-full px-4 py-1 text-xs md:text-sm font-bold mb-8"
           style={{ backgroundColor: BRAND.green, color: BRAND.ink }}
         >
-          Kids by Day. 3D Printing Ninjas by Night.
+          Kids by day, 3D printing Ninjas by Night
         </p>
         <div className="flex justify-center mb-6">
           {/* Responsive logo: 200px on phones, 280px on sm+, 320px on md+ */}

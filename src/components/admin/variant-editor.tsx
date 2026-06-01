@@ -41,7 +41,7 @@
  * Bottom:        variant matrix table (inline edit: price, sale, stock, SKU, weight, image, default, active)
  */
 
-import { useState, useTransition, useCallback, useRef } from "react";
+import { useState, useTransition, useCallback, useRef, useMemo, useEffect } from "react";
 import { Pencil, Trash2, Plus, RefreshCw, Star, Upload, X, Palette } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,7 +74,11 @@ import {
 } from "@/actions/variants";
 import type { HydratedOption, HydratedVariant } from "@/lib/variants";
 import { generateVariantSku } from "@/lib/sku";
-import { ColourPickerDialog } from "@/components/admin/colour-picker-dialog";
+import { ColourPickerDialog, type ColourPickerRow, type MyColoursPrompt } from "@/components/admin/colour-picker-dialog";
+import { ColourFillConfirmationDialog, type ColourFillPrompt } from "@/components/admin/colour-fill-confirmation-dialog";
+import { attachLibraryColours, getMyColoursForPicker } from "@/actions/admin-colours";
+import { useProductDraft } from "@/hooks/use-product-draft";
+import { DraftRestoredBanner } from "@/components/admin/draft-restored-banner";
 
 // Phase 18 Plan 06 — case-insensitive Color/Colour option detection.
 // Mounting the picker is gated on this helper everywhere it appears.
@@ -83,14 +87,38 @@ function isColourOption(opt: { name: string }): boolean {
   return n === "color" || n === "colour";
 }
 
+// Fields that VariantRow owns locally and mirrors up to the parent for
+// autosave. Shape must be serialisable (no Date objects, no functions).
+type RowEditFields = {
+  price: string;
+  salePrice: string;
+  sku: string;
+  weightG: string;
+  showSchedule: boolean;
+};
+
 interface VariantEditorProps {
   productId: string;
   productSlug: string;
   initialOptions: HydratedOption[];
   initialVariants: HydratedVariant[];
+  /**
+   * Quick task 260501-spv — when productType === "simple", cap option count
+   * at 1 (one-axis rule). Stocked retains the 6-axis cap (R8 / 6-slot rule).
+   * Defaulting to "stocked" preserves existing call-site behaviour.
+   */
+  productType?: "stocked" | "simple";
 }
 
-export function VariantEditor({ productId, productSlug, initialOptions, initialVariants }: VariantEditorProps) {
+// Quick task 260501-spv — single source of truth for the option cap.
+// Mirrors the server-side guard in `addProductOption` so the UI never
+// invites a request the server will reject.
+function maxOptionsFor(productType: "stocked" | "simple"): number {
+  return productType === "simple" ? 1 : 6;
+}
+
+export function VariantEditor({ productId, productSlug, initialOptions, initialVariants, productType = "stocked" }: VariantEditorProps) {
+  const maxOptions = maxOptionsFor(productType);
   const [isPending, startTransition] = useTransition();
   const [options, setOptions] = useState<HydratedOption[]>(initialOptions);
   const [variants, setVariants] = useState<HydratedVariant[]>(initialVariants);
@@ -106,16 +134,118 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
   // single product (rare but defensible).
   const [pickerOptionId, setPickerOptionId] = useState<string | null>(null);
 
+  // Phase 20-xx — My Colours prompt state for the picker
+  const [myColoursPrompt, setMyColoursPrompt] = useState<MyColoursPrompt | null>(null);
+
+  // Cross-axis colour fill queue — sequential prompt after picker confirm.
+  const [fillQueue, setFillQueue] = useState<ColourFillPrompt[]>([]);
+
   // Phase 17 — bulk edit state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkMode, setBulkMode] = useState<"idle" | "set-price" | "multiply" | "add" | "sale">("idle");
   const [bulkValue, setBulkValue] = useState("");
   const [uploadingIds, setUploadingIds] = useState<Set<string>>(new Set());
 
+  // -------------------------------------------------------------------------
+  // Row-level inline edits mirror — captures in-flight price/salePrice/sku/
+  // weightG/showSchedule keystrokes from VariantRow without lifting full row
+  // state. Included in the autosave draftValue so these values survive a
+  // tab-close. On Restore the rowEdits map is passed back down to rows so
+  // they initialise from the restored values instead of the server-snapshot.
+  // -------------------------------------------------------------------------
+  const [rowEdits, setRowEdits] = useState<Record<string, Partial<RowEditFields>>>({});
+
+  const handleRowEdit = useCallback(
+    (variantId: string, edits: Partial<RowEditFields>) => {
+      setRowEdits((prev) => ({
+        ...prev,
+        [variantId]: { ...(prev[variantId] ?? {}), ...edits },
+      }));
+    },
+    [],
+  );
+
   const showToast = useCallback((msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
   }, []);
+
+  // -------------------------------------------------------------------------
+  // Autosave draft — persists live options + variants to localStorage so the
+  // admin can recover from accidental navigation. Scope "variants" keeps the
+  // key separate from the main product-form and configurator drafts.
+  // -------------------------------------------------------------------------
+  const draftValue = useMemo(() => ({ options, variants, rowEdits }), [options, variants, rowEdits]);
+  const draft = useProductDraft(productId, draftValue, { scope: "variants" });
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+
+  function restoreDraft() {
+    const v = draft.restore();
+    if (!v) {
+      setBannerDismissed(true);
+      return;
+    }
+    // Defensive shape validation — options must be Array of objects with id,
+    // name, position, values (array). Variants must be Array of objects with
+    // id, optionValueIds (array), priceMyrCents (number), inStock (boolean).
+    // Drop any malformed entry rather than crashing.
+    if (Array.isArray(v.options)) {
+      const safeOptions = v.options.filter((o: unknown) => {
+        if (!o || typeof o !== "object") return false;
+        const entry = o as Record<string, unknown>;
+        if (typeof entry.id !== "string") return false;
+        if (typeof entry.name !== "string") return false;
+        if (typeof entry.position !== "number") return false;
+        if (!Array.isArray(entry.values)) return false;
+        return true;
+      });
+      if (safeOptions.length !== v.options.length) {
+        console.warn(
+          `[variants autosave] Dropped ${v.options.length - safeOptions.length} malformed option(s) from draft.`,
+        );
+      }
+      setOptions(safeOptions as HydratedOption[]);
+    }
+    if (Array.isArray(v.variants)) {
+      const safeVariants = v.variants.filter((vr: unknown) => {
+        if (!vr || typeof vr !== "object") return false;
+        const entry = vr as Record<string, unknown>;
+        if (typeof entry.id !== "string") return false;
+        if (!Array.isArray(entry.optionValueIds)) return false;
+        if (typeof entry.price !== "string") return false;
+        if (typeof entry.inStock !== "boolean") return false;
+        return true;
+      });
+      if (safeVariants.length !== v.variants.length) {
+        console.warn(
+          `[variants autosave] Dropped ${v.variants.length - safeVariants.length} malformed variant(s) from draft.`,
+        );
+      }
+      setVariants(safeVariants as HydratedVariant[]);
+    }
+    // Restore row-level in-flight edits if present.
+    if (v.rowEdits && typeof v.rowEdits === "object" && !Array.isArray(v.rowEdits)) {
+      const safe: Record<string, Partial<RowEditFields>> = {};
+      for (const [id, edits] of Object.entries(v.rowEdits)) {
+        if (!edits || typeof edits !== "object") continue;
+        const e = edits as Record<string, unknown>;
+        const entry: Partial<RowEditFields> = {};
+        if (typeof e.price === "string") entry.price = e.price;
+        if (typeof e.salePrice === "string") entry.salePrice = e.salePrice;
+        if (typeof e.sku === "string") entry.sku = e.sku;
+        if (typeof e.weightG === "string") entry.weightG = e.weightG;
+        if (typeof e.showSchedule === "boolean") entry.showSchedule = e.showSchedule;
+        if (Object.keys(entry).length > 0) safe[id] = entry;
+      }
+      setRowEdits(safe);
+    }
+    setBannerDismissed(true);
+  }
+
+  function discardDraft() {
+    draft.discard();
+    setBannerDismissed(true);
+  }
 
   // Pattern B: refetch after shape-changing ops
   const refresh = useCallback(async () => {
@@ -123,11 +253,45 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
     if ("data" in result && result.data) {
       setOptions(result.data.options);
       setVariants(result.data.variants);
+      // Successful server sync — clear the autosave draft and row edits so
+      // the banner won't reappear and stale in-flight edits are dropped.
+      draft.discard();
+      setRowEdits({});
     } else if ("error" in result) {
       showToast("Failed to refresh editor data", "error");
     }
     // NOTE: router.refresh() intentionally removed (AD-06)
-  }, [productId, showToast]);
+  }, [productId, showToast, draft]);
+
+  // ---------------------------------------------------------------------------
+  // My Colours prompt - fetches after refresh is defined
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!pickerOptionId) {
+      setMyColoursPrompt(null);
+      return;
+    }
+    let cancelled = false;
+    getMyColoursForPicker()
+      .then((rows) => {
+        if (!cancelled && rows.length > 0) {
+          setMyColoursPrompt({
+            myColours: rows,
+            onSkip: () => {
+              setMyColoursPrompt(null);
+            },
+          });
+        } else if (!cancelled) {
+          setMyColoursPrompt(null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setMyColoursPrompt(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pickerOptionId, options, refresh]);
 
   // ---------------------------------------------------------------------------
   // Selection helpers
@@ -376,6 +540,17 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
 
   return (
     <div className="space-y-8">
+      {/* Autosave restore banner — shown when a draft snapshot exists and the
+          admin hasn't already chosen Restore/Discard this session. Restore
+          requires an explicit click; NO auto-hydration on mount. */}
+      {draft.draft && !bannerDismissed && (
+        <DraftRestoredBanner
+          savedAt={draft.draft.savedAt}
+          onRestore={restoreDraft}
+          onDiscard={discardDraft}
+        />
+      )}
+
       {/* Toast */}
       {toast && (
         <div
@@ -516,10 +691,14 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
         ))}
 
         {/* Add option */}
-        {options.length < 6 && (
+        {options.length < maxOptions && (
           <div className="flex gap-2">
             <Input
-              placeholder="New option name (e.g., Size, Color, Material, Part)"
+              placeholder={
+                productType === "simple"
+                  ? "Option name (e.g., Size or Colour)"
+                  : "New option name (e.g., Size, Color, Material, Part)"
+              }
               value={newOptionName}
               onChange={(e) => setNewOptionName(e.target.value)}
               className="h-9"
@@ -529,6 +708,14 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
               <Plus className="h-4 w-4 mr-1" /> Add Option
             </Button>
           </div>
+        )}
+        {/* Quick task 260501-spv — one-axis rule notice for simple products. */}
+        {productType === "simple" && (
+          <p className="text-xs text-[var(--color-brand-text-muted)]">
+            {options.length >= maxOptions
+              ? "Simple products support one variant option only (e.g. Size OR Colour). Delete the existing option to add a different one."
+              : "Simple products support one variant option only (e.g. Size OR Colour)."}
+          </p>
         )}
       </div>
 
@@ -664,6 +851,8 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
                     onRemoveImage={handleRemoveImage}
                     isUploading={uploadingIds.has(v.id)}
                     isPending={isPending}
+                    restoredEdits={rowEdits[v.id]}
+                    onRowEdit={handleRowEdit}
                   />
                 ))}
               </tbody>
@@ -727,11 +916,61 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
                 .filter((id): id is string => Boolean(id)),
             )
           }
+          myColoursPrompt={myColoursPrompt || undefined}
+          onConfirmedWithRows={(attachedRows: ColourPickerRow[]) => {
+            // Build cross-axis fill queue for every OTHER colour option that is
+            // missing one or more of the just-attached colours.
+            const sourceOptionId = pickerOptionId;
+            const prompts: ColourFillPrompt[] = [];
+
+            for (const otherOpt of options) {
+              if (otherOpt.id === sourceOptionId) continue;
+              if (!isColourOption(otherOpt)) continue;
+
+              const alreadyOnTarget = new Set(
+                otherOpt.values
+                  .map((v) => v.colorId)
+                  .filter((id): id is string => Boolean(id)),
+              );
+
+              const toAdd = attachedRows.filter((r) => !alreadyOnTarget.has(r.id));
+              if (toAdd.length === 0) continue;
+
+              const toAddIds = toAdd.map((r) => r.id);
+              const capturedOptId = otherOpt.id;
+              const capturedLabel = otherOpt.name;
+
+              // Each prompt advances the queue via setFillQueue.
+              // We use a functional helper so each closure gets its own index.
+              prompts.push({
+                targetAxisLabel: capturedLabel,
+                coloursToAdd: toAdd.map((r) => ({ id: r.id, name: r.name, hex: r.hex })),
+                onConfirm: async () => {
+                  await attachLibraryColours(capturedOptId, toAddIds);
+                  await refresh();
+                  setFillQueue((q) => q.slice(1));
+                },
+                onSkip: () => {
+                  setFillQueue((q) => q.slice(1));
+                },
+              });
+            }
+
+            if (prompts.length > 0) {
+              setFillQueue(prompts);
+            }
+          }}
           onConfirmed={async () => {
             await refresh();
           }}
         />
       ) : null}
+
+      {/* Cross-axis colour fill sequential prompts */}
+      <ColourFillConfirmationDialog
+        queue={fillQueue}
+        onResolveAll={() => setFillQueue([])}
+      />
     </div>
   );
 }
@@ -752,6 +991,8 @@ function VariantRow({
   onRemoveImage,
   isUploading,
   isPending,
+  onRowEdit,
+  restoredEdits,
 }: {
   variant: HydratedVariant;
   productSlug: string;
@@ -764,12 +1005,14 @@ function VariantRow({
   onRemoveImage: (variantId: string) => void;
   isUploading: boolean;
   isPending: boolean;
+  onRowEdit?: (variantId: string, edits: Partial<RowEditFields>) => void;
+  restoredEdits?: Partial<RowEditFields>;
 }) {
-  const [price, setPrice] = useState(variant.price);
-  const [salePrice, setSalePrice] = useState(variant.salePrice ?? "");
-  const [sku, setSku] = useState(variant.sku ?? "");
-  const [weightG, setWeightG] = useState(variant.weightG !== null ? String(variant.weightG) : "");
-  const [showSchedule, setShowSchedule] = useState(false);
+  const [price, setPrice] = useState(restoredEdits?.price ?? variant.price);
+  const [salePrice, setSalePrice] = useState(restoredEdits?.salePrice ?? (variant.salePrice ?? ""));
+  const [sku, setSku] = useState(restoredEdits?.sku ?? (variant.sku ?? ""));
+  const [weightG, setWeightG] = useState(restoredEdits?.weightG ?? (variant.weightG !== null ? String(variant.weightG) : ""));
+  const [showSchedule, setShowSchedule] = useState(restoredEdits?.showSchedule ?? false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Keep local state in sync when variant prop changes (e.g. after bulk refetch)
@@ -807,7 +1050,10 @@ function VariantRow({
       <td className="px-4 py-3">
         <Input
           value={price}
-          onChange={(e) => setPrice(e.target.value)}
+          onChange={(e) => {
+            setPrice(e.target.value);
+            onRowEdit?.(variant.id, { price: e.target.value });
+          }}
           onBlur={() => {
             if (/^\d+(\.\d{1,2})?$/.test(price) && price !== variant.price) {
               onUpdate(variant.id, "price", price);
@@ -822,7 +1068,10 @@ function VariantRow({
         <div className="flex flex-col gap-1">
           <Input
             value={salePrice}
-            onChange={(e) => setSalePrice(e.target.value)}
+            onChange={(e) => {
+              setSalePrice(e.target.value);
+              onRowEdit?.(variant.id, { salePrice: e.target.value });
+            }}
             onBlur={() => {
               const val = salePrice.trim();
               const current = variant.salePrice ?? "";
@@ -836,7 +1085,11 @@ function VariantRow({
           <button
             type="button"
             className="text-xs text-blue-600 hover:underline text-left"
-            onClick={() => setShowSchedule((s) => !s)}
+            onClick={() => {
+              const next = !showSchedule;
+              setShowSchedule(next);
+              onRowEdit?.(variant.id, { showSchedule: next });
+            }}
           >
             {showSchedule ? "▲ Hide schedule" : "▼ Schedule"}
           </button>
@@ -935,7 +1188,10 @@ function VariantRow({
             <div className="flex flex-col gap-0.5">
               <Input
                 value={sku}
-                onChange={(e) => setSku(e.target.value)}
+                onChange={(e) => {
+                  setSku(e.target.value);
+                  onRowEdit?.(variant.id, { sku: e.target.value });
+                }}
                 onBlur={() => {
                   if (sku !== (variant.sku ?? "")) {
                     onUpdate(variant.id, "sku", sku || null);
@@ -950,6 +1206,7 @@ function VariantRow({
                   className="text-xs text-blue-600 hover:underline text-left"
                   onClick={() => {
                     setSku(autoSku);
+                    onRowEdit?.(variant.id, { sku: autoSku });
                     onUpdate(variant.id, "sku", autoSku);
                   }}
                 >
@@ -966,7 +1223,10 @@ function VariantRow({
         <Input
           type="number"
           value={weightG}
-          onChange={(e) => setWeightG(e.target.value)}
+          onChange={(e) => {
+            setWeightG(e.target.value);
+            onRowEdit?.(variant.id, { weightG: e.target.value });
+          }}
           onBlur={() => {
             const num = weightG.trim() === "" ? null : parseInt(weightG, 10);
             const current = variant.weightG;

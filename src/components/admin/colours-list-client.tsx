@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { BRAND } from "@/lib/brand";
 import { ColourRowActions } from "@/components/admin/colour-row-actions";
+import { toggleMyColour } from "@/actions/admin-colours";
 import type { ColourAdmin } from "@/lib/colours";
+import { sortByShade } from "@/lib/colour-sort";
 
 type Props = {
   rows: ColourAdmin[];
@@ -13,46 +15,46 @@ type Props = {
 const BRANDS = ["All", "Bambu", "Polymaker", "Other"] as const;
 const FAMILIES = ["All", "PLA", "PETG", "TPU", "CF", "Other"] as const;
 const STATUSES = ["All", "Active", "Archived"] as const;
+const MY_COLOURS = ["All", "My Colours", "Other"] as const;
 
-export function ColoursListClient({ rows }: Props) {
+export function ColoursListClient({ rows: initialRows }: Props) {
+  const [rows, setRows] = useState(initialRows);
   const [query, setQuery] = useState("");
   const [brand, setBrand] = useState<(typeof BRANDS)[number]>("All");
   const [family, setFamily] = useState<(typeof FAMILIES)[number]>("All");
   const [status, setStatus] = useState<(typeof STATUSES)[number]>("All");
+  const [myColour, setMyColour] = useState<(typeof MY_COLOURS)[number]>("All");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return rows
-      .filter((r) => {
-        if (brand !== "All" && r.brand !== brand) return false;
-        if (family !== "All" && r.familyType !== family) return false;
-        if (status === "Active" && !r.isActive) return false;
-        if (status === "Archived" && r.isActive) return false;
-        if (q) {
-          const hay = [
-            r.name,
-            r.familySubtype ?? "",
-            r.code ?? "",
-            r.brand,
-            r.familyType,
-            r.hex,
-          ]
-            .join(" ")
-            .toLowerCase();
-          if (!hay.includes(q)) return false;
-        }
-        return true;
-      })
-      .sort((a, b) => {
-        if (a.brand !== b.brand) return a.brand.localeCompare(b.brand);
-        if (a.familyType !== b.familyType)
-          return a.familyType.localeCompare(b.familyType);
-        const subA = a.familySubtype ?? "";
-        const subB = b.familySubtype ?? "";
-        if (subA !== subB) return subA.localeCompare(subB);
-        return a.name.localeCompare(b.name);
-      });
-  }, [rows, query, brand, family, status]);
+    const matches = rows.filter((r) => {
+      if (brand !== "All" && r.brand !== brand) return false;
+      if (family !== "All" && r.familyType !== family) return false;
+      if (status === "Active" && !r.isActive) return false;
+      if (status === "Archived" && r.isActive) return false;
+      if (myColour === "My Colours" && !r.isMyColour) return false;
+      if (myColour === "Other" && r.isMyColour) return false;
+      if (q) {
+        const hay = [
+          r.name,
+          r.familySubtype ?? "",
+          r.code ?? "",
+          r.brand,
+          r.familyType,
+          r.hex,
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+    // Shade-aware order — active rows first (so archived sit below), then
+    // hue family + lightness within each group.
+    const active = sortByShade(matches.filter((r) => r.isActive));
+    const archived = sortByShade(matches.filter((r) => !r.isActive));
+    return [...active, ...archived];
+  }, [rows, query, brand, family, status, myColour]);
 
   const activeCount = rows.filter((r) => r.isActive).length;
 
@@ -82,7 +84,7 @@ export function ColoursListClient({ rows }: Props) {
 
         {/* Filter bar */}
         <div
-          className="mb-4 grid gap-3 rounded-2xl p-4 md:grid-cols-[1fr_auto_auto_auto_auto]"
+          className="mb-4 grid gap-3 rounded-2xl p-4 md:grid-cols-[1fr_auto_auto_auto_auto_auto]"
           style={{ backgroundColor: "#ffffff" }}
         >
           <input
@@ -135,7 +137,37 @@ export function ColoursListClient({ rows }: Props) {
               </option>
             ))}
           </select>
-          {(query || brand !== "All" || family !== "All" || status !== "All") && (
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="my-colour-filter"
+              checked={myColour === "My Colours"}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  setMyColour("My Colours");
+                } else {
+                  setMyColour("All");
+                }
+              }}
+              className="h-5 w-5 rounded border-gray-300 text-[#7360F2] focus:ring-[#7360F2]"
+            />
+            <label htmlFor="my-colour-filter" className="text-sm font-semibold select-none">
+              My Colour
+            </label>
+          </div>
+          <select
+            value={myColour === "My Colours" ? "My Colours" : myColour === "Other" ? "Other" : "All"}
+            onChange={(e) =>
+              setMyColour(e.target.value as (typeof MY_COLOURS)[number])
+            }
+            className="rounded-xl border-2 px-3 py-2 text-sm min-h-[44px]"
+            style={{ borderColor: `${BRAND.ink}33` }}
+          >
+            <option value="All">All</option>
+            <option value="My Colours">My Colours only</option>
+            <option value="Other">Not my colour</option>
+          </select>
+          {(query || brand !== "All" || family !== "All" || status !== "All" || myColour !== "All") && (
             <button
               type="button"
               onClick={() => {
@@ -143,6 +175,7 @@ export function ColoursListClient({ rows }: Props) {
                 setBrand("All");
                 setFamily("All");
                 setStatus("All");
+                setMyColour("All");
               }}
               className="rounded-xl border-2 px-4 py-2 text-sm font-semibold min-h-[44px]"
               style={{ borderColor: `${BRAND.ink}33`, color: BRAND.ink }}
@@ -180,6 +213,7 @@ export function ColoursListClient({ rows }: Props) {
                     <th className="p-3 whitespace-nowrap">Brand</th>
                     <th className="p-3 whitespace-nowrap">Family</th>
                     <th className="p-3 whitespace-nowrap">Code</th>
+                    <th className="p-3 whitespace-nowrap">My Colour</th>
                     <th className="p-3 whitespace-nowrap">Status</th>
                     <th className="p-3 text-right whitespace-nowrap">
                       Actions
@@ -232,6 +266,35 @@ export function ColoursListClient({ rows }: Props) {
                       <td className="p-3 font-mono text-xs text-slate-600">
                         {c.code ?? "—"}
                       </td>
+                      <td className="p-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={c.isMyColour}
+                          onChange={async () => {
+                            // Optimistic update — no page reload
+                            setRows((prev) =>
+                              prev.map((r) =>
+                                r.id === c.id
+                                  ? { ...r, isMyColour: !r.isMyColour }
+                                  : r,
+                              ),
+                            );
+                            const res = await toggleMyColour(c.id);
+                            if (!res.ok) {
+                              // Revert on failure
+                              setRows((prev) =>
+                                prev.map((r) =>
+                                  r.id === c.id
+                                    ? { ...r, isMyColour: !r.isMyColour }
+                                    : r,
+                                ),
+                              );
+                            }
+                          }}
+                          className="h-4 w-4 rounded border-gray-300 text-[#7360F2] focus:ring-[#7360F2]"
+                          title={c.isMyColour ? "Click to remove from My Colours" : "Click to add to My Colours"}
+                        />
+                      </td>
                       <td className="p-3">
                         {c.isActive ? (
                           <span
@@ -255,6 +318,7 @@ export function ColoursListClient({ rows }: Props) {
                             id: c.id,
                             name: c.name,
                             isActive: c.isActive,
+                            isMyColour: c.isMyColour,
                           }}
                         />
                       </td>

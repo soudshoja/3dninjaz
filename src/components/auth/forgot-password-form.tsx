@@ -74,14 +74,14 @@ export function ForgotPasswordForm() {
               placeholder="you@example.com"
               required
               autoComplete="email"
-              className="h-10"
+              className="h-12"
             />
           </div>
 
           <Button
             type="submit"
             disabled={submitting}
-            className="h-10 w-full bg-[var(--color-brand-cta)] text-white hover:bg-[var(--color-brand-cta)]/90"
+            className="h-12 w-full bg-[var(--color-brand-cta)] text-white hover:bg-[var(--color-brand-cta)]/90"
           >
             {submitting ? "Sending..." : "Send reset link"}
           </Button>

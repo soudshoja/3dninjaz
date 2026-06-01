@@ -21,7 +21,7 @@
  * ============================================================================
  */
 
-import { useState, useTransition, useCallback } from "react";
+import { useState, useTransition, useCallback, useMemo } from "react";
 import {
   GripVertical,
   Pencil,
@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { ConfigFieldModal, ConfigFieldFormBody } from "@/components/admin/config-field-modal";
+import { ColourFillConfirmationDialog, type ColourFillPrompt } from "@/components/admin/colour-fill-confirmation-dialog";
 import { TierTableEditor } from "@/components/admin/tier-table-editor";
 import {
   getConfiguratorData,
@@ -54,7 +55,10 @@ import {
   updateConfigField,
   type ConfigField,
 } from "@/actions/configurator";
+import { getActiveColoursForPicker } from "@/actions/admin-colours";
 import { BRAND } from "@/lib/brand";
+import { useProductDraft } from "@/hooks/use-product-draft";
+import { DraftRestoredBanner } from "@/components/admin/draft-restored-banner";
 
 // ============================================================================
 // Types
@@ -64,7 +68,7 @@ type ProductSummary = {
   id: string;
   name: string;
   slug: string;
-  productType: "stocked" | "configurable" | "keychain" | "vending";
+  productType: "stocked" | "configurable" | "keychain" | "vending" | "simple";
   maxUnitCount: number | null;
   priceTiers: Record<string, number>;
   unitField: string | null;
@@ -86,6 +90,8 @@ const TYPE_COLORS: Record<string, string> = {
   number: "#8B5CF6",
   colour: "#EC4899",
   select: "#F59E0B",
+  // Quick task 260430-icx — textarea (rich text) fields.
+  textarea: "#10B981",
 };
 
 // ============================================================================
@@ -98,10 +104,22 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  // -------------------------------------------------------------------------
+  // Autosave draft — persists the live `fields` state to localStorage so the
+  // admin can recover from accidental navigation. Scope "configurator" keeps
+  // the key separate from the main product-form draft.
+  // -------------------------------------------------------------------------
+  const draftValue = useMemo(() => ({ fields }), [fields]);
+  const draft = useProductDraft(product.id, draftValue, { scope: "configurator" });
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+
   // Modal state (non-locked fields)
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingField, setEditingField] = useState<ConfigField | null>(null);
+
+  // Cross-axis colour fill queue — sequential prompt after a colour field saves.
+  const [fillQueue, setFillQueue] = useState<ColourFillPrompt[]>([]);
 
   // Inline drawer state (locked fields)
   const [expandedFieldId, setExpandedFieldId] = useState<string | null>(null);
@@ -116,12 +134,14 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
   );
 
   // -------------------------------------------------------------------------
-  // Pattern B refetch helper
+  // Pattern B refetch helper — clears the autosave draft after each
+  // successful server sync so the banner won't reappear once data is saved.
   // -------------------------------------------------------------------------
   const refetch = useCallback(async () => {
     const data = await getConfiguratorData(product.id);
     setFields(data.fields);
-  }, [product.id]);
+    draft.discard();
+  }, [product.id, draft]);
 
   // -------------------------------------------------------------------------
   // Reorder: Up/Down buttons → Pattern B
@@ -170,6 +190,69 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
       }
     });
   };
+
+  // -------------------------------------------------------------------------
+  // Cross-axis colour fill queue builder (async — fetches colour catalogue
+  // once to resolve names + hex for the swatch chips in the dialog).
+  // Called after any colour field saves; produces sequential prompts for
+  // every OTHER colour field that is missing one or more of the new colours.
+  // -------------------------------------------------------------------------
+  const buildFillQueue = useCallback(
+    async (
+      sourceFieldId: string,
+      newAllowedColorIds: string[],
+      currentFields: ConfigField[],
+    ): Promise<ColourFillPrompt[]> => {
+      if (newAllowedColorIds.length === 0) return [];
+
+      // Fetch catalogue once so swatches show real names + hex values.
+      const catalogue = await getActiveColoursForPicker().catch(() => []);
+      const rowById = new Map(catalogue.map((r) => [r.id, r]));
+
+      const prompts: ColourFillPrompt[] = [];
+
+      for (const other of currentFields) {
+        if (other.id === sourceFieldId) continue;
+        if (other.fieldType !== "colour") continue;
+
+        const existingIds = new Set(
+          ((other.config as { allowedColorIds?: string[] }).allowedColorIds ?? []),
+        );
+        const toAddIds = newAllowedColorIds.filter((id) => !existingIds.has(id));
+        if (toAddIds.length === 0) continue;
+
+        const capturedOtherId = other.id;
+        const capturedOtherLabel = other.label;
+        const capturedExisting = Array.from(existingIds);
+
+        prompts.push({
+          targetAxisLabel: capturedOtherLabel,
+          coloursToAdd: toAddIds.map((id) => {
+            const row = rowById.get(id);
+            return {
+              id,
+              name: row?.name ?? id,
+              hex: row?.hex ?? "#E0E0E0",
+            };
+          }),
+          onConfirm: async () => {
+            const merged = Array.from(new Set([...capturedExisting, ...toAddIds]));
+            await updateConfigField(capturedOtherId, {
+              config: { allowedColorIds: merged },
+            });
+            await refetch();
+            setFillQueue((q) => q.slice(1));
+          },
+          onSkip: () => {
+            setFillQueue((q) => q.slice(1));
+          },
+        });
+      }
+
+      return prompts;
+    },
+    [refetch],
+  );
 
   // -------------------------------------------------------------------------
   // Auto-fill Clicker + Letter palettes when Base palette is saved.
@@ -229,6 +312,44 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
   };
 
   // -------------------------------------------------------------------------
+  // Draft restore / discard handlers
+  // -------------------------------------------------------------------------
+
+  function restoreDraft() {
+    const v = draft.restore();
+    if (!v) {
+      setBannerDismissed(true);
+      return;
+    }
+    // Defensive shape validation — snapshot must have `fields` as an Array and
+    // each entry must have the minimum required shape. Drop malformed entries.
+    if (Array.isArray(v.fields)) {
+      const VALID_FIELD_TYPES = new Set(["text", "number", "colour", "select", "textarea"]);
+      const safe = v.fields.filter((f: unknown) => {
+        if (!f || typeof f !== "object") return false;
+        const entry = f as Record<string, unknown>;
+        if (typeof entry.id !== "string") return false;
+        if (typeof entry.fieldType !== "string" || !VALID_FIELD_TYPES.has(entry.fieldType)) return false;
+        if (typeof entry.label !== "string") return false;
+        if (!entry.config || typeof entry.config !== "object") return false;
+        return true;
+      });
+      if (safe.length !== v.fields.length) {
+        console.warn(
+          `[configurator autosave] Dropped ${v.fields.length - safe.length} malformed field(s) from draft.`,
+        );
+      }
+      setFields(safe as ConfigField[]);
+    }
+    setBannerDismissed(true);
+  }
+
+  function discardDraft() {
+    draft.discard();
+    setBannerDismissed(true);
+  }
+
+  // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
 
@@ -241,6 +362,17 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
 
   return (
     <div className="space-y-6">
+      {/* Autosave restore banner — shown when a draft snapshot exists and the
+          admin hasn't already chosen Restore/Discard this session. Restore
+          requires an explicit click; NO auto-hydration on mount. */}
+      {draft.draft && !bannerDismissed && (
+        <DraftRestoredBanner
+          savedAt={draft.draft.savedAt}
+          onRestore={restoreDraft}
+          onDiscard={discardDraft}
+        />
+      )}
+
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -509,6 +641,7 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
                     {expandedFieldId === field.id && (
                       <ConfigFieldFormBody
                         productId={product.id}
+                        productSlug={product.slug}
                         mode="edit"
                         initialField={field}
                         onSaved={async (savedField) => {
@@ -517,6 +650,15 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
                             await handleBaseAutoFill(savedField);
                           } else {
                             await refetch();
+                            // Cross-axis fill prompt for non-Base colour fields
+                            if (savedField && savedField.fieldType === "colour") {
+                              const newIds = (savedField.config as { allowedColorIds?: string[] }).allowedColorIds ?? [];
+                              // Fetch fresh field list AFTER refetch so buildFillQueue sees current state.
+                              // setFields() in refetch() is async; reading `fields` here would be stale.
+                              const fresh = await getConfiguratorData(product.id);
+                              const queue = await buildFillQueue(savedField.id, newIds, fresh.fields);
+                              if (queue.length > 0) setFillQueue(queue);
+                            }
                           }
                         }}
                         onCancel={() => setExpandedFieldId(null)}
@@ -535,10 +677,57 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
         open={addModalOpen}
         onOpenChange={setAddModalOpen}
         productId={product.id}
+        productSlug={product.slug}
         mode="add"
         onSaved={async (_savedField) => {
           setAddModalOpen(false);
-          await refetch(); // Pattern B
+          // Capture known field IDs before refetch so we can identify the new field.
+          const knownIds = new Set(fields.map((f) => f.id));
+          const fresh = await getConfiguratorData(product.id);
+          setFields(fresh.fields);
+          // Find the newly added colour field (if any).
+          const newColourField = fresh.fields.find(
+            (f) => !knownIds.has(f.id) && f.fieldType === "colour",
+          );
+          if (newColourField) {
+            const newIds = (newColourField.config as { allowedColorIds?: string[] }).allowedColorIds ?? [];
+            if (newIds.length > 0) {
+              // New field has colours → push-direction: offer to add them to other fields.
+              const queue = await buildFillQueue(newColourField.id, newIds, fresh.fields);
+              if (queue.length > 0) setFillQueue(queue);
+            } else {
+              // New field is empty → pull-direction: offer to copy colours FROM each
+              // existing colour field INTO the new one (one prompt per source).
+              const catalogue = await getActiveColoursForPicker().catch(() => []);
+              const rowById = new Map(catalogue.map((r) => [r.id, r]));
+              const prompts: ColourFillPrompt[] = [];
+              for (const other of fresh.fields) {
+                if (other.id === newColourField.id) continue;
+                if (other.fieldType !== "colour") continue;
+                const srcIds = (other.config as { allowedColorIds?: string[] }).allowedColorIds ?? [];
+                if (srcIds.length === 0) continue;
+                const capturedNewId = newColourField.id;
+                const capturedSrcIds = srcIds;
+                const coloursToAdd = srcIds.map((id) => {
+                  const row = rowById.get(id);
+                  return { id, name: row?.name ?? id, hex: row?.hex ?? "#E0E0E0" };
+                });
+                prompts.push({
+                  targetAxisLabel: newColourField.label,
+                  coloursToAdd,
+                  onConfirm: async () => {
+                    await updateConfigField(capturedNewId, {
+                      config: { allowedColorIds: capturedSrcIds },
+                    });
+                    await refetch();
+                    setFillQueue((q) => q.slice(1));
+                  },
+                  onSkip: () => setFillQueue((q) => q.slice(1)),
+                });
+              }
+              if (prompts.length > 0) setFillQueue(prompts);
+            }
+          }
         }}
       />
 
@@ -551,6 +740,7 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
             if (!v) setEditingField(null);
           }}
           productId={product.id}
+          productSlug={product.slug}
           mode="edit"
           initialField={editingField}
           onSaved={async (savedField) => {
@@ -560,6 +750,15 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
               await handleBaseAutoFill(savedField);
             } else {
               await refetch(); // Pattern B
+              // Cross-axis fill prompt for non-Base colour fields
+              if (savedField && savedField.fieldType === "colour") {
+                const newIds = (savedField.config as { allowedColorIds?: string[] }).allowedColorIds ?? [];
+                // Fetch fresh field list AFTER refetch so buildFillQueue sees current state.
+                // setFields() in refetch() is async; reading `fields` here would be stale.
+                const fresh = await getConfiguratorData(product.id);
+                const queue = await buildFillQueue(savedField.id, newIds, fresh.fields);
+                if (queue.length > 0) setFillQueue(queue);
+              }
             }
             setEditingField(null);
           }}
@@ -594,6 +793,12 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Cross-axis colour fill sequential prompts */}
+      <ColourFillConfirmationDialog
+        queue={fillQueue}
+        onResolveAll={() => setFillQueue([])}
+      />
     </div>
   );
 }

@@ -12,6 +12,8 @@ import {
   shippingConfig,
   shippingServiceCatalog,
   products,
+  productVariants,
+  productConfigFields,
 } from "@/lib/db/schema";
 import { requireAdmin, getSessionUser } from "@/lib/auth-helpers";
 import { delyvaApi, DelyvaError, parseQuoteServices, getDelyvaWebhookSecret } from "@/lib/delyva";
@@ -31,6 +33,10 @@ import type { ShippingConfigRow as ShippingConfigRowType } from "@/lib/shipping-
 import { filterByEnabledCatalog } from "@/lib/delyva-filter";
 import { sendOrderShippedEmail } from "@/actions/send-emails";
 import { formatOrderNumber } from "@/lib/orders";
+import { ensureConfigJson, ensureConfigurationData } from "@/lib/config-fields";
+import type { SelectFieldConfig } from "@/lib/config-fields";
+import { resolveOptionWeightKg } from "@/lib/option-weight";
+import type { FieldWeightEntry } from "@/lib/option-weight";
 
 // ============================================================================
 // Phase 9 (09-01) — admin-side shipping configuration + Delyva-backed order
@@ -436,26 +442,111 @@ async function sumOrderWeight(
       weight: products.shippingWeightKg,
     })
     .from(products);
-  const weights = new Map<string, number>();
+  const productWeights = new Map<string, number>();
   for (const p of prodRows) {
-    if (p.weight) weights.set(p.id, Number(p.weight));
+    if (p.weight) productWeights.set(p.id, Number(p.weight));
+  }
+
+  // Batch-fetch per-variant weights (AD-08)
+  const variantIds = Array.from(new Set(items.map((i) => i.variantId)));
+  const variantRows = variantIds.length
+    ? await db
+        .select({ id: productVariants.id, weightG: productVariants.weightG })
+        .from(productVariants)
+        .where(inArray(productVariants.id, variantIds))
+    : [];
+  const variantWeights = new Map<string, number | null>();
+  for (const v of variantRows) {
+    variantWeights.set(v.id, v.weightG ?? null);
+  }
+
+  // Tier 0: batch-fetch select-type config fields for items with a configurationData
+  // snapshot. Resolves the chosen option's weight from the DB — never trusts a
+  // client-supplied weight (T-17-09). MariaDB no-LATERAL: inArray + in-memory join.
+  const configItemProductIds = Array.from(
+    new Set(
+      items
+        .filter((i) => i.configurationData !== null && i.configurationData !== undefined)
+        .map((i) => i.productId),
+    ),
+  );
+  const fieldsByProduct = new Map<string, FieldWeightEntry[]>();
+  if (configItemProductIds.length > 0) {
+    const cfRows = await db
+      .select({
+        id: productConfigFields.id,
+        productId: productConfigFields.productId,
+        fieldType: productConfigFields.fieldType,
+        configJson: productConfigFields.configJson,
+      })
+      .from(productConfigFields)
+      .where(inArray(productConfigFields.productId, configItemProductIds));
+
+    for (const row of cfRows) {
+      if (row.fieldType !== "select") continue;
+      try {
+        const parsed = ensureConfigJson("select", row.configJson) as SelectFieldConfig;
+        const optionsByValue = new Map<string, number>();
+        for (const opt of parsed.options) {
+          if (typeof opt.weight === "number") {
+            optionsByValue.set(opt.value, opt.weight);
+          }
+        }
+        if (optionsByValue.size === 0) continue;
+        const existing = fieldsByProduct.get(row.productId) ?? [];
+        existing.push({ fieldId: row.id, optionsByValue });
+        fieldsByProduct.set(row.productId, existing);
+      } catch {
+        // Parse error on corrupt configJson — skip, fall through to next tier
+      }
+    }
   }
 
   let total = 0;
   for (const i of items) {
-    const w = weights.get(i.productId) ?? fallbackKg;
+    let w: number;
+
+    // Tier 0: per-option weight from the order_item configuration snapshot.
+    // order_items.configurationData is a JSON STRING column — parse via
+    // ensureConfigurationData() before reading .values.
+    const configData = ensureConfigurationData(i.configurationData);
+    const optKg =
+      configData?.values && Object.keys(configData.values).length > 0
+        ? resolveOptionWeightKg(configData.values, fieldsByProduct.get(i.productId) ?? [])
+        : null;
+
+    if (optKg !== null) {
+      w = optKg;
+    } else {
+      const variantWeightG = variantWeights.get(i.variantId) ?? null;
+      if (variantWeightG !== null) {
+        // Tier 1: per-variant weight_g (grams → kg)
+        w = variantWeightG / 1000;
+      } else {
+        const productWeightKg = productWeights.get(i.productId) ?? null;
+        if (productWeightKg !== null) {
+          // Tier 2: product-level shippingWeightKg
+          w = productWeightKg;
+        } else {
+          // Tier 3: global fallback
+          w = fallbackKg;
+        }
+      }
+    }
     total += w * i.quantity;
   }
   return total;
+  // TODO: bookShipmentForOrder's inventory weight ladder does not yet resolve
+  // option weight. Mirror resolveOptionWeightKg there if per-parcel weight
+  // accuracy at booking time becomes a requirement. Out of scope for 260525-xbb.
 }
 
 /**
- * Book a Delyva courier for an already-paid order. Two-step flow:
- *   1. createDraft (process: false)
- *   2. process() to confirm dispatch
- *   3. getOrder() to pull consignmentNo + trackingNo
+ * Internal (non-exported) heavy-lifter for booking a Delyva shipment.
+ * Does NOT call requireAdmin() — callers are responsible for authorization.
+ * Only call this from bookShipmentForOrder (admin) or autoBookShipmentAfterPayment (trusted server-only).
  */
-export async function bookShipmentForOrder(
+async function _bookShipmentInternal(
   orderId: string,
   serviceCode: string,
   opts?: { quotedPrice?: string | null },
@@ -468,8 +559,6 @@ export async function bookShipmentForOrder(
     }
   | { ok: false; error: string }
 > {
-  await requireAdmin();
-
   if (!serviceCode) return { ok: false, error: "serviceCode required" };
 
   // Idempotency — reject if a shipment already exists for this order.
@@ -508,12 +597,39 @@ export async function bookShipmentForOrder(
     prodRows.map((p) => [p.id, p]),
   );
 
+  // Batch-fetch per-variant weights (AD-08)
+  const variantIds = [...new Set(items.map((i) => i.variantId))];
+  const variantRows = variantIds.length
+    ? await db
+        .select({ id: productVariants.id, weightG: productVariants.weightG })
+        .from(productVariants)
+        .where(inArray(productVariants.id, variantIds))
+    : [];
+  const variantWeights = new Map<string, number | null>();
+  for (const v of variantRows) {
+    variantWeights.set(v.id, v.weightG ?? null);
+  }
+
   const fallbackWeight = Number(cfg.defaultWeightKg);
   const inventory: InventoryItem[] = items.map((i) => {
     const p = prodById.get(i.productId);
-    const weight = p?.shippingWeightKg
-      ? Number(p.shippingWeightKg)
-      : fallbackWeight;
+    const variantWeightG = variantWeights.get(i.variantId) ?? null;
+    let weight: number;
+    if (variantWeightG !== null) {
+      // Tier 1: per-variant weight_g (grams → kg)
+      weight = variantWeightG / 1000;
+    } else {
+      const productWeightKg = p?.shippingWeightKg
+        ? Number(p.shippingWeightKg)
+        : null;
+      if (productWeightKg !== null) {
+        // Tier 2: product-level shippingWeightKg
+        weight = productWeightKg;
+      } else {
+        // Tier 3: global fallback
+        weight = fallbackWeight;
+      }
+    }
     const dim =
       p?.shippingLengthCm && p?.shippingWidthCm && p?.shippingHeightCm
         ? {
@@ -565,7 +681,10 @@ export async function bookShipmentForOrder(
       extId: order.id,
       referenceNo: order.id.slice(0, 8).toUpperCase(),
       origin: { scheduledAt: pickupAt, inventory, contact: originContact },
-      destination: { scheduledAt: deliveryAt, contact: destContact },
+      // Delyva (2026-05) now requires destination.inventory too. Use the
+      // same inventory array on both ends — the parcel doesn't change
+      // between pickup and dropoff.
+      destination: { scheduledAt: deliveryAt, inventory, contact: destContact },
     });
 
     await delyvaApi.process(draft.id, {
@@ -627,6 +746,68 @@ export async function bookShipmentForOrder(
       return { ok: false, error: `${e.code}: ${e.message}` };
     return { ok: false, error: (e as Error).message };
   }
+}
+
+/**
+ * Book a Delyva courier for an already-paid order. Two-step flow:
+ *   1. createDraft (process: false)
+ *   2. process() to confirm dispatch
+ *   3. getOrder() to pull consignmentNo + trackingNo
+ *
+ * Admin-gated public export. Delegates to _bookShipmentInternal.
+ */
+export async function bookShipmentForOrder(
+  orderId: string,
+  serviceCode: string,
+  opts?: { quotedPrice?: string | null },
+): Promise<
+  | {
+      ok: true;
+      shipmentId: string;
+      delyvaOrderId: string;
+      consignmentNo: string | null;
+    }
+  | { ok: false; error: string }
+> {
+  await requireAdmin();
+  return _bookShipmentInternal(orderId, serviceCode, opts);
+}
+
+/**
+ * Server-only auto-booking entry point invoked from PayPal capture paths
+ * (storefront + payment-link). Reads serviceCode from the order row itself
+ * (already-trusted DB value, not client input). NO requireAdmin() — only
+ * trusted server-side code may call this. Returns the same result shape as
+ * bookShipmentForOrder. Safe to call when serviceCode is null — returns
+ * { ok: false, error } so callers can fire-and-forget without blocking.
+ */
+export async function autoBookShipmentAfterPayment(
+  orderId: string,
+): Promise<
+  | {
+      ok: true;
+      shipmentId: string;
+      delyvaOrderId: string;
+      consignmentNo: string | null;
+    }
+  | { ok: false; error: string }
+> {
+  const orderRows = await db
+    .select()
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+  if (orderRows.length === 0) return { ok: false, error: "Order not found" };
+  const order = orderRows[0];
+  if (!order.shippingServiceCode) {
+    return {
+      ok: false,
+      error: "No courier selected on order — skipping auto-book",
+    };
+  }
+  return _bookShipmentInternal(orderId, order.shippingServiceCode, {
+    quotedPrice: order.shippingQuotedPrice ?? null,
+  });
 }
 
 export async function cancelShipment(

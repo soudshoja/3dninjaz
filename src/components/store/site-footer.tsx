@@ -43,7 +43,7 @@ export async function SiteFooter() {
 
   const hasEmail = !!settings.contactEmail;
   const hasPhone = usable(settings.contactPhone);
-  const hasWhatsApp = !!settings.whatsappNumber && settings.whatsappNumber !== "60000000000";
+  const hasWhatsApp = !!settings.whatsappNumber && settings.whatsappNumber.length > 0;
 
   return (
     <footer
@@ -154,67 +154,7 @@ export async function SiteFooter() {
           </div>
         </div>
 
-        {/* Contact row — each tile conditional. If none set, block is omitted. */}
-        {(hasEmail || hasPhone || hasWhatsApp) && (
-          <div
-            className="mb-8 grid gap-3 sm:grid-cols-3 pt-6 border-t border-zinc-200"
-            aria-label="Contact"
-          >
-            {hasEmail && (
-              <a
-                href={`mailto:${settings.contactEmail}`}
-                className="inline-flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-white min-h-[48px]"
-              >
-                <Image
-                  src="/icons/ninja/emoji/contact.png"
-                  alt=""
-                  width={40}
-                  height={40}
-                  className="h-10 w-10 object-contain"
-                />
-                <span className="text-sm font-semibold break-all">
-                  {settings.contactEmail}
-                </span>
-              </a>
-            )}
-            {hasPhone && (
-              <a
-                href={`tel:${settings.contactPhone.replace(/[^\d+]/g, "")}`}
-                className="inline-flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-white min-h-[48px]"
-              >
-                <Image
-                  src="/icons/ninja/emoji/hello@128.png"
-                  alt=""
-                  width={40}
-                  height={40}
-                  className="h-10 w-10 object-contain"
-                />
-                <span className="text-sm font-semibold">
-                  {settings.contactPhone}
-                </span>
-              </a>
-            )}
-            {hasWhatsApp && (
-              <a
-                href={`https://wa.me/${settings.whatsappNumber}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-white min-h-[48px]"
-              >
-                <Image
-                  src="/icons/ninja/social/whatsapp.png"
-                  alt=""
-                  width={40}
-                  height={40}
-                  className="h-10 w-10 object-contain"
-                />
-                <span className="text-sm font-semibold">
-                  {settings.whatsappNumberDisplay || "WhatsApp us"}
-                </span>
-              </a>
-            )}
-          </div>
-        )}
+        {/* Contact details are shown once in the brand bar below (no duplicate row). */}
 
         {/* Brand + socials row */}
         <div className="flex flex-col md:flex-row items-center md:items-center justify-between gap-6 pt-8 border-t border-zinc-200 text-center md:text-left">
@@ -228,12 +168,59 @@ export async function SiteFooter() {
               className="h-8 w-8 object-contain hidden sm:block"
             />
             <div className="flex flex-col">
-              <span className="font-[var(--font-heading)] tracking-wide text-zinc-900">
+              <span className="font-[var(--font-heading)] text-lg tracking-wide text-zinc-900">
                 3D <span style={{ color: BRAND.green }}>NINJAZ</span>
               </span>
-              <span className="text-xs" style={{ color: BRAND.blue }}>
+              <span className="mt-0.5 text-xs text-zinc-500">
                 © {year} {BUSINESS.legalName} · {BUSINESS.city},{" "}
                 {BUSINESS.country}
+              </span>
+              {/* Inline contact — email + phone alongside the brand line */}
+              <span className="mt-1.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-zinc-600 md:justify-start">
+                <a
+                  href={`mailto:${BUSINESS.contactEmail}`}
+                  className="inline-flex items-center gap-1.5 min-h-[44px] px-1 transition-colors hover:text-zinc-900"
+                  aria-label={`Email ${BUSINESS.contactEmail}`}
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect width="20" height="16" x="2" y="4" rx="2" />
+                    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                  </svg>
+                  {BUSINESS.contactEmail}
+                </a>
+                <span className="text-zinc-300" aria-hidden="true">
+                  ·
+                </span>
+                <a
+                  href={`tel:+${BUSINESS.whatsappNumber}`}
+                  className="inline-flex items-center gap-1.5 min-h-[44px] px-1 transition-colors hover:text-zinc-900"
+                  aria-label={`Call ${BUSINESS.whatsappNumberDisplay}`}
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                  </svg>
+                  {BUSINESS.whatsappNumberDisplay}
+                </a>
               </span>
             </div>
           </div>

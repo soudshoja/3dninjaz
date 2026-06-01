@@ -7,7 +7,7 @@ import {
 } from "@react-pdf/renderer";
 import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
-import { formatOrderNumber } from "@/lib/orders";
+import { formatOrderNumber, isManualLine } from "@/lib/orders";
 import { ensureOrderItemConfigData } from "@/lib/config-fields";
 
 /**
@@ -109,6 +109,8 @@ export type InvoiceOrder = {
   totalAmount: string;
   items: Array<{
     id: string;
+    productId: string;    // Phase 20 (20-13) — D-08 isManualLine guard
+    variantId: string;    // Phase 20 (20-13) — D-08 isManualLine guard
     productName: string;
     size: string | null;
     variantLabel?: string | null;
@@ -182,6 +184,19 @@ export function InvoiceDocument({
           <Text style={styles.col4}>Line total</Text>
         </View>
         {order.items.map((i) => {
+          // D-08 (Phase 20): manual lines (productId/variantId === 'manual') render
+          // directly from productName + unitPrice. No variant/config summary needed —
+          // these are free-text POS lines with no product record in the DB.
+          if (isManualLine(i)) {
+            return (
+              <View key={i.id} style={styles.tableRow}>
+                <Text style={styles.col1}>{i.productName}</Text>
+                <Text style={styles.col2}>{"—"}</Text>
+                <Text style={styles.col3}>{String(i.quantity)}</Text>
+                <Text style={styles.col4}>{formatMYR(i.lineTotal)}</Text>
+              </View>
+            );
+          }
           const cfg = ensureOrderItemConfigData(i.configurationData);
           const summary = cfg?.computedSummary ?? i.variantLabel ?? (i.size ? `Size ${i.size}` : "—");
           return (

@@ -3,23 +3,34 @@ import { ReturnRequestButton } from "@/components/orders/return-request-button";
 import { RETURN_WINDOW_MS } from "@/lib/order-windows";
 
 /**
- * Phase 6 06-06 — server-side eligibility gate for the cancel + return
- * forms. Renders nothing when neither action is available; pending request
- * gates both (Assumption 7 — one pending per order).
+ * Phase 6 06-06 — server-side eligibility gate for the cancel + return forms.
+ * 260601-afs — passes orderLines to ReturnRequestButton for per-item picker.
  *
- * Mirrors the eligibility checks in submitOrderRequest so the UI never
- * surfaces a button the server would reject.
+ * Renders nothing when neither action is available; pending request gates both
+ * (Assumption 7 — one pending per order).
+ *
+ * Mirrors the eligibility checks in submitOrderRequest / submitReturnRequest
+ * so the UI never surfaces a button the server would reject.
  */
+
+export type OrderLineForReturn = {
+  id: string;
+  productName: string;
+  quantity: number;
+};
+
 export function OrderActionsPanel({
   orderId,
   status,
   updatedAt,
   hasPendingRequest,
+  orderLines,
 }: {
   orderId: string;
   status: string;
   updatedAt: Date;
   hasPendingRequest: boolean;
+  orderLines: OrderLineForReturn[];
 }) {
   const ageMs = Date.now() - new Date(updatedAt).getTime();
   const canCancel =
@@ -48,7 +59,9 @@ export function OrderActionsPanel({
       ) : null}
       <div className="flex gap-3 flex-wrap">
         {canCancel ? <CancelRequestButton orderId={orderId} /> : null}
-        {canReturn ? <ReturnRequestButton orderId={orderId} /> : null}
+        {canReturn ? (
+          <ReturnRequestButton orderId={orderId} orderLines={orderLines} />
+        ) : null}
       </div>
     </section>
   );

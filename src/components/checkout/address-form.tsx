@@ -8,6 +8,7 @@ import { orderAddressSchema, MALAYSIAN_STATES } from "@/lib/validators";
 import { BRAND } from "@/lib/brand";
 import { AddressPicker } from "@/components/checkout/address-picker";
 import type { SavedAddress } from "@/actions/addresses";
+import { readDraft, saveDraft } from "@/stores/checkout-draft-store";
 
 // Output type (what Zod produces after parsing — country is "Malaysia", not
 // optional) is the contract the rest of the app consumes.
@@ -75,10 +76,13 @@ export function AddressForm({
   defaultName,
   onValidChange,
   savedAddresses,
+  userId,
 }: {
   defaultName: string;
   onValidChange: (v: AddressFormValues | null) => void;
   savedAddresses?: SavedAddress[];
+  /** Logged-in user id — used to key the localStorage draft. Required for draft persistence. */
+  userId?: string;
 }) {
   const hasSaved = !!savedAddresses && savedAddresses.length > 0;
   const [mode, setMode] = useState<"saved" | "new">(hasSaved ? "saved" : "new");
@@ -91,7 +95,10 @@ export function AddressForm({
   const [formAttempted, setFormAttempted] = useState(false);
   const bannerRef = useRef<HTMLDivElement>(null);
 
-  const { register, formState, watch, trigger } = useForm<
+  // Debounce ref for draft autosave
+  const draftSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const { register, formState, watch, trigger, reset } = useForm<
     AddressFormInput,
     unknown,
     AddressFormValues
@@ -109,6 +116,33 @@ export function AddressForm({
       country: "Malaysia",
     },
   });
+
+  // On mount (new-address mode only): restore any saved draft so the user
+  // doesn't have to retype after navigating away. Runs once after hydration.
+  useEffect(() => {
+    if (!userId || hasSaved) return;
+    const draft = readDraft(userId);
+    if (!draft) return;
+    // Only apply if the draft has at least one non-empty field beyond recipientName
+    const hasContent =
+      draft.phone ||
+      draft.addressLine1 ||
+      draft.city ||
+      draft.state ||
+      draft.postcode;
+    if (!hasContent) return;
+    reset({
+      recipientName: draft.recipientName ?? defaultName,
+      phone: draft.phone ?? "",
+      addressLine1: draft.addressLine1 ?? "",
+      addressLine2: draft.addressLine2 ?? "",
+      city: draft.city ?? "",
+      state: (draft.state as AddressFormValues["state"]) ?? undefined,
+      postcode: draft.postcode ?? "",
+      country: "Malaysia",
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   const values = watch();
   const valid = formState.isValid;
@@ -143,6 +177,39 @@ export function AddressForm({
     values.state,
     values.postcode,
     values.country,
+  ]);
+
+  // Debounced autosave — persist what the user has typed so they can return
+  // to the checkout without losing their address. Runs only in "new" mode
+  // (saved-address mode already has persistence via the address book).
+  useEffect(() => {
+    if (!userId || mode === "saved") return;
+    if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
+    draftSaveTimer.current = setTimeout(() => {
+      saveDraft(userId, {
+        recipientName: values.recipientName ?? "",
+        phone: values.phone ?? "",
+        addressLine1: values.addressLine1 ?? "",
+        addressLine2: values.addressLine2 ?? "",
+        city: values.city ?? "",
+        state: values.state ?? "",
+        postcode: values.postcode ?? "",
+      });
+    }, 800);
+    return () => {
+      if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    userId,
+    mode,
+    values.recipientName,
+    values.phone,
+    values.addressLine1,
+    values.addressLine2,
+    values.city,
+    values.state,
+    values.postcode,
   ]);
 
   // When the form is not valid and the user clicks anywhere outside a field

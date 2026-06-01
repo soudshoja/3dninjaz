@@ -5,7 +5,8 @@ import { orders, orderItems, user } from "@/lib/db/schema";
 import { and, eq, desc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-helpers";
-import { assertValidTransition, type OrderStatus } from "@/lib/orders";
+import { assertValidTransition, formatOrderNumber, type OrderStatus } from "@/lib/orders";
+import { sendOrderProcessingEmail } from "@/actions/send-emails";
 import { orderStatusValues } from "@/lib/db/schema";
 import { computeOrderCost, toNum, toNumOrNull } from "@/lib/profit";
 
@@ -27,7 +28,7 @@ import { computeOrderCost, toNum, toNumOrNull } from "@/lib/profit";
 
 export type AdminOrderListRow = {
   id: string;
-  userId: string;
+  userId: string | null; // null for guest orders
   status: OrderStatus;
   paypalOrderId: string | null;
   paypalCaptureId: string | null;
@@ -131,7 +132,7 @@ export async function listAdminOrders(
 
 export type AdminOrderDetail = {
   id: string;
-  userId: string;
+  userId: string | null; // null for guest orders
   status: OrderStatus;
   paypalOrderId: string | null;
   paypalCaptureId: string | null;
@@ -308,7 +309,12 @@ export async function updateOrderStatus(
   }
 
   const [row] = await db
-    .select({ id: orders.id, status: orders.status })
+    .select({
+      id: orders.id,
+      status: orders.status,
+      customerEmail: orders.customerEmail,
+      shippingName: orders.shippingName,
+    })
     .from(orders)
     .where(eq(orders.id, orderId))
     .limit(1);
@@ -322,6 +328,19 @@ export async function updateOrderStatus(
   }
 
   await db.update(orders).set({ status: newStatus }).where(eq(orders.id, orderId));
+
+  // Fire transactional email before revalidatePath so it's enqueued
+  // before the response returns.
+  if (newStatus === "processing") {
+    void sendOrderProcessingEmail({
+      customerEmail: row.customerEmail,
+      customerName: row.shippingName,
+      orderNumber: formatOrderNumber(orderId),
+      orderId,
+    }).catch((err) =>
+      console.error("[admin-orders] processing email dispatch failed:", err)
+    );
+  }
 
   revalidatePath(`/admin/orders`);
   revalidatePath(`/admin/orders/${orderId}`);

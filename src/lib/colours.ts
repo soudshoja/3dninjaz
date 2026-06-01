@@ -45,6 +45,7 @@ export type ColourAdmin = {
   code: string | null;
   familyType: "PLA" | "PETG" | "TPU" | "CF" | "Other";
   familySubtype: string;
+  isMyColour: boolean;
   isActive: boolean;
 };
 
@@ -88,6 +89,7 @@ export async function getColourAdmin(id: string): Promise<ColourAdmin | null> {
     code: row.code ?? null,
     familyType: row.familyType,
     familySubtype: row.familySubtype,
+    isMyColour: row.isMyColour,
     isActive: row.isActive,
   };
 }

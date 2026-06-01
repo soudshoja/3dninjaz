@@ -269,6 +269,25 @@ export function ColourForm({ mode, initial }: Props) {
         </p>
       </div>
 
+      {/* My Colour toggle */}
+      <div>
+        <label className="inline-flex items-center gap-2">
+          <input
+            name="isMyColour"
+            type="checkbox"
+            value="true"
+            defaultChecked={initial?.isMyColour ?? false}
+            className="h-5 w-5 rounded"
+          />
+          <span className="text-sm font-semibold">
+            My Colour (auto-populate in products)
+          </span>
+        </label>
+        <p className="mt-1 text-xs text-slate-500">
+          Check this box if this is one of your frequently used colours. It will be suggested when editing color fields in product forms.
+        </p>
+      </div>
+
       {/* Active toggle */}
       <div>
         <label className="inline-flex items-center gap-2">

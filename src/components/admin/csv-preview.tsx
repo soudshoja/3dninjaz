@@ -203,7 +203,7 @@ export function CsvPreview({ fileName }: { fileName: string }) {
                         ))}
                       </ul>
                     </td>
-                    <td className="p-3 text-xs font-mono whitespace-pre-wrap break-all align-top max-w-[400px]">
+                    <td className="p-3 text-xs font-mono whitespace-pre-wrap break-words align-top max-w-[400px]">
                       {Object.entries(r.raw)
                         .map(([k, v]) => `${k}: ${v}`)
                         .join("\n")}

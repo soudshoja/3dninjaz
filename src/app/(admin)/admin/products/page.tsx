@@ -14,6 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ProductRowActions } from "./product-row-actions";
+import { LatestDraftBanner } from "@/components/admin/latest-draft-banner";
 
 export const metadata: Metadata = {
   title: "Admin · Products",
@@ -21,16 +22,41 @@ export const metadata: Metadata = {
 };
 
 function formatPriceRange(
-  variants: Array<{ price: string }>
+  variants: Array<{ price: string }>,
+  productType?: string | null,
+  priceTiersRaw?: unknown,
 ): string {
-  if (variants.length === 0) return "—";
-  const prices = variants
-    .map((v) => Number.parseFloat(v.price))
-    .filter((n) => !Number.isNaN(n))
-    .sort((a, b) => a - b);
-  if (prices.length === 0) return "—";
-  const min = prices[0];
-  const max = prices[prices.length - 1];
+  // Stocked: variant-based pricing
+  if (!productType || productType === "stocked") {
+    if (variants.length === 0) return "—";
+    const prices = variants
+      .map((v) => Number.parseFloat(v.price))
+      .filter((n) => !Number.isNaN(n))
+      .sort((a, b) => a - b);
+    if (prices.length === 0) return "—";
+    const min = prices[0];
+    const max = prices[prices.length - 1];
+    if (min === max) return `MYR ${min.toFixed(2)}`;
+    return `MYR ${min.toFixed(2)} – ${max.toFixed(2)}`;
+  }
+  // Configurable / keychain / vending / simple: tier-based pricing
+  let tiers: Record<string, number> = {};
+  if (priceTiersRaw && typeof priceTiersRaw === "object") {
+    tiers = priceTiersRaw as Record<string, number>;
+  } else if (typeof priceTiersRaw === "string") {
+    try {
+      const parsed = JSON.parse(priceTiersRaw);
+      if (parsed && typeof parsed === "object") tiers = parsed;
+    } catch {
+      /* fall through */
+    }
+  }
+  const tierValues = Object.values(tiers).filter(
+    (v): v is number => typeof v === "number" && Number.isFinite(v),
+  );
+  if (tierValues.length === 0) return "—";
+  const min = Math.min(...tierValues);
+  const max = Math.max(...tierValues);
   if (min === max) return `MYR ${min.toFixed(2)}`;
   return `MYR ${min.toFixed(2)} – ${max.toFixed(2)}`;
 }
@@ -40,6 +66,7 @@ export default async function AdminProductsPage() {
 
   return (
     <div className="space-y-6">
+      <LatestDraftBanner />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="font-heading text-3xl text-[var(--color-brand-text-primary)]">
@@ -79,7 +106,8 @@ export default async function AdminProductsPage() {
                 <TableHead className="w-16">Image</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Category</TableHead>
-                <TableHead>Price Range</TableHead>
+                <TableHead>Price</TableHead>
+                <TableHead className="w-24">Type</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="w-16 text-center">Featured</TableHead>
                 <TableHead className="w-16 text-right">Actions</TableHead>
@@ -115,7 +143,17 @@ export default async function AdminProductsPage() {
                         </span>
                       )}
                     </TableCell>
-                    <TableCell>{formatPriceRange(product.variants)}</TableCell>
+                    <TableCell className="font-medium">
+                      {formatPriceRange(product.variants, product.productType, product.priceTiers)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] uppercase tracking-wide"
+                      >
+                        {product.productType ?? "stocked"}
+                      </Badge>
+                    </TableCell>
                     <TableCell>
                       {product.isActive ? (
                         <Badge className="bg-green-100 text-green-800 hover:bg-green-100">

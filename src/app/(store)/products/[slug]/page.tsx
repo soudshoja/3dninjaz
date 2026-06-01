@@ -13,6 +13,8 @@ import { pickImage } from "@/lib/image-manifest";
 import { hydrateProductVariants } from "@/lib/variants";
 // Phase 19 (19-06) — configurable product hydration
 import { getConfigurableProductData } from "@/lib/configurable-product-data";
+// Quick task 260430-kmr — server-side description renderer (auto-detects HTML vs plain text)
+import { renderDescription } from "@/lib/render-description";
 
 type Params = Promise<{ slug: string }>;
 
@@ -47,8 +49,13 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
   ]);
 
   // Phase 19 (19-06) — fetch configurable-product data when productType is configurable-like
+  // Quick task 260430-icx — `simple` shares the configurable-data shape (config fields list)
+  // so the storefront <SimpleProductView> reads from the same payload.
   const configurableData =
-    (product.productType === "configurable" || product.productType === "keychain" || product.productType === "vending")
+    (product.productType === "configurable" ||
+      product.productType === "keychain" ||
+      product.productType === "vending" ||
+      product.productType === "simple")
       ? await getConfigurableProductData(product.id)
       : undefined;
 
@@ -71,6 +78,11 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
           name: product.name,
           slug: product.slug,
           description: product.description,
+          // Quick task 260430-kmr — pre-rendered HTML (sanitised). Legacy plain
+          // text is paragraph-wrapped + escaped; HTML descriptions are sanitised.
+          // Empty string when description is absent — PDP root falls back to
+          // legacy inline render to avoid blowing up the page.
+          descriptionHtml: renderDescription(product.description),
           images: product.images,
           // Phase 19 (19-10) — captions parallel to images[] for configurable PDP figcaption
           imageCaptions: product.imagesV2.map((e) => e.caption ?? null),
@@ -84,6 +96,8 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
           hydratedVariants,
           // Phase 19 (19-06) — product type discriminator
           productType: product.productType,
+          // Bug 3 — pass hide-base-price flag to view components
+          hideBasePrice: product.hideBasePrice ?? false,
         }}
         isWishlistedInitial={wished}
         ratingAvg={reviewsSummary.avgRating}

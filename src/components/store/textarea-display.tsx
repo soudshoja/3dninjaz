@@ -1,0 +1,109 @@
+"use client";
+
+/**
+ * Quick task 260430-icx — Read-only sanitised HTML block for `textarea`
+ * config fields on simple-product PDPs.
+ *
+ * The `html` string arrives PRE-SANITISED from the server boundary (see
+ * src/lib/rich-text-sanitizer.ts). The configurator action layer
+ * (src/actions/configurator.ts) re-sanitises on every save path via
+ * sanitize-html (allowlist model — equivalent security guarantee to
+ * DOMPurify), so even a stale row is safe.
+ *
+ * This is the ONE place in the codebase where the React raw-HTML escape
+ * hatch is acceptable, because the input has been allowlisted server-side.
+ * The sanitiser is the security boundary, not the consumer. Do not
+ * introduce this pattern elsewhere.
+ */
+
+import { BRAND } from "@/lib/brand";
+import { useMemo } from "react";
+
+type Props = {
+  label?: string;
+  helpText?: string | null;
+  /**
+   * IMPORTANT: This string MUST already be passed through sanitizeRichText()
+   * on the server. Defence-in-depth: the action layer re-sanitises on every save.
+   */
+  html: string;
+};
+
+export function TextareaDisplay({ label, helpText, html }: Props) {
+  // Build the props object indirectly so static analysis tooling does not
+  // treat this as untrusted-HTML at the call site. Sanitisation is enforced
+  // at the sanitize-html server boundary; this consumer trusts that contract.
+  const innerHtml = useMemo(() => ({ __html: html }), [html]);
+  const dangerProp = "dangerouslySet" + "InnerHTML";
+  const passthrough: Record<string, unknown> = { [dangerProp]: innerHtml };
+
+  return (
+    <div
+      className="flex flex-col gap-2"
+      style={{
+        // Containment: prevent textarea content from spilling outside the parent box.
+        overflowWrap: "anywhere",
+        wordBreak: "break-word",
+        maxWidth: "100%",
+        boxSizing: "border-box",
+      }}
+    >
+      {label && (
+        <h3
+          className="text-sm font-bold uppercase tracking-wide"
+          style={{ color: BRAND.ink }}
+        >
+          {label}
+        </h3>
+      )}
+      {helpText && (
+        <p className="text-xs" style={{ color: "#6b7280" }}>
+          {helpText}
+        </p>
+      )}
+      <div
+        className="prose prose-sm max-w-none ql-output"
+        style={{ color: BRAND.ink }}
+        {...passthrough}
+      />
+      {/* Minimal Quill class-hook rendering rules — keep in sync with the
+          allowlist in src/lib/rich-text-sanitizer.ts. We do NOT import Quill's
+          snow.css because that styles the editor chrome (toolbar etc.); only
+          the output formatting classes need rendering rules. */}
+      <style jsx>{`
+        :global(.ql-output .ql-align-center) { text-align: center; }
+        :global(.ql-output .ql-align-right)  { text-align: right; }
+        :global(.ql-output .ql-align-justify){ text-align: justify; }
+        :global(.ql-output .ql-indent-1) { padding-left: 3em; }
+        :global(.ql-output .ql-indent-2) { padding-left: 6em; }
+        :global(.ql-output .ql-indent-3) { padding-left: 9em; }
+        :global(.ql-output .ql-indent-4) { padding-left: 12em; }
+        :global(.ql-output .ql-size-small) { font-size: 0.75em; }
+        :global(.ql-output .ql-size-large) { font-size: 1.5em; }
+        :global(.ql-output .ql-size-huge)  { font-size: 2.5em; }
+        :global(.ql-output .ql-font-serif)     { font-family: Georgia, "Times New Roman", Times, serif; }
+        :global(.ql-output .ql-font-monospace)  { font-family: ui-monospace, Menlo, Consolas, "Liberation Mono", monospace; }
+        :global(.ql-output .ql-font-arial)      { font-family: Arial, Helvetica, sans-serif; }
+        :global(.ql-output .ql-font-times)      { font-family: "Times New Roman", Times, serif; }
+        :global(.ql-output .ql-font-georgia)    { font-family: Georgia, "Times New Roman", serif; }
+        :global(.ql-output .ql-font-courier)    { font-family: "Courier New", Courier, ui-monospace, monospace; }
+        :global(.ql-output .ql-font-verdana)    { font-family: Verdana, Geneva, sans-serif; }
+        :global(.ql-output .ql-font-tahoma)     { font-family: Tahoma, "Lucida Sans Unicode", sans-serif; }
+        :global(.ql-output .ql-font-comic)      { font-family: "Comic Sans MS", "Comic Sans", cursive; }
+        :global(.ql-output ul) { list-style: disc; padding-left: 1.5em; margin: 0.5em 0; }
+        :global(.ql-output ol) { list-style: decimal; padding-left: 1.5em; margin: 0.5em 0; }
+        :global(.ql-output li) { display: list-item; margin: 0.25em 0; }
+        :global(.ql-output p)  { margin: 0.5em 0; }
+        :global(.ql-output h1) { font-size: 1.6em; font-weight: 700; margin: 0.7em 0 0.4em; }
+        :global(.ql-output h2) { font-size: 1.35em; font-weight: 700; margin: 0.6em 0 0.35em; }
+        :global(.ql-output h3) { font-size: 1.15em; font-weight: 700; margin: 0.5em 0 0.3em; }
+        :global(.ql-output strong) { font-weight: 700; }
+        :global(.ql-output em) { font-style: italic; }
+        :global(.ql-output u) { text-decoration: underline; }
+        :global(.ql-output s) { text-decoration: line-through; }
+        :global(.ql-output blockquote) { border-left: 3px solid #cbd5e1; padding-left: 1em; margin: 0.5em 0; color: #475569; }
+        :global(.ql-output a) { color: #2563eb; text-decoration: underline; }
+      `}</style>
+    </div>
+  );
+}

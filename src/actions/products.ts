@@ -10,7 +10,8 @@ import {
   subcategories,
 } from "@/lib/db/schema";
 import { eq, desc, inArray, count } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { CATEGORY_TREE_TAG } from "@/lib/catalog";
 import { productSchema, type ProductInput } from "@/lib/validators";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { computeVariantCost } from "@/lib/cost-breakdown";
@@ -18,6 +19,16 @@ import { getStoreSettingsCached } from "@/lib/store-settings";
 import { ensureImagesV2 } from "@/lib/config-fields";
 import { seedKeychainFields } from "@/lib/keychain-fields";
 import { seedVendingFields } from "@/lib/vending-fields";
+// Quick task 260430-kmr — sanitise description HTML on every save (defence-in-depth).
+import { sanitizeRichText } from "@/lib/rich-text-sanitizer";
+import {
+  addConfigField,
+  updateConfigField,
+  deleteConfigField,
+  reorderConfigFields,
+} from "@/actions/configurator";
+import { migrateNewImages } from "@/lib/storage";
+import type { FieldType, AnyFieldConfig } from "@/lib/config-fields";
 
 export type ProductActionResult =
   | { success: true; productId?: string }
@@ -87,8 +98,117 @@ function ensureImagesArray(raw: unknown): string[] {
   return ensureImagesV2(raw).map((e) => e.url);
 }
 
+/**
+ * Quick task 260430-kmr — Single-call fan-out that reconciles the inline
+ * fields[] payload from the unified edit form against the DB. Only invoked
+ * for productType in (simple, configurable). Wraps each helper in a try/catch
+ * so partial failures surface as a single error string but do NOT roll back
+ * the product row update — the diff is idempotent on retry.
+ *
+ * Threat T-260430-kmr-06 (repudiation, accept): no transaction across the
+ * existing helpers. Each helper checks requireAdmin() — caller is also gated
+ * (defence-in-depth).
+ */
+type IncomingField = {
+  id?: string;
+  fieldType: FieldType;
+  label: string;
+  helpText?: string | null;
+  required: boolean;
+  config: unknown;
+};
+
+async function reconcileInlineFields(
+  productId: string,
+  incoming: IncomingField[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  // Fetch existing field IDs once.
+  const existingRows = await db
+    .select({ id: productConfigFields.id })
+    .from(productConfigFields)
+    .where(eq(productConfigFields.productId, productId));
+  const existingIds = new Set(existingRows.map((r) => r.id));
+
+  // Compute diff sets.
+  const incomingIds = new Set(
+    incoming.filter((f) => f.id && existingIds.has(f.id)).map((f) => f.id as string),
+  );
+  const toDelete = [...existingIds].filter((id) => !incomingIds.has(id));
+  const toUpdate = incoming.filter((f) => f.id && existingIds.has(f.id));
+  const toAddIndices = new Set(
+    incoming
+      .map((f, i) => (f.id && existingIds.has(f.id) ? -1 : i))
+      .filter((i) => i >= 0),
+  );
+
+  // Final ordered id list (with newly-created uuids substituted).
+  const finalIdByIndex: (string | null)[] = incoming.map(() => null);
+
+  try {
+    // 1. Deletions
+    for (const id of toDelete) {
+      const result = await deleteConfigField(id);
+      if (!result.ok) return { ok: false, error: `Delete failed: ${result.error}` };
+    }
+
+    // 2. Updates (re-validate config inside helper)
+    for (const f of toUpdate) {
+      const result = await updateConfigField(f.id as string, {
+        label: f.label,
+        helpText: f.helpText ?? null,
+        required: f.required,
+        config: f.config as AnyFieldConfig,
+      });
+      if (!result.ok) return { ok: false, error: `Update failed: ${result.error}` };
+    }
+
+    // 3. Adds — capture new ids for the reorder pass.
+    for (let i = 0; i < incoming.length; i++) {
+      const f = incoming[i];
+      if (toAddIndices.has(i)) {
+        const result = await addConfigField(productId, {
+          fieldType: f.fieldType,
+          label: f.label,
+          helpText: f.helpText ?? undefined,
+          required: f.required,
+          config: f.config as AnyFieldConfig,
+        });
+        if (!result.ok) return { ok: false, error: `Add failed: ${result.error}` };
+        finalIdByIndex[i] = result.field.id;
+      } else if (f.id) {
+        finalIdByIndex[i] = f.id;
+      }
+    }
+
+    // 4. Final reorder pass — only when there are fields to order.
+    const orderedIds = finalIdByIndex.filter((id): id is string => !!id);
+    if (orderedIds.length > 0) {
+      const result = await reorderConfigFields(productId, orderedIds);
+      if (!result.ok) return { ok: false, error: `Reorder failed: ${result.error}` };
+    }
+
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: `Failed to save fields: ${msg}` };
+  }
+}
+
 export async function createProduct(
-  data: ProductInput
+  data: ProductInput,
+  /**
+   * Optional pre-generated product UUID from the client form.
+   *
+   * When provided (the standard admin-form path), images were uploaded
+   * directly to /uploads/products/<preGeneratedId>/<imageUuid>/ and no
+   * /new/ migration is needed. When omitted (seed scripts, bulk importers,
+   * tests) a fresh UUID is generated server-side.
+   *
+   * Security: the value is sanitised to alphanum+dash before use; the upload
+   * route handler already wrote the files using this same ID so the DB URL
+   * and filesystem path are guaranteed to match.
+   */
+  preGeneratedId?: string,
 ): Promise<ProductActionResult> {
   await requireAdmin();
 
@@ -99,12 +219,58 @@ export async function createProduct(
 
   const { variants, ...productData } = parsed.data;
 
-  // Generate a UUID in app code so we can return it immediately and control
-  // filesystem paths (uploads/products/<id>/...). MySQL's UUID() default
-  // would work, but we'd need a follow-up SELECT to read it back.
-  const id = randomUUID();
+  // Quick task 260430-kmr — sanitise description HTML at the server boundary.
+  // Idempotent: re-running on already-sanitised text is a no-op. Defence-in-depth
+  // even if a malformed payload bypassed the Quill editor in product-form.tsx.
+  productData.description = sanitizeRichText(productData.description);
+
+  // Use the client-supplied pre-generated UUID when available (admin-form path).
+  // Fall back to a fresh server-generated UUID for programmatic callers.
+  // Sanitise to alphanum+dash to prevent path traversal regardless of origin.
+  const rawId = preGeneratedId?.trim() ?? "";
+  const id = rawId.length > 0
+    ? rawId.replace(/[^a-zA-Z0-9-]/g, "")
+    : randomUUID();
+
   const baseSlug = slugify(productData.name);
   const slug = `${baseSlug || "product"}-${Date.now().toString(36)}`;
+
+  // When a pre-generated ID was supplied the images were already uploaded
+  // directly to /uploads/products/<id>/<imageUuid>/ — no migration needed.
+  // Only run migrateNewImages as a defensive pass for the legacy /new/ case
+  // (programmatic callers that haven't adopted pre-generation yet).
+  const hasNewUrls = [
+    ...(productData.images ?? []),
+    ...(productData.imagesV2?.map((e) => e.url) ?? []),
+  ].some((u) => u.includes("/uploads/products/new/"));
+
+  if (hasNewUrls) {
+    if (productData.images && productData.images.length > 0) {
+      productData.images = await migrateNewImages(id, productData.images);
+    }
+    if (productData.imagesV2 && productData.imagesV2.length > 0) {
+      const migratedUrls = await migrateNewImages(
+        id,
+        productData.imagesV2.map((e) => e.url),
+      );
+      productData.imagesV2 = productData.imagesV2.map((e, i) => ({
+        ...e,
+        url: migratedUrls[i] ?? e.url,
+      }));
+    }
+  }
+
+  // Defensive check: warn if any URL still references /new/ after migration.
+  const allUrls = (productData.imagesV2 ?? productData.images).map((e) =>
+    typeof e === "string" ? e : (e as { url: string }).url,
+  );
+  const unmigrated = allUrls.filter((u) => u.includes("/uploads/products/new/"));
+  if (unmigrated.length > 0) {
+    console.warn(
+      `[createProduct] ${unmigrated.length} image(s) still reference /new/ after migration for product ${id}:`,
+      unmigrated,
+    );
+  }
 
   // Phase 19 (19-10) — if imagesV2 is provided (new shape with captions),
   // persist it directly. Otherwise fall back to the legacy string[].
@@ -145,6 +311,8 @@ export async function createProduct(
     subcategoryId: productData.subcategoryId || null,
     // Phase 19 (19-03) — persist product type chosen at creation
     productType: productData.productType ?? "stocked",
+    // Bug 3 — hide flat-rate price pill on storefront PDP.
+    hideBasePrice: productData.hideBasePrice ?? false,
   });
 
   if (variants.length > 0) {
@@ -254,8 +422,48 @@ export async function createProduct(
     }
   }
 
+  // Quick task 260430-icx — `simple` shares vending's flat-price model
+  // (priceTiers={"1":<amount>}, maxUnitCount=1, unitField=null) but does NOT
+  // auto-seed any config fields. Admin curates fields freely from the
+  // /admin/products/<id>/fields editor. simplePrice required for create.
+  if (productData.productType === "simple") {
+    const priceStr = (productData.simplePrice ?? "").trim();
+    if (!priceStr) {
+      try {
+        await db.delete(products).where(eq(products.id, id));
+      } catch {
+        /* best-effort rollback */
+      }
+      return { error: { simplePrice: ["Price is required for simple products"] } };
+    }
+    const priceNum = Number(priceStr);
+    await db
+      .update(products)
+      .set({
+        unitField: null,
+        maxUnitCount: 1,
+        priceTiers: JSON.stringify({ 1: priceNum }),
+      })
+      .where(eq(products.id, id));
+  }
+
+  // Quick task 260430-kmr — fan out inline fields[] for simple + configurable.
+  // Out-of-scope for keychain/vending/stocked; their seeders/configurator own it.
+  if (
+    productData.fields &&
+    (productData.productType === "simple" || productData.productType === "configurable")
+  ) {
+    const result = await reconcileInlineFields(id, productData.fields as IncomingField[]);
+    if (!result.ok) {
+      // Product row already inserted; client will see an error and can retry.
+      return { error: { _form: [result.error] } };
+    }
+  }
+
   revalidatePath("/admin/products");
   revalidatePath("/admin");
+  revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true, productId: id };
 }
 
@@ -271,6 +479,10 @@ export async function updateProduct(
   }
 
   const { variants, ...productData } = parsed.data;
+
+  // Quick task 260430-kmr — sanitise description HTML at the server boundary
+  // on the update path too (mirrors createProduct).
+  productData.description = sanitizeRichText(productData.description);
 
   const safeThumb = clampThumbnailIndex(
     productData.thumbnailIndex,
@@ -303,13 +515,17 @@ export async function updateProduct(
       subcategoryId: productData.subcategoryId || null,
       // Phase 19 (19-03) — persist product type (additive, no variant logic change)
       productType: productData.productType ?? "stocked",
+      // Bug 3 — hide flat-rate price pill on storefront PDP.
+      hideBasePrice: productData.hideBasePrice ?? false,
     })
     .where(eq(products.id, id));
 
-  // Replace variants: delete old, insert new. Simpler and correct than diffing.
-  await db.delete(productVariants).where(eq(productVariants.productId, id));
-
+  // Only replace variants if variants are actually provided in the payload.
+  // The edit form passes variants: [] which should NOT delete existing variants.
   if (variants.length > 0) {
+    // Delete old variants before inserting new ones.
+    await db.delete(productVariants).where(eq(productVariants.productId, id));
+
     // Phase 14 — fetch store rates once for cost computation.
     const storeSettings = await getStoreSettingsCached();
     const storeRates = {
@@ -415,9 +631,43 @@ export async function updateProduct(
     }
   }
 
+  // Quick task 260430-icx — `simple` re-writes the tier-pricing trio on every
+  // update so admin price edits propagate. NO auto-seed (unlike vending).
+  // simplePrice empty -> leave existing tier untouched (form may omit field
+  // when user hasn't changed it).
+  if (productData.productType === "simple") {
+    const priceStr = (productData.simplePrice ?? "").trim();
+    if (priceStr) {
+      const priceNum = Number(priceStr);
+      await db
+        .update(products)
+        .set({
+          unitField: null,
+          maxUnitCount: 1,
+          priceTiers: JSON.stringify({ 1: priceNum }),
+        })
+        .where(eq(products.id, id));
+    }
+  }
+
+  // Quick task 260430-kmr — fan out inline fields[] for simple + configurable.
+  // Skips the path entirely for keychain/vending/stocked so their dedicated
+  // surfaces (configurator, variants editor) stay authoritative.
+  if (
+    productData.fields &&
+    (productData.productType === "simple" || productData.productType === "configurable")
+  ) {
+    const result = await reconcileInlineFields(id, productData.fields as IncomingField[]);
+    if (!result.ok) {
+      return { error: { _form: [result.error] } };
+    }
+  }
+
   revalidatePath("/admin/products");
   revalidatePath(`/admin/products/${id}/edit`);
   revalidatePath("/admin");
+  revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true };
 }
 
@@ -427,6 +677,8 @@ export async function deleteProduct(id: string): Promise<ProductActionResult> {
   await db.delete(products).where(eq(products.id, id));
   revalidatePath("/admin/products");
   revalidatePath("/admin");
+  revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true };
 }
 
@@ -438,6 +690,8 @@ export async function toggleProductActive(
   await db.update(products).set({ isActive }).where(eq(products.id, id));
   revalidatePath("/admin/products");
   revalidatePath("/admin");
+  revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true };
 }
 
@@ -449,6 +703,8 @@ export async function toggleProductFeatured(
   await db.update(products).set({ isFeatured }).where(eq(products.id, id));
   revalidatePath("/admin/products");
   revalidatePath("/admin");
+  revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
   return { success: true };
 }
 

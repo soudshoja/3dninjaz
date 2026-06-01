@@ -43,9 +43,10 @@ export function AccountSidebar() {
   const pathname = usePathname() ?? "/account";
 
   return (
-    <nav aria-label="Account">
-      {/* Mobile chip strip */}
-      <ul className="flex md:hidden gap-2 overflow-x-auto pb-2 -mx-4 px-4">
+    <nav aria-label="Account" className="overflow-x-clip md:overflow-x-visible">
+      {/* Mobile chip strip — overflow-x-clip on the nav container prevents the
+          strip from widening the document body (horizontal scroll bug). */}
+      <ul className="flex md:hidden gap-2 overflow-x-auto pb-2 px-4">
         {ITEMS.map((it) => {
           const active = isActive(pathname, it.href);
           const Icon = it.icon;

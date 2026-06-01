@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/drawer";
 import { CheckoutSummary } from "./checkout-summary";
 import { PayPalButton } from "./paypal-button";
+import { WhatsAppBankTransferButton } from "./whatsapp-bank-transfer-button";
 import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
 import type { HydratedCartItem } from "@/actions/cart";
@@ -25,7 +26,7 @@ import type { SelectedShipping } from "./shipping-rate-picker";
  * - Visible only below the `md` breakpoint (≤ 768px).
  * - Dock shows the current total and a "Review & Pay" button that opens
  *   a Drawer (vaul bottom-sheet shape on mobile) with the order summary
- *   plus the PayPal button.
+ *   plus the PayPal button and WhatsApp bank-transfer CTA.
  * - Tap targets: total+button row meets 60px minimum for primary CTAs
  *   (D3-20).
  */
@@ -37,6 +38,11 @@ export function MobileSummarySheet({
   onCouponChange,
   shipping,
   onPaid,
+  customerName,
+  customerEmail,
+  isGuest,
+  guestEmail,
+  guestEmailValid,
 }: {
   items: HydratedCartItem[];
   subtotalMyr: number;
@@ -45,6 +51,14 @@ export function MobileSummarySheet({
   onCouponChange: (next: AppliedCoupon | null) => void;
   shipping: SelectedShipping | null;
   onPaid: (redirectTo: string) => void;
+  customerName: string;
+  customerEmail: string;
+  /** True when no session — hides coupon widget. */
+  isGuest?: boolean;
+  /** Guest checkout email — undefined when the user is authenticated. */
+  guestEmail?: string;
+  /** Whether the guest email input passes the format check. */
+  guestEmailValid?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const discountedSubtotal = appliedCoupon
@@ -93,19 +107,35 @@ export function MobileSummarySheet({
               appliedCoupon={appliedCoupon}
               onCouponChange={onCouponChange}
               shipping={shipping}
+              isGuest={isGuest}
             />
           </div>
 
           <DrawerFooter>
+            {/* Pay eyebrow — mirrors desktop right-column hierarchy */}
+            <p className="text-[11px] uppercase tracking-wider text-zinc-500 font-medium px-1 mb-1">
+              Pay
+            </p>
             <PayPalButton
               address={address}
               items={items}
-              appliedCouponCode={appliedCoupon?.code ?? null}
+              appliedCouponCode={isGuest ? null : (appliedCoupon?.code ?? null)}
               shipping={shipping}
               onPaid={(redirect) => {
                 setOpen(false);
                 onPaid(redirect);
               }}
+              guestEmail={guestEmail}
+              guestEmailValid={guestEmailValid}
+            />
+            <WhatsAppBankTransferButton
+              items={items}
+              subtotal={subtotalMyr}
+              shipping={shipping}
+              address={address}
+              customerName={customerName}
+              customerEmail={customerEmail}
+              disabled={items.length === 0}
             />
           </DrawerFooter>
         </DrawerContent>

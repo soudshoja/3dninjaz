@@ -1,4 +1,5 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import {
   products,
@@ -9,7 +10,7 @@ import {
   subcategories,
   colors,
 } from "@/lib/db/schema";
-import { and, asc, eq, desc, inArray, isNotNull, or } from "drizzle-orm";
+import { and, asc, eq, desc, inArray, isNotNull, or, sql } from "drizzle-orm";
 import {
   composeVariantLabel,
   type HydratedProductVariants,
@@ -17,6 +18,7 @@ import {
   type HydratedVariant,
 } from "@/lib/variants";
 import { buildColourSlugMap } from "@/lib/colours";
+import { sortByShade } from "@/lib/colour-sort";
 import { ensureTiers, ensureImagesV2, type ImageEntryV2 } from "@/lib/config-fields";
 
 // ============================================================================
@@ -45,14 +47,17 @@ type SubcategoryRow = typeof subcategories.$inferSelect;
 export type CatalogVariant = VariantRow;
 
 /** Discriminator union for all product types. */
-export type ProductType = "stocked" | "configurable" | "keychain" | "vending";
+export type ProductType = "stocked" | "configurable" | "keychain" | "vending" | "simple";
 
 /**
  * Returns true for product types that use configurationData instead of
  * variantId — used for cart/order partitioning and PDP routing.
+ *
+ * Quick task 260430-icx: `simple` shares the configurable-like cart-line
+ * keying convention (`${productId}::${hash}`) with vending/keychain.
  */
 export function isConfigurableLike(t: ProductType): boolean {
-  return t === "configurable" || t === "keychain" || t === "vending";
+  return t === "configurable" || t === "keychain" || t === "vending" || t === "simple";
 }
 
 export type CatalogProduct = Omit<ProductRow, "images" | "productType" | "priceTiers"> & {
@@ -75,12 +80,23 @@ export type CatalogProduct = Omit<ProductRow, "images" | "productType" | "priceT
  * Category tree node consumed by the storefront nav + shop sidebar. Keeps
  * only the fields the UI actually renders, so we don't leak admin-only
  * columns (position is kept so the storefront matches admin ordering).
+ * productCount is computed via sql<number> count subquery.
+ * thumbnailUrl is the first active product's thumbnail image, or null.
+ * products is up to 8 active products for the nav dropdown thumbnail grid.
  */
 export type CategoryTreeNode = {
   id: string;
   name: string;
   slug: string;
   position: number;
+  productCount: number;
+  thumbnailUrl: string | null;
+  products: {
+    id: string;
+    slug: string;
+    name: string;
+    thumbnailUrl: string | null;
+  }[];
   subcategories: {
     id: string;
     name: string;
@@ -276,6 +292,26 @@ export async function getActiveProducts(): Promise<CatalogProduct[]> {
   return hydrateProducts(rows);
 }
 
+export async function searchActiveProducts(
+  q: string,
+): Promise<CatalogProduct[]> {
+  const pattern = `%${q}%`;
+  const rows = await db
+    .select()
+    .from(products)
+    .where(
+      and(
+        eq(products.isActive, true),
+        or(
+          sql`${products.name} LIKE ${pattern}`,
+          sql`${products.description} LIKE ${pattern}`,
+        ),
+      ),
+    )
+    .orderBy(desc(products.createdAt));
+  return hydrateProducts(rows);
+}
+
 export async function getActiveFeaturedProducts(
   limit = 4
 ): Promise<CatalogProduct[]> {
@@ -308,13 +344,23 @@ export async function getActiveCategories(): Promise<CategoryRow[]> {
     .orderBy(asc(categories.position), asc(categories.name));
 }
 
+// Cache tag for the nav category tree. Admin product/category mutations call
+// `revalidateTag(CATEGORY_TREE_TAG)` so every store route picks up the new
+// tree on next render — `revalidatePath('/', 'layout')` only busts `/` itself,
+// leaving /shop, /products/*, /about, etc. rendering a stale (store) layout.
+export const CATEGORY_TREE_TAG = "nav-category-tree";
+
 /**
  * Phase 8 (08-01) — hierarchical tree for the nav mega-menu and the shop
  * filter sidebar. Empty categories (zero subcategories) are kept so admins
  * can pre-create placeholder categories; the consuming UI chooses whether
  * to hide them.
+ *
+ * Pattern C (WIP) — extends to expose productCount via sql<number> count
+ * subquery and thumbnailUrl (first active product's image).
+ * MariaDB 10.11: manual hydration — no LATERAL joins.
  */
-export async function getActiveCategoryTree(): Promise<CategoryTreeNode[]> {
+async function getActiveCategoryTreeUncached(): Promise<CategoryTreeNode[]> {
   const cats = await db
     .select()
     .from(categories)
@@ -332,21 +378,108 @@ export async function getActiveCategoryTree(): Promise<CategoryTreeNode[]> {
     )
     .orderBy(asc(subcategories.position), asc(subcategories.name));
 
-  return cats.map((c) => ({
-    id: c.id,
-    name: c.name,
-    slug: c.slug,
-    position: c.position,
-    subcategories: subs
-      .filter((s) => s.categoryId === c.id)
-      .map((s) => ({
-        id: s.id,
-        name: s.name,
-        slug: s.slug,
-        position: s.position,
-      })),
-  }));
+  // Fetch product counts per category (active products only)
+  const catIds = cats.map((c) => c.id);
+  const countRows = await db
+    .select({
+      categoryId: products.categoryId,
+      count: sql<number>`COUNT(*)`,
+    })
+    .from(products)
+    .where(and(eq(products.isActive, true), inArray(products.categoryId, catIds)))
+    .groupBy(products.categoryId);
+
+  const countByCategory = new Map<string, number>();
+  for (const row of countRows) {
+    if (row.categoryId) {
+      countByCategory.set(row.categoryId, Number(row.count));
+    }
+  }
+
+  // Fetch active products per category for the nav dropdown thumbnail grid.
+  // We pull ALL active products for the category set (ordered by position then
+  // createdAt) and slice to 8 per category in memory — no LATERAL join needed.
+  const navProductRows = await db
+    .select({
+      id: products.id,
+      slug: products.slug,
+      name: products.name,
+      images: products.images,
+      thumbnailIndex: products.thumbnailIndex,
+      categoryId: products.categoryId,
+      createdAt: products.createdAt,
+    })
+    .from(products)
+    .where(and(eq(products.isActive, true), inArray(products.categoryId, catIds)))
+    .orderBy(desc(products.createdAt));
+
+  // Build per-category product list (max 8) and derive thumbnailUrl from the
+  // first product in each category bucket.
+  const productsByCategory = new Map<string, typeof navProductRows>();
+  for (const row of navProductRows) {
+    if (!row.categoryId) continue;
+    const bucket = productsByCategory.get(row.categoryId) ?? [];
+    bucket.push(row);
+    productsByCategory.set(row.categoryId, bucket);
+  }
+
+  const thumbnailByCategory = new Map<string, string | null>();
+  for (const [catId, rows] of productsByCategory.entries()) {
+    const first = rows[0];
+    if (!first) { thumbnailByCategory.set(catId, null); continue; }
+    const imageArray = ensureImagesArray(first.images);
+    const idx = typeof first.thumbnailIndex === "number" ? first.thumbnailIndex : 0;
+    const thumbUrl =
+      imageArray.length > 0 && idx >= 0 && idx < imageArray.length
+        ? imageArray[idx]
+        : imageArray.length > 0
+          ? imageArray[0]
+          : null;
+    thumbnailByCategory.set(catId, thumbUrl ?? null);
+  }
+
+  return cats.map((c) => {
+    const catProducts = (productsByCategory.get(c.id) ?? []).slice(0, 8);
+    return {
+      id: c.id,
+      name: c.name,
+      slug: c.slug,
+      position: c.position,
+      productCount: countByCategory.get(c.id) ?? 0,
+      thumbnailUrl: thumbnailByCategory.get(c.id) ?? null,
+      products: catProducts.map((p) => {
+        const imgs = ensureImagesArray(p.images);
+        const idx = typeof p.thumbnailIndex === "number" ? p.thumbnailIndex : 0;
+        const thumbUrl =
+          imgs.length > 0 && idx >= 0 && idx < imgs.length
+            ? imgs[idx]
+            : imgs.length > 0
+              ? imgs[0]
+              : null;
+        return {
+          id: p.id,
+          slug: p.slug,
+          name: p.name,
+          thumbnailUrl: thumbUrl ?? null,
+        };
+      }),
+      subcategories: subs
+        .filter((s) => s.categoryId === c.id)
+        .map((s) => ({
+          id: s.id,
+          name: s.name,
+          slug: s.slug,
+          position: s.position,
+        })),
+    };
+  });
 }
+
+export const getActiveCategoryTree = unstable_cache(
+  getActiveCategoryTreeUncached,
+  ["nav-category-tree"],
+  { tags: [CATEGORY_TREE_TAG] },
+);
 
 export async function getActiveProductsByCategorySlug(
   categorySlug: string,
@@ -543,9 +676,11 @@ export async function getActiveProductColourChips(): Promise<ShopColourChip[]> {
   const usedColours = allColours.filter((c) => usedColourIds.has(c.id));
   if (usedColours.length === 0) return [];
   const slugMap = buildColourSlugMap(usedColours);
-  return usedColours
-    .map((c) => ({ slug: slugMap.get(c.id)!, name: c.name, hex: c.hex }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  // Shade-aware order so the /shop colour filter chips group reds, blues, etc.
+  // together (achromatics last) — matches the storefront picker ordering.
+  return sortByShade(
+    usedColours.map((c) => ({ slug: slugMap.get(c.id)!, name: c.name, hex: c.hex })),
+  );
 }
 
 /**

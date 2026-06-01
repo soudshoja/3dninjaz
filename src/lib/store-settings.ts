@@ -3,6 +3,19 @@ import { db } from "@/lib/db";
 import { storeSettings, seedStoreSettings } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
+/**
+ * Full settings row inferred from Drizzle schema.
+ *
+ * Phase 20 (20-04) — 4 new nullable fields ride the existing 60s cache:
+ *   bankName            — bank display name (e.g. "Maybank")
+ *   bankAccountNumber   — account number shown on draft page
+ *   bankAccountHolder   — registered account holder name
+ *   draftLinkTemplate   — Mustache-style body for WhatsApp/email deeplinks
+ *
+ * D-16: if bankName / bankAccountNumber / bankAccountHolder is NULL/empty the
+ * Bank Transfer card is hidden on the customer draft page (server guard).
+ * D-18: draftLinkTemplate supports {{customer_name}}, {{link}} placeholders.
+ */
 export type StoreSettings = typeof storeSettings.$inferSelect;
 
 // In-memory cache — single Node process. v1 deploys to a single Vercel/cPanel
@@ -67,3 +80,10 @@ export async function getStoreSettingsCached(): Promise<StoreSettings> {
 export function clearStoreSettingsCache(): void {
   global.__storeSettingsCache = null;
 }
+
+/**
+ * Phase 20 (20-04) alias — same as clearStoreSettingsCache.
+ * Exported under this name so Plan 20-04 bank/template writer can call it
+ * without importing a "clear" function that sounds like destructive data deletion.
+ */
+export const invalidateStoreSettingsCache = clearStoreSettingsCache;

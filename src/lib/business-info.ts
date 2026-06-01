@@ -29,14 +29,11 @@ export const BUSINESS = {
   contactEmail: "info@3dninjaz.com",
   // Data-protection officer / PDPA data-request inbox. D-04.
   dpoEmail: "info@3dninjaz.com",
-  // TODO: Q4-01 / D-01 — replace before public launch (Plan 04-04 hard blocker).
-  whatsappNumber: "60000000000",
-  whatsappNumberDisplay: "+60 00 000 0000",
+  whatsappNumber: "601125434730",
+  whatsappNumberDisplay: "+60 11 2543 4730",
   socials: {
-    // TODO: D-05 — replace `#` with real Instagram URL once handle confirmed.
-    instagram: "#",
-    // TODO: D-05 — replace `#` with real TikTok URL once handle confirmed.
-    tiktok: "#",
+    instagram: "https://www.instagram.com/3dninjaz/",
+    tiktok: "https://www.tiktok.com/@shojakidz",
     email: "mailto:info@3dninjaz.com",
   },
   retention: {
@@ -46,7 +43,7 @@ export const BUSINESS = {
       "3 years after your last sign-in; you can request earlier deletion at any time",
     marketing: "Until you unsubscribe",
   },
-  hours: "Mon-Fri 10:00-18:00 MYT (Malaysia Time)",
+  hours: "Mon-Fri 11 AM – 6 PM MYT (Malaysia Time)",
 } as const;
 
 export type BusinessInfo = typeof BUSINESS;
@@ -73,5 +70,5 @@ export function whatsappLink(
  * the link is not yet the real destination.
  */
 export function isWhatsAppPlaceholder(): boolean {
-  return BUSINESS.whatsappNumber === "60000000000";
+  return false;
 }

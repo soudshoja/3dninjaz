@@ -1,0 +1,48 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-05-04T11:38:57.624Z",
+  "context": "default",
+  "phase": null,
+  "phase_name": null,
+  "phase_dir": null,
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
+  "status": "paused",
+  "session_summary": "Ad-hoc UI/CSS/admin polish + bug-fix session on dev branch. Not a planned phase. 13 commits shipped to origin/dev — CI auto-deploys to app.3dninjaz.com.",
+  "completed_tasks": [
+    {"id": 1, "name": "PDP description mobile word-break fix (initial CSS attempt)", "status": "done", "commit": "751f3af"},
+    {"id": 2, "name": "Homepage 'How it works' copy rewrite", "status": "done", "commit": "91db592"},
+    {"id": 3, "name": "Step 02 copy variant-agnostic", "status": "done", "commit": "73ab8c0"},
+    {"id": 4, "name": "Admin slug ER_DUP_ENTRY catch + dev DB UPDATE rename keychains slug", "status": "done", "commit": "9fc50f6"},
+    {"id": 5, "name": "Checkout address localStorage draft for logged-in users", "status": "done", "commit": "85eed3a"},
+    {"id": 6, "name": "MY_PHONE regex loosened (allow + - spaces parens)", "status": "done", "commit": "82ee6bf"},
+    {"id": 7, "name": "Variant Select fields: per-option SKU/price/imageUrl", "status": "done", "commit": "3558436"},
+    {"id": 8, "name": "Kill auto-hyphenation on PDP descriptions", "status": "done", "commit": "4e5a460"},
+    {"id": 9, "name": "Justify PDP description paragraphs", "status": "done", "commit": "ac4e713"},
+    {"id": 10, "name": "Strip NBSP/zero-width/Win-1252 from product descriptions (3-layer defense)", "status": "done", "commit": "996bf86"},
+    {"id": 11, "name": "Admin Product-Type picker grid normalisation", "status": "done", "commit": "28a9cb8"},
+    {"id": 12, "name": "Storefront variant picker redesign (rich rows + mobile bottom-sheet)", "status": "done", "commit": "d1b34d9"},
+    {"id": 13, "name": "Admin Select-option image upload visibility + alignment fix", "status": "done", "commit": "eb088f7"}
+  ],
+  "remaining_tasks": [
+    {"id": 14, "name": "OPTIONAL — run scripts/strip-soft-hyphens.cjs with APPLY=1 to clean existing description rows at rest", "status": "not_started", "notes": "Render-side strip already covers existing dirty rows; this is data-at-rest hygiene only"}
+  ],
+  "blockers": [],
+  "human_actions_pending": [
+    {"action": "Visual QA of all 13 commits on app.3dninjaz.com once CI deploys", "context": "Especially: PDP description on 375px viewport, variant picker mobile bottom-sheet, admin Edit Product page resize behaviour, admin Select-field image upload click-through", "blocking": false}
+  ],
+  "decisions": [
+    {"decision": "Strip NBSP/soft-hyphens client-side AND server-side, instead of relying on either alone", "rationale": "Existing dirty rows render clean immediately (client-side) without a data migration; new content arrives clean (server-side). DB cleaner script written but un-run as defence-in-depth."},
+    {"decision": "Variant picker uses vaul bottom-sheet on mobile (<=767px), anchored popover on desktop", "rationale": "vaul already a project dependency; large touch targets + swipe-down close are the mobile e-commerce pattern."},
+    {"decision": "Admin product-type cards use sm:2 / lg:3 / xl:5 grid with auto-rows: 1fr", "rationale": "Previous grid jumped 2->5 cols at lg breakpoint, squeezing cards. New ladder gives 3-col sweet spot at lg, equal heights at every width."},
+    {"decision": "Select-option image cell renders as full-size dashed drop-zone even when fieldId is missing, with inline 'Save field' CTA", "rationale": "Old gate was a 10px italic string - invisible. New gate looks like a real disabled drop-zone + actionable button, so user sees what is blocked and how to unblock."}
+  ],
+  "uncommitted_files": [],
+  "next_action": "On resume: review CI deploy status with `gh run list --branch dev --limit 5`. If green, do visual QA on app.3dninjaz.com per the human_actions_pending entry. If red, read failure logs and patch.",
+  "context_notes": "User caught me shipping 3 wrong CSS fixes for the PDP word-break issue before the actual cause (NBSP pollution in description content) was found via SSH hex-dump. This taught: for invisible-char bugs, inspect source bytes BEFORE iterating CSS knobs. New memory file `feedback_verify_visually_before_claiming_success.md` documents this.",
+  "blocking_constraints": [],
+  "advisory_constraints": [
+    {"name": "Verify visually before claiming UI fix done", "description": "Diff + typecheck does not prove a UI fix works. Use Playwright screenshot at narrow viewport, OR ask user to screenshot, OR SSH-hex-dump source bytes for invisible-char issues.", "severity": "advisory"}
+  ]
+}

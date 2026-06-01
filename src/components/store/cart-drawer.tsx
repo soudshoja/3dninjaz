@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Drawer,
   DrawerContent,
@@ -53,7 +53,7 @@ export function CartDrawer() {
         // Drop store items whose variants/products were deleted/inactive.
         // Stocked lines key on variantId; configurable lines key on productId.
         const liveKeys = new Set(
-          items.map((i) => (i.productType === "configurable" || i.productType === "keychain" || i.productType === "vending" ? i.productId : i.variantId))
+          items.map((i) => (i.productType === "configurable" || i.productType === "keychain" || i.productType === "vending" || i.productType === "simple" ? i.productId : i.variantId))
         );
         for (const si of storeItems) {
           const lookupKey = isConfigurableCartItem(si) ? si.productId : si.variantId;
@@ -66,7 +66,20 @@ export function CartDrawer() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, storeItems.length]);
 
-  const subtotal = hydrated.reduce(
+  // Merge live store quantities into hydrated data so +/- buttons reflect
+  // instantly without a server round-trip.
+  const displayItems = useMemo(
+    () =>
+      hydrated.map((h) => {
+        const match = storeItems.find(
+          (si) => si.key === (h.storeKey ?? h.variantId),
+        );
+        return match ? { ...h, quantity: match.quantity } : h;
+      }),
+    [hydrated, storeItems],
+  );
+
+  const subtotal = displayItems.reduce(
     (sum, i) => sum + parseFloat(i.unitPrice) * i.quantity,
     0,
   );
@@ -116,7 +129,7 @@ export function CartDrawer() {
           ) : loading ? (
             <div className="py-10 text-center text-sm text-zinc-500">Loading…</div>
           ) : (
-            hydrated.map((i) => (
+            displayItems.map((i) => (
               <CartLineRow key={i.storeKey ?? i.variantId} item={i} variant="compact" />
             ))
           )}
@@ -148,6 +161,10 @@ export function CartDrawer() {
                 Checkout
               </Link>
             </div>
+            <p className="mt-3 text-center text-xs font-semibold leading-snug text-red-600">
+              No refunds. Faulty items are remade &amp; replaced if reported
+              within 3 days of delivery (return shipping at your cost).
+            </p>
           </DrawerFooter>
         ) : null}
       </DrawerContent>

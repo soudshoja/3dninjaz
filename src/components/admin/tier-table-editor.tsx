@@ -14,6 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { saveTierTable } from "@/actions/configurator";
 import { BRAND } from "@/lib/brand";
+import { useProductDraft } from "@/hooks/use-product-draft";
+import { DraftRestoredBanner } from "@/components/admin/draft-restored-banner";
 
 // ============================================================================
 // Types
@@ -62,6 +64,52 @@ export function TierTableEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // -------------------------------------------------------------------------
+  // Autosave draft — persists tier state to localStorage so the admin can
+  // recover from accidental navigation. Scope "tiers" keeps the key separate
+  // from the main product-form and configurator drafts.
+  // -------------------------------------------------------------------------
+  const tierDraftValue = useMemo(
+    () => ({ maxUnit, tiers, unitField }),
+    [maxUnit, tiers, unitField],
+  );
+  const tierDraft = useProductDraft(productId, tierDraftValue, { scope: "tiers" });
+  const [tierBannerDismissed, setTierBannerDismissed] = useState(false);
+
+  function restoreTierDraft() {
+    const v = tierDraft.restore();
+    if (!v) {
+      setTierBannerDismissed(true);
+      return;
+    }
+    // Defensive shape validation.
+    if (typeof v.maxUnit === "number" && Number.isFinite(v.maxUnit) && v.maxUnit >= 1) {
+      setMaxUnit(Math.floor(v.maxUnit));
+    } else {
+      console.warn("[tiers autosave] Dropped invalid maxUnit from draft.");
+    }
+    if (v.tiers && typeof v.tiers === "object" && !Array.isArray(v.tiers)) {
+      const safe: Record<string, number> = {};
+      for (const [k, val] of Object.entries(v.tiers)) {
+        if (typeof val === "number" && Number.isFinite(val) && val >= 0) {
+          safe[k] = val;
+        }
+      }
+      setTiers(safe);
+    } else {
+      console.warn("[tiers autosave] Dropped invalid tiers map from draft.");
+    }
+    if (typeof v.unitField === "string") {
+      setUnitField(v.unitField);
+    }
+    setTierBannerDismissed(true);
+  }
+
+  function discardTierDraft() {
+    tierDraft.discard();
+    setTierBannerDismissed(true);
+  }
 
   // Auto-fill: linear interpolation mode
   const [autoMode, setAutoMode] = useState<"step" | "linear">("linear");
@@ -197,6 +245,7 @@ export function TierTableEditor({
         return;
       }
       setSuccessMsg("Tier pricing saved.");
+      tierDraft.discard();
       await onSaved();
     });
   };
@@ -211,6 +260,15 @@ export function TierTableEditor({
 
   return (
     <div className="space-y-5">
+      {/* Tier autosave restore banner */}
+      {tierDraft.draft && !tierBannerDismissed && (
+        <DraftRestoredBanner
+          savedAt={tierDraft.draft.savedAt}
+          onRestore={restoreTierDraft}
+          onDiscard={discardTierDraft}
+        />
+      )}
+
       {/* Error / success banners */}
       {error && (
         <div

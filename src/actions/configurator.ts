@@ -1,10 +1,11 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
+import { promises as fsPromises } from "node:fs";
+import path from "node:path";
 import { db } from "@/lib/db";
 import {
   products,
-  productVariants,
   productConfigFields,
 } from "@/lib/db/schema";
 import { eq, asc, and, sql } from "drizzle-orm";
@@ -17,9 +18,16 @@ import {
   NumberFieldConfigSchema,
   ColourFieldConfigSchema,
   SelectFieldConfigSchema,
+  TextareaFieldConfigSchema,
   type FieldType,
   type AnyFieldConfig,
+  type TextareaFieldConfig,
+  type SelectFieldConfig,
 } from "@/lib/config-fields";
+// Quick task 260430-icx — textarea sanitisation at the action layer.
+// Server-only import; importing into a client module fails at build time.
+import { sanitizeRichText } from "@/lib/rich-text-sanitizer";
+import { writeUpload, deleteUpload } from "@/lib/storage";
 
 // ============================================================================
 // Types
@@ -53,7 +61,23 @@ function pickSchemaByFieldType(t: FieldType) {
       return ColourFieldConfigSchema;
     case "select":
       return SelectFieldConfigSchema;
+    case "textarea":
+      return TextareaFieldConfigSchema;
   }
+}
+
+/**
+ * Quick task 260430-icx — defence-in-depth sanitisation for textarea config.
+ * Mutates the html field of a TextareaFieldConfig through sanitize-html
+ * (server-only). Idempotent: passing already-sanitised HTML returns the same
+ * string. Caller should re-run on every save (admin add + admin update).
+ */
+function sanitizeTextareaConfig(cfg: AnyFieldConfig): AnyFieldConfig {
+  const t = cfg as Partial<TextareaFieldConfig>;
+  if (typeof t.html === "string") {
+    return { html: sanitizeRichText(t.html) } satisfies TextareaFieldConfig;
+  }
+  return cfg;
 }
 
 function hydrateConfigField(r: typeof productConfigFields.$inferSelect): ConfigField {
@@ -78,15 +102,16 @@ function hydrateConfigField(r: typeof productConfigFields.$inferSelect): ConfigF
 
 /**
  * Update the productType for a product.
- * Guards against changing type when data of the other type is already attached.
+ *
+ * Per user directive "keep all data and switch": no guards, no data-presence
+ * checks. Existing variants/config fields stay in the DB as orphan data for
+ * the new type — admin can switch back anytime to restore them.
  */
 export async function updateProductType(
   productId: string,
-  newType: "stocked" | "configurable" | "keychain" | "vending",
+  newType: "stocked" | "configurable" | "keychain" | "vending" | "simple",
 ): Promise<
   | { ok: true }
-  | { ok: false; error: "Cannot change product type with attached variants" }
-  | { ok: false; error: "Cannot change product type with attached config fields" }
   | { ok: false; error: "Product not found" }
 > {
   await requireAdmin(); // FIRST await — CVE-2025-29927
@@ -99,34 +124,6 @@ export async function updateProductType(
 
   if (!row) return { ok: false as const, error: "Product not found" } as const;
   if (row.type === newType) return { ok: true as const }; // no-op fast path
-
-  if (newType === "configurable") {
-    // Going stocked → configurable: must have zero variants
-    const [countRow] = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(productVariants)
-      .where(eq(productVariants.productId, productId))
-      .limit(1);
-    if ((countRow?.count ?? 0) > 0) {
-      return {
-        ok: false as const,
-        error: "Cannot change product type with attached variants",
-      } as const;
-    }
-  } else {
-    // Going configurable → stocked: must have zero config fields
-    const [countRow] = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(productConfigFields)
-      .where(eq(productConfigFields.productId, productId))
-      .limit(1);
-    if ((countRow?.count ?? 0) > 0) {
-      return {
-        ok: false as const,
-        error: "Cannot change product type with attached config fields",
-      } as const;
-    }
-  }
 
   await db
     .update(products)
@@ -152,7 +149,7 @@ export async function getConfiguratorData(productId: string): Promise<{
     id: string;
     name: string;
     slug: string;
-    productType: "stocked" | "configurable" | "keychain" | "vending";
+    productType: "stocked" | "configurable" | "keychain" | "vending" | "simple";
     maxUnitCount: number | null;
     priceTiers: Record<string, number>;
     unitField: string | null;
@@ -216,7 +213,12 @@ export async function addConfigField(
   await requireAdmin();
 
   const schema = pickSchemaByFieldType(input.fieldType);
-  const parsed = schema.safeParse(input.config);
+  // Quick task 260430-icx — sanitise textarea HTML BEFORE schema validation
+  // so the persisted shape matches the schema's max-length cap (sanitisation
+  // can shorten the string by stripping tags).
+  const incomingConfig =
+    input.fieldType === "textarea" ? sanitizeTextareaConfig(input.config) : input.config;
+  const parsed = schema.safeParse(incomingConfig);
   if (!parsed.success) {
     return {
       ok: false as const,
@@ -289,8 +291,12 @@ export async function updateConfigField(
   // Re-validate config if provided
   let configJsonString: string | undefined;
   if (patch.config !== undefined) {
-    const schema = pickSchemaByFieldType(existing.fieldType as FieldType);
-    const parsed = schema.safeParse(patch.config);
+    const fieldType = existing.fieldType as FieldType;
+    const schema = pickSchemaByFieldType(fieldType);
+    // Quick task 260430-icx — re-sanitise textarea HTML on every update.
+    const incomingConfig =
+      fieldType === "textarea" ? sanitizeTextareaConfig(patch.config) : patch.config;
+    const parsed = schema.safeParse(incomingConfig);
     if (!parsed.success) {
       return {
         ok: false as const,
@@ -315,6 +321,7 @@ export async function updateConfigField(
   }
 
   revalidatePath(`/admin/products/${existing.productId}/configurator`);
+  revalidatePath(`/admin/products/${existing.productId}/edit`);
 
   const [prod] = await db
     .select({ slug: products.slug })
@@ -504,6 +511,237 @@ export async function saveTierTable(
 
   revalidatePath(`/admin/products/${productId}/configurator`);
   if (prod) revalidatePath(`/products/${prod.slug}`);
+
+  return { ok: true as const };
+}
+
+// ============================================================================
+// Per-option image upload for Select fields
+// ============================================================================
+
+/**
+ * Upload an image for a specific option value inside a Select config field.
+ *
+ * Reads the field's configJson, finds the option by `optionValue`, writes the
+ * image via the standard writeUpload pipeline (bucket = productId), persists
+ * the new imageUrl into the option, and saves back via updateConfigField.
+ *
+ * Old image is best-effort deleted from disk after DB update succeeds.
+ * Pattern A — caller should optimistically update local state and roll back
+ * on error (same pattern as uploadVariantImage in src/actions/variants.ts).
+ */
+export async function uploadSelectOptionImage(
+  fieldId: string,
+  optionValue: string,
+  formData: FormData,
+): Promise<{ ok: true; imageUrl: string } | { ok: false; error: string }> {
+  await requireAdmin();
+
+  const file = formData.get("file");
+  if (!(file instanceof File)) return { ok: false as const, error: "No file provided" };
+
+  // Fetch field row
+  const [row] = await db
+    .select()
+    .from(productConfigFields)
+    .where(eq(productConfigFields.id, fieldId))
+    .limit(1);
+  if (!row) return { ok: false as const, error: "Field not found" };
+  if (row.fieldType !== "select") return { ok: false as const, error: "Field is not a select type" };
+
+  // Fetch productId for the upload bucket and PDP revalidation
+  const productId = row.productId;
+
+  // Parse current config
+  let cfg: SelectFieldConfig;
+  try {
+    cfg = ensureConfigJson("select", row.configJson) as SelectFieldConfig;
+  } catch {
+    return { ok: false as const, error: "Failed to parse field config" };
+  }
+
+  const optIndex = cfg.options.findIndex((o) => o.value === optionValue);
+  if (optIndex === -1) return { ok: false as const, error: `Option "${optionValue}" not found` };
+
+  const oldImageUrl = cfg.options[optIndex].imageUrl ?? null;
+
+  // Write the new image
+  let newUrl: string;
+  try {
+    newUrl = await writeUpload(productId, file);
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : "Upload failed" };
+  }
+
+  // Patch the option in config
+  const updatedOptions = cfg.options.map((o, i) =>
+    i === optIndex ? { ...o, imageUrl: newUrl } : o,
+  );
+  const updatedConfig: SelectFieldConfig = { options: updatedOptions };
+
+  // Persist via updateConfigField (re-validates + saves configJson)
+  const saveResult = await updateConfigField(fieldId, { config: updatedConfig });
+  if (!saveResult.ok) {
+    // Rollback the newly written file
+    await deleteUpload(newUrl).catch(() => {});
+    return { ok: false as const, error: saveResult.error };
+  }
+
+  // Best-effort delete old image
+  if (oldImageUrl) {
+    await deleteUpload(oldImageUrl).catch(() => {});
+  }
+
+  return { ok: true as const, imageUrl: newUrl };
+}
+
+/**
+ * List all images already uploaded to a product's upload bucket.
+ * Used by the gallery picker so admins can re-use existing product images
+ * for Select option thumbnails without creating duplicate files.
+ *
+ * Returns one entry per image UUID subdirectory that has been successfully
+ * processed (contains manifest.json or at least one image rendition).
+ *
+ * The path-traversal guard uses fs.realpath() to resolve symlinks before
+ * comparing — the server stores uploads outside the deploy tree and symlinks
+ * public/uploads/products → /home/ninjaz/uploads/3dninjaz_v1/products, so
+ * path.resolve() alone (which does NOT follow symlinks) would fail the check
+ * and return [] even when images are present.
+ */
+export async function listProductImages(
+  productId: string,
+): Promise<{ url: string; name: string }[]> {
+  await requireAdmin();
+
+  const UPLOADS_DIR = process.env.UPLOADS_DIR ?? "./public/uploads";
+  const PUBLIC_PREFIX = process.env.UPLOADS_PUBLIC_PREFIX ?? "/uploads";
+
+  // Sanitise productId — must be UUID-like (alphanum + dash).
+  const safePid = productId.replace(/[^a-zA-Z0-9-]/g, "");
+  if (!safePid) return [];
+
+  const bucketDir = path.join(process.cwd(), UPLOADS_DIR, "products", safePid);
+
+  // Path-traversal guard — use realpath so symlinks resolve before comparison.
+  // IMPORTANT: resolve realRoot via the "products" subdirectory, not the uploads
+  // root itself. The symlink lives at uploads/products → /home/ninjaz/uploads/…,
+  // so realpath(uploads/) does NOT follow it and stays under the deploy tree,
+  // while realpath(uploads/products/<pid>/) does follow it and lands in the real
+  // storage path. Comparing the two would always fail. Using the parent of
+  // realBucket as the anchor is correct and still prevents path traversal.
+  let realBucket: string;
+  let realRoot: string;
+  try {
+    const rawProductsRoot = path.join(process.cwd(), UPLOADS_DIR, "products");
+    [realBucket, realRoot] = await Promise.all([
+      fsPromises.realpath(bucketDir),
+      fsPromises.realpath(rawProductsRoot).catch(() => path.resolve(rawProductsRoot)),
+    ]);
+  } catch {
+    // bucketDir doesn't exist yet — no images uploaded for this product.
+    return [];
+  }
+  if (!realBucket.startsWith(realRoot)) return [];
+
+  let entries: string[];
+  try {
+    entries = await fsPromises.readdir(realBucket);
+  } catch {
+    return [];
+  }
+
+  const IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".avif"]);
+  const SKIP_FILES = new Set([".gitkeep", ".DS_Store", "Thumbs.db"]);
+
+  const result: { url: string; name: string }[] = [];
+
+  for (const entry of entries) {
+    if (SKIP_FILES.has(entry)) continue;
+
+    const entryPath = path.join(realBucket, entry);
+    let stat: Awaited<ReturnType<typeof fsPromises.stat>> | null = null;
+    try {
+      stat = await fsPromises.stat(entryPath);
+    } catch {
+      continue;
+    }
+
+    if (stat.isDirectory()) {
+      // Each image UUID directory contains responsive variants (400w.jpg etc.)
+      // Confirm at least one image variant exists before including it.
+      let hasImage = false;
+      try {
+        const children = await fsPromises.readdir(entryPath);
+        hasImage = children.some((f) => IMAGE_EXTS.has(path.extname(f).toLowerCase()));
+      } catch {
+        continue;
+      }
+      if (!hasImage) continue;
+
+      result.push({
+        url: `${PUBLIC_PREFIX}/products/${safePid}/${entry}`,
+        name: entry,
+      });
+    } else if (stat.isFile()) {
+      // Legacy flat layout: a bare image file directly under the product dir.
+      const ext = path.extname(entry).toLowerCase();
+      if (!IMAGE_EXTS.has(ext)) continue;
+      if (SKIP_FILES.has(entry)) continue;
+
+      result.push({
+        url: `${PUBLIC_PREFIX}/products/${safePid}/${entry}`,
+        name: entry,
+      });
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Remove the image from a specific option value inside a Select config field.
+ * Best-effort deletes the file from disk; always clears imageUrl from config.
+ */
+export async function removeSelectOptionImage(
+  fieldId: string,
+  optionValue: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
+
+  const [row] = await db
+    .select()
+    .from(productConfigFields)
+    .where(eq(productConfigFields.id, fieldId))
+    .limit(1);
+  if (!row) return { ok: false as const, error: "Field not found" };
+  if (row.fieldType !== "select") return { ok: false as const, error: "Field is not a select type" };
+
+  let cfg: SelectFieldConfig;
+  try {
+    cfg = ensureConfigJson("select", row.configJson) as SelectFieldConfig;
+  } catch {
+    return { ok: false as const, error: "Failed to parse field config" };
+  }
+
+  const optIndex = cfg.options.findIndex((o) => o.value === optionValue);
+  if (optIndex === -1) return { ok: false as const, error: `Option "${optionValue}" not found` };
+
+  const oldImageUrl = cfg.options[optIndex].imageUrl ?? null;
+
+  const updatedOptions = cfg.options.map((o, i) => {
+    if (i !== optIndex) return o;
+    const { imageUrl: _dropped, ...rest } = o;
+    return rest;
+  });
+  const updatedConfig: SelectFieldConfig = { options: updatedOptions };
+
+  const saveResult = await updateConfigField(fieldId, { config: updatedConfig });
+  if (!saveResult.ok) return { ok: false as const, error: saveResult.error };
+
+  if (oldImageUrl) {
+    await deleteUpload(oldImageUrl).catch(() => {});
+  }
 
   return { ok: true as const };
 }

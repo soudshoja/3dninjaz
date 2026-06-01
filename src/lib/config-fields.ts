@@ -22,7 +22,7 @@ import { z } from "zod";
 // Types
 // ============================================================================
 
-export type FieldType = "text" | "number" | "colour" | "select";
+export type FieldType = "text" | "number" | "colour" | "select" | "textarea";
 
 /** D-03 — text field config */
 export type TextFieldConfig = {
@@ -46,14 +46,44 @@ export type ColourFieldConfig = {
 
 /** D-03 — select field config */
 export type SelectFieldConfig = {
-  options: Array<{ label: string; value: string; priceAdd?: number }>;
+  options: Array<{
+    label: string;
+    value: string;
+    /** Per-option price override — replaces the tier/flat price when this option is selected. */
+    price?: number;
+    /** Admin-assigned SKU for this option value (for order fulfilment tracking). */
+    sku?: string;
+    /** Public URL of the option image (from writeUpload pipeline). */
+    imageUrl?: string;
+    /**
+     * Per-option shipping weight in GRAMS (integer >= 0).
+     * Matches the existing product_variants.weight_g grams convention (AD-08).
+     * Optional + backward compatible: old options without weight fall through to
+     * the variant/product/default ladder.
+     */
+    weight?: number;
+  }>;
+};
+
+/**
+ * Quick task 260430-icx — textarea (rich text) field config.
+ *
+ * Admin-authored content rendered read-only on the storefront PDP. Never
+ * accepts customer input — it's a description block, not a form field.
+ * The `html` string is sanitised at the server boundary via
+ * src/lib/rich-text-sanitizer.ts on every save path (defence-in-depth).
+ */
+export type TextareaFieldConfig = {
+  /** Sanitised HTML; admin source-of-truth (allowlisted by sanitize-html). */
+  html: string;
 };
 
 export type AnyFieldConfig =
   | TextFieldConfig
   | NumberFieldConfig
   | ColourFieldConfig
-  | SelectFieldConfig;
+  | SelectFieldConfig
+  | TextareaFieldConfig;
 
 /** D-05 — backwards-compat image entry (old shape = plain string, new = object) */
 export type ImageEntryV2 = {
@@ -72,7 +102,7 @@ export type ConfigurationData = {
    * order detail without a DB lookup. Optional for backwards compat with cart
    * items created before this field was added.
    */
-  baseClickerColor?: string;      // hex e.g. "#39E600"
+  baseClickerColor?: string;      // hex e.g. "#25D366"
   baseClickerColorName?: string;  // display name e.g. "Neon Green"
 };
 
@@ -94,9 +124,10 @@ export const NumberFieldConfigSchema: z.ZodType<NumberFieldConfig> = z.object({
 });
 
 export const ColourFieldConfigSchema: z.ZodType<ColourFieldConfig> = z.object({
-  allowedColorIds: z
-    .array(z.string().min(1))
-    .min(1),
+  // Allow empty palette — admin can save a colour field without selecting colours
+  // yet and configure the palette later. A non-empty palette is only required at
+  // storefront render time (PDP validates before showing the field to customers).
+  allowedColorIds: z.array(z.string().min(1)),
 });
 
 export const SelectFieldConfigSchema: z.ZodType<SelectFieldConfig> = z.object({
@@ -105,10 +136,22 @@ export const SelectFieldConfigSchema: z.ZodType<SelectFieldConfig> = z.object({
       z.object({
         label: z.string().min(1),
         value: z.string().min(1),
-        priceAdd: z.number().optional(),
+        price: z.number().nonnegative().optional(),
+        sku: z.string().optional(),
+        imageUrl: z.string().optional(),
+        weight: z.number().int().min(0).max(50_000).optional(),
       }),
     )
     .min(1),
+});
+
+/**
+ * Quick task 260430-icx — textarea config Zod schema.
+ * Generous 50_000-char cap to prevent runaway DB rows (LONGTEXT can
+ * hold up to 4GB but the PDP UI shouldn't render essays).
+ */
+export const TextareaFieldConfigSchema: z.ZodType<TextareaFieldConfig> = z.object({
+  html: z.string().max(50_000),
 });
 
 // Internal map for dispatch
@@ -117,6 +160,7 @@ const schemaByFieldType: Record<FieldType, z.ZodType<AnyFieldConfig>> = {
   number: NumberFieldConfigSchema,
   colour: ColourFieldConfigSchema,
   select: SelectFieldConfigSchema,
+  textarea: TextareaFieldConfigSchema,
 };
 
 // ============================================================================

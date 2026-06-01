@@ -309,7 +309,7 @@ export default async function AdminPaymentsPage({
                           {new Date(r.createdAt).toLocaleDateString("en-MY")}
                         </td>
                         <td className="p-3">
-                          <code className="text-xs break-all">
+                          <code className="text-xs break-words">
                             {r.paypalCaptureId}
                           </code>
                         </td>

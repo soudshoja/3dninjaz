@@ -10,11 +10,13 @@ import {
   RotateCcw,
   Trash2,
   ExternalLink,
+  Heart,
 } from "lucide-react";
 import {
   archiveColour,
   reactivateColour,
   deleteColour,
+  toggleMyColour,
 } from "@/actions/admin-colours";
 import { BRAND } from "@/lib/brand";
 import {
@@ -27,7 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-type Row = { id: string; name: string; isActive: boolean };
+type Row = { id: string; name: string; isActive: boolean; isMyColour: boolean };
 
 type InUseProduct = { id: string; name: string; slug: string };
 
@@ -53,6 +55,7 @@ export function ColourRowActions({ row }: { row: Row }) {
   const [inUseProducts, setInUseProducts] = useState<InUseProduct[] | null>(
     null,
   );
+  const [isMyColour, setIsMyColour] = useState(row.isMyColour);
 
   const onToggleActive = () => {
     setError(null);
@@ -79,6 +82,19 @@ export function ColourRowActions({ row }: { row: Row }) {
       } else if ("code" in res && res.code === "IN_USE") {
         setInUseProducts(res.products);
         setError(res.error);
+      } else if ("error" in res) {
+        setError(res.error);
+      }
+    });
+  };
+
+  const onToggleMyColour = () => {
+    setError(null);
+    startTransition(async () => {
+      const res = await toggleMyColour(row.id);
+      if (res.ok) {
+        setIsMyColour(!isMyColour);
+        router.refresh();
       } else if ("error" in res) {
         setError(res.error);
       }
@@ -142,6 +158,20 @@ export function ColourRowActions({ row }: { row: Row }) {
               <>
                 <RotateCcw className="mr-2 h-4 w-4" />
                 Reactivate
+              </>
+            )}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={onToggleMyColour} disabled={pending}>
+            {isMyColour ? (
+              <>
+                <Heart className="mr-2 h-4 w-4" />
+                Remove from My Colours
+              </>
+            ) : (
+              <>
+                <Heart className="mr-2 h-4 w-4" />
+                Add to My Colours
               </>
             )}
           </DropdownMenuItem>
