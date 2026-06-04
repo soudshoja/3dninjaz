@@ -71,6 +71,7 @@ type ProductSummary = {
   productType: "stocked" | "configurable" | "keychain" | "vending" | "simple";
   maxUnitCount: number | null;
   priceTiers: Record<string, number>;
+  weightTiers: Record<string, number>;
   unitField: string | null;
 };
 
@@ -459,6 +460,7 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
               productId={product.id}
               initialMaxUnitCount={product.maxUnitCount}
               initialPriceTiers={product.priceTiers}
+              initialWeightTiers={product.weightTiers}
               initialUnitField={product.unitField}
               fieldOptions={textAndNumberFields.map((f) => ({
                 id: f.id,
