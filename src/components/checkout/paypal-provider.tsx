@@ -89,11 +89,25 @@ export function CheckoutIsland({
       .catch(() => {});
   }, [hydrated, storeItems.length]);
 
-  const subtotal = hydratedItems.reduce(
+  // Merge live store quantities into hydrated data so +/- buttons reflect
+  // instantly without waiting for a server re-hydration (which only re-runs
+  // when the item COUNT changes, not when a quantity changes). Matches the
+  // pattern in cart-drawer.tsx + bag/page.tsx.
+  const items = useMemo(
+    () =>
+      hydratedItems.map((h) => {
+        const match = storeItems.find(
+          (si) => si.key === (h.storeKey ?? h.variantId),
+        );
+        return match ? { ...h, quantity: match.quantity } : h;
+      }),
+    [hydratedItems, storeItems],
+  );
+
+  const subtotal = items.reduce(
     (sum, i) => sum + parseFloat(i.unitPrice) * i.quantity,
     0,
   );
-  const items = hydratedItems;
 
   useEffect(() => {
     if (hydrated && storeItems.length === 0) {
