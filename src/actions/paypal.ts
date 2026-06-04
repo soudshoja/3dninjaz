@@ -517,6 +517,9 @@ export async function createPayPalOrder(
       subtotal: subtotalStr,
       shippingCost: shippingStr,
       totalAmount: totalStr,
+      // Record the coupon discount on the order so it reflects everywhere.
+      discountAmount: discount.toFixed(2),
+      discountCode: discount > 0 ? (input.couponCode ?? null) : null,
       currency: PAYPAL_CURRENCY,
       customerEmail: resolvedEmail,
       shippingName: addr.data.recipientName,
