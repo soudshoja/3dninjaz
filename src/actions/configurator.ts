@@ -152,6 +152,7 @@ export async function getConfiguratorData(productId: string): Promise<{
     productType: "stocked" | "configurable" | "keychain" | "vending" | "simple";
     maxUnitCount: number | null;
     priceTiers: Record<string, number>;
+    weightTiers: Record<string, number>;
     unitField: string | null;
   };
   fields: ConfigField[];
@@ -166,6 +167,7 @@ export async function getConfiguratorData(productId: string): Promise<{
       productType: products.productType,
       maxUnitCount: products.maxUnitCount,
       priceTiersRaw: products.priceTiers,
+      weightTiersRaw: products.weightTiers,
       unitField: products.unitField,
     })
     .from(products)
@@ -190,6 +192,7 @@ export async function getConfiguratorData(productId: string): Promise<{
       productType: product.productType as "stocked" | "configurable" | "keychain" | "vending",
       maxUnitCount: product.maxUnitCount ?? null,
       priceTiers: ensureTiers(product.priceTiersRaw),
+      weightTiers: ensureTiers(product.weightTiersRaw),
       unitField: product.unitField ?? null,
     },
     fields,
@@ -435,6 +438,7 @@ export async function saveTierTable(
   maxUnitCount: number,
   priceTiers: Record<string, number>,
   unitField: string,
+  weightTiers: Record<string, number> = {},
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   await requireAdmin();
 
@@ -493,6 +497,28 @@ export async function saveTierTable(
     };
   }
 
+  // Per-tier weight (optional). Keys must fall within 1..maxUnitCount and
+  // values must be non-negative grams. Tiers with no weight are allowed —
+  // they fall back to the variant/product/default ladder at quote time. We
+  // keep only valid entries so a stray key can't poison the stored JSON.
+  const sanitizedWeightTiers: Record<string, number> = {};
+  for (const [k, v] of Object.entries(weightTiers ?? {})) {
+    const n = Number(k);
+    if (!Number.isInteger(n) || n < 1 || n > maxUnitCount) {
+      return {
+        ok: false as const,
+        error: `weightTiers key "${k}" is outside 1..${maxUnitCount}`,
+      };
+    }
+    if (typeof v !== "number" || !Number.isFinite(v) || v < 0) {
+      return {
+        ok: false as const,
+        error: `weightTiers["${k}"] must be a non-negative number (grams)`,
+      };
+    }
+    if (v > 0) sanitizedWeightTiers[k] = v; // drop zero/blank — treat as unset
+  }
+
   // Find product slug for PDP revalidation
   const [prod] = await db
     .select({ slug: products.slug })
@@ -505,6 +531,7 @@ export async function saveTierTable(
     .set({
       maxUnitCount,
       priceTiers: JSON.stringify(priceTiers),
+      weightTiers: JSON.stringify(sanitizedWeightTiers),
       unitField,
     })
     .where(eq(products.id, productId));

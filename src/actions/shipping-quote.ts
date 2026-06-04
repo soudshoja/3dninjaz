@@ -10,9 +10,9 @@ import { delyvaApi, DelyvaError, parseQuoteServices } from "@/lib/delyva";
 import { loadShippingConfig, resolveItemType } from "@/lib/shipping-config";
 import { filterByEnabledCatalog } from "@/lib/delyva-filter";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { ensureConfigJson } from "@/lib/config-fields";
+import { ensureConfigJson, ensureTiers } from "@/lib/config-fields";
 import type { SelectFieldConfig } from "@/lib/config-fields";
-import { resolveOptionWeightKg } from "@/lib/option-weight";
+import { resolveOptionWeightKg, resolveTierWeightKg } from "@/lib/option-weight";
 import type { FieldWeightEntry } from "@/lib/option-weight";
 // NOTE: do NOT re-export `resolveOptionWeightKg` / `FieldWeightEntry` from this
 // "use server" module. Next compiles every export of a server-action file as an
@@ -142,13 +142,27 @@ export async function quoteForCart(
   const productIds = Array.from(new Set(items.map((i) => i.productId)));
   const prodRows = productIds.length
     ? await db
-        .select({ id: products.id, weight: products.shippingWeightKg })
+        .select({
+          id: products.id,
+          weight: products.shippingWeightKg,
+          unitField: products.unitField,
+          weightTiers: products.weightTiers,
+        })
         .from(products)
         .where(inArray(products.id, productIds))
     : [];
   const productWeights = new Map<string, number>();
+  // Per-tier weight (keychain/clicker): unit field id + grams-by-count map.
+  const productTierWeights = new Map<
+    string,
+    { unitField: string | null; weightTiers: Record<string, number> }
+  >();
   for (const p of prodRows) {
     if (p.weight) productWeights.set(p.id, Number(p.weight));
+    const wt = ensureTiers(p.weightTiers);
+    if (Object.keys(wt).length > 0) {
+      productTierWeights.set(p.id, { unitField: p.unitField ?? null, weightTiers: wt });
+    }
   }
 
   // Batch-fetch per-variant weights (AD-08)
@@ -208,13 +222,22 @@ export async function quoteForCart(
     let w: number;
 
     // Tier 0: per-option weight from DB configJson (configurable products)
-    const optKg =
-      it.configValues && Object.keys(it.configValues).length > 0
-        ? resolveOptionWeightKg(it.configValues, fieldsByProduct.get(it.productId) ?? [])
-        : null;
+    // + per-tier weight (keychain/clicker — grams by unit-field char count).
+    // Both are config-derived and summed; the DB is the source of truth for
+    // grams (T-17-09 — never trust a client weight).
+    const hasConfig = it.configValues && Object.keys(it.configValues).length > 0;
+    const optKg = hasConfig
+      ? resolveOptionWeightKg(it.configValues!, fieldsByProduct.get(it.productId) ?? [])
+      : null;
+    const tw = productTierWeights.get(it.productId);
+    const tierKg = hasConfig && tw
+      ? resolveTierWeightKg(tw.unitField, it.configValues!, tw.weightTiers)
+      : null;
+    const configKg =
+      optKg !== null || tierKg !== null ? (optKg ?? 0) + (tierKg ?? 0) : null;
 
-    if (optKg !== null) {
-      w = optKg;
+    if (configKg !== null) {
+      w = configKg;
     } else {
       const variantWeightG = variantWeights.get(it.variantId) ?? null;
       if (variantWeightG !== null) {

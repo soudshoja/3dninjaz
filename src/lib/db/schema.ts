@@ -167,6 +167,12 @@ export const products = mysqlTable("products", {
   maxUnitCount: int("maxUnitCount"),
   priceTiers: text("priceTiers"),
   unitField: varchar("unitField", { length: 64 }),
+  // Per-tier shipping weight (parallel to priceTiers): JSON object
+  //   {"1":15,"2":18,...} of GRAMS keyed by unit count (same key space as
+  //   priceTiers). Stored as LONGTEXT — round-trip via ensureTiers(). NULL =
+  //   no per-tier weight; shipping falls back to the variant/product/default
+  //   ladder. Lets the clicker/keychain weight scale with character count.
+  weightTiers: text("weight_tiers"),
   estimatedProductionDays: int("estimated_production_days"),
   isActive: boolean("is_active").notNull().default(true), // ADM-04
   isFeatured: boolean("is_featured").notNull().default(false), // D-12
