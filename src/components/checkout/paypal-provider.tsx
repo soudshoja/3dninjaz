@@ -269,7 +269,7 @@ export function CheckoutIsland({
               <PayPalButton
                 address={address}
                 items={items}
-                appliedCouponCode={isGuest ? null : (appliedCoupon?.code ?? null)}
+                appliedCouponCode={appliedCoupon?.code ?? null}
                 shipping={shipping}
                 onPaid={handlePaid}
                 guestEmail={isGuest ? guestEmail : undefined}

@@ -116,16 +116,6 @@ export function MobileSummarySheet({
           </DrawerHeader>
 
           <div className="flex-1 overflow-y-auto px-5 py-3">
-            {/* Coupon at top so it's always visible without scrolling */}
-            {!isGuest && (
-              <div className="mb-4">
-                <CouponApply
-                  subtotal={subtotalMyr}
-                  applied={appliedCoupon}
-                  onChange={onCouponChange}
-                />
-              </div>
-            )}
             <CheckoutSummary
               items={items}
               subtotal={subtotalMyr}
@@ -135,6 +125,14 @@ export function MobileSummarySheet({
               showCoupon={false}
               isGuest={isGuest}
             />
+            {/* Coupon below the order total */}
+            <div className="mt-4">
+              <CouponApply
+                subtotal={subtotalMyr}
+                applied={appliedCoupon}
+                onChange={onCouponChange}
+              />
+            </div>
           </div>
 
           <DrawerFooter>
@@ -145,7 +143,7 @@ export function MobileSummarySheet({
             <PayPalButton
               address={address}
               items={items}
-              appliedCouponCode={isGuest ? null : (appliedCoupon?.code ?? null)}
+              appliedCouponCode={appliedCoupon?.code ?? null}
               shipping={shipping}
               onPaid={(redirect) => {
                 setOpen(false);
