@@ -129,6 +129,7 @@ export function WhatsAppBankTransferButton({
   guestName,
   guestEmail,
   disabled,
+  compact = false,
 }: {
   items: HydratedCartItem[];
   subtotal: number;
@@ -144,6 +145,9 @@ export function WhatsAppBankTransferButton({
   guestName?: string;
   guestEmail?: string;
   disabled?: boolean;
+  /** Compact: render only the button (no divider/caption), sized to sit
+   *  side-by-side with the PayPal button in the mobile drawer. */
+  compact?: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -191,6 +195,29 @@ export function WhatsAppBankTransferButton({
       const url = `https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`;
       window.open(url, "_blank", "noopener,noreferrer");
     });
+  }
+
+  // Compact mode: just the pill button (no divider/caption), height-matched to
+  // the PayPal button (55px) so the two sit cleanly side-by-side on mobile.
+  if (compact) {
+    return (
+      <div className="flex flex-col">
+        <button
+          type="button"
+          onClick={handleClick}
+          disabled={isDisabled}
+          aria-label="Pay via WhatsApp direct bank transfer"
+          className="w-full h-[55px] flex items-center justify-center gap-2 rounded-full px-3 font-bold text-sm text-black shadow-[0_4px_0_rgba(0,0,0,0.25)] active:translate-y-[1px] active:shadow-[0_2px_0_rgba(0,0,0,0.25)] transition disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
+          style={{ backgroundColor: "#25D366" }}
+        >
+          <WhatsAppIcon className="h-5 w-5 shrink-0" />
+          <span className="truncate">{isPending ? "Placing…" : "Pay via WhatsApp"}</span>
+        </button>
+        {error ? (
+          <p className="text-red-600 text-xs mt-2 text-center">{error}</p>
+        ) : null}
+      </div>
+    );
   }
 
   return (

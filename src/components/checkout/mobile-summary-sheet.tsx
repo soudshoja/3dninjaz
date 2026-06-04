@@ -140,34 +140,39 @@ export function MobileSummarySheet({
             <p className="text-[11px] uppercase tracking-wider text-zinc-500 font-medium px-1 mb-1">
               Pay
             </p>
-            <PayPalButton
-              address={address}
-              items={items}
-              appliedCouponCode={appliedCoupon?.code ?? null}
-              shipping={shipping}
-              onPaid={(redirect) => {
-                setOpen(false);
-                onPaid(redirect);
-              }}
-              guestEmail={guestEmail}
-              guestEmailValid={guestEmailValid}
-            />
-            <WhatsAppBankTransferButton
-              items={items}
-              subtotal={subtotalMyr}
-              shipping={shipping}
-              address={address}
-              customerName={customerName}
-              customerEmail={customerEmail}
-              couponCode={couponCode}
-              waNumber={waNumber}
-              bankName={bankName}
-              bankAccountNumber={bankAccountNumber}
-              bankAccountHolder={bankAccountHolder}
-              guestName={isGuest ? guestName : undefined}
-              guestEmail={isGuest ? guestEmail : undefined}
-              disabled={items.length === 0 || (isGuest === true && !(guestName ?? "").trim())}
-            />
+            {/* PayPal + WhatsApp side-by-side to save vertical space on mobile.
+                Each column takes half the row; min-w-0 lets them shrink. */}
+            <div className="flex items-stretch gap-2 [&>*]:flex-1 [&>*]:min-w-0">
+              <PayPalButton
+                address={address}
+                items={items}
+                appliedCouponCode={appliedCoupon?.code ?? null}
+                shipping={shipping}
+                onPaid={(redirect) => {
+                  setOpen(false);
+                  onPaid(redirect);
+                }}
+                guestEmail={guestEmail}
+                guestEmailValid={guestEmailValid}
+              />
+              <WhatsAppBankTransferButton
+                compact
+                items={items}
+                subtotal={subtotalMyr}
+                shipping={shipping}
+                address={address}
+                customerName={customerName}
+                customerEmail={customerEmail}
+                couponCode={couponCode}
+                waNumber={waNumber}
+                bankName={bankName}
+                bankAccountNumber={bankAccountNumber}
+                bankAccountHolder={bankAccountHolder}
+                guestName={isGuest ? guestName : undefined}
+                guestEmail={isGuest ? guestEmail : undefined}
+                disabled={items.length === 0 || (isGuest === true && !(guestName ?? "").trim())}
+              />
+            </div>
           </DrawerFooter>
         </DrawerContent>
       </Drawer>
