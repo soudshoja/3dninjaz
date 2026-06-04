@@ -1,0 +1,379 @@
+"use server";
+
+import { db } from "@/lib/db";
+import { orders, orderItems, productVariants, productOptionValues, products } from "@/lib/db/schema";
+import { eq, inArray } from "drizzle-orm";
+import { composeVariantLabel, resolveEffectivePrice } from "@/lib/variants";
+import { randomUUID } from "node:crypto";
+import { getSessionUser } from "@/lib/auth-helpers";
+import { orderAddressSchema, type OrderAddressInput } from "@/lib/validators";
+import { validateCoupon } from "@/actions/coupons";
+import { getShippingRate } from "@/actions/admin-shipping";
+import { quoteForCart } from "@/actions/shipping-quote";
+import { revalidatePath } from "next/cache";
+import type { ConfigurationData } from "@/lib/config-fields";
+
+type BagLineInput = {
+  variantId: string;
+  quantity: number;
+  configurationData?: ConfigurationData | null;
+  productId?: string;
+};
+
+type CreateWhatsAppOrderInput = {
+  address: OrderAddressInput;
+  items: BagLineInput[];
+  couponCode?: string | null;
+  shippingServiceCode?: string | null;
+};
+
+type CreateWhatsAppOrderResult =
+  | { ok: true; orderId: string }
+  | { ok: false; error: string };
+
+/**
+ * Create a WhatsApp bank-transfer order. Mirrors createPayPalOrder exactly
+ * for item-fetching, pricing, coupon, and shipping re-quote logic.
+ * Differences: no PayPal API call; inserts with status "awaiting_payment_review"
+ * and paymentMethod "bank_transfer".
+ *
+ * SECURITY CONTRACT: same as createPayPalOrder — the client sends only
+ * { variantId, quantity } pairs; the server re-fetches and re-prices everything.
+ */
+export async function createWhatsAppOrder(
+  input: CreateWhatsAppOrderInput,
+): Promise<CreateWhatsAppOrderResult> {
+  const user = await getSessionUser();
+  if (!user) {
+    return { ok: false, error: "You must be signed in to check out." };
+  }
+
+  const addr = orderAddressSchema.safeParse(input.address);
+  if (!addr.success) {
+    return { ok: false, error: "Please review the shipping address fields." };
+  }
+  if (!Array.isArray(input.items) || input.items.length === 0) {
+    return { ok: false, error: "Your bag is empty." };
+  }
+
+  // Partition stocked vs configurable lines.
+  const stockedInputLines = input.items.filter((l) => !l.configurationData);
+  const configurableInputLines = input.items.filter((l) => !!l.configurationData);
+
+  // Clamp quantities 1..10 and dedupe by variantId.
+  const qtyByVariant = new Map<string, number>();
+  for (const line of stockedInputLines) {
+    if (typeof line.variantId !== "string" || line.variantId.length === 0) {
+      continue;
+    }
+    const q = Math.max(1, Math.min(10, Math.floor(Number(line.quantity) || 0)));
+    qtyByVariant.set(
+      line.variantId,
+      Math.min(10, (qtyByVariant.get(line.variantId) ?? 0) + q),
+    );
+  }
+  const variantIds = [...qtyByVariant.keys()];
+  if (variantIds.length === 0 && configurableInputLines.length === 0) {
+    return { ok: false, error: "Your bag is empty." };
+  }
+
+  // Fetch variants + their products — manual two-query hydration (no LATERAL joins).
+  const rawVariants = variantIds.length > 0
+    ? await db.select().from(productVariants).where(inArray(productVariants.id, variantIds))
+    : [];
+  const productIdsForVariants = [
+    ...new Set(rawVariants.map((v) => v.productId)),
+  ];
+  const productRows = productIdsForVariants.length
+    ? await db
+        .select()
+        .from(products)
+        .where(inArray(products.id, productIdsForVariants))
+    : [];
+  const productByIdForVariants = new Map(productRows.map((p) => [p.id, p]));
+  const variantRows = rawVariants.map((v) => ({
+    ...v,
+    product: productByIdForVariants.get(v.productId)!,
+  }));
+  if (variantRows.length !== variantIds.length) {
+    return { ok: false, error: "One or more items are no longer available." };
+  }
+  for (const v of variantRows) {
+    if (!v.product?.isActive) {
+      return { ok: false, error: "One or more items are no longer available." };
+    }
+    const trackedAndOOS = v.trackStock === true && (v.stock ?? 0) <= 0;
+    const allowPreorder = v.allowPreorder === true;
+    const legacyOOS = v.trackStock !== true && v.inStock === false;
+    if ((trackedAndOOS && !allowPreorder) || legacyOOS) {
+      return {
+        ok: false,
+        error: `${v.product?.name ?? "An item"} is sold out. Please remove it from your bag.`,
+      };
+    }
+  }
+
+  // Fetch option values for variant label composition.
+  const optionValueIds = [
+    ...new Set(
+      variantRows.flatMap((v) =>
+        [
+          v.option1ValueId,
+          v.option2ValueId,
+          v.option3ValueId,
+          v.option4ValueId,
+          v.option5ValueId,
+          v.option6ValueId,
+        ].filter((id): id is string => typeof id === "string"),
+      ),
+    ),
+  ];
+  const optionValueRows =
+    optionValueIds.length > 0
+      ? await db
+          .select()
+          .from(productOptionValues)
+          .where(inArray(productOptionValues.id, optionValueIds))
+      : [];
+  const valueById = new Map(optionValueRows.map((v) => [v.id, v]));
+
+  type Snap = {
+    variantId: string;
+    productId: string;
+    productName: string;
+    productSlug: string;
+    productImage: string | null;
+    variantLabel: string;
+    unitPrice: string;
+    unitCost: string | null;
+    quantity: number;
+    lineTotal: string;
+  };
+
+  const priceNow = new Date();
+  const snapshots: Snap[] = variantRows.map((v) => {
+    const quantity = qtyByVariant.get(v.id)!;
+    const { effectivePrice } = resolveEffectivePrice(v, priceNow);
+    const unit = Number(effectivePrice);
+    const line = Number((unit * quantity).toFixed(2));
+    const rawImages = v.product.images as unknown;
+    let firstImage: string | null = null;
+    if (Array.isArray(rawImages) && rawImages.length > 0) {
+      firstImage = String(rawImages[0]);
+    } else if (typeof rawImages === "string" && rawImages.length > 0) {
+      try {
+        const parsed = JSON.parse(rawImages) as unknown;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          firstImage = String(parsed[0]);
+        }
+      } catch {
+        // leave null
+      }
+    }
+    const labelParts: string[] = [];
+    for (const vid of [
+      v.option1ValueId,
+      v.option2ValueId,
+      v.option3ValueId,
+      v.option4ValueId,
+      v.option5ValueId,
+      v.option6ValueId,
+    ]) {
+      if (vid) {
+        const val = valueById.get(vid);
+        if (val) labelParts.push(val.value);
+      }
+    }
+    const variantLabel =
+      labelParts.length > 0
+        ? composeVariantLabel(labelParts)
+        : (v.labelCache ?? "");
+
+    return {
+      variantId: v.id,
+      productId: v.productId,
+      productName: v.product.name,
+      productSlug: v.product.slug,
+      productImage: firstImage,
+      variantLabel,
+      unitPrice: effectivePrice,
+      unitCost: v.costPrice ?? null,
+      quantity,
+      lineTotal: line.toFixed(2),
+    };
+  });
+
+  // Append configurable line snapshots.
+  const configurableProductIds = [
+    ...new Set(
+      configurableInputLines
+        .map((l) => l.productId)
+        .filter((id): id is string => typeof id === "string" && id.length > 0),
+    ),
+  ];
+  const configurableProductRows =
+    configurableProductIds.length > 0
+      ? await db
+          .select({ id: products.id, slug: products.slug, name: products.name })
+          .from(products)
+          .where(inArray(products.id, configurableProductIds))
+      : [];
+  const productById = new Map(configurableProductRows.map((p) => [p.id, p]));
+
+  type ConfigSnap = typeof snapshots[0] & { configurationData: ConfigurationData | null };
+  const allSnapshots: ConfigSnap[] = [
+    ...snapshots.map((s) => ({ ...s, configurationData: null as ConfigurationData | null })),
+    ...configurableInputLines.map((line) => {
+      const cfg = line.configurationData!;
+      const qty = Math.max(1, Math.min(10, Math.floor(Number(line.quantity) || 1)));
+      const unitPrice = cfg.computedPrice.toFixed(2);
+      const product = line.productId ? productById.get(line.productId) : undefined;
+      return {
+        variantId: "NONE",
+        productId: product?.id ?? line.productId ?? "",
+        productName: product?.name ?? cfg.computedSummary.slice(0, 127),
+        productSlug: product?.slug ?? "",
+        productImage: null,
+        variantLabel: cfg.computedSummary,
+        unitPrice,
+        unitCost: null as string | null,
+        quantity: qty,
+        lineTotal: (cfg.computedPrice * qty).toFixed(2),
+        configurationData: cfg,
+      };
+    }),
+  ];
+
+  const subtotal = allSnapshots.reduce((sum, s) => sum + Number(s.lineTotal), 0);
+  const subtotalStr = subtotal.toFixed(2);
+
+  // Shipping re-quote — same logic as createPayPalOrder.
+  let shippingNum: number;
+  let shippingServiceCode: string | null = null;
+  let shippingServiceName: string | null = null;
+  if (input.shippingServiceCode) {
+    try {
+      const quote = await quoteForCart(
+        input.items.map((i) => {
+          const row = variantRows.find((v) => v.id === i.variantId);
+          const snap = allSnapshots.find((s) => s.variantId === i.variantId);
+          return {
+            productId: row?.productId ?? "",
+            variantId: i.variantId,
+            quantity: qtyByVariant.get(i.variantId) ?? i.quantity,
+            unitPrice: snap ? Number(snap.unitPrice) : 0,
+          };
+        }),
+        {
+          address1: addr.data.addressLine1,
+          address2: addr.data.addressLine2 ?? null,
+          city: addr.data.city,
+          state: addr.data.state,
+          postcode: addr.data.postcode,
+          country: "MY",
+        },
+      );
+      if (quote.ok) {
+        const match = quote.options.find(
+          (o) => o.serviceCode === input.shippingServiceCode,
+        );
+        if (match) {
+          shippingNum = match.finalPrice;
+          shippingServiceCode = match.serviceCode;
+          shippingServiceName = match.serviceName;
+        } else {
+          const cheapest = [...quote.options].sort(
+            (a, b) => a.finalPrice - b.finalPrice,
+          )[0];
+          if (cheapest) {
+            shippingNum = cheapest.finalPrice;
+            shippingServiceCode = cheapest.serviceCode;
+            shippingServiceName = cheapest.serviceName;
+          } else {
+            const flat = await getShippingRate(addr.data.state, subtotal);
+            shippingNum = Number(flat.cost.toFixed(2));
+          }
+        }
+      } else {
+        const flat = await getShippingRate(addr.data.state, subtotal);
+        shippingNum = Number(flat.cost.toFixed(2));
+      }
+    } catch (err) {
+      console.error("[whatsapp-order] Delyva re-quote failed:", err);
+      const flat = await getShippingRate(addr.data.state, subtotal);
+      shippingNum = Number(flat.cost.toFixed(2));
+    }
+  } else {
+    const shippingResult = await getShippingRate(addr.data.state, subtotal);
+    shippingNum = Number(shippingResult.cost.toFixed(2));
+  }
+  shippingNum = Number(shippingNum.toFixed(2));
+  const shippingStr = shippingNum.toFixed(2);
+
+  // Coupon validation.
+  let discount = 0;
+  if (input.couponCode && typeof input.couponCode === "string") {
+    const valid = await validateCoupon(input.couponCode, subtotal);
+    if (valid.ok) {
+      discount = valid.discount;
+    }
+  }
+
+  const totalNum = Math.max(0, +(subtotal - discount + shippingNum).toFixed(2));
+  const totalStr = totalNum.toFixed(2);
+
+  // Insert order row with bank_transfer + awaiting_payment_review.
+  const internalOrderId = randomUUID();
+  try {
+    await db.insert(orders).values({
+      id: internalOrderId,
+      userId: user.id,
+      status: "awaiting_payment_review",
+      paymentMethod: "bank_transfer",
+      subtotal: subtotalStr,
+      shippingCost: shippingStr,
+      totalAmount: totalStr,
+      currency: "MYR",
+      customerEmail: user.email,
+      shippingName: addr.data.recipientName,
+      shippingPhone: addr.data.phone,
+      shippingLine1: addr.data.addressLine1,
+      shippingLine2: addr.data.addressLine2 || null,
+      shippingCity: addr.data.city,
+      shippingState: addr.data.state,
+      shippingPostcode: addr.data.postcode,
+      shippingCountry: "Malaysia",
+      shippingServiceCode: shippingServiceCode,
+      shippingServiceName: shippingServiceName,
+      shippingQuotedPrice: shippingServiceCode ? shippingStr : null,
+    });
+
+    await db.insert(orderItems).values(
+      allSnapshots.map((s) => ({
+        id: randomUUID(),
+        orderId: internalOrderId,
+        productId: s.productId,
+        variantId: s.variantId,
+        productName: s.productName,
+        productSlug: s.productSlug,
+        productImage: s.productImage,
+        variantLabel: s.variantLabel || null,
+        unitPrice: s.unitPrice,
+        unitCost: s.unitCost,
+        quantity: s.quantity,
+        lineTotal: s.lineTotal,
+        configurationData: s.configurationData
+          ? JSON.stringify(s.configurationData)
+          : null,
+      })),
+    );
+
+    revalidatePath("/admin/orders");
+    revalidatePath("/orders");
+
+    return { ok: true, orderId: internalOrderId };
+  } catch (err) {
+    console.error("[whatsapp-order] DB write failed:", err);
+    return { ok: false, error: "We could not save your order. Please try again." };
+  }
+}

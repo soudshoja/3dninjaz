@@ -3,6 +3,7 @@ import { getSessionUser } from "@/lib/auth-helpers";
 import { listMyAddresses } from "@/actions/addresses";
 import { CheckoutIsland } from "@/components/checkout/paypal-provider";
 import { BRAND } from "@/lib/brand";
+import { getStoreSettingsCached } from "@/lib/store-settings";
 
 /**
  * /checkout — server component auth gate + layout shell (D3-03, D3-04, T-03-16).
@@ -27,7 +28,10 @@ export default async function CheckoutPage() {
   // listMyAddresses re-validates session via requireUser(), but we already
   // know the user is authenticated (gate above). Returns [] if none saved —
   // the picker hides itself and the existing form path is preserved.
-  const savedAddresses = await listMyAddresses();
+  const [savedAddresses, settings] = await Promise.all([
+    listMyAddresses(),
+    getStoreSettingsCached(),
+  ]);
 
   return (
     <main
@@ -48,6 +52,10 @@ export default async function CheckoutPage() {
           defaultEmail={user.email}
           savedAddresses={savedAddresses}
           userId={user.id}
+          whatsappNumber={settings.whatsappNumber ?? "60167203048"}
+          bankName={settings.bankName}
+          bankAccountNumber={settings.bankAccountNumber}
+          bankAccountHolder={settings.bankAccountHolder}
         />
       </div>
     </main>

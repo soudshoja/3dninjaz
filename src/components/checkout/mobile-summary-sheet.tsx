@@ -40,6 +40,11 @@ export function MobileSummarySheet({
   onPaid,
   customerName,
   customerEmail,
+  couponCode,
+  waNumber,
+  bankName,
+  bankAccountNumber,
+  bankAccountHolder,
 }: {
   items: HydratedCartItem[];
   subtotalMyr: number;
@@ -50,6 +55,11 @@ export function MobileSummarySheet({
   onPaid: (redirectTo: string) => void;
   customerName: string;
   customerEmail: string;
+  couponCode: string | null;
+  waNumber: string;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
+  bankAccountHolder?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const discountedSubtotal = appliedCoupon
@@ -123,6 +133,11 @@ export function MobileSummarySheet({
               address={address}
               customerName={customerName}
               customerEmail={customerEmail}
+              couponCode={couponCode}
+              waNumber={waNumber}
+              bankName={bankName}
+              bankAccountNumber={bankAccountNumber}
+              bankAccountHolder={bankAccountHolder}
               disabled={items.length === 0}
             />
           </DrawerFooter>

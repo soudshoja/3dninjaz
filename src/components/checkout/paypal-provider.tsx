@@ -42,12 +42,20 @@ export function CheckoutIsland({
   defaultEmail,
   savedAddresses,
   userId,
+  whatsappNumber,
+  bankName,
+  bankAccountNumber,
+  bankAccountHolder,
 }: {
   defaultName: string;
   defaultEmail: string;
   savedAddresses?: SavedAddress[];
   /** Logged-in user id — forwarded to AddressForm for draft persistence. */
   userId: string;
+  whatsappNumber: string;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
+  bankAccountHolder?: string | null;
 }) {
   const router = useRouter();
   const storeItems = useCartStore((s) => s.items);
@@ -99,6 +107,13 @@ export function CheckoutIsland({
       currency: "MYR",
       intent: "capture",
       components: "buttons",
+      // Malaysian PayPal merchant accounts do NOT have Advanced Card
+      // capability — the default "Debit or Credit Card" button renders a
+      // hosted-fields form that PayPal then rejects ("This card can't be
+      // used for your payment"). Disable unsupported funding sources so
+      // customers only see the PayPal wallet button that actually works
+      // for MY merchants.
+      disableFunding: "card,credit,paylater,venmo",
     }),
     [],
   );
@@ -194,6 +209,11 @@ export function CheckoutIsland({
                 address={address}
                 customerName={defaultName}
                 customerEmail={defaultEmail}
+                couponCode={appliedCoupon?.code ?? null}
+                waNumber={whatsappNumber}
+                bankName={bankName}
+                bankAccountNumber={bankAccountNumber}
+                bankAccountHolder={bankAccountHolder}
                 disabled={items.length === 0}
               />
             </div>
@@ -210,6 +230,11 @@ export function CheckoutIsland({
           onPaid={handlePaid}
           customerName={defaultName}
           customerEmail={defaultEmail}
+          couponCode={appliedCoupon?.code ?? null}
+          waNumber={whatsappNumber}
+          bankName={bankName}
+          bankAccountNumber={bankAccountNumber}
+          bankAccountHolder={bankAccountHolder}
         />
       </div>
     </PayPalScriptProvider>
