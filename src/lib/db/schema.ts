@@ -931,6 +931,9 @@ export const coupons = mysqlTable(
     usageCap: int("usage_cap"),
     usageCount: int("usage_count").notNull().default(0),
     active: boolean("active").notNull().default(true),
+    // When TRUE (default) the coupon works for guests too; FALSE restricts it
+    // to logged-in customers. Admin sets this per coupon at create/edit time.
+    guestAllowed: boolean("guest_allowed").notNull().default(true),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
   },

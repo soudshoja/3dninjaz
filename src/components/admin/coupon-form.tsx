@@ -15,6 +15,7 @@ type CouponInitial = {
   endsAt: Date | null;
   usageCap: number | null;
   active: boolean;
+  guestAllowed: boolean;
 };
 
 function toDateLocal(d: Date | null): string {
@@ -222,6 +223,23 @@ export function CouponForm({
           />
           <span className="text-sm font-semibold">Active</span>
         </label>
+      </div>
+
+      <div>
+        <label className="inline-flex items-center gap-2">
+          <input
+            name="guestAllowed"
+            type="checkbox"
+            value="true"
+            defaultChecked={initial?.guestAllowed ?? true}
+            className="h-5 w-5 rounded"
+          />
+          <span className="text-sm font-semibold">Available to guests</span>
+        </label>
+        <p className="mt-1 text-xs text-slate-500">
+          When on, anyone can use this code at checkout. Turn off to restrict it
+          to logged-in (registered) customers only.
+        </p>
       </div>
 
       {error ? (
