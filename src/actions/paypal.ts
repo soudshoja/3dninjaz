@@ -14,6 +14,7 @@ import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
 import { validateCoupon, redeemCoupon } from "@/actions/coupons";
 import { getShippingRate } from "@/actions/admin-shipping";
 import { quoteForCart } from "@/actions/shipping-quote";
+import { autoBookShipmentAfterPayment } from "@/actions/shipping";
 import { revalidatePath } from "next/cache";
 import type { ConfigurationData } from "@/lib/config-fields";
 
@@ -95,16 +96,16 @@ export async function createPayPalOrder(
   const stockedInputLines = input.items.filter((l) => !l.configurationData);
   const configurableInputLines = input.items.filter((l) => !!l.configurationData);
 
-  // Clamp quantities 1..10 and dedupe by variantId (sum quantities if dup).
+  // Clamp quantities to min 1, dedupe by variantId (sum quantities if dup).
   const qtyByVariant = new Map<string, number>();
   for (const line of stockedInputLines) {
     if (typeof line.variantId !== "string" || line.variantId.length === 0) {
       continue;
     }
-    const q = Math.max(1, Math.min(10, Math.floor(Number(line.quantity) || 0)));
+    const q = Math.max(1, Math.floor(Number(line.quantity) || 0));
     qtyByVariant.set(
       line.variantId,
-      Math.min(10, (qtyByVariant.get(line.variantId) ?? 0) + q),
+      (qtyByVariant.get(line.variantId) ?? 0) + q,
     );
   }
   const variantIds = [...qtyByVariant.keys()];
@@ -286,7 +287,7 @@ export async function createPayPalOrder(
     ...snapshots.map((s) => ({ ...s, configurationData: null as ConfigurationData | null })),
     ...configurableInputLines.map((line) => {
       const cfg = line.configurationData!;
-      const qty = Math.max(1, Math.min(10, Math.floor(Number(line.quantity) || 1)));
+      const qty = Math.max(1, Math.floor(Number(line.quantity) || 1));
       const unitPrice = cfg.computedPrice.toFixed(2);
       const product = line.productId ? productById.get(line.productId) : undefined;
       return {
@@ -661,6 +662,13 @@ export async function capturePayPalOrder({
     .set({ status: "paid", paypalCaptureId: captureId })
     .where(eq(orders.id, existing.id));
 
+  // Auto-book the Delyva courier the customer selected at checkout.
+  // Fire-and-forget — booking failures must never block the payment
+  // response. Admin can manually retry from /admin/orders/[id] if needed.
+  void autoBookShipmentAfterPayment(existing.id).catch((err) =>
+    console.error("[paypal] auto-book shipment failed:", err),
+  );
+
   // Plan 05-03 — atomic coupon redemption AFTER capture succeeds. If the
   // coupon's usage_cap was hit between approval and capture, we lose the
   // discount on the audit trail but the customer already paid the
@@ -692,14 +700,18 @@ export async function capturePayPalOrder({
     }
   }
 
-  // Fire-and-forget order-confirmation email (Plan 03-03).
-  // T-03-26 / D3-10 UX contract: SMTP failure must NEVER block the capture
-  // response. sendOrderConfirmationEmail itself catches and logs internally;
-  // we also attach a catch here as a belt-and-braces guard in case the
-  // top-level DB read inside that function throws before the inner try/catch.
-  void sendOrderConfirmationEmail(existing.id).catch((err) =>
-    console.error("[paypal] confirmation email dispatch failed:", err),
-  );
+  // Await the order-confirmation email send. Previously this was
+  // `void sendOrderConfirmationEmail(...)`, but on Node-runtime server
+  // actions Next.js may abort the pending promise after the response
+  // returns to the client, so customers stopped receiving confirmations.
+  // sendOrderConfirmationEmail catches its own SMTP errors and never
+  // throws — awaiting it adds ~500ms-1s to the capture response but
+  // guarantees the email is actually sent before we hand control back.
+  try {
+    await sendOrderConfirmationEmail(existing.id);
+  } catch (err) {
+    console.error("[paypal] confirmation email dispatch failed:", err);
+  }
 
   revalidatePath(`/orders/${existing.id}`);
   revalidatePath("/orders");

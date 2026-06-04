@@ -68,16 +68,16 @@ export async function createWhatsAppOrder(
   const stockedInputLines = input.items.filter((l) => !l.configurationData);
   const configurableInputLines = input.items.filter((l) => !!l.configurationData);
 
-  // Clamp quantities 1..10 and dedupe by variantId.
+  // Clamp quantities to min 1, dedupe by variantId.
   const qtyByVariant = new Map<string, number>();
   for (const line of stockedInputLines) {
     if (typeof line.variantId !== "string" || line.variantId.length === 0) {
       continue;
     }
-    const q = Math.max(1, Math.min(10, Math.floor(Number(line.quantity) || 0)));
+    const q = Math.max(1, Math.floor(Number(line.quantity) || 0));
     qtyByVariant.set(
       line.variantId,
-      Math.min(10, (qtyByVariant.get(line.variantId) ?? 0) + q),
+      (qtyByVariant.get(line.variantId) ?? 0) + q,
     );
   }
   const variantIds = [...qtyByVariant.keys()];
@@ -233,7 +233,7 @@ export async function createWhatsAppOrder(
     ...snapshots.map((s) => ({ ...s, configurationData: null as ConfigurationData | null })),
     ...configurableInputLines.map((line) => {
       const cfg = line.configurationData!;
-      const qty = Math.max(1, Math.min(10, Math.floor(Number(line.quantity) || 1)));
+      const qty = Math.max(1, Math.floor(Number(line.quantity) || 1));
       const unitPrice = cfg.computedPrice.toFixed(2);
       const product = line.productId ? productById.get(line.productId) : undefined;
       return {
