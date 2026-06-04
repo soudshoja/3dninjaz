@@ -11,6 +11,7 @@ import {
   DrawerClose,
 } from "@/components/ui/drawer";
 import { CheckoutSummary } from "./checkout-summary";
+import { CouponApply } from "@/components/store/coupon-apply";
 import { PayPalButton } from "./paypal-button";
 import { WhatsAppBankTransferButton } from "./whatsapp-bank-transfer-button";
 import { BRAND } from "@/lib/brand";
@@ -102,12 +103,21 @@ export function MobileSummarySheet({
           </DrawerHeader>
 
           <div className="flex-1 overflow-y-auto px-5 py-3">
+            {/* Coupon at top so it's always visible without scrolling */}
+            <div className="mb-4">
+              <CouponApply
+                subtotal={subtotalMyr}
+                applied={appliedCoupon}
+                onChange={onCouponChange}
+              />
+            </div>
             <CheckoutSummary
               items={items}
               subtotal={subtotalMyr}
               appliedCoupon={appliedCoupon}
               onCouponChange={onCouponChange}
               shipping={shipping}
+              showCoupon={false}
             />
           </div>
 

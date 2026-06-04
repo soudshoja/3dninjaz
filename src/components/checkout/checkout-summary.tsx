@@ -25,12 +25,14 @@ export function CheckoutSummary({
   appliedCoupon,
   onCouponChange,
   shipping,
+  showCoupon = true,
 }: {
   items: HydratedCartItem[];
   subtotal: number;
   appliedCoupon: AppliedCoupon | null;
   onCouponChange: (next: AppliedCoupon | null) => void;
   shipping: SelectedShipping | null;
+  showCoupon?: boolean;
 }) {
   const discounted = appliedCoupon ? appliedCoupon.finalTotal : subtotal;
   const shippingNum = shipping?.price ?? 0;
@@ -43,13 +45,15 @@ export function CheckoutSummary({
         ))}
       </div>
 
-      <div className="mt-4">
-        <CouponApply
-          subtotal={subtotal}
-          applied={appliedCoupon}
-          onChange={onCouponChange}
-        />
-      </div>
+      {showCoupon && (
+        <div className="mt-4">
+          <CouponApply
+            subtotal={subtotal}
+            applied={appliedCoupon}
+            onChange={onCouponChange}
+          />
+        </div>
+      )}
 
       <div className="mt-4 flex items-center justify-between">
         <span className="text-sm text-slate-600">Subtotal</span>
