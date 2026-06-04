@@ -133,25 +133,16 @@ export function MobileSummarySheet({
             <p className="text-[11px] uppercase tracking-wider text-zinc-500 font-medium px-1 mb-1">
               Pay
             </p>
-            {isGuest ? (
-              <div className="rounded-xl border-2 border-dashed border-slate-200 px-4 py-4 text-center mb-2">
-                <p className="text-sm text-slate-500">
-                  <a href="/login?next=/checkout" className="font-semibold underline" style={{ color: "#1E8BFF" }}>Sign in</a>
-                  {" "}to pay with PayPal
-                </p>
-              </div>
-            ) : (
-              <PayPalButton
-                address={address}
-                items={items}
-                appliedCouponCode={appliedCoupon?.code ?? null}
-                shipping={shipping}
-                onPaid={(redirect) => {
-                  setOpen(false);
-                  onPaid(redirect);
-                }}
-              />
-            )}
+            <PayPalButton
+              address={address}
+              items={items}
+              appliedCouponCode={appliedCoupon?.code ?? null}
+              shipping={shipping}
+              onPaid={(redirect) => {
+                setOpen(false);
+                onPaid(redirect);
+              }}
+            />
             <WhatsAppBankTransferButton
               items={items}
               subtotal={subtotalMyr}

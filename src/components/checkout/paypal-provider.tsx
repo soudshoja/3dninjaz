@@ -241,22 +241,13 @@ export function CheckoutIsland({
               <p className="text-[11px] uppercase tracking-wider text-zinc-500 mb-3 font-medium">
                 Pay
               </p>
-              {isGuest ? (
-                <div className="rounded-xl border-2 border-dashed border-slate-200 px-4 py-4 text-center">
-                  <p className="text-sm text-slate-500">
-                    <a href="/login?next=/checkout" className="font-semibold underline" style={{ color: "#1E8BFF" }}>Sign in</a>
-                    {" "}to pay with PayPal
-                  </p>
-                </div>
-              ) : (
-                <PayPalButton
-                  address={address}
-                  items={items}
-                  appliedCouponCode={appliedCoupon?.code ?? null}
-                  shipping={shipping}
-                  onPaid={handlePaid}
-                />
-              )}
+              <PayPalButton
+                address={address}
+                items={items}
+                appliedCouponCode={appliedCoupon?.code ?? null}
+                shipping={shipping}
+                onPaid={handlePaid}
+              />
               <WhatsAppBankTransferButton
                 items={items}
                 subtotal={subtotal}

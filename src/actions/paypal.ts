@@ -78,10 +78,7 @@ type CaptureOrderResult =
 export async function createPayPalOrder(
   input: CreateOrderInput,
 ): Promise<CreateOrderResult> {
-  const user = await getSessionUser();
-  if (!user) {
-    return { ok: false, error: "You must be signed in to check out." };
-  }
+  const user = await getSessionUser(); // nullable — guests allowed
 
   // Validate address shape server-side even though the client validated too.
   const addr = orderAddressSchema.safeParse(input.address);
@@ -492,14 +489,14 @@ export async function createPayPalOrder(
   try {
     await db.insert(orders).values({
       id: internalOrderId,
-      userId: user.id,
+      userId: user?.id ?? null,
       status: "pending",
       paypalOrderId,
       subtotal: subtotalStr,
       shippingCost: shippingStr,
       totalAmount: totalStr,
       currency: PAYPAL_CURRENCY,
-      customerEmail: user.email,
+      customerEmail: user?.email ?? "guest@3dninjaz.local",
       shippingName: addr.data.recipientName,
       shippingPhone: addr.data.phone,
       shippingLine1: addr.data.addressLine1,
@@ -569,13 +566,7 @@ export async function capturePayPalOrder({
 }: {
   paypalOrderId: string;
 }): Promise<CaptureOrderResult> {
-  const user = await getSessionUser();
-  if (!user) {
-    return {
-      ok: false,
-      error: "You must be signed in to complete your order.",
-    };
-  }
+  const user = await getSessionUser(); // nullable — guest capture allowed
   if (!paypalOrderId || typeof paypalOrderId !== "string") {
     return { ok: false, error: "Missing PayPal order ID." };
   }
@@ -586,10 +577,15 @@ export async function capturePayPalOrder({
   if (!existing) {
     return { ok: false, error: "Order not found." };
   }
-  // Only the owner may capture; admins don't capture on behalf of customers.
-  if (existing.userId !== user.id) {
+  // Only enforce ownership if both order and session have a userId.
+  if (user && existing.userId && existing.userId !== user.id) {
     return { ok: false, error: "Order not found." };
   }
+
+  const redir = (id: string, uid: string | null) =>
+    uid
+      ? `/orders/${id}?from=checkout`
+      : `/order-success?n=${encodeURIComponent(formatOrderNumber(id))}`;
 
   // Idempotency (D3-09): if we already captured, return existing result
   // without calling PayPal again.
@@ -598,7 +594,7 @@ export async function capturePayPalOrder({
       ok: true,
       orderId: existing.id,
       orderNumber: formatOrderNumber(existing.id),
-      redirectTo: `/orders/${existing.id}`,
+      redirectTo: redir(existing.id, existing.userId),
     };
   }
 
@@ -609,11 +605,14 @@ export async function capturePayPalOrder({
   // Plan 05-03: pull the customId we set in createPayPalOrder so we know
   // which coupon (if any) to redeem after capture succeeds.
   let appliedCouponCode: string | null = null;
+  // Hoisted so guest email back-fill can read payer info after the try block.
+  let captureResponse: Awaited<ReturnType<ReturnType<typeof ordersController>["captureOrder"]>> | null = null;
   try {
-    const response = await ordersController().captureOrder({
+    captureResponse = await ordersController().captureOrder({
       id: paypalOrderId,
       prefer: "return=representation",
     });
+    const response = captureResponse;
     const order = response.result;
     const capture = order?.purchaseUnits?.[0]?.payments?.captures?.[0];
     captureId = capture?.id ?? null;
@@ -648,7 +647,7 @@ export async function capturePayPalOrder({
           ok: true,
           orderId: refetched.id,
           orderNumber: formatOrderNumber(refetched.id),
-          redirectTo: `/orders/${refetched.id}`,
+          redirectTo: redir(refetched.id, refetched.userId),
         };
       }
     }
@@ -662,6 +661,21 @@ export async function capturePayPalOrder({
     .set({ status: "paid", paypalCaptureId: captureId })
     .where(eq(orders.id, existing.id));
 
+  // For guest orders: back-fill customerEmail from PayPal payer info.
+  if (!existing.userId && captureResponse) {
+    try {
+      const payerEmail = (captureResponse as { result?: { payer?: { emailAddress?: string } } })
+        .result?.payer?.emailAddress;
+      if (payerEmail) {
+        await db.update(orders)
+          .set({ customerEmail: payerEmail })
+          .where(eq(orders.id, existing.id));
+      }
+    } catch {
+      // non-critical — order is paid regardless
+    }
+  }
+
   // Auto-book the Delyva courier the customer selected at checkout.
   // Fire-and-forget — booking failures must never block the payment
   // response. Admin can manually retry from /admin/orders/[id] if needed.
@@ -674,7 +688,9 @@ export async function capturePayPalOrder({
   // discount on the audit trail but the customer already paid the
   // discounted amount (it was sent to PayPal as the order total). This is
   // an acceptable failure mode — log it for the operator.
-  if (appliedCouponCode) {
+  // Guest orders skip coupon redemption recording — the discount was already
+  // applied to the PayPal amount; redeemCoupon requires a userId.
+  if (appliedCouponCode && existing.userId) {
     try {
       const subtotalNum = parseFloat(existing.subtotal);
       const valid = await validateCoupon(appliedCouponCode, subtotalNum);
@@ -720,9 +736,9 @@ export async function capturePayPalOrder({
     ok: true,
     orderId: existing.id,
     orderNumber: formatOrderNumber(existing.id),
-    // `?from=checkout` toggles the success banner on /orders/[id] (Plan 03-03).
-    // T-03-24: cosmetic only — no behavior change if the flag is spoofed.
-    redirectTo: `/orders/${existing.id}?from=checkout`,
+    // Logged-in: /orders/[id]?from=checkout shows success banner (Plan 03-03).
+    // Guest: /order-success?n=[orderNumber] — no account to show orders page.
+    redirectTo: redir(existing.id, existing.userId),
   };
 }
 
