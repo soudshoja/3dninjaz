@@ -26,6 +26,25 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // Page documents must always be revalidated so returning visitors pick up
+      // a new deploy without a manual hard-refresh. `no-cache` = "ask the server
+      // first" (not "never store"), so the browser re-checks the HTML each visit;
+      // the HTML then references the latest content-hashed /_next/static assets.
+      //
+      // The negative lookahead EXCLUDES anything that must stay cached or set its
+      // own headers: hashed build assets (_next/), uploaded media (uploads/),
+      // API + route handlers (api/), and any path containing a file extension
+      // (e.g. .pdf invoices, favicon.ico, sitemap.xml). What's left = clean page
+      // routes (no extension) = the HTML documents we want fresh.
+      {
+        source: "/((?!_next/|uploads/|api/|.*\\.).*)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-cache",
+          },
+        ],
+      },
     ];
   },
 };
