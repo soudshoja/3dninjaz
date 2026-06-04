@@ -571,6 +571,16 @@ export const orders = mysqlTable("orders", {
     .notNull()
     .default("0.00"),
   extraCostNote: varchar("extra_cost_note", { length: 255 }),
+  // Order-level discount recorded on the order so it reflects everywhere
+  // (admin detail, customer view, invoice, WhatsApp message). Set by a
+  // checkout coupon OR by an admin applying a discount to a pending order.
+  // discountAmount is the MYR value subtracted from subtotal; discountCode is
+  // the coupon code (or "MANUAL" for an admin-entered amount). NOT NULL default
+  // 0 so existing rows stay valid.
+  discountAmount: decimal("discount_amount", { precision: 10, scale: 2 })
+    .notNull()
+    .default("0.00"),
+  discountCode: varchar("discount_code", { length: 64 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
 });

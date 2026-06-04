@@ -341,6 +341,10 @@ export async function createWhatsAppOrder(
       subtotal: subtotalStr,
       shippingCost: shippingStr,
       totalAmount: totalStr,
+      // Record the coupon discount on the order so it reflects in admin/customer
+      // views, the invoice, and the WhatsApp message.
+      discountAmount: discount.toFixed(2),
+      discountCode: discount > 0 ? (input.couponCode ?? null) : null,
       currency: "MYR",
       customerEmail: user?.email ?? (input.guestEmail?.trim() || "guest@3dninjaz.local"),
       shippingName: addr.data.recipientName,

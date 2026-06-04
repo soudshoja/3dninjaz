@@ -274,7 +274,7 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
     <nav
       ref={navRef}
       aria-label="Primary"
-      className="sticky top-0 z-40 border-b border-zinc-200 backdrop-blur bg-white/90 overflow-x-clip"
+      className="sticky top-0 z-50 border-b border-zinc-200 bg-white"
     >
       <div className="max-w-6xl mx-auto flex items-center justify-between px-6 md:px-8 py-2">
 
@@ -434,7 +434,7 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
       <>
         {/* Backdrop */}
         <div
-          className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 ease-in-out ${open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+          className={`fixed inset-0 z-[55] bg-black/40 transition-opacity duration-300 ease-in-out ${open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
           aria-hidden
           onClick={() => setOpen(false)}
         />
@@ -443,7 +443,7 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
         <div
           id="site-nav-mobile"
           aria-hidden={!open}
-          className={`fixed inset-x-0 top-0 z-50 bg-white max-h-screen overflow-y-auto shadow-xl transition-transform duration-300 ease-in-out ${open ? "translate-y-0" : "-translate-y-full"}`}
+          className={`fixed inset-x-0 top-0 z-[60] bg-white max-h-screen overflow-y-auto shadow-xl transition-transform duration-300 ease-in-out ${open ? "translate-y-0" : "-translate-y-full"}`}
         >
           {/* Drawer header */}
           <div className="flex items-center justify-between px-6 py-3 border-b border-zinc-200">

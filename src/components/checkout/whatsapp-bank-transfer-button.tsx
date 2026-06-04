@@ -38,6 +38,8 @@ function buildMessage({
   orderId,
   items,
   subtotal,
+  discount,
+  couponCode,
   shipping,
   address,
   customerName,
@@ -49,6 +51,8 @@ function buildMessage({
   orderId: string;
   items: HydratedCartItem[];
   subtotal: number;
+  discount: number;
+  couponCode: string | null;
   shipping: SelectedShipping | null;
   address: AddressFormValues | null;
   customerName: string;
@@ -74,12 +78,18 @@ function buildMessage({
   lines.push("");
   lines.push(`Subtotal: ${formatMYR(subtotal)}`);
 
+  if (discount > 0) {
+    const label = couponCode ? ` (${couponCode})` : "";
+    lines.push(`Discount${label}: -${formatMYR(discount)}`);
+  }
+
+  const discounted = Math.max(0, subtotal - discount);
   if (shipping) {
     lines.push(`Shipping (${shipping.serviceName}): ${formatMYR(shipping.price)}`);
-    const total = subtotal + shipping.price;
+    const total = discounted + shipping.price;
     lines.push(`*Total: ${formatMYR(total)}*`);
   } else {
-    lines.push(`*Total: ${formatMYR(subtotal)}* (+ shipping TBC)`);
+    lines.push(`*Total: ${formatMYR(discounted)}* (+ shipping TBC)`);
   }
 
   lines.push("");
@@ -122,6 +132,7 @@ export function WhatsAppBankTransferButton({
   customerName,
   customerEmail,
   couponCode,
+  discount,
   waNumber,
   bankName,
   bankAccountNumber,
@@ -138,6 +149,8 @@ export function WhatsAppBankTransferButton({
   customerName: string;
   customerEmail: string;
   couponCode: string | null;
+  /** Applied coupon discount in MYR — shown in the WhatsApp message. */
+  discount?: number;
   waNumber: string;
   bankName?: string | null;
   bankAccountNumber?: string | null;
@@ -184,6 +197,8 @@ export function WhatsAppBankTransferButton({
         orderId: res.orderId,
         items,
         subtotal,
+        discount: discount ?? 0,
+        couponCode: couponCode ?? null,
         shipping,
         address,
         customerName,
