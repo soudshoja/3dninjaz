@@ -281,8 +281,9 @@ export function ConfigurableProductView({
   // ── Text value for preview ────────────────────────────────────────────────
   const textFields = useMemo(() => fields.filter((f) => f.fieldType === "text"), [fields]);
   const textValue = textFields.length > 0 ? (values[textFields[0].id] ?? "") : "";
-  const maxLength = maxUnitCount ??
-    (textFields.length > 0 ? ((textFields[0].config as { maxLength?: number }).maxLength ?? 8) : 8);
+  const maxLength = textFields.length > 0
+    ? ((textFields[0].config as { maxLength?: number }).maxLength ?? maxUnitCount ?? 8)
+    : (maxUnitCount ?? 8);
 
   // ── Mobile sticky preview strip visibility ────────────────────────────────
   // Rules (mobile only): show ONLY once the customer has actually started

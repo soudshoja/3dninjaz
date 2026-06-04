@@ -630,13 +630,13 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
                 <div
                   className="overflow-hidden transition-[max-height] duration-200 ease-out"
                   style={{
-                    maxHeight: expandedFieldId === field.id ? "600px" : "0px",
+                    maxHeight: expandedFieldId === field.id ? "1200px" : "0px",
                   }}
                   aria-hidden={expandedFieldId !== field.id}
                 >
                   <div
-                    className="rounded-b-xl border border-t-0 bg-white px-5 py-4"
-                    style={{ borderColor: "#BFDBFE", boxShadow: "inset 0 2px 4px rgba(0,0,0,0.04)" }}
+                    className="rounded-b-xl border border-t-0 bg-white px-5 py-4 overflow-y-auto"
+                    style={{ borderColor: "#BFDBFE", boxShadow: "inset 0 2px 4px rgba(0,0,0,0.04)", maxHeight: "80vh" }}
                   >
                     {expandedFieldId === field.id && (
                       <ConfigFieldFormBody
