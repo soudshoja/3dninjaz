@@ -58,11 +58,8 @@ function buildMessage({
   bankAccountHolder?: string | null;
 }): string {
   const lines: string[] = [];
-  const orderRef = orderId.slice(0, 8).toUpperCase();
 
-  lines.push("Hi 3D Ninjaz! I just placed an order on your website and would like to pay via bank transfer.");
-  lines.push("");
-  lines.push(`*Order Reference: #${orderRef}*`);
+  lines.push("Hi 3D Ninjaz! I'd like to pay via direct bank transfer.");
   lines.push("");
   lines.push("*Order Summary*");
 
@@ -88,7 +85,9 @@ function buildMessage({
   lines.push("");
   lines.push("*My Details*");
   lines.push(`Name: ${customerName}`);
-  lines.push(`Email: ${customerEmail}`);
+  if (customerEmail && customerEmail.trim()) {
+    lines.push(`Email: ${customerEmail}`);
+  }
 
   if (address) {
     lines.push("");
@@ -110,7 +109,7 @@ function buildMessage({
   }
 
   lines.push("");
-  lines.push("I will send my transfer screenshot shortly. Thank you!");
+  lines.push("I'll send my transfer screenshot once done. Thank you!");
 
   return lines.join("\n");
 }
@@ -207,7 +206,7 @@ export function WhatsAppBankTransferButton({
 
       {/* Explanatory copy */}
       <p className="text-xs text-slate-500 text-center mb-3">
-        Your order will be saved automatically — just send us your transfer screenshot to confirm.
+        Message us on WhatsApp — send your transfer screenshot and we&apos;ll confirm your order.
       </p>
 
       {/* WhatsApp CTA */}
