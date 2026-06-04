@@ -107,7 +107,6 @@ export function CartLineRow({
               type="button"
               onClick={() => increment(key)}
               aria-label={`Increase quantity of ${item.productName}`}
-              disabled={item.quantity >= 10}
               className="min-h-[48px] min-w-[48px] inline-flex items-center justify-center text-zinc-900 hover:bg-zinc-100 disabled:opacity-40"
             >
               <Plus className="h-4 w-4" aria-hidden />

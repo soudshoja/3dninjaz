@@ -81,20 +81,22 @@ export async function createPayPalOrder(
   input: CreateOrderInput,
 ): Promise<CreateOrderResult> {
   const user = await getSessionUser();
-  // Guest checkout: user may be null. Resolve the email to use for the order.
+  // Guest checkout: user may be null. Email is OPTIONAL for guests — if they
+  // provide one it must be well-formed; otherwise we fall back to a placeholder
+  // and (for PayPal) back-fill from the payer info on capture.
   let resolvedEmail: string;
   if (user) {
     resolvedEmail = user.email;
   } else {
-    // Require a valid guest email.
     const guestEmail = typeof input.customerEmail === "string" ? input.customerEmail.trim() : "";
-    if (!guestEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail)) {
-      return { ok: false, error: "A valid email address is required to check out as a guest." };
+    if (guestEmail) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail) || guestEmail.length > 254) {
+        return { ok: false, error: "Please enter a valid email address (or leave it blank)." };
+      }
+      resolvedEmail = guestEmail;
+    } else {
+      resolvedEmail = "guest@3dninjaz.local";
     }
-    if (guestEmail.length > 254) {
-      return { ok: false, error: "Email address is too long." };
-    }
-    resolvedEmail = guestEmail;
   }
 
   // Validate address shape server-side even though the client validated too.
@@ -110,16 +112,16 @@ export async function createPayPalOrder(
   const stockedInputLines = input.items.filter((l) => !l.configurationData);
   const configurableInputLines = input.items.filter((l) => !!l.configurationData);
 
-  // Clamp quantities 1..10 and dedupe by variantId (sum quantities if dup).
+  // Clamp quantities to min 1, dedupe by variantId (sum quantities if dup).
   const qtyByVariant = new Map<string, number>();
   for (const line of stockedInputLines) {
     if (typeof line.variantId !== "string" || line.variantId.length === 0) {
       continue;
     }
-    const q = Math.max(1, Math.min(10, Math.floor(Number(line.quantity) || 0)));
+    const q = Math.max(1, Math.floor(Number(line.quantity) || 0));
     qtyByVariant.set(
       line.variantId,
-      Math.min(10, (qtyByVariant.get(line.variantId) ?? 0) + q),
+      (qtyByVariant.get(line.variantId) ?? 0) + q,
     );
   }
   const variantIds = [...qtyByVariant.keys()];
@@ -301,7 +303,7 @@ export async function createPayPalOrder(
     ...snapshots.map((s) => ({ ...s, configurationData: null as ConfigurationData | null })),
     ...configurableInputLines.map((line) => {
       const cfg = line.configurationData!;
-      const qty = Math.max(1, Math.min(10, Math.floor(Number(line.quantity) || 1)));
+      const qty = Math.max(1, Math.floor(Number(line.quantity) || 1));
       const unitPrice = cfg.computedPrice.toFixed(2);
       const product = line.productId ? productById.get(line.productId) : undefined;
       return {
@@ -597,7 +599,7 @@ export async function capturePayPalOrder({
   if (!existing) {
     return { ok: false, error: "Order not found." };
   }
-  // Ownership gate:
+  // Ownership gate (positive rule — denies by default):
   //   - Authenticated order (userId set): require the session user to own it.
   //   - Guest order (userId null): allow capture by anyone holding the
   //     unguessable paypalOrderId — PayPal approval already proves intent.
@@ -607,6 +609,8 @@ export async function capturePayPalOrder({
     }
   }
   // Guest orders (userId null) pass through — secured by the paypalOrderId.
+  // Guests view their order via the unguessable guestAccessToken (?t=...);
+  // authenticated users use the normal /orders/[id] route.
 
   // Idempotency (D3-09): if we already captured, return existing result
   // without calling PayPal again.
@@ -629,11 +633,14 @@ export async function capturePayPalOrder({
   // Plan 05-03: pull the customId we set in createPayPalOrder so we know
   // which coupon (if any) to redeem after capture succeeds.
   let appliedCouponCode: string | null = null;
+  // Hoisted so guest email back-fill can read payer info after the try block.
+  let captureResponse: Awaited<ReturnType<ReturnType<typeof ordersController>["captureOrder"]>> | null = null;
   try {
-    const response = await ordersController().captureOrder({
+    captureResponse = await ordersController().captureOrder({
       id: paypalOrderId,
       prefer: "return=representation",
     });
+    const response = captureResponse;
     const order = response.result;
     const capture = order?.purchaseUnits?.[0]?.payments?.captures?.[0];
     captureId = capture?.id ?? null;
@@ -685,6 +692,22 @@ export async function capturePayPalOrder({
     .set({ status: "paid", paypalCaptureId: captureId })
     .where(eq(orders.id, existing.id));
 
+  // For guest orders with a placeholder/blank email: back-fill customerEmail
+  // from PayPal payer info so the confirmation/tracking link can reach them.
+  if (!existing.userId && captureResponse) {
+    try {
+      const payerEmail = (captureResponse as { result?: { payer?: { emailAddress?: string } } })
+        .result?.payer?.emailAddress;
+      if (payerEmail) {
+        await db.update(orders)
+          .set({ customerEmail: payerEmail })
+          .where(eq(orders.id, existing.id));
+      }
+    } catch {
+      // non-critical — order is paid regardless
+    }
+  }
+
   // Shipping is booked MANUALLY by an admin from /admin/orders/[id] when
   // ready (ops decision 2026-06-01) — do NOT auto-book the courier on payment.
 
@@ -692,10 +715,9 @@ export async function capturePayPalOrder({
   // coupon's usage_cap was hit between approval and capture, we lose the
   // discount on the audit trail but the customer already paid the
   // discounted amount (it was sent to PayPal as the order total). This is
-  // an acceptable failure mode — log it for the operator.
-  // Plan 05-03 — atomic coupon redemption AFTER capture succeeds. Guest orders
+  // an acceptable failure mode — log it for the operator. Guest orders
   // (userId null) cannot record a coupon_redemptions row because that table's
-  // userId is NOT NULL. The discount was already applied to the PayPal total;
+  // userId is NOT NULL — the discount was already applied to the PayPal total,
   // only the audit row is lost, which is acceptable for v1 guest flow.
   if (appliedCouponCode && existing.userId) {
     try {
@@ -749,7 +771,8 @@ export async function capturePayPalOrder({
     orderId: existing.id,
     orderNumber: formatOrderNumber(existing.id),
     // `?from=checkout` toggles the success banner on /orders/[id] (Plan 03-03).
-    // T-03-24: cosmetic only — no behavior change if the flag is spoofed.
+    // Guests append the unguessable ?t=token so the tokenized order page lets
+    // them view it without an account.
     redirectTo: `/orders/${existing.id}?from=checkout${guestTokenQS}`,
   };
 }

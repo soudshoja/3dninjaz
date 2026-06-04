@@ -9,6 +9,7 @@ import { assertValidTransition, formatOrderNumber, type OrderStatus } from "@/li
 import { sendOrderProcessingEmail } from "@/actions/send-emails";
 import { orderStatusValues } from "@/lib/db/schema";
 import { computeOrderCost, toNum, toNumOrNull } from "@/lib/profit";
+import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
 
 // ============================================================================
 // Plan 03-04 admin order actions.
@@ -167,6 +168,8 @@ export type AdminOrderDetail = {
   shippingServiceCode: string | null;
   shippingServiceName: string | null;
   shippingQuotedPrice: string | null;
+  // Payment method — "paypal" | "bank_transfer" | null
+  paymentMethod: string | null;
   // Phase 10 (10-01) — order-level one-off cost + optional note.
   extraCost: string;
   extraCostNote: string | null;
@@ -265,6 +268,7 @@ export async function getAdminOrder(orderId: string): Promise<AdminOrderDetail |
     shippingServiceCode: head.o.shippingServiceCode ?? null,
     shippingServiceName: head.o.shippingServiceName ?? null,
     shippingQuotedPrice: head.o.shippingQuotedPrice ?? null,
+    paymentMethod: head.o.paymentMethod ?? null,
     extraCost: head.o.extraCost ?? "0.00",
     extraCostNote: head.o.extraCostNote ?? null,
     user: head.uId
@@ -339,6 +343,48 @@ export async function updateOrderStatus(
       orderId,
     }).catch((err) =>
       console.error("[admin-orders] processing email dispatch failed:", err)
+    );
+  }
+
+  revalidatePath(`/admin/orders`);
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath(`/orders/${orderId}`);
+  revalidatePath(`/orders`);
+
+  return { ok: true };
+}
+
+/**
+ * Approve a WhatsApp bank-transfer order: flip status to "paid" and send
+ * the customer a confirmation email. Only callable when the order has
+ * paymentMethod === "bank_transfer" and status === "awaiting_payment_review".
+ */
+export async function approveWhatsAppOrder(
+  orderId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
+
+  const [row] = await db
+    .select({ id: orders.id, status: orders.status, paymentMethod: orders.paymentMethod, customerEmail: orders.customerEmail })
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+
+  if (!row) return { ok: false, error: "Order not found." };
+  if (row.paymentMethod !== "bank_transfer") {
+    return { ok: false, error: "This action is only for bank transfer orders." };
+  }
+  if (row.status !== "awaiting_payment_review") {
+    return { ok: false, error: `Cannot approve from status: ${row.status}.` };
+  }
+
+  await db.update(orders).set({ status: "paid" }).where(eq(orders.id, orderId));
+
+  // Skip email for guest orders with placeholder address (no real email to send to).
+  const isGuestPlaceholder = row.customerEmail?.endsWith("@3dninjaz.local");
+  if (!isGuestPlaceholder) {
+    void sendOrderConfirmationEmail(orderId).catch((err) =>
+      console.error("[admin-orders] approveWhatsApp email failed:", err),
     );
   }
 

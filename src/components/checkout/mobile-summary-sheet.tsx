@@ -11,6 +11,7 @@ import {
   DrawerClose,
 } from "@/components/ui/drawer";
 import { CheckoutSummary } from "./checkout-summary";
+import { CouponApply } from "@/components/store/coupon-apply";
 import { PayPalButton } from "./paypal-button";
 import { WhatsAppBankTransferButton } from "./whatsapp-bank-transfer-button";
 import { BRAND } from "@/lib/brand";
@@ -29,6 +30,7 @@ import type { SelectedShipping } from "./shipping-rate-picker";
  *   plus the PayPal button and WhatsApp bank-transfer CTA.
  * - Tap targets: total+button row meets 60px minimum for primary CTAs
  *   (D3-20).
+ * - For guests (isGuest=true): PayPal is replaced by a sign-in prompt.
  */
 export function MobileSummarySheet({
   items,
@@ -40,7 +42,13 @@ export function MobileSummarySheet({
   onPaid,
   customerName,
   customerEmail,
+  couponCode,
+  waNumber,
+  bankName,
+  bankAccountNumber,
+  bankAccountHolder,
   isGuest,
+  guestName,
   guestEmail,
   guestEmailValid,
 }: {
@@ -53,11 +61,18 @@ export function MobileSummarySheet({
   onPaid: (redirectTo: string) => void;
   customerName: string;
   customerEmail: string;
+  couponCode: string | null;
+  waNumber: string;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
+  bankAccountHolder?: string | null;
   /** True when no session — hides coupon widget. */
   isGuest?: boolean;
+  /** Guest full name — undefined when the user is authenticated. */
+  guestName?: string;
   /** Guest checkout email — undefined when the user is authenticated. */
   guestEmail?: string;
-  /** Whether the guest email input passes the format check. */
+  /** Whether the guest email input passes the format check (or is blank). */
   guestEmailValid?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -101,12 +116,23 @@ export function MobileSummarySheet({
           </DrawerHeader>
 
           <div className="flex-1 overflow-y-auto px-5 py-3">
+            {/* Coupon at top so it's always visible without scrolling */}
+            {!isGuest && (
+              <div className="mb-4">
+                <CouponApply
+                  subtotal={subtotalMyr}
+                  applied={appliedCoupon}
+                  onChange={onCouponChange}
+                />
+              </div>
+            )}
             <CheckoutSummary
               items={items}
               subtotal={subtotalMyr}
               appliedCoupon={appliedCoupon}
               onCouponChange={onCouponChange}
               shipping={shipping}
+              showCoupon={false}
               isGuest={isGuest}
             />
           </div>
@@ -135,7 +161,14 @@ export function MobileSummarySheet({
               address={address}
               customerName={customerName}
               customerEmail={customerEmail}
-              disabled={items.length === 0}
+              couponCode={couponCode}
+              waNumber={waNumber}
+              bankName={bankName}
+              bankAccountNumber={bankAccountNumber}
+              bankAccountHolder={bankAccountHolder}
+              guestName={isGuest ? guestName : undefined}
+              guestEmail={isGuest ? guestEmail : undefined}
+              disabled={items.length === 0 || (isGuest === true && !(guestName ?? "").trim())}
             />
           </DrawerFooter>
         </DrawerContent>

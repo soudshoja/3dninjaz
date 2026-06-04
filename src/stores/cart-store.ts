@@ -85,8 +85,7 @@ type CartState = {
   getItemCount: () => number;
 };
 
-/** Soft cap per line — D2-20 */
-const MAX_PER_LINE = 10;
+const MAX_PER_LINE = 9999;
 
 const isBrowser = typeof window !== "undefined";
 

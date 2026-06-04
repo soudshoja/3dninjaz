@@ -853,8 +853,45 @@ export async function cancelShipment(
 async function hydrateTrackingView(
   shipment: ShipmentRow | null,
 ): Promise<ShipmentTrackingView> {
+  // Pull serviceType (drives live-map eligibility) + ETA window from the
+  // shipping catalog keyed by the booked serviceCode. Best-effort: a missing
+  // catalog row or query failure just leaves these null.
+  let serviceType: string | null = null;
+  let etaMinMinutes: number | null = null;
+  let etaMaxMinutes: number | null = null;
+  if (shipment?.serviceCode) {
+    try {
+      const cat = await db
+        .select({
+          serviceType: shippingServiceCatalog.serviceType,
+          etaMinMinutes: shippingServiceCatalog.etaMinMinutes,
+          etaMaxMinutes: shippingServiceCatalog.etaMaxMinutes,
+        })
+        .from(shippingServiceCatalog)
+        .where(eq(shippingServiceCatalog.serviceCode, shipment.serviceCode))
+        .limit(1);
+      if (cat.length > 0) {
+        serviceType = cat[0].serviceType ?? null;
+        etaMinMinutes = cat[0].etaMinMinutes ?? null;
+        etaMaxMinutes = cat[0].etaMaxMinutes ?? null;
+      }
+    } catch (e) {
+      console.warn(
+        "hydrateTrackingView: catalog lookup failed",
+        (e as Error).message,
+      );
+    }
+  }
+
   if (!shipment || !shipment.delyvaOrderId) {
-    return buildTrackingView({ shipment, live: null, cachedNote: null });
+    return buildTrackingView({
+      shipment,
+      live: null,
+      cachedNote: null,
+      serviceType,
+      etaMinMinutes,
+      etaMaxMinutes,
+    });
   }
 
   let live: OrderDetails | null = null;
@@ -894,7 +931,14 @@ async function hydrateTrackingView(
     }
   }
 
-  return buildTrackingView({ shipment, live, cachedNote });
+  return buildTrackingView({
+    shipment,
+    live,
+    cachedNote,
+    serviceType,
+    etaMinMinutes,
+    etaMaxMinutes,
+  });
 }
 
 /**

@@ -40,6 +40,12 @@ type Props = {
    * where no unit value has been entered).
    */
   basePrice?: number;
+  /**
+   * Override for text-field character cap. When provided, takes precedence over
+   * the per-field config.maxLength. Driven by product.maxUnitCount so the tier
+   * table and the input limit stay in sync.
+   */
+  textMaxLength?: number;
 };
 
 // ============================================================================
@@ -60,15 +66,17 @@ function TextField({
   onChange,
   onTouch,
   touched,
+  textMaxLength,
 }: {
   field: PublicConfigField;
   value: string;
   onChange: (v: string) => void;
   onTouch: () => void;
   touched: React.MutableRefObject<boolean>;
+  textMaxLength?: number;
 }) {
   const cfg = field.config as TextFieldConfig;
-  const maxLen = cfg.maxLength ?? 20;
+  const maxLen = textMaxLength ?? cfg.maxLength ?? 20;
   const allowedPattern = cfg.allowedChars ? new RegExp(`[^${cfg.allowedChars}]`, "g") : null;
   const remaining = maxLen - value.length;
   const atLimit = value.length >= maxLen;
@@ -370,7 +378,7 @@ function SelectField({
 // ConfiguratorForm — main export
 // ============================================================================
 
-export function ConfiguratorForm({ fields, values, onChange, onTouch, basePrice }: Props) {
+export function ConfiguratorForm({ fields, values, onChange, onTouch, basePrice, textMaxLength }: Props) {
   const touchedRef = useRef(false);
 
   if (fields.length === 0) {
@@ -426,6 +434,7 @@ export function ConfiguratorForm({ fields, values, onChange, onTouch, basePrice 
                 onChange={handleFieldChange}
                 onTouch={onTouch}
                 touched={touchedRef}
+                textMaxLength={textMaxLength}
               />
             )}
             {field.fieldType === "number" && (

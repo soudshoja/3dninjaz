@@ -26,7 +26,7 @@ import { WhatsAppBankTransferButton } from "./whatsapp-bank-transfer-button";
  * (clientId from NEXT_PUBLIC_PAYPAL_CLIENT_ID, currency MYR) and composes:
  *   - AddressForm (left column / stacked)
  *   - CheckoutSummary (right column desktop)
- *   - PayPalButton (below address on desktop)
+ *   - PayPalButton (below address on desktop) — hidden for guests
  *   - MobileSummarySheet (sticky dock + bottom sheet on mobile)
  *
  * Flow contracts:
@@ -36,8 +36,9 @@ import { WhatsAppBankTransferButton } from "./whatsapp-bank-transfer-button";
  *   - On successful PayPal capture the server redirectTo is honored after
  *     calling useCartStore.getState().clear() so the next page renders with
  *     an empty bag (D3-10).
- *   - Guest flow: isGuest=true renders a required email input. The email is
- *     passed to createPayPalOrder as customerEmail (the server rejects without it).
+ *   - Guest flow: isGuest=true renders a "Your details" form with name
+ *     (required) and email (OPTIONAL). Both PayPal and WhatsApp work for
+ *     guests; email is collected only for the confirmation/tracking link.
  */
 export function CheckoutIsland({
   defaultName,
@@ -45,27 +46,35 @@ export function CheckoutIsland({
   savedAddresses,
   userId,
   isGuest,
+  whatsappNumber,
+  bankName,
+  bankAccountNumber,
+  bankAccountHolder,
 }: {
   defaultName: string;
   defaultEmail: string;
   savedAddresses?: SavedAddress[];
   /** Logged-in user id — forwarded to AddressForm for draft persistence. Null for guests. */
   userId: string | null;
-  /** True when the visitor has no session. Shows guest email input + account prompt. */
+  /** True when the visitor has no session. Shows guest details form (name required, email optional). */
   isGuest: boolean;
+  whatsappNumber: string;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
+  bankAccountHolder?: string | null;
 }) {
   const router = useRouter();
   const storeItems = useCartStore((s) => s.items);
-
-  // Guest checkout — email collected in the island so it can be passed to
-  // createPayPalOrder. Not needed for authenticated users.
-  const [guestEmail, setGuestEmail] = useState("");
-  const [guestEmailTouched, setGuestEmailTouched] = useState(false);
 
   // Defer redirect decisions until after persist hydration to avoid
   // bouncing signed-in users with a still-loading localStorage bag.
   const [hydrated, setHydrated] = useState(false);
   const [hydratedItems, setHydratedItems] = useState<HydratedCartItem[]>([]);
+
+  // Guest details — name (required) + email (optional). Collected in the
+  // island so both the PayPal and WhatsApp paths can read them.
+  const [guestName, setGuestName] = useState(defaultName);
+  const [guestEmail, setGuestEmail] = useState(defaultEmail);
 
   useEffect(() => setHydrated(true), []);
 
@@ -80,11 +89,25 @@ export function CheckoutIsland({
       .catch(() => {});
   }, [hydrated, storeItems.length]);
 
-  const subtotal = hydratedItems.reduce(
+  // Merge live store quantities into hydrated data so +/- buttons reflect
+  // instantly without waiting for a server re-hydration (which only re-runs
+  // when the item COUNT changes, not when a quantity changes). Matches the
+  // pattern in cart-drawer.tsx + bag/page.tsx.
+  const items = useMemo(
+    () =>
+      hydratedItems.map((h) => {
+        const match = storeItems.find(
+          (si) => si.key === (h.storeKey ?? h.variantId),
+        );
+        return match ? { ...h, quantity: match.quantity } : h;
+      }),
+    [hydratedItems, storeItems],
+  );
+
+  const subtotal = items.reduce(
     (sum, i) => sum + parseFloat(i.unitPrice) * i.quantity,
     0,
   );
-  const items = hydratedItems;
 
   useEffect(() => {
     if (hydrated && storeItems.length === 0) {
@@ -102,6 +125,10 @@ export function CheckoutIsland({
   // Phase 9b — customer-selected Delyva courier + price. Null until quote
   // returns options + user picks one. PayPal button stays disabled while null.
   const [shipping, setShipping] = useState<SelectedShipping | null>(null);
+
+  // Resolved display name / email for submission and WhatsApp message.
+  const resolvedName = isGuest ? guestName : defaultName;
+  const resolvedEmail = isGuest ? guestEmail : defaultEmail;
 
   const initialOptions = useMemo<ReactPayPalScriptOptions>(
     () => ({
@@ -134,8 +161,12 @@ export function CheckoutIsland({
     router.push(redirectTo);
   };
 
-  // Derived: guest email is valid (simple format check matching server)
-  const guestEmailValid = !isGuest || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim());
+  // Email is OPTIONAL for guests: valid when not a guest, when left blank,
+  // or when it is a well-formed address. Never blocks PayPal on empty email.
+  const guestEmailValid =
+    !isGuest ||
+    guestEmail.trim() === "" ||
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim());
 
   return (
     <PayPalScriptProvider options={initialOptions}>
@@ -145,36 +176,54 @@ export function CheckoutIsland({
           aria-labelledby="ship-heading"
           className="order-1"
         >
-          {/* Guest banner + email input — shown only when no session */}
+          {/* Guest details form — shown before address for unauthenticated users.
+              Name is required; email is optional (used only for the confirmation
+              + tracking link). PayPal and WhatsApp both work without an email. */}
           {isGuest && (
-            <div className="mb-6 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-              <p className="text-sm text-zinc-700 mb-3">
+            <div className="mb-8 p-5 rounded-2xl border-2" style={{ borderColor: "#BFDBFE", backgroundColor: "#EFF6FF" }}>
+              <h2 className="font-[var(--font-heading)] text-xl mb-1">Your details</h2>
+              <p className="text-sm text-zinc-600 mb-4">
                 Checking out as guest.{" "}
                 <a href="/register?next=/checkout" className="font-medium underline text-zinc-900">
                   Create an account
                 </a>{" "}
-                to track orders, reorder faster, and keep your order history.
+                to track orders and reorder faster.
               </p>
-              <label className="block text-sm font-medium text-zinc-800 mb-1" htmlFor="guest-email">
-                Email address <span className="text-red-500">*</span>
-              </label>
-              <p className="text-xs text-zinc-500 mb-2">
-                Your order confirmation and tracking link will be sent here.
-              </p>
-              <input
-                id="guest-email"
-                type="email"
-                autoComplete="email"
-                required
-                value={guestEmail}
-                onChange={(e) => setGuestEmail(e.target.value)}
-                onBlur={() => setGuestEmailTouched(true)}
-                placeholder="you@example.com"
-                className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
-              />
-              {guestEmailTouched && !guestEmailValid && (
-                <p className="mt-1 text-xs text-red-600">Please enter a valid email address.</p>
-              )}
+              <div className="flex flex-col gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1" htmlFor="guest-name">
+                    Full name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="guest-name"
+                    type="text"
+                    required
+                    value={guestName}
+                    onChange={(e) => setGuestName(e.target.value)}
+                    placeholder="e.g. Ahmad bin Ali"
+                    className="w-full rounded-xl border-2 px-4 py-3 text-sm outline-none focus:border-blue-400"
+                    style={{ borderColor: "#BFDBFE" }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1" htmlFor="guest-email">
+                    Email <span className="text-slate-400 text-xs font-normal">(optional — for order confirmation)</span>
+                  </label>
+                  <input
+                    id="guest-email"
+                    type="email"
+                    autoComplete="email"
+                    value={guestEmail}
+                    onChange={(e) => setGuestEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="w-full rounded-xl border-2 px-4 py-3 text-sm outline-none focus:border-blue-400"
+                    style={{ borderColor: "#BFDBFE" }}
+                  />
+                  {isGuest && !guestEmailValid && (
+                    <p className="mt-1 text-xs text-red-600">Please enter a valid email address (or leave blank).</p>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
@@ -249,9 +298,16 @@ export function CheckoutIsland({
                 subtotal={subtotal}
                 shipping={shipping}
                 address={address}
-                customerName={defaultName}
-                customerEmail={defaultEmail}
-                disabled={items.length === 0}
+                customerName={resolvedName}
+                customerEmail={resolvedEmail}
+                couponCode={appliedCoupon?.code ?? null}
+                waNumber={whatsappNumber}
+                bankName={bankName}
+                bankAccountNumber={bankAccountNumber}
+                bankAccountHolder={bankAccountHolder}
+                guestName={isGuest ? guestName : undefined}
+                guestEmail={isGuest ? guestEmail : undefined}
+                disabled={items.length === 0 || (isGuest && !guestName.trim())}
               />
             </div>
           </div>
@@ -265,10 +321,16 @@ export function CheckoutIsland({
           onCouponChange={setAppliedCoupon}
           shipping={shipping}
           onPaid={handlePaid}
-          customerName={defaultName}
-          customerEmail={defaultEmail}
+          customerName={resolvedName}
+          customerEmail={resolvedEmail}
+          couponCode={appliedCoupon?.code ?? null}
+          waNumber={whatsappNumber}
+          bankName={bankName}
+          bankAccountNumber={bankAccountNumber}
+          bankAccountHolder={bankAccountHolder}
           isGuest={isGuest}
-          guestEmail={isGuest ? guestEmail : undefined}
+          guestName={guestName}
+          guestEmail={guestEmail}
           guestEmailValid={guestEmailValid}
         />
       </div>

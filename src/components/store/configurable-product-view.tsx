@@ -604,6 +604,7 @@ export function ConfigurableProductView({
                 onChange={handleValuesChange}
                 onTouch={handleTouch}
                 basePrice={basePriceBeforeOverride ?? undefined}
+                textMaxLength={maxLength}
               />
             </div>
 
