@@ -274,7 +274,7 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
     <nav
       ref={navRef}
       aria-label="Primary"
-      className="sticky top-0 z-40 border-b border-zinc-200 bg-white overflow-x-clip"
+      className="sticky top-0 z-50 border-b border-zinc-200 bg-white"
     >
       <div className="max-w-6xl mx-auto flex items-center justify-between px-6 md:px-8 py-2">
 
