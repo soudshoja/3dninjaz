@@ -283,6 +283,7 @@ export function CheckoutIsland({
                 customerName={resolvedName}
                 customerEmail={resolvedEmail}
                 couponCode={appliedCoupon?.code ?? null}
+                discount={appliedCoupon?.discount ?? 0}
                 waNumber={whatsappNumber}
                 bankName={bankName}
                 bankAccountNumber={bankAccountNumber}

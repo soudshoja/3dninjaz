@@ -164,6 +164,7 @@ export function MobileSummarySheet({
                 customerName={customerName}
                 customerEmail={customerEmail}
                 couponCode={couponCode}
+                discount={appliedCoupon?.discount ?? 0}
                 waNumber={waNumber}
                 bankName={bankName}
                 bankAccountNumber={bankAccountNumber}
