@@ -14,7 +14,6 @@ import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
 import { validateCoupon, redeemCoupon } from "@/actions/coupons";
 import { getShippingRate } from "@/actions/admin-shipping";
 import { quoteForCart } from "@/actions/shipping-quote";
-import { autoBookShipmentAfterPayment } from "@/actions/shipping";
 import { revalidatePath } from "next/cache";
 import type { ConfigurationData } from "@/lib/config-fields";
 
@@ -43,6 +42,9 @@ type CreateOrderInput = {
   // re-derives the price — the client never dictates shipping cost
   // (T-09-01-tampering). When null, falls back to the flat-rate table.
   shippingServiceCode?: string | null;
+  // Guest checkout — required when no session user is present. Must be a
+  // valid email address; this is where the order confirmation is sent.
+  customerEmail?: string | null;
 };
 
 type CreateOrderResult =
@@ -78,7 +80,24 @@ type CaptureOrderResult =
 export async function createPayPalOrder(
   input: CreateOrderInput,
 ): Promise<CreateOrderResult> {
-  const user = await getSessionUser(); // nullable — guests allowed
+  const user = await getSessionUser();
+  // Guest checkout: user may be null. Email is OPTIONAL for guests — if they
+  // provide one it must be well-formed; otherwise we fall back to a placeholder
+  // and (for PayPal) back-fill from the payer info on capture.
+  let resolvedEmail: string;
+  if (user) {
+    resolvedEmail = user.email;
+  } else {
+    const guestEmail = typeof input.customerEmail === "string" ? input.customerEmail.trim() : "";
+    if (guestEmail) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail) || guestEmail.length > 254) {
+        return { ok: false, error: "Please enter a valid email address (or leave it blank)." };
+      }
+      resolvedEmail = guestEmail;
+    } else {
+      resolvedEmail = "guest@3dninjaz.local";
+    }
+  }
 
   // Validate address shape server-side even though the client validated too.
   const addr = orderAddressSchema.safeParse(input.address);
@@ -486,17 +505,20 @@ export async function createPayPalOrder(
   // depend on MariaDB's $returningId behavior (which uses LAST_INSERT_ID
   // and does not round-trip non-integer UUIDs reliably on mysql2).
   const internalOrderId = randomUUID();
+  // For guest orders: generate a token for the emailed order-view link.
+  const guestAccessToken = user ? null : randomUUID();
   try {
     await db.insert(orders).values({
       id: internalOrderId,
       userId: user?.id ?? null,
+      guestAccessToken,
       status: "pending",
       paypalOrderId,
       subtotal: subtotalStr,
       shippingCost: shippingStr,
       totalAmount: totalStr,
       currency: PAYPAL_CURRENCY,
-      customerEmail: user?.email ?? "guest@3dninjaz.local",
+      customerEmail: resolvedEmail,
       shippingName: addr.data.recipientName,
       shippingPhone: addr.data.phone,
       shippingLine1: addr.data.addressLine1,
@@ -566,7 +588,7 @@ export async function capturePayPalOrder({
 }: {
   paypalOrderId: string;
 }): Promise<CaptureOrderResult> {
-  const user = await getSessionUser(); // nullable — guest capture allowed
+  const user = await getSessionUser(); // may be null for guests
   if (!paypalOrderId || typeof paypalOrderId !== "string") {
     return { ok: false, error: "Missing PayPal order ID." };
   }
@@ -577,24 +599,30 @@ export async function capturePayPalOrder({
   if (!existing) {
     return { ok: false, error: "Order not found." };
   }
-  // Only enforce ownership if both order and session have a userId.
-  if (user && existing.userId && existing.userId !== user.id) {
-    return { ok: false, error: "Order not found." };
+  // Ownership gate (positive rule — denies by default):
+  //   - Authenticated order (userId set): require the session user to own it.
+  //   - Guest order (userId null): allow capture by anyone holding the
+  //     unguessable paypalOrderId — PayPal approval already proves intent.
+  if (existing.userId !== null) {
+    if (!user || existing.userId !== user.id) {
+      return { ok: false, error: "Order not found." };
+    }
   }
-
-  const redir = (id: string, uid: string | null) =>
-    uid
-      ? `/orders/${id}?from=checkout`
-      : `/order-success?n=${encodeURIComponent(formatOrderNumber(id))}`;
+  // Guest orders (userId null) pass through — secured by the paypalOrderId.
+  // Guests view their order via the unguessable guestAccessToken (?t=...);
+  // authenticated users use the normal /orders/[id] route.
 
   // Idempotency (D3-09): if we already captured, return existing result
   // without calling PayPal again.
   if (existing.paypalCaptureId) {
+    const tokenSuffix = (existing.guestAccessToken && !existing.userId)
+      ? `?t=${existing.guestAccessToken}`
+      : "";
     return {
       ok: true,
       orderId: existing.id,
       orderNumber: formatOrderNumber(existing.id),
-      redirectTo: redir(existing.id, existing.userId),
+      redirectTo: `/orders/${existing.id}${tokenSuffix}`,
     };
   }
 
@@ -643,11 +671,14 @@ export async function capturePayPalOrder({
         where: eq(orders.paypalOrderId, paypalOrderId),
       });
       if (refetched?.paypalCaptureId) {
+        const tok = (refetched.guestAccessToken && !refetched.userId)
+          ? `?t=${refetched.guestAccessToken}`
+          : "";
         return {
           ok: true,
           orderId: refetched.id,
           orderNumber: formatOrderNumber(refetched.id),
-          redirectTo: redir(refetched.id, refetched.userId),
+          redirectTo: `/orders/${refetched.id}${tok}`,
         };
       }
     }
@@ -661,7 +692,8 @@ export async function capturePayPalOrder({
     .set({ status: "paid", paypalCaptureId: captureId })
     .where(eq(orders.id, existing.id));
 
-  // For guest orders: back-fill customerEmail from PayPal payer info.
+  // For guest orders with a placeholder/blank email: back-fill customerEmail
+  // from PayPal payer info so the confirmation/tracking link can reach them.
   if (!existing.userId && captureResponse) {
     try {
       const payerEmail = (captureResponse as { result?: { payer?: { emailAddress?: string } } })
@@ -676,20 +708,17 @@ export async function capturePayPalOrder({
     }
   }
 
-  // Auto-book the Delyva courier the customer selected at checkout.
-  // Fire-and-forget — booking failures must never block the payment
-  // response. Admin can manually retry from /admin/orders/[id] if needed.
-  void autoBookShipmentAfterPayment(existing.id).catch((err) =>
-    console.error("[paypal] auto-book shipment failed:", err),
-  );
+  // Shipping is booked MANUALLY by an admin from /admin/orders/[id] when
+  // ready (ops decision 2026-06-01) — do NOT auto-book the courier on payment.
 
   // Plan 05-03 — atomic coupon redemption AFTER capture succeeds. If the
   // coupon's usage_cap was hit between approval and capture, we lose the
   // discount on the audit trail but the customer already paid the
   // discounted amount (it was sent to PayPal as the order total). This is
-  // an acceptable failure mode — log it for the operator.
-  // Guest orders skip coupon redemption recording — the discount was already
-  // applied to the PayPal amount; redeemCoupon requires a userId.
+  // an acceptable failure mode — log it for the operator. Guest orders
+  // (userId null) cannot record a coupon_redemptions row because that table's
+  // userId is NOT NULL — the discount was already applied to the PayPal total,
+  // only the audit row is lost, which is acceptable for v1 guest flow.
   if (appliedCouponCode && existing.userId) {
     try {
       const subtotalNum = parseFloat(existing.subtotal);
@@ -732,13 +761,19 @@ export async function capturePayPalOrder({
   revalidatePath(`/orders/${existing.id}`);
   revalidatePath("/orders");
 
+  // Build the redirect URL. Guest orders include ?t=<token> so the order
+  // detail page allows unauthenticated access via the tokenized link.
+  const guestTokenQS = (existing.guestAccessToken && !existing.userId)
+    ? `&t=${existing.guestAccessToken}`
+    : "";
   return {
     ok: true,
     orderId: existing.id,
     orderNumber: formatOrderNumber(existing.id),
-    // Logged-in: /orders/[id]?from=checkout shows success banner (Plan 03-03).
-    // Guest: /order-success?n=[orderNumber] — no account to show orders page.
-    redirectTo: redir(existing.id, existing.userId),
+    // `?from=checkout` toggles the success banner on /orders/[id] (Plan 03-03).
+    // Guests append the unguessable ?t=token so the tokenized order page lets
+    // them view it without an account.
+    redirectTo: `/orders/${existing.id}?from=checkout${guestTokenQS}`,
   };
 }
 

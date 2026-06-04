@@ -29,7 +29,7 @@ import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
 
 export type AdminOrderListRow = {
   id: string;
-  userId: string | null;
+  userId: string | null; // null for guest orders
   status: OrderStatus;
   paypalOrderId: string | null;
   paypalCaptureId: string | null;
@@ -133,7 +133,7 @@ export async function listAdminOrders(
 
 export type AdminOrderDetail = {
   id: string;
-  userId: string | null;
+  userId: string | null; // null for guest orders
   status: OrderStatus;
   paypalOrderId: string | null;
   paypalCaptureId: string | null;

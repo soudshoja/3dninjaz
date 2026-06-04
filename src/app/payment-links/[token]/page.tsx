@@ -9,6 +9,7 @@ import { formatMYR } from "@/lib/format";
 import { isManualLine } from "@/lib/orders";
 import { whatsappLink } from "@/lib/business-info";
 import Image from "next/image";
+import { CheckCircle } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -73,6 +74,179 @@ export default async function PaymentLinkPage({
 
   const { order, orderItems, paymentProofs } = view;
 
+  // ── Thank You branch — paid orders render a receipt instead of the payment form ──
+  if (view.paid) {
+    return (
+      <main
+        className="min-h-screen"
+        style={{ backgroundColor: BRAND.cream, color: BRAND.ink }}
+      >
+        <div className="mx-auto max-w-2xl px-4 py-8">
+          {/* Header */}
+          <header className="mb-6 flex flex-col items-center gap-2">
+            <div className="flex items-center gap-2">
+              <Image
+                src="/logo.png"
+                alt="3D Ninjaz"
+                width={32}
+                height={32}
+                className="rounded-[4px]"
+              />
+              <span className="text-sm font-medium text-slate-500 uppercase tracking-wide">
+                3D Ninjaz
+              </span>
+            </div>
+          </header>
+
+          {/* Success card */}
+          <div
+            className="rounded-[4px] border-2 border-green-300 bg-green-50 p-6 text-center mb-6"
+          >
+            <CheckCircle
+              className="mx-auto mb-3 text-green-600"
+              size={48}
+              aria-hidden
+            />
+            <h1 className="font-[var(--font-heading)] text-2xl md:text-3xl font-semibold text-green-900 mb-2">
+              Payment received — thank you!
+            </h1>
+            <p className="text-green-800 text-sm">
+              Your order <span className="font-semibold">{order.orderNumber}</span> has been confirmed.
+            </p>
+            {order.shippingServiceName ? (
+              <p className="text-green-700 text-sm mt-1">
+                Courier: {order.shippingServiceName}
+              </p>
+            ) : null}
+            <p className="text-green-700 text-xs mt-3">
+              A receipt has been sent to your email.
+            </p>
+          </div>
+
+          {/* Order summary card (reuse same card as pre-payment) */}
+          <section
+            className="rounded-[4px] border-2 border-slate-200 p-4 md:p-6 space-y-4"
+            style={{ backgroundColor: "#fff" }}
+          >
+            <h2 className="font-[var(--font-heading)] text-[18px] font-semibold">
+              Order summary
+            </h2>
+
+            {orderItems.length > 0 ? (
+              <ul className="divide-y divide-slate-100 space-y-0">
+                {orderItems.map((item) => {
+                  const manual = isManualLine(item);
+                  return (
+                    <li
+                      key={item.id}
+                      className="flex items-start gap-3 py-3 first:pt-0 last:pb-0"
+                    >
+                      <div className="flex-shrink-0 h-10 w-10 rounded-[4px] bg-slate-100 flex items-center justify-center overflow-hidden">
+                        {item.productImage ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={item.productImage}
+                            alt={item.productName ?? "Product"}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-xs text-slate-400">
+                            {manual ? "Item" : "img"}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium leading-tight">
+                          {item.productName || "Item"}
+                        </p>
+                        {item.variantLabel ? (
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            {item.variantLabel}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="flex-shrink-0 text-right">
+                        <p className="text-sm font-semibold">
+                          {formatMYR(item.lineTotal)}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {item.quantity} × {formatMYR(item.unitPrice)}
+                        </p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : order.customItemName ? (
+              <div>
+                <p className="font-medium">{order.customItemName}</p>
+                {order.customItemDescription ? (
+                  <p className="mt-1 text-sm text-slate-700 whitespace-pre-wrap">
+                    {order.customItemDescription}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
+            {/* Totals */}
+            <div className="border-t border-slate-200 pt-4 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-600">Subtotal</span>
+                <span className="tabular-nums" style={{ fontFeatureSettings: "'tnum'" }}>
+                  {formatMYR(order.subtotal)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-600">
+                  Shipping
+                  {order.shippingServiceName ? (
+                    <span className="text-slate-400"> ({order.shippingServiceName})</span>
+                  ) : null}
+                </span>
+                <span className="tabular-nums" style={{ fontFeatureSettings: "'tnum'" }}>
+                  {Number(order.shippingCost) > 0
+                    ? formatMYR(order.shippingCost)
+                    : "Free"}
+                </span>
+              </div>
+              {Number(order.discountAmount) > 0 ? (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600">Discount</span>
+                  <span
+                    className="tabular-nums text-emerald-700"
+                    style={{ fontFeatureSettings: "'tnum'" }}
+                  >
+                    −{formatMYR(order.discountAmount)}
+                  </span>
+                </div>
+              ) : null}
+              <div className="border-t border-slate-200 pt-3 flex items-center justify-between">
+                <span className="text-slate-600">Total</span>
+                <span
+                  className="font-[var(--font-heading)] text-2xl font-semibold"
+                  style={{ fontFeatureSettings: "'tnum'" }}
+                >
+                  {formatMYR(order.totalAmount)} {order.currency}
+                </span>
+              </div>
+            </div>
+          </section>
+
+          {/* Visit shop CTA */}
+          <div className="mt-6 text-center">
+            <Link
+              href="/"
+              className="inline-flex min-h-[48px] items-center rounded-[4px] px-5 py-3 text-white"
+              style={{ backgroundColor: BRAND.blue }}
+            >
+              Visit shop
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   // D-16: Server-side guard — hide Bank Transfer if any bank field is null/empty.
   const settings = await getStoreSettingsCached();
   const { bankName, bankAccountNumber, bankAccountHolder } = settings;
@@ -108,7 +282,7 @@ export default async function PaymentLinkPage({
   );
 
   // WhatsApp number from settings or fallback to business-info default.
-  const waNumber = settings.whatsappNumber || "60167203048";
+  const waNumber = settings.whatsappNumber || "601125434730";
 
   return (
     <main
@@ -155,12 +329,20 @@ export default async function PaymentLinkPage({
                     key={item.id}
                     className="flex items-start gap-3 py-3 first:pt-0 last:pb-0"
                   >
-                    {/* Product image placeholder for manual lines (D-08) */}
+                    {/* Product image — snapshot URL on the order_item row.
+                        Manual lines or missing snapshots fall back to a label. */}
                     <div className="flex-shrink-0 h-10 w-10 rounded-[4px] bg-slate-100 flex items-center justify-center overflow-hidden">
-                      {!manual && item.productId ? (
-                        <span className="text-xs text-slate-400">img</span>
+                      {item.productImage ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={item.productImage}
+                          alt={item.productName ?? "Product"}
+                          className="h-full w-full object-cover"
+                        />
                       ) : (
-                        <span className="text-xs text-slate-400">Item</span>
+                        <span className="text-xs text-slate-400">
+                          {manual ? "Item" : "img"}
+                        </span>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -216,15 +398,57 @@ export default async function PaymentLinkPage({
             </div>
           ) : null}
 
-          {/* Totals */}
-          <div className="border-t border-slate-200 pt-4 flex items-center justify-between">
-            <span className="text-slate-600">Total</span>
-            <span
-              className="font-[var(--font-heading)] text-2xl font-semibold"
-              style={{ fontFeatureSettings: "'tnum'" }}
-            >
-              {formatMYR(order.totalAmount)} {order.currency}
-            </span>
+          {/* Totals — Subtotal / Shipping (with courier name) / Discount /
+              Total. Discount row only appears when any coupon was applied. */}
+          <div className="border-t border-slate-200 pt-4 space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-600">Subtotal</span>
+              <span
+                className="tabular-nums"
+                style={{ fontFeatureSettings: "'tnum'" }}
+              >
+                {formatMYR(order.subtotal)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-600">
+                Shipping
+                {order.shippingServiceName ? (
+                  <span className="text-slate-400">
+                    {" "}
+                    ({order.shippingServiceName})
+                  </span>
+                ) : null}
+              </span>
+              <span
+                className="tabular-nums"
+                style={{ fontFeatureSettings: "'tnum'" }}
+              >
+                {Number(order.shippingCost) > 0
+                  ? formatMYR(order.shippingCost)
+                  : "Free"}
+              </span>
+            </div>
+            {Number(order.discountAmount) > 0 ? (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-600">Discount</span>
+                <span
+                  className="tabular-nums text-emerald-700"
+                  style={{ fontFeatureSettings: "'tnum'" }}
+                >
+                  −{formatMYR(order.discountAmount)}
+                </span>
+              </div>
+            ) : null}
+            <div className="border-t border-slate-200 pt-3 flex items-center justify-between">
+              <span className="text-slate-600">Total</span>
+              <span
+                className="font-[var(--font-heading)] text-2xl font-semibold"
+                style={{ fontFeatureSettings: "'tnum'" }}
+              >
+                {formatMYR(order.totalAmount)} {order.currency}
+              </span>
+            </div>
           </div>
         </section>
 

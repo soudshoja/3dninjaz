@@ -124,11 +124,16 @@ export function PaymentMethodPicker({
             )}
           </button>
 
-          {/* Expanded body */}
+          {/* Expanded body — max-h bumped from 600px to 2000px to fit the
+              PayPal hosted-fields Debit/Credit card form expanded with the
+              full billing-address block (name, line 1+2, postcode, city,
+              state, country). overflow-hidden was clipping the Pay button
+              entirely; 2000px leaves a comfortable margin without breaking
+              the 250ms slide-down animation. */}
           <div
             className={
               "overflow-hidden transition-all duration-[250ms] " +
-              (paypalActive ? "max-h-[600px] opacity-100" : "max-h-0 opacity-0")
+              (paypalActive ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0")
             }
             style={{ willChange: "max-height" }}
           >

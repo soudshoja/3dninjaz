@@ -5,7 +5,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
-import { sendWelcomeEmail } from "@/actions/send-emails";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -122,13 +121,13 @@ function ForgotForm({ onBack }: { onBack: () => void }) {
               placeholder="you@example.com"
               required
               autoComplete="email"
-              className="h-10"
+              className="h-12"
             />
           </div>
           <Button
             type="submit"
             disabled={submitting}
-            className="h-10 w-full bg-[var(--color-brand-cta)] text-white hover:bg-[var(--color-brand-cta)]/90"
+            className="h-12 w-full bg-[var(--color-brand-cta)] text-white hover:bg-[var(--color-brand-cta)]/90"
           >
             {submitting ? "Sending..." : "Send reset link"}
           </Button>
@@ -203,7 +202,7 @@ function LoginForm({
             placeholder="you@example.com"
             required
             autoComplete="email"
-            className="h-10"
+            className="h-12"
           />
         </div>
 
@@ -225,7 +224,7 @@ function LoginForm({
             onChange={(e) => setPassword(e.target.value)}
             required
             autoComplete="current-password"
-            className="h-10"
+            className="h-12"
           />
         </div>
 
@@ -238,7 +237,7 @@ function LoginForm({
         <Button
           type="submit"
           disabled={submitting}
-          className="h-10 w-full bg-[var(--color-brand-cta)] text-white hover:bg-[var(--color-brand-cta)]/90"
+          className="h-12 w-full bg-[var(--color-brand-cta)] text-white hover:bg-[var(--color-brand-cta)]/90"
         >
           {submitting ? "Signing in..." : "Sign In"}
         </Button>
@@ -260,10 +259,14 @@ function LoginForm({
 
 // ─── register sub-form ────────────────────────────────────────────────────────
 
+// Simple MY phone regex — permissive, same as validators.ts MY_PHONE.
+const MY_PHONE_RE_UNIFIED = /^[+\d\s\-()]{7,20}$/;
+
 function RegisterForm() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [pdpaChecked, setPdpaChecked] = useState(false);
@@ -281,6 +284,10 @@ function RegisterForm() {
       setError("Passwords do not match.");
       return;
     }
+    if (phone && !MY_PHONE_RE_UNIFIED.test(phone.trim())) {
+      setError("Enter a valid Malaysian phone number.");
+      return;
+    }
     if (!pdpaChecked) {
       setError("You must agree to the PDPA Privacy Policy to register.");
       return;
@@ -292,6 +299,7 @@ function RegisterForm() {
         password,
         name,
         pdpaConsentAt: new Date().toISOString(),
+        ...(phone.trim() ? { phone: phone.trim() } : {}),
       } as Parameters<typeof authClient.signUp.email>[0]);
 
       if (result.error) {
@@ -299,9 +307,9 @@ function RegisterForm() {
         return;
       }
 
-      void sendWelcomeEmail(email, name).catch((err) =>
-        console.error("[register] welcome email failed:", err)
-      );
+      // Welcome email is sent server-side by a Better Auth
+      // databaseHooks.user.create.after hook (src/lib/auth.ts) — the
+      // client redirect below used to cancel the SMTP send mid-flight.
 
       router.push("/account");
       router.refresh();
@@ -324,7 +332,7 @@ function RegisterForm() {
           onChange={(e) => setName(e.target.value)}
           required
           autoComplete="name"
-          className="h-10"
+          className="h-12"
         />
       </div>
 
@@ -338,7 +346,23 @@ function RegisterForm() {
           placeholder="you@example.com"
           required
           autoComplete="email"
-          className="h-10"
+          className="h-12"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="reg-phone">
+          Phone number{" "}
+          <span className="text-xs font-normal text-[var(--color-brand-text-muted)]">(optional)</span>
+        </Label>
+        <Input
+          id="reg-phone"
+          type="tel"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="+60 11 2543 4730"
+          autoComplete="tel"
+          className="h-12"
         />
       </div>
 
@@ -352,7 +376,7 @@ function RegisterForm() {
           required
           minLength={8}
           autoComplete="new-password"
-          className="h-10"
+          className="h-12"
         />
         <p className="text-xs text-[var(--color-brand-text-muted)]">
           Minimum 8 characters.
@@ -369,7 +393,7 @@ function RegisterForm() {
           required
           minLength={8}
           autoComplete="new-password"
-          className="h-10"
+          className="h-12"
         />
       </div>
 
@@ -402,7 +426,7 @@ function RegisterForm() {
       <Button
         type="submit"
         disabled={submitting}
-        className="h-10 w-full bg-[var(--color-brand-cta)] text-white hover:bg-[var(--color-brand-cta)]/90"
+        className="h-12 w-full bg-[var(--color-brand-cta)] text-white hover:bg-[var(--color-brand-cta)]/90"
       >
         {submitting ? "Creating account..." : "Create Account"}
       </Button>
@@ -432,7 +456,7 @@ function TabBar({
             aria-selected={isActive}
             onClick={() => onChange(tab)}
             className={[
-              "flex-1 pb-3 pt-1 text-sm font-medium transition-colors",
+              "flex-1 min-h-[44px] flex items-center justify-center pb-3 pt-1 text-sm font-medium transition-colors",
               isActive
                 ? "border-b-2 border-[#1E8BFF] text-[#1E8BFF]"
                 : "text-[var(--color-brand-text-muted)] hover:text-[var(--color-brand-text-primary)]",

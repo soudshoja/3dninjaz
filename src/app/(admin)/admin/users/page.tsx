@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { listAdminUsers } from "@/actions/admin-users";
 import { BRAND } from "@/lib/brand";
+import { formatMYR } from "@/lib/format";
 import { UserRowActions } from "./user-row-actions";
 
 export const dynamic = "force-dynamic";
@@ -11,13 +13,22 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+function relativeDate(d: Date | null): string {
+  if (!d) return "—";
+  const diff = Date.now() - d.getTime();
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 30) return `${days} days ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months} mo ago`;
+  return `${Math.floor(months / 12)} yr ago`;
+}
+
 /**
  * /admin/users — list every non-admin user with name, email, registration
- * date, order count, ban status, and a row-actions menu. Mirrors the
- * orders-list pattern: filter card with horizontal-scroll table on mobile.
- *
- * requireAdmin() is called at the top even though (admin)/layout.tsx also
- * redirects unauthenticated users — belt-and-braces, CVE-2025-29927.
+ * date, order count, lifetime spend, last order date, ban status, and a
+ * row-actions menu. CRM upgrade: name is a link to /admin/users/[id].
  */
 export default async function AdminUsersPage() {
   await requireAdmin();
@@ -55,7 +66,7 @@ export default async function AdminUsersPage() {
           >
             {/* Horizontal scroll inside the card (D-04 mobile rule). */}
             <div className="overflow-x-auto">
-              <table className="min-w-[760px] w-full text-sm">
+              <table className="min-w-[900px] w-full text-sm">
                 <thead>
                   <tr
                     className="text-left"
@@ -65,6 +76,8 @@ export default async function AdminUsersPage() {
                     <th className="p-3">Email</th>
                     <th className="p-3">Registered</th>
                     <th className="p-3">Orders</th>
+                    <th className="p-3">Lifetime</th>
+                    <th className="p-3">Last order</th>
                     <th className="p-3">Status</th>
                     <th className="p-3"></th>
                   </tr>
@@ -73,9 +86,13 @@ export default async function AdminUsersPage() {
                   {rows.map((u) => (
                     <tr key={u.id} className="border-t border-black/10">
                       <td className="p-3">
-                        <p className="font-semibold truncate max-w-[200px]">
+                        <Link
+                          href={`/admin/users/${u.id}`}
+                          className="font-bold hover:underline truncate max-w-[200px] block"
+                          style={{ color: BRAND.ink }}
+                        >
                           {u.name || "—"}
-                        </p>
+                        </Link>
                       </td>
                       <td className="p-3">
                         <p className="text-sm truncate max-w-[240px]">
@@ -86,6 +103,12 @@ export default async function AdminUsersPage() {
                         {new Date(u.createdAt).toLocaleDateString("en-MY")}
                       </td>
                       <td className="p-3 text-sm">{u.orderCount}</td>
+                      <td className="p-3 text-sm whitespace-nowrap">
+                        {u.lifetimeSpend > 0 ? formatMYR(u.lifetimeSpend) : "—"}
+                      </td>
+                      <td className="p-3 text-sm whitespace-nowrap">
+                        {relativeDate(u.lastOrderAt)}
+                      </td>
                       <td className="p-3">
                         {u.banned ? (
                           <span

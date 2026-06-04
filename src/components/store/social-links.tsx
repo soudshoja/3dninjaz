@@ -73,7 +73,7 @@ export function SocialLinks({
             title={e.name}
             className={
               itemClassName ??
-              "inline-flex items-center justify-center rounded-full transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+              "inline-flex items-center justify-center rounded-full min-h-[44px] min-w-[44px] transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
             }
             style={{ width: size, height: size }}
           >

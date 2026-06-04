@@ -542,12 +542,11 @@ async function sumOrderWeight(
 }
 
 /**
- * Book a Delyva courier for an already-paid order. Two-step flow:
- *   1. createDraft (process: false)
- *   2. process() to confirm dispatch
- *   3. getOrder() to pull consignmentNo + trackingNo
+ * Internal (non-exported) heavy-lifter for booking a Delyva shipment.
+ * Does NOT call requireAdmin() — callers are responsible for authorization.
+ * Only call this from bookShipmentForOrder (admin) or autoBookShipmentAfterPayment (trusted server-only).
  */
-export async function bookShipmentForOrder(
+async function _bookShipmentInternal(
   orderId: string,
   serviceCode: string,
   opts?: { quotedPrice?: string | null },
@@ -560,8 +559,6 @@ export async function bookShipmentForOrder(
     }
   | { ok: false; error: string }
 > {
-  await requireAdmin();
-
   if (!serviceCode) return { ok: false, error: "serviceCode required" };
 
   // Idempotency — reject if a shipment already exists for this order.
@@ -684,7 +681,10 @@ export async function bookShipmentForOrder(
       extId: order.id,
       referenceNo: order.id.slice(0, 8).toUpperCase(),
       origin: { scheduledAt: pickupAt, inventory, contact: originContact },
-      destination: { scheduledAt: deliveryAt, contact: destContact },
+      // Delyva (2026-05) now requires destination.inventory too. Use the
+      // same inventory array on both ends — the parcel doesn't change
+      // between pickup and dropoff.
+      destination: { scheduledAt: deliveryAt, inventory, contact: destContact },
     });
 
     await delyvaApi.process(draft.id, {
@@ -746,6 +746,68 @@ export async function bookShipmentForOrder(
       return { ok: false, error: `${e.code}: ${e.message}` };
     return { ok: false, error: (e as Error).message };
   }
+}
+
+/**
+ * Book a Delyva courier for an already-paid order. Two-step flow:
+ *   1. createDraft (process: false)
+ *   2. process() to confirm dispatch
+ *   3. getOrder() to pull consignmentNo + trackingNo
+ *
+ * Admin-gated public export. Delegates to _bookShipmentInternal.
+ */
+export async function bookShipmentForOrder(
+  orderId: string,
+  serviceCode: string,
+  opts?: { quotedPrice?: string | null },
+): Promise<
+  | {
+      ok: true;
+      shipmentId: string;
+      delyvaOrderId: string;
+      consignmentNo: string | null;
+    }
+  | { ok: false; error: string }
+> {
+  await requireAdmin();
+  return _bookShipmentInternal(orderId, serviceCode, opts);
+}
+
+/**
+ * Server-only auto-booking entry point invoked from PayPal capture paths
+ * (storefront + payment-link). Reads serviceCode from the order row itself
+ * (already-trusted DB value, not client input). NO requireAdmin() — only
+ * trusted server-side code may call this. Returns the same result shape as
+ * bookShipmentForOrder. Safe to call when serviceCode is null — returns
+ * { ok: false, error } so callers can fire-and-forget without blocking.
+ */
+export async function autoBookShipmentAfterPayment(
+  orderId: string,
+): Promise<
+  | {
+      ok: true;
+      shipmentId: string;
+      delyvaOrderId: string;
+      consignmentNo: string | null;
+    }
+  | { ok: false; error: string }
+> {
+  const orderRows = await db
+    .select()
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+  if (orderRows.length === 0) return { ok: false, error: "Order not found" };
+  const order = orderRows[0];
+  if (!order.shippingServiceCode) {
+    return {
+      ok: false,
+      error: "No courier selected on order — skipping auto-book",
+    };
+  }
+  return _bookShipmentInternal(orderId, order.shippingServiceCode, {
+    quotedPrice: order.shippingQuotedPrice ?? null,
+  });
 }
 
 export async function cancelShipment(

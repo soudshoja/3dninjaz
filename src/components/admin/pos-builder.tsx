@@ -40,7 +40,7 @@ import {
 import { DraftRestoredBanner } from "@/components/admin/draft-restored-banner";
 import { PosSendDraftModal } from "@/components/admin/pos-send-draft-modal";
 import { PosProductModal } from "@/components/admin/pos-product-modal";
-import { PosCustomerStep, type CustomerForm } from "@/components/admin/pos-customer-step";
+import { PosCustomerStep, type CustomerForm, type PosCustomerStepHandle } from "@/components/admin/pos-customer-step";
 import type { PosAddToOrderLine } from "@/components/store/product-detail";
 import type { CartItemForQuote } from "@/actions/shipping-quote";
 import { ensureConfigurationData } from "@/lib/config-fields";
@@ -120,8 +120,13 @@ function toTicketLine(posLine: PosAddToOrderLine, localId: string): TicketLine {
     productId: posLine.productId,
     quantity: posLine.qty,
     computedUnitPrice: posLine.unitPrice,
+    // Stringify the FULL ConfigurationData ({ values, computedPrice,
+    // computedSummary }) — not just .values. Downstream consumers
+    // (ensureConfigurationData via Zod) reject a bare values map, which
+    // would silently zero out Tier 0 per-option shipping weight and break
+    // order_items.configuration_data parsing on the invoice + admin views.
     configurationData: posLine.configurationData
-      ? JSON.stringify(posLine.configurationData.values)
+      ? JSON.stringify(posLine.configurationData)
       : "{}",
     productName: posLine.productName,
     productImageUrl: posLine.productImageUrl ?? null,
@@ -300,6 +305,7 @@ export function PosBuilder() {
   // ── Shipping override ──────────────────────────────────────────────────────
   const [shippingOverride, setShippingOverride] = useState<string>("");
   const [editingShipping, setEditingShipping] = useState(false);
+  const [shippingCourier, setShippingCourier] = useState<{ serviceCode: string; serviceName: string } | null>(null);
 
   // ── Product grid / search ──────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState("");
@@ -313,6 +319,12 @@ export function PosBuilder() {
 
   // ── Customer step modal ────────────────────────────────────────────────────
   const [showCustomerStep, setShowCustomerStep] = useState(false);
+
+  // ── No-email confirmation dialog ───────────────────────────────────────────
+  const [confirmNoEmailOpen, setConfirmNoEmailOpen] = useState(false);
+
+  // ── Customer step ref (for focus-email from dialog) ────────────────────────
+  const customerStepRef = useRef<PosCustomerStepHandle>(null);
 
   // ── Submit / send-draft ────────────────────────────────────────────────────
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -467,8 +479,12 @@ export function PosBuilder() {
           : undefined,
     }));
 
-  function handleShippingFromCustomerStep(price: number) {
+  function handleShippingFromCustomerStep(
+    price: number,
+    courier: { serviceCode: string; serviceName: string } | null,
+  ) {
     setShippingOverride(price === 0 ? "0" : price.toFixed(2));
+    setShippingCourier(courier);
   }
 
   // ── Create order → customer step → submit ─────────────────────────────────
@@ -488,6 +504,16 @@ export function PosBuilder() {
     if (!customerForm.addressLine1.trim()) { setSubmitError("Address line 1 is required."); return; }
     if (!customerForm.city.trim()) { setSubmitError("City is required."); return; }
     if (!customerForm.postcode.trim()) { setSubmitError("Postcode is required."); return; }
+    // Gate: if email is blank, show the no-email confirmation dialog first.
+    if (!customerForm.email.trim()) {
+      setConfirmNoEmailOpen(true);
+      return;
+    }
+    setSubmitError(null);
+    doCreateOrder();
+  }
+
+  function doCreateOrder() {
     setSubmitError(null);
 
     startTransition(async () => {
@@ -510,6 +536,7 @@ export function PosBuilder() {
         },
         shippingOverride:
           shippingOverride !== "" ? parseFloat(shippingOverride) || undefined : undefined,
+        shippingCourier: shippingCourier ?? null,
       });
 
       if (!result.ok) {
@@ -876,6 +903,7 @@ export function PosBuilder() {
             {/* Body */}
             <div className="overflow-y-auto flex-1 px-5 py-5">
               <PosCustomerStep
+                ref={customerStepRef}
                 customerForm={customerForm}
                 onChange={setCustomerForm}
                 items={quoteItems}
@@ -940,6 +968,84 @@ export function PosBuilder() {
           customerName={customerForm.name}
           customerPhone={customerForm.phone}
         />
+      )}
+
+      {/* ── No-email confirmation dialog ── */}
+      {confirmNoEmailOpen && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(11,16,32,0.65)" }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="no-email-dialog-title"
+        >
+          <div
+            className="relative bg-white rounded-xl overflow-hidden"
+            style={{
+              maxWidth: 460,
+              width: "92vw",
+              boxShadow: "0 24px 64px rgba(0,0,0,0.32)",
+            }}
+          >
+            {/* Header */}
+            <div className="px-6 pt-6 pb-4 border-b-2 border-slate-100">
+              <h2
+                id="no-email-dialog-title"
+                className="text-base font-extrabold"
+                style={{ color: BRAND.ink }}
+              >
+                Send without an email?
+              </h2>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5">
+              <p className="text-sm text-slate-600 leading-relaxed">
+                This customer won&apos;t receive any order emails (confirmation, processing,
+                shipped, delivered). You&apos;ll need to update them manually via WhatsApp.
+                Add an email now to keep them in the loop.
+              </p>
+            </div>
+
+            {/* Footer */}
+            <div className="flex flex-col gap-2 px-6 pb-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmNoEmailOpen(false);
+                  customerStepRef.current?.focusEmail();
+                }}
+                className="w-full flex items-center justify-center min-h-[52px] rounded-[4px] text-sm font-semibold text-white transition-colors cursor-pointer"
+                style={{ backgroundColor: "#0B1020" }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#1a2540";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#0B1020";
+                }}
+              >
+                Go back and add email
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmNoEmailOpen(false);
+                  doCreateOrder();
+                }}
+                className="w-full flex items-center justify-center min-h-[52px] rounded-[4px] border-2 text-sm font-semibold transition-colors cursor-pointer"
+                style={{ borderColor: "#cbd5e1", color: BRAND.ink }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#f8fafc";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent";
+                }}
+              >
+                Continue without email
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -129,6 +129,7 @@ export async function listMyOrderRequests(
     .from(orders)
     .where(eq(orders.id, orderId))
     .limit(1);
+  // Guest orders have userId=null; null !== session.user.id → correctly excluded.
   if (!order || order.userId !== session.user.id) return [];
 
   const rows = await db
@@ -195,6 +196,7 @@ export async function submitOrderRequest(input: unknown) {
     .from(orders)
     .where(eq(orders.id, parsed.data.orderId))
     .limit(1);
+  // Guest orders have userId=null; null !== session.user.id → correctly excluded.
   if (!order || order.userId !== session.user.id) {
     // Same response as truly missing — T-06-06-enumeration.
     return { ok: false as const, error: "Order not found." };

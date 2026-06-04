@@ -161,6 +161,10 @@ export function CartDrawer() {
                 Checkout
               </Link>
             </div>
+            <p className="mt-3 text-center text-xs font-semibold leading-snug text-red-600">
+              No refunds. Faulty items are remade &amp; replaced if reported
+              within 3 days of delivery (return shipping at your cost).
+            </p>
           </DrawerFooter>
         ) : null}
       </DrawerContent>

@@ -26,13 +26,17 @@ export function CheckoutSummary({
   onCouponChange,
   shipping,
   showCoupon = true,
+  isGuest,
 }: {
   items: HydratedCartItem[];
   subtotal: number;
   appliedCoupon: AppliedCoupon | null;
   onCouponChange: (next: AppliedCoupon | null) => void;
   shipping: SelectedShipping | null;
+  /** When false, the inline coupon widget is hidden (e.g. mobile drawer renders it at top). */
   showCoupon?: boolean;
+  /** When true, the coupon widget is hidden (guests can't use coupons). */
+  isGuest?: boolean;
 }) {
   const discounted = appliedCoupon ? appliedCoupon.finalTotal : subtotal;
   const shippingNum = shipping?.price ?? 0;
@@ -45,7 +49,7 @@ export function CheckoutSummary({
         ))}
       </div>
 
-      {showCoupon && (
+      {showCoupon && !isGuest && (
         <div className="mt-4">
           <CouponApply
             subtotal={subtotal}

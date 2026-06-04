@@ -50,6 +50,7 @@ export function MobileSummarySheet({
   isGuest,
   guestName,
   guestEmail,
+  guestEmailValid,
 }: {
   items: HydratedCartItem[];
   subtotalMyr: number;
@@ -65,9 +66,14 @@ export function MobileSummarySheet({
   bankName?: string | null;
   bankAccountNumber?: string | null;
   bankAccountHolder?: string | null;
+  /** True when no session — hides coupon widget. */
   isGuest?: boolean;
+  /** Guest full name — undefined when the user is authenticated. */
   guestName?: string;
+  /** Guest checkout email — undefined when the user is authenticated. */
   guestEmail?: string;
+  /** Whether the guest email input passes the format check (or is blank). */
+  guestEmailValid?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const discountedSubtotal = appliedCoupon
@@ -111,13 +117,15 @@ export function MobileSummarySheet({
 
           <div className="flex-1 overflow-y-auto px-5 py-3">
             {/* Coupon at top so it's always visible without scrolling */}
-            <div className="mb-4">
-              <CouponApply
-                subtotal={subtotalMyr}
-                applied={appliedCoupon}
-                onChange={onCouponChange}
-              />
-            </div>
+            {!isGuest && (
+              <div className="mb-4">
+                <CouponApply
+                  subtotal={subtotalMyr}
+                  applied={appliedCoupon}
+                  onChange={onCouponChange}
+                />
+              </div>
+            )}
             <CheckoutSummary
               items={items}
               subtotal={subtotalMyr}
@@ -125,6 +133,7 @@ export function MobileSummarySheet({
               onCouponChange={onCouponChange}
               shipping={shipping}
               showCoupon={false}
+              isGuest={isGuest}
             />
           </div>
 
@@ -136,12 +145,14 @@ export function MobileSummarySheet({
             <PayPalButton
               address={address}
               items={items}
-              appliedCouponCode={appliedCoupon?.code ?? null}
+              appliedCouponCode={isGuest ? null : (appliedCoupon?.code ?? null)}
               shipping={shipping}
               onPaid={(redirect) => {
                 setOpen(false);
                 onPaid(redirect);
               }}
+              guestEmail={guestEmail}
+              guestEmailValid={guestEmailValid}
             />
             <WhatsAppBankTransferButton
               items={items}

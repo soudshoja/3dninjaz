@@ -14,10 +14,12 @@ import { ensureConfigJson } from "@/lib/config-fields";
 import type { SelectFieldConfig } from "@/lib/config-fields";
 import { resolveOptionWeightKg } from "@/lib/option-weight";
 import type { FieldWeightEntry } from "@/lib/option-weight";
-
-// Re-export so callers (shipping.ts, tests) have a single source of truth.
-export { resolveOptionWeightKg };
-export type { FieldWeightEntry };
+// NOTE: do NOT re-export `resolveOptionWeightKg` / `FieldWeightEntry` from this
+// "use server" module. Next compiles every export of a server-action file as an
+// async server action; a `export type { ... }` named re-export becomes a runtime
+// reference to a type with no runtime binding → `ReferenceError: FieldWeightEntry
+// is not defined` and a 500 on /checkout. Callers import both directly from
+// `@/lib/option-weight` (the single source of truth).
 
 // ============================================================================
 // Phase 9 (09-01) — checkout shipping-quote helper (NOT YET WIRED TO UI).

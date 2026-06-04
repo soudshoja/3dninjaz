@@ -29,10 +29,16 @@ import { WhatsAppBankTransferButton } from "./whatsapp-bank-transfer-button";
  *   - PayPalButton (below address on desktop) — hidden for guests
  *   - MobileSummarySheet (sticky dock + bottom sheet on mobile)
  *
- * Guest flow:
- *   - isGuest=true: show "Your details" form (name required, email optional)
- *   - Guests can only use the WhatsApp bank-transfer button
- *   - PayPal is replaced by a "Sign in to pay with PayPal" prompt for guests
+ * Flow contracts:
+ *   - On first render we wait for Zustand's `persist` hydration before
+ *     deciding to redirect the user. If the bag is empty post-hydration we
+ *     push the visitor back to /bag (D3-04).
+ *   - On successful PayPal capture the server redirectTo is honored after
+ *     calling useCartStore.getState().clear() so the next page renders with
+ *     an empty bag (D3-10).
+ *   - Guest flow: isGuest=true renders a "Your details" form with name
+ *     (required) and email (OPTIONAL). Both PayPal and WhatsApp work for
+ *     guests; email is collected only for the confirmation/tracking link.
  */
 export function CheckoutIsland({
   defaultName,
@@ -48,9 +54,9 @@ export function CheckoutIsland({
   defaultName: string;
   defaultEmail: string;
   savedAddresses?: SavedAddress[];
-  /** Logged-in user id — null for guests. */
+  /** Logged-in user id — forwarded to AddressForm for draft persistence. Null for guests. */
   userId: string | null;
-  /** True when no user session exists. */
+  /** True when the visitor has no session. Shows guest details form (name required, email optional). */
   isGuest: boolean;
   whatsappNumber: string;
   bankName?: string | null;
@@ -65,7 +71,8 @@ export function CheckoutIsland({
   const [hydrated, setHydrated] = useState(false);
   const [hydratedItems, setHydratedItems] = useState<HydratedCartItem[]>([]);
 
-  // Guest details state
+  // Guest details — name (required) + email (optional). Collected in the
+  // island so both the PayPal and WhatsApp paths can read them.
   const [guestName, setGuestName] = useState(defaultName);
   const [guestEmail, setGuestEmail] = useState(defaultEmail);
 
@@ -135,9 +142,17 @@ export function CheckoutIsland({
     // with an empty bag drawer.
     useCartStore.getState().clear();
     // Clear the address draft — order is complete, no need to restore.
+    // userId is null for guests; clearDraft handles null gracefully (no-op).
     if (userId) clearDraft(userId);
     router.push(redirectTo);
   };
+
+  // Email is OPTIONAL for guests: valid when not a guest, when left blank,
+  // or when it is a well-formed address. Never blocks PayPal on empty email.
+  const guestEmailValid =
+    !isGuest ||
+    guestEmail.trim() === "" ||
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim());
 
   return (
     <PayPalScriptProvider options={initialOptions}>
@@ -147,10 +162,19 @@ export function CheckoutIsland({
           aria-labelledby="ship-heading"
           className="order-1"
         >
-          {/* Guest details form — shown before address for unauthenticated users */}
+          {/* Guest details form — shown before address for unauthenticated users.
+              Name is required; email is optional (used only for the confirmation
+              + tracking link). PayPal and WhatsApp both work without an email. */}
           {isGuest && (
             <div className="mb-8 p-5 rounded-2xl border-2" style={{ borderColor: "#BFDBFE", backgroundColor: "#EFF6FF" }}>
-              <h2 className="font-[var(--font-heading)] text-xl mb-4">Your details</h2>
+              <h2 className="font-[var(--font-heading)] text-xl mb-1">Your details</h2>
+              <p className="text-sm text-zinc-600 mb-4">
+                Checking out as guest.{" "}
+                <a href="/register?next=/checkout" className="font-medium underline text-zinc-900">
+                  Create an account
+                </a>{" "}
+                to track orders and reorder faster.
+              </p>
               <div className="flex flex-col gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1" htmlFor="guest-name">
@@ -174,12 +198,16 @@ export function CheckoutIsland({
                   <input
                     id="guest-email"
                     type="email"
+                    autoComplete="email"
                     value={guestEmail}
                     onChange={(e) => setGuestEmail(e.target.value)}
                     placeholder="you@example.com"
                     className="w-full rounded-xl border-2 px-4 py-3 text-sm outline-none focus:border-blue-400"
                     style={{ borderColor: "#BFDBFE" }}
                   />
+                  {isGuest && !guestEmailValid && (
+                    <p className="mt-1 text-xs text-red-600">Please enter a valid email address (or leave blank).</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -233,6 +261,7 @@ export function CheckoutIsland({
                 appliedCoupon={appliedCoupon}
                 onCouponChange={setAppliedCoupon}
                 shipping={shipping}
+                isGuest={isGuest}
               />
             </div>
 
@@ -244,9 +273,11 @@ export function CheckoutIsland({
               <PayPalButton
                 address={address}
                 items={items}
-                appliedCouponCode={appliedCoupon?.code ?? null}
+                appliedCouponCode={isGuest ? null : (appliedCoupon?.code ?? null)}
                 shipping={shipping}
                 onPaid={handlePaid}
+                guestEmail={isGuest ? guestEmail : undefined}
+                guestEmailValid={guestEmailValid}
               />
               <WhatsAppBankTransferButton
                 items={items}
@@ -286,6 +317,7 @@ export function CheckoutIsland({
           isGuest={isGuest}
           guestName={guestName}
           guestEmail={guestEmail}
+          guestEmailValid={guestEmailValid}
         />
       </div>
     </PayPalScriptProvider>

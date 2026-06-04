@@ -2,23 +2,10 @@
 
 import { db } from "@/lib/db";
 import { user, orders } from "@/lib/db/schema";
-import { eq, ne, sql, desc, count, inArray } from "drizzle-orm";
+import { eq, ne, desc, count, sum, max, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { userSuspendSchema } from "@/lib/validators";
-
-// ============================================================================
-// Plan 05-02 admin user actions.
-//
-// IMPORTANT (T-05-02-EoP / CVE-2025-29927):
-// Every exported function MUST call `await requireAdmin()` as its FIRST
-// statement, BEFORE any DB access.
-//
-// IMPORTANT (T-05-02-self-suspend, T-05-02-admin-on-admin):
-// suspendUser refuses self-targeting and refuses to suspend another admin.
-// Better Auth admin plugin's banned=true field is set; existing sessions
-// continue until next request (Q-05-07 — accepted).
-// ============================================================================
 
 export type AdminUserRow = {
   id: string;
@@ -30,15 +17,10 @@ export type AdminUserRow = {
   banExpires: Date | null;
   createdAt: Date;
   orderCount: number;
+  lifetimeSpend: number;
+  lastOrderAt: Date | null;
 };
 
-/**
- * List every non-admin user with order count, newest first.
- *
- * Two SELECTs (manual hydration — MariaDB 10.11 has no LATERAL joins):
- *   1) users WHERE role != 'admin' ORDER BY createdAt DESC
- *   2) order count grouped by userId, joined in memory
- */
 export async function listAdminUsers(): Promise<AdminUserRow[]> {
   await requireAdmin();
 
@@ -51,13 +33,28 @@ export async function listAdminUsers(): Promise<AdminUserRow[]> {
   if (users.length === 0) return [];
 
   const ids = users.map((u) => u.id);
-  const orderCounts = await db
-    .select({ userId: orders.userId, c: count() })
+
+  const orderStats = await db
+    .select({
+      userId: orders.userId,
+      c: count(),
+      spend: sum(orders.totalAmount),
+      lastAt: max(orders.createdAt),
+    })
     .from(orders)
     .where(inArray(orders.userId, ids))
     .groupBy(orders.userId);
 
-  const countMap = new Map(orderCounts.map((r) => [r.userId, Number(r.c)]));
+  const statsMap = new Map(
+    orderStats.map((r) => [
+      r.userId,
+      {
+        orderCount: Number(r.c),
+        lifetimeSpend: r.spend ? parseFloat(String(r.spend)) : 0,
+        lastOrderAt: r.lastAt ? new Date(r.lastAt) : null,
+      },
+    ]),
+  );
 
   return users.map((u) => ({
     id: u.id,
@@ -68,19 +65,14 @@ export async function listAdminUsers(): Promise<AdminUserRow[]> {
     banReason: u.banReason ?? null,
     banExpires: u.banExpires ?? null,
     createdAt: u.createdAt,
-    orderCount: countMap.get(u.id) ?? 0,
+    orderCount: statsMap.get(u.id)?.orderCount ?? 0,
+    lifetimeSpend: statsMap.get(u.id)?.lifetimeSpend ?? 0,
+    lastOrderAt: statsMap.get(u.id)?.lastOrderAt ?? null,
   }));
 }
 
 type SuspendResult = { ok: true } | { ok: false; error: string };
 
-/**
- * Suspend a user via Better Auth admin plugin's `banned` field.
- *
- * Refuses (T-05-02-EoP):
- *   - target === current admin (no self-suspend)
- *   - target.role === 'admin' (no admin-on-admin suspend)
- */
 export async function suspendUser(formData: FormData): Promise<SuspendResult> {
   const session = await requireAdmin();
 
@@ -113,8 +105,6 @@ export async function suspendUser(formData: FormData): Promise<SuspendResult> {
     .set({
       banned: suspend,
       banReason: suspend ? reason ?? null : null,
-      // v1: permanent suspension until explicit unsuspend; future could expose
-      // a "suspend until" datepicker.
       banExpires: null,
     })
     .where(eq(user.id, userId));
@@ -123,9 +113,6 @@ export async function suspendUser(formData: FormData): Promise<SuspendResult> {
   return { ok: true };
 }
 
-/**
- * Unsuspend a previously banned user. Clears banReason + banExpires too.
- */
 export async function unsuspendUser(userId: string): Promise<SuspendResult> {
   await requireAdmin();
 
@@ -148,7 +135,3 @@ export async function unsuspendUser(userId: string): Promise<SuspendResult> {
   revalidatePath("/admin/users");
   return { ok: true };
 }
-
-// Suppress unused-warning for sql (we may need it later for raw NOT-IN style
-// queries; keeping the import groomed avoids flicker).
-void sql;

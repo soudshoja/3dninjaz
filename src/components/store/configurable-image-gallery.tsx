@@ -256,13 +256,19 @@ export function ConfigurableImageGallery({
               type="button"
               onClick={() => goToIndex(i)}
               aria-label={i === 0 ? "Go to your preview" : `Go to display image ${i}`}
-              className="rounded-full transition-all duration-200"
-              style={{
-                width: i === currentIdx ? 20 : 6,
-                height: 6,
-                backgroundColor: i === currentIdx ? BRAND.blue : `${BRAND.ink}30`,
-              }}
-            />
+              className="flex items-center justify-center"
+              style={{ width: 44, height: 44 }}
+            >
+              <span
+                aria-hidden="true"
+                className="rounded-full transition-all duration-200"
+                style={{
+                  width: i === currentIdx ? 20 : 6,
+                  height: 6,
+                  backgroundColor: i === currentIdx ? BRAND.blue : `${BRAND.ink}30`,
+                }}
+              />
+            </button>
           ))}
         </div>
       ) : null}

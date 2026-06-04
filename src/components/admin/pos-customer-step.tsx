@@ -26,7 +26,7 @@
  *   onShippingChange  — emits selected shipping cost (MYR) to parent
  */
 
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Search, Loader2, User, Phone, Mail, MapPin, Truck, CheckCircle2 } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import { MALAYSIAN_STATES } from "@/lib/validators";
@@ -50,13 +50,37 @@ type Props = {
   customerForm: CustomerForm;
   onChange: (form: CustomerForm) => void;
   items: CartItemForQuote[];
-  onShippingChange: (price: number) => void;
+  onShippingChange: (
+    price: number,
+    courier: { serviceCode: string; serviceName: string } | null,
+  ) => void;
+};
+
+export type PosCustomerStepHandle = {
+  focusEmail: () => void;
 };
 
 type Tab = "returning" | "new";
 
-export function PosCustomerStep({ customerForm, onChange, items, onShippingChange }: Props) {
+export const PosCustomerStep = forwardRef<PosCustomerStepHandle, Props>(function PosCustomerStep(
+  { customerForm, onChange, items, onShippingChange }: Props,
+  ref,
+) {
   const [tab, setTab] = useState<Tab>("returning");
+
+  // Email input ref — exposed via PosCustomerStepHandle for parent focus calls
+  const emailInputRef = useRef<HTMLInputElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    focusEmail() {
+      setTab("new");
+      // Defer focus so the "new" tab renders first
+      setTimeout(() => {
+        emailInputRef.current?.focus();
+        emailInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 50);
+    },
+  }));
 
   // Returning customer search
   const [searchQuery, setSearchQuery] = useState("");
@@ -135,7 +159,10 @@ export function PosCustomerStep({ customerForm, onChange, items, onShippingChang
           const sorted = [...res.options].sort((a, b) => a.finalPrice - b.finalPrice);
           const cheapest = sorted[0];
           setSelectedServiceCode(cheapest.serviceCode);
-          onShippingChange(cheapest.finalPrice);
+          onShippingChange(cheapest.finalPrice, {
+            serviceCode: cheapest.serviceCode,
+            serviceName: cheapest.serviceName,
+          });
           setQuotingShipping(false);
           return;
         }
@@ -150,12 +177,12 @@ export function PosCustomerStep({ customerForm, onChange, items, onShippingChang
         setShippingOptions([]);
         setSelectedServiceCode(null);
         setShippingError(null);
-        onShippingChange(fallback.cost);
+        onShippingChange(fallback.cost, null);
       } catch {
         setShippingOptions([]);
         setSelectedServiceCode(null);
         setShippingError("Could not fetch shipping rates. You can override the amount manually.");
-        onShippingChange(0);
+        onShippingChange(0, null);
       }
       setQuotingShipping(false);
     }, 500);
@@ -168,7 +195,10 @@ export function PosCustomerStep({ customerForm, onChange, items, onShippingChang
 
   function handleSelectShippingOption(opt: QuoteOption) {
     setSelectedServiceCode(opt.serviceCode);
-    onShippingChange(opt.finalPrice);
+    onShippingChange(opt.finalPrice, {
+      serviceCode: opt.serviceCode,
+      serviceName: opt.serviceName,
+    });
   }
 
   function selectCustomer(c: PosCustomerResult) {
@@ -384,7 +414,7 @@ export function PosCustomerStep({ customerForm, onChange, items, onShippingChang
           {/* Email */}
           <div className="md:col-span-2">
             <label className="block text-sm font-medium mb-1">
-              Email (optional)
+              Email
             </label>
             <div className="relative">
               <Mail
@@ -393,6 +423,7 @@ export function PosCustomerStep({ customerForm, onChange, items, onShippingChang
                 aria-hidden
               />
               <input
+                ref={emailInputRef}
                 type="email"
                 className={inputClass + " pl-9"}
                 value={customerForm.email}
@@ -402,7 +433,7 @@ export function PosCustomerStep({ customerForm, onChange, items, onShippingChang
               />
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              Without email, send the payment link via WhatsApp manually.
+              Recommended — customer won&apos;t get order updates without it.
             </p>
           </div>
 
@@ -592,4 +623,4 @@ export function PosCustomerStep({ customerForm, onChange, items, onShippingChang
       ) : null}
     </div>
   );
-}
+});

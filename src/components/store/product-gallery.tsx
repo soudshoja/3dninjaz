@@ -210,14 +210,20 @@ export function ProductGallery({
               type="button"
               onClick={() => goToIndex(i)}
               aria-label={`Go to image ${i + 1}`}
-              className="rounded-full transition-all duration-200"
-              style={{
-                width: i === activeIndex ? 20 : 7,
-                height: 7,
-                backgroundColor:
-                  i === activeIndex ? BRAND.blue : `${BRAND.ink}30`,
-              }}
-            />
+              className="flex items-center justify-center"
+              style={{ width: 44, height: 44 }}
+            >
+              <span
+                aria-hidden="true"
+                className="rounded-full transition-all duration-200"
+                style={{
+                  width: i === activeIndex ? 20 : 7,
+                  height: 7,
+                  backgroundColor:
+                    i === activeIndex ? BRAND.blue : `${BRAND.ink}30`,
+                }}
+              />
+            </button>
           ))}
         </div>
       ) : null}

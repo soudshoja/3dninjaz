@@ -664,6 +664,27 @@ export function SimpleProductView({
               </div>
             </div>
 
+            {/* Delivery duration — production lead time, shown to the customer */}
+            <div
+              className="flex items-center gap-3 rounded-2xl px-4 py-3.5"
+              style={{
+                backgroundColor: `${BRAND.blue}0f`,
+                border: `1.5px solid ${BRAND.blue}25`,
+              }}
+            >
+              <Image
+                src="/icons/ninja/emoji/secure@128.png"
+                alt=""
+                width={28}
+                height={28}
+                className="h-7 w-7 object-contain shrink-0"
+              />
+              <p className="text-sm font-medium leading-snug" style={{ color: BRAND.ink }}>
+                <span className="font-bold block">Made to order</span>
+                Ships in {leadDays} business days from Kuala Lumpur
+              </p>
+            </div>
+
             {/* Material + craft */}
             <div
               className="rounded-3xl p-5 sm:p-6"
