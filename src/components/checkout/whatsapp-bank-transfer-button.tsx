@@ -1,26 +1,23 @@
 "use client";
 
+import { useState, useTransition } from "react";
 import type { HydratedCartItem } from "@/actions/cart";
 import type { AddressFormValues } from "./address-form";
 import type { SelectedShipping } from "./shipping-rate-picker";
 import { formatMYR } from "@/lib/format";
+import { createWhatsAppOrder } from "@/actions/whatsapp-order";
 
 /**
- * WhatsApp direct-bank-transfer CTA (wa.me deep link).
+ * WhatsApp direct-bank-transfer CTA.
  *
- * Opens WhatsApp with a pre-filled message that includes:
- *   - Friendly opener
- *   - Order line items (name × qty, variant label)
- *   - Subtotal + shipping total in MYR
- *   - Customer name + email
- *   - Shipping address
- *
- * No DB write is performed — the order status enum does not include a
- * pending_bank_transfer value. The admin confirms the order manually after
- * receiving the transfer screenshot via WhatsApp.
+ * On click:
+ *   1. Calls createWhatsAppOrder server action to persist the order in the DB
+ *      with status "awaiting_payment_review" and paymentMethod "bank_transfer".
+ *   2. On success, opens a wa.me deep link pre-filled with the full order
+ *      summary including the order reference, bank transfer details, and
+ *      shipping address.
+ *   3. On error, shows an inline error message below the button.
  */
-
-const WA_NUMBER = "601125434730";
 
 // WhatsApp SVG logo (official green brand mark, no external dependency)
 function WhatsAppIcon({ className }: { className?: string }) {
@@ -38,19 +35,27 @@ function WhatsAppIcon({ className }: { className?: string }) {
 }
 
 function buildMessage({
+  orderId,
   items,
   subtotal,
   shipping,
   address,
   customerName,
   customerEmail,
+  bankName,
+  bankAccountNumber,
+  bankAccountHolder,
 }: {
+  orderId: string;
   items: HydratedCartItem[];
   subtotal: number;
   shipping: SelectedShipping | null;
   address: AddressFormValues | null;
   customerName: string;
   customerEmail: string;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
+  bankAccountHolder?: string | null;
 }): string {
   const lines: string[] = [];
 
@@ -80,7 +85,9 @@ function buildMessage({
   lines.push("");
   lines.push("*My Details*");
   lines.push(`Name: ${customerName}`);
-  lines.push(`Email: ${customerEmail}`);
+  if (customerEmail && customerEmail.trim()) {
+    lines.push(`Email: ${customerEmail}`);
+  }
 
   if (address) {
     lines.push("");
@@ -93,8 +100,16 @@ function buildMessage({
     lines.push("Malaysia");
   }
 
+  if (bankName && bankAccountNumber) {
+    lines.push("");
+    lines.push("*Bank Transfer Details*");
+    lines.push(`Bank: ${bankName}`);
+    lines.push(`Account No: ${bankAccountNumber}`);
+    if (bankAccountHolder) lines.push(`Account Name: ${bankAccountHolder}`);
+  }
+
   lines.push("");
-  lines.push("Please send me the bank transfer details. I'll send the screenshot once done!");
+  lines.push("I'll send my transfer screenshot once done. Thank you!");
 
   return lines.join("\n");
 }
@@ -106,7 +121,15 @@ export function WhatsAppBankTransferButton({
   address,
   customerName,
   customerEmail,
+  couponCode,
+  waNumber,
+  bankName,
+  bankAccountNumber,
+  bankAccountHolder,
+  guestName,
+  guestEmail,
   disabled,
+  compact = false,
 }: {
   items: HydratedCartItem[];
   subtotal: number;
@@ -114,22 +137,87 @@ export function WhatsAppBankTransferButton({
   address: AddressFormValues | null;
   customerName: string;
   customerEmail: string;
+  couponCode: string | null;
+  waNumber: string;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
+  bankAccountHolder?: string | null;
+  guestName?: string;
+  guestEmail?: string;
   disabled?: boolean;
+  /** Compact: render only the button (no divider/caption), sized to sit
+   *  side-by-side with the PayPal button in the mobile drawer. */
+  compact?: boolean;
 }) {
-  const isDisabled = disabled || items.length === 0;
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const isDisabled = disabled || items.length === 0 || !address || !shipping || isPending;
 
   function handleClick() {
     if (isDisabled) return;
-    const message = buildMessage({
-      items,
-      subtotal,
-      shipping,
-      address,
-      customerName,
-      customerEmail,
+    setError(null);
+
+    const bagLines = items.map((i) => ({
+      variantId: i.variantId,
+      quantity: i.quantity,
+      configurationData: i.configurationData ?? null,
+      productId: i.productId,
+    }));
+
+    startTransition(async () => {
+      const res = await createWhatsAppOrder({
+        address: address!,
+        items: bagLines,
+        couponCode: couponCode ?? null,
+        shippingServiceCode: shipping?.serviceCode ?? null,
+        guestName,
+        guestEmail,
+      });
+
+      if (!res.ok) {
+        setError(res.error ?? "Something went wrong. Please try again.");
+        return;
+      }
+
+      const message = buildMessage({
+        orderId: res.orderId,
+        items,
+        subtotal,
+        shipping,
+        address,
+        customerName,
+        customerEmail,
+        bankName,
+        bankAccountNumber,
+        bankAccountHolder,
+      });
+      const url = `https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`;
+      window.open(url, "_blank", "noopener,noreferrer");
     });
-    const url = `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(message)}`;
-    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  // Compact mode: just the pill button (no divider/caption), height-matched to
+  // the PayPal button (55px) so the two sit cleanly side-by-side on mobile.
+  if (compact) {
+    return (
+      <div className="flex flex-col">
+        <button
+          type="button"
+          onClick={handleClick}
+          disabled={isDisabled}
+          aria-label="Pay via WhatsApp direct bank transfer"
+          className="w-full h-[55px] flex items-center justify-center gap-2 rounded-full px-3 font-bold text-sm text-black shadow-[0_4px_0_rgba(0,0,0,0.25)] active:translate-y-[1px] active:shadow-[0_2px_0_rgba(0,0,0,0.25)] transition disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
+          style={{ backgroundColor: "#25D366" }}
+        >
+          <WhatsAppIcon className="h-5 w-5 shrink-0" />
+          <span className="truncate">{isPending ? "Placing…" : "Pay via WhatsApp"}</span>
+        </button>
+        {error ? (
+          <p className="text-red-600 text-xs mt-2 text-center">{error}</p>
+        ) : null}
+      </div>
+    );
   }
 
   return (
@@ -158,8 +246,12 @@ export function WhatsAppBankTransferButton({
         style={{ backgroundColor: "#25D366" }}
       >
         <WhatsAppIcon className="h-5 w-5 shrink-0" />
-        Pay via WhatsApp
+        {isPending ? "Placing order…" : "Pay via WhatsApp"}
       </button>
+
+      {error ? (
+        <p className="text-red-600 text-xs mt-2 text-center">{error}</p>
+      ) : null}
     </div>
   );
 }

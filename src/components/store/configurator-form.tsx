@@ -40,6 +40,12 @@ type Props = {
    * where no unit value has been entered).
    */
   basePrice?: number;
+  /**
+   * Override for text-field character cap. When provided, takes precedence over
+   * the per-field config.maxLength. Driven by product.maxUnitCount so the tier
+   * table and the input limit stay in sync.
+   */
+  textMaxLength?: number;
 };
 
 // ============================================================================
@@ -54,21 +60,42 @@ function isFilled(value: string | undefined): boolean {
 // TextField
 // ============================================================================
 
+/**
+ * Build a dynamic constraints hint from the text field config so the line
+ * under the input always reflects the configured max + allowed characters
+ * (e.g. "Letters & numbers (uppercase), max 10 characters.") instead of a
+ * static, hand-written string.
+ */
+function textFieldHint(allowedChars: string | undefined, uppercase: boolean, maxLen: number): string {
+  const chars = allowedChars ?? "";
+  const hasLetters = /a-z/i.test(chars);
+  const hasDigits = /0-9/.test(chars);
+  let label: string;
+  if (hasLetters && hasDigits) label = "Letters & numbers";
+  else if (hasDigits) label = "Numbers";
+  else if (hasLetters) label = "Letters A–Z";
+  else label = "Text";
+  const caseSuffix = uppercase ? " (uppercase)" : "";
+  return `${label}${caseSuffix}, max ${maxLen} character${maxLen === 1 ? "" : "s"}.`;
+}
+
 function TextField({
   field,
   value,
   onChange,
   onTouch,
   touched,
+  textMaxLength,
 }: {
   field: PublicConfigField;
   value: string;
   onChange: (v: string) => void;
   onTouch: () => void;
   touched: React.MutableRefObject<boolean>;
+  textMaxLength?: number;
 }) {
   const cfg = field.config as TextFieldConfig;
-  const maxLen = cfg.maxLength ?? 20;
+  const maxLen = textMaxLength ?? cfg.maxLength ?? 20;
   const allowedPattern = cfg.allowedChars ? new RegExp(`[^${cfg.allowedChars}]`, "g") : null;
   const remaining = maxLen - value.length;
   const atLimit = value.length >= maxLen;
@@ -119,23 +146,21 @@ function TextField({
         </span>
       </div>
 
-      {/* Help text or limit warning */}
+      {/* Dynamic constraints hint derived from the live config (max length +
+          allowed chars), not a static string. Limit warnings on the right. */}
       <div className="flex justify-between items-center px-1">
-        {field.helpText ? (
-          <p className="text-xs" style={{ color: "#6b7280" }}>{field.helpText}</p>
-        ) : (
-          <span />
-        )}
-        {atLimit && (
+        <p className="text-xs" style={{ color: "#6b7280" }}>
+          {textFieldHint(cfg.allowedChars, !!cfg.uppercase, maxLen)}
+        </p>
+        {atLimit ? (
           <span className="text-xs font-semibold" style={{ color: "#be123c" }}>
             Maximum reached
           </span>
-        )}
-        {!atLimit && remaining <= 3 && value.length > 0 && (
+        ) : remaining <= 3 && value.length > 0 ? (
           <span className="text-xs font-semibold" style={{ color: "#f59e0b" }}>
             {remaining} left
           </span>
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -370,7 +395,7 @@ function SelectField({
 // ConfiguratorForm — main export
 // ============================================================================
 
-export function ConfiguratorForm({ fields, values, onChange, onTouch, basePrice }: Props) {
+export function ConfiguratorForm({ fields, values, onChange, onTouch, basePrice, textMaxLength }: Props) {
   const touchedRef = useRef(false);
 
   if (fields.length === 0) {
@@ -426,6 +451,7 @@ export function ConfiguratorForm({ fields, values, onChange, onTouch, basePrice 
                 onChange={handleFieldChange}
                 onTouch={onTouch}
                 touched={touchedRef}
+                textMaxLength={textMaxLength}
               />
             )}
             {field.fieldType === "number" && (

@@ -12,7 +12,7 @@
  *   - When text has chars: renders exactly chars.length cubes — no trailing
  *     empty placeholders.
  *   - Container expands via flex as cubes are added.
- *   - Fluid cube sizing via clamp() so 8 cubes always fit on any screen
+ *   - Fluid cube sizing via clamp() so all cubes fit on any screen (count driven by maxLength prop)
  *     without horizontal scroll.
  *
  * Props:

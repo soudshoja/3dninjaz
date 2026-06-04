@@ -442,7 +442,7 @@ export default async function AdminOrderDetailPage({
             style={{ backgroundColor: "#ffffff" }}
           >
             <h2 className="font-[var(--font-heading)] text-xl mb-3">Update status</h2>
-            <AdminOrderStatusForm orderId={row.id} current={row.status} />
+            <AdminOrderStatusForm orderId={row.id} current={row.status} paymentMethod={row.paymentMethod ?? null} />
             {row.paypalOrderId ? (
               <p className="text-xs text-slate-500 mt-3 font-mono break-words">
                 PayPal order ID: {row.paypalOrderId}

@@ -71,12 +71,14 @@ export async function seedKeychainFields(
     position: 0,
     fieldType: "text",
     label: "Your name",
-    helpText: "Letters A–Z, max 8 characters.",
+    // Helper text is generated dynamically on the storefront from the config
+    // (allowed chars + max length); this stored value is just an admin hint.
+    helpText: "Letters & numbers (uppercase).",
     required: true,
     locked: true,
     configJson: JSON.stringify({
       maxLength: 8,
-      allowedChars: "A-Z",
+      allowedChars: "A-Z0-9",
       uppercase: true,
       profanityCheck: true,
     }),

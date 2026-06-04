@@ -628,12 +628,13 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
               {/* Inline drawer — locked fields only, expands below row */}
               {field.locked && (
                 <div
-                  className="overflow-hidden transition-[max-height] duration-200 ease-out"
+                  className="grid transition-[grid-template-rows] duration-200 ease-out"
                   style={{
-                    maxHeight: expandedFieldId === field.id ? "600px" : "0px",
+                    gridTemplateRows: expandedFieldId === field.id ? "1fr" : "0fr",
                   }}
                   aria-hidden={expandedFieldId !== field.id}
                 >
+                  <div className="overflow-hidden">
                   <div
                     className="rounded-b-xl border border-t-0 bg-white px-5 py-4"
                     style={{ borderColor: "#BFDBFE", boxShadow: "inset 0 2px 4px rgba(0,0,0,0.04)" }}
@@ -664,6 +665,7 @@ export function ConfiguratorBuilder({ initial }: BuilderProps) {
                         onCancel={() => setExpandedFieldId(null)}
                       />
                     )}
+                  </div>
                   </div>
                 </div>
               )}
