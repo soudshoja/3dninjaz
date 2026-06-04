@@ -11,6 +11,7 @@ import { formatMYR } from "@/lib/format";
 import { AdminOrderStatusBadge } from "@/components/admin/admin-order-status-badge";
 import { AdminOrderTimeline } from "@/components/admin/admin-order-timeline";
 import { AdminOrderStatusForm } from "@/components/admin/admin-order-status-form";
+import { AdminOrderManage } from "@/components/admin/admin-order-manage";
 import { AdminOrderNotesForm } from "@/components/admin/admin-order-notes-form";
 // Phase 6 06-06 — admin approval surface for cancel/return requests.
 // 260601-afs — listOrderRequestsForOrder now returns AdminOrderRequestRow[]
@@ -361,6 +362,15 @@ export default async function AdminOrderDetailPage({
                 <span className="text-slate-600">Subtotal</span>
                 <span>{formatMYR(row.subtotal)}</span>
               </div>
+              {parseFloat(row.discountAmount || "0") > 0 ? (
+                <div className="flex justify-between" style={{ color: BRAND.green }}>
+                  <span>
+                    Discount
+                    {row.discountCode ? ` (${row.discountCode})` : ""}
+                  </span>
+                  <span>-{formatMYR(row.discountAmount)}</span>
+                </div>
+              ) : null}
               <div className="flex justify-between">
                 <span className="text-slate-600">
                   Shipping
@@ -453,6 +463,19 @@ export default async function AdminOrderDetailPage({
                 PayPal capture ID: {row.paypalCaptureId}
               </p>
             ) : null}
+          </section>
+
+          <section
+            className="rounded-2xl p-4 md:p-6 md:col-span-2"
+            style={{ backgroundColor: "#ffffff" }}
+          >
+            <h2 className="font-[var(--font-heading)] text-xl mb-4">Manage order</h2>
+            <AdminOrderManage
+              orderId={row.id}
+              status={row.status}
+              discountAmount={row.discountAmount}
+              discountCode={row.discountCode}
+            />
           </section>
 
           <section

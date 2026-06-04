@@ -1,10 +1,11 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { orders, orderItems, user } from "@/lib/db/schema";
+import { orders, orderItems, orderShipments, user } from "@/lib/db/schema";
 import { and, eq, desc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-helpers";
+import { validateCoupon } from "@/actions/coupons";
 import { assertValidTransition, formatOrderNumber, type OrderStatus } from "@/lib/orders";
 import { sendOrderProcessingEmail } from "@/actions/send-emails";
 import { orderStatusValues } from "@/lib/db/schema";
@@ -173,6 +174,9 @@ export type AdminOrderDetail = {
   // Phase 10 (10-01) — order-level one-off cost + optional note.
   extraCost: string;
   extraCostNote: string | null;
+  // Order-level discount (checkout coupon or admin-applied).
+  discountAmount: string;
+  discountCode: string | null;
   user: { id: string; email: string; name: string } | null;
   items: Array<{
     id: string;
@@ -271,6 +275,8 @@ export async function getAdminOrder(orderId: string): Promise<AdminOrderDetail |
     paymentMethod: head.o.paymentMethod ?? null,
     extraCost: head.o.extraCost ?? "0.00",
     extraCostNote: head.o.extraCostNote ?? null,
+    discountAmount: head.o.discountAmount ?? "0.00",
+    discountCode: head.o.discountCode ?? null,
     user: head.uId
       ? { id: head.uId, email: head.uEmail ?? "", name: head.uName ?? "" }
       : null,
@@ -596,4 +602,112 @@ export async function updateOrderExtraCost(
   const summary = await recomputeOrderProfit(orderId);
   revalidatePath(`/admin/orders/${orderId}`);
   return { ok: true, summary };
+}
+
+type ApplyDiscountResult = { ok: true } | { ok: false; error: string };
+
+// Statuses where an admin may still adjust the price before payment is collected.
+const DISCOUNTABLE_STATUSES: OrderStatus[] = [
+  "pending",
+  "awaiting_customer",
+  "awaiting_payment_review",
+];
+
+/**
+ * Apply (or clear) an order-level discount on a not-yet-paid order. Admin can
+ * pass a coupon `code` (re-validated server-side) OR a manual `amount` in MYR.
+ * Passing neither (or amount 0 with no code) clears any existing discount.
+ * Recomputes totalAmount = subtotal - discount + shipping + extraCost.
+ */
+export async function applyOrderDiscount(
+  orderId: string,
+  input: { code?: string | null; amount?: number | null },
+): Promise<ApplyDiscountResult> {
+  await requireAdmin();
+
+  const [row] = await db
+    .select({
+      id: orders.id,
+      status: orders.status,
+      subtotal: orders.subtotal,
+      shippingCost: orders.shippingCost,
+      extraCost: orders.extraCost,
+    })
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+  if (!row) return { ok: false, error: "Order not found." };
+
+  if (!DISCOUNTABLE_STATUSES.includes(row.status as OrderStatus)) {
+    return {
+      ok: false,
+      error: `Discounts can only be applied before payment (current status: ${row.status}).`,
+    };
+  }
+
+  const subtotal = toNum(row.subtotal);
+  const shipping = toNum(row.shippingCost);
+  const extra = toNum(row.extraCost);
+
+  let discount = 0;
+  let discountCode: string | null = null;
+
+  const code = input.code?.trim();
+  if (code) {
+    const valid = await validateCoupon(code, subtotal);
+    if (!valid.ok) {
+      return { ok: false, error: valid.error ?? "Invalid coupon code." };
+    }
+    discount = valid.discount;
+    discountCode = code.toUpperCase();
+  } else if (typeof input.amount === "number" && input.amount > 0) {
+    // Manual amount — never exceed the subtotal.
+    discount = Math.min(+input.amount.toFixed(2), subtotal);
+    discountCode = "MANUAL";
+  }
+  // else: clear discount (discount stays 0, code null)
+
+  const total = Math.max(0, +(subtotal - discount + shipping + extra).toFixed(2));
+
+  await db
+    .update(orders)
+    .set({
+      discountAmount: discount.toFixed(2),
+      discountCode,
+      totalAmount: total.toFixed(2),
+    })
+    .where(eq(orders.id, orderId));
+
+  revalidatePath(`/admin/orders`);
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath(`/orders/${orderId}`);
+  return { ok: true };
+}
+
+type DeleteOrderResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Hard-delete an order and its children. order_items / payment_proofs /
+ * payment_links / order_requests cascade via FK; order_shipments has no FK so
+ * we delete it explicitly first. Irreversible — the UI gates this behind an
+ * explicit confirmation. Admin-only.
+ */
+export async function deleteOrder(orderId: string): Promise<DeleteOrderResult> {
+  await requireAdmin();
+
+  const [row] = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+  if (!row) return { ok: false, error: "Order not found." };
+
+  // order_shipments has no ON DELETE cascade — remove its rows first.
+  await db.delete(orderShipments).where(eq(orderShipments.orderId, orderId));
+  // Deleting the order cascades order_items / payment_proofs / payment_links /
+  // order_requests via their FK constraints.
+  await db.delete(orders).where(eq(orders.id, orderId));
+
+  revalidatePath(`/admin/orders`);
+  return { ok: true };
 }
