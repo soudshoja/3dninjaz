@@ -73,7 +73,6 @@ export function CheckoutIsland({
 
   // Guest details — name (required) + email (optional). Collected in the
   // island so both the PayPal and WhatsApp paths can read them.
-  const [guestName, setGuestName] = useState(defaultName);
   const [guestEmail, setGuestEmail] = useState(defaultEmail);
 
   useEffect(() => setHydrated(true), []);
@@ -127,7 +126,8 @@ export function CheckoutIsland({
   const [shipping, setShipping] = useState<SelectedShipping | null>(null);
 
   // Resolved display name / email for submission and WhatsApp message.
-  const resolvedName = isGuest ? guestName : defaultName;
+  // For guests the name comes from the (mandatory) shipping address recipient.
+  const resolvedName = isGuest ? (address?.recipientName ?? "") : defaultName;
   const resolvedEmail = isGuest ? guestEmail : defaultEmail;
 
   const initialOptions = useMemo<ReactPayPalScriptOptions>(
@@ -176,12 +176,11 @@ export function CheckoutIsland({
           aria-labelledby="ship-heading"
           className="order-1"
         >
-          {/* Guest details form — shown before address for unauthenticated users.
-              Name is required; email is optional (used only for the confirmation
-              + tracking link). PayPal and WhatsApp both work without an email. */}
+          {/* Guest box — name/phone come from the (mandatory) shipping address
+              below, so we only collect an OPTIONAL email here for the order
+              confirmation. PayPal and WhatsApp both work without an email. */}
           {isGuest && (
             <div className="mb-8 p-5 rounded-2xl border-2" style={{ borderColor: "#BFDBFE", backgroundColor: "#EFF6FF" }}>
-              <h2 className="font-[var(--font-heading)] text-xl mb-1">Your details</h2>
               <p className="text-sm text-zinc-600 mb-4">
                 Checking out as guest.{" "}
                 <a href="/register?next=/checkout" className="font-medium underline text-zinc-900">
@@ -189,40 +188,23 @@ export function CheckoutIsland({
                 </a>{" "}
                 to track orders and reorder faster.
               </p>
-              <div className="flex flex-col gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1" htmlFor="guest-name">
-                    Full name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    id="guest-name"
-                    type="text"
-                    required
-                    value={guestName}
-                    onChange={(e) => setGuestName(e.target.value)}
-                    placeholder="e.g. Ahmad bin Ali"
-                    className="w-full rounded-xl border-2 px-4 py-3 text-sm outline-none focus:border-blue-400"
-                    style={{ borderColor: "#BFDBFE" }}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1" htmlFor="guest-email">
-                    Email <span className="text-slate-400 text-xs font-normal">(optional — for order confirmation)</span>
-                  </label>
-                  <input
-                    id="guest-email"
-                    type="email"
-                    autoComplete="email"
-                    value={guestEmail}
-                    onChange={(e) => setGuestEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    className="w-full rounded-xl border-2 px-4 py-3 text-sm outline-none focus:border-blue-400"
-                    style={{ borderColor: "#BFDBFE" }}
-                  />
-                  {isGuest && !guestEmailValid && (
-                    <p className="mt-1 text-xs text-red-600">Please enter a valid email address (or leave blank).</p>
-                  )}
-                </div>
+              <div>
+                <label className="block text-sm font-medium mb-1" htmlFor="guest-email">
+                  Email <span className="text-slate-400 text-xs font-normal">(optional — for order confirmation)</span>
+                </label>
+                <input
+                  id="guest-email"
+                  type="email"
+                  autoComplete="email"
+                  value={guestEmail}
+                  onChange={(e) => setGuestEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full rounded-xl border-2 px-4 py-3 text-sm outline-none focus:border-blue-400"
+                  style={{ borderColor: "#BFDBFE" }}
+                />
+                {isGuest && !guestEmailValid && (
+                  <p className="mt-1 text-xs text-red-600">Please enter a valid email address (or leave blank).</p>
+                )}
               </div>
             </div>
           )}
@@ -305,9 +287,9 @@ export function CheckoutIsland({
                 bankName={bankName}
                 bankAccountNumber={bankAccountNumber}
                 bankAccountHolder={bankAccountHolder}
-                guestName={isGuest ? guestName : undefined}
+                guestName={isGuest ? resolvedName : undefined}
                 guestEmail={isGuest ? guestEmail : undefined}
-                disabled={items.length === 0 || (isGuest && !guestName.trim())}
+                disabled={items.length === 0 || (isGuest && !resolvedName.trim())}
               />
             </div>
           </div>
@@ -329,7 +311,7 @@ export function CheckoutIsland({
           bankAccountNumber={bankAccountNumber}
           bankAccountHolder={bankAccountHolder}
           isGuest={isGuest}
-          guestName={guestName}
+          guestName={resolvedName}
           guestEmail={guestEmail}
           guestEmailValid={guestEmailValid}
         />
