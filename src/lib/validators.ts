@@ -488,6 +488,8 @@ export const couponSchema = z
     endsAt: z.string().datetime().optional().nullable(),
     usageCap: z.coerce.number().int().positive().optional().nullable(),
     active: z.boolean().default(true),
+    // When true (default) the coupon works for guests too; false = registered only.
+    guestAllowed: z.boolean().default(true),
   })
   .superRefine((val, ctx) => {
     if (val.type === "percentage" && parseFloat(val.amount) > 100) {

@@ -34,6 +34,7 @@ export type CouponListRow = {
   usageCap: number | null;
   usageCount: number;
   active: boolean;
+  guestAllowed: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -55,6 +56,7 @@ export async function listCoupons(): Promise<CouponListRow[]> {
     usageCap: r.usageCap ?? null,
     usageCount: r.usageCount,
     active: !!r.active,
+    guestAllowed: !!r.guestAllowed,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
   }));
@@ -79,6 +81,7 @@ export async function getCoupon(id: string): Promise<CouponListRow | null> {
     usageCap: row.usageCap ?? null,
     usageCount: row.usageCount,
     active: !!row.active,
+    guestAllowed: !!row.guestAllowed,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -96,6 +99,7 @@ function parseCouponForm(formData: FormData) {
     endsAt: formData.get("endsAt") || null,
     usageCap: formData.get("usageCap") || null,
     active: formData.get("active") === "true",
+    guestAllowed: formData.get("guestAllowed") === "true",
   });
 }
 
@@ -122,6 +126,7 @@ export async function createCoupon(
       usageCap: data.usageCap ?? null,
       usageCount: 0,
       active: data.active,
+      guestAllowed: data.guestAllowed,
     });
   } catch (err: unknown) {
     const raw = String((err as Error)?.message ?? "");
@@ -157,6 +162,7 @@ export async function updateCoupon(
       endsAt: data.endsAt ? new Date(data.endsAt) : null,
       usageCap: data.usageCap ?? null,
       active: data.active,
+      guestAllowed: data.guestAllowed,
     })
     .where(eq(coupons.id, id));
 

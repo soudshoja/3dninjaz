@@ -62,13 +62,6 @@ export async function validateCoupon(
   code: string,
   subtotalMYR: number,
 ): Promise<CouponValidation> {
-  // T-05-03-enumeration — require a session so anonymous bots cannot crawl
-  // codes via timing-attack guesses.
-  const sessionUser = await getSessionUser();
-  if (!sessionUser) {
-    return { ok: false, error: "Sign in to apply a coupon" };
-  }
-
   // Normalise + validate code shape before DB lookup.
   const upper = String(code ?? "")
     .toUpperCase()
@@ -84,6 +77,16 @@ export async function validateCoupon(
     .where(eq(coupons.code, parsed.data.code))
     .limit(1);
   if (!row) return { ok: false, error: "Invalid coupon code" };
+
+  // Guest access is per-coupon: guest_allowed (default) coupons work for
+  // everyone; registered-only coupons still require a session. The code-shape
+  // check + needing a real code already limits enumeration (T-05-03).
+  if (!row.guestAllowed) {
+    const sessionUser = await getSessionUser();
+    if (!sessionUser) {
+      return { ok: false, error: "Sign in to use this coupon." };
+    }
+  }
 
   const snapshot = rowToSnapshot(row);
   try {
