@@ -26,22 +26,20 @@ import { WhatsAppBankTransferButton } from "./whatsapp-bank-transfer-button";
  * (clientId from NEXT_PUBLIC_PAYPAL_CLIENT_ID, currency MYR) and composes:
  *   - AddressForm (left column / stacked)
  *   - CheckoutSummary (right column desktop)
- *   - PayPalButton (below address on desktop)
+ *   - PayPalButton (below address on desktop) — hidden for guests
  *   - MobileSummarySheet (sticky dock + bottom sheet on mobile)
  *
- * Flow contracts:
- *   - On first render we wait for Zustand's `persist` hydration before
- *     deciding to redirect the user. If the bag is empty post-hydration we
- *     push the visitor back to /bag (D3-04).
- *   - On successful PayPal capture the server redirectTo is honored after
- *     calling useCartStore.getState().clear() so the next page renders with
- *     an empty bag (D3-10).
+ * Guest flow:
+ *   - isGuest=true: show "Your details" form (name required, email optional)
+ *   - Guests can only use the WhatsApp bank-transfer button
+ *   - PayPal is replaced by a "Sign in to pay with PayPal" prompt for guests
  */
 export function CheckoutIsland({
   defaultName,
   defaultEmail,
   savedAddresses,
   userId,
+  isGuest,
   whatsappNumber,
   bankName,
   bankAccountNumber,
@@ -50,8 +48,10 @@ export function CheckoutIsland({
   defaultName: string;
   defaultEmail: string;
   savedAddresses?: SavedAddress[];
-  /** Logged-in user id — forwarded to AddressForm for draft persistence. */
-  userId: string;
+  /** Logged-in user id — null for guests. */
+  userId: string | null;
+  /** True when no user session exists. */
+  isGuest: boolean;
   whatsappNumber: string;
   bankName?: string | null;
   bankAccountNumber?: string | null;
@@ -64,6 +64,10 @@ export function CheckoutIsland({
   // bouncing signed-in users with a still-loading localStorage bag.
   const [hydrated, setHydrated] = useState(false);
   const [hydratedItems, setHydratedItems] = useState<HydratedCartItem[]>([]);
+
+  // Guest details state
+  const [guestName, setGuestName] = useState(defaultName);
+  const [guestEmail, setGuestEmail] = useState(defaultEmail);
 
   useEffect(() => setHydrated(true), []);
 
@@ -101,6 +105,10 @@ export function CheckoutIsland({
   // returns options + user picks one. PayPal button stays disabled while null.
   const [shipping, setShipping] = useState<SelectedShipping | null>(null);
 
+  // Resolved display name / email for submission and WhatsApp message.
+  const resolvedName = isGuest ? guestName : defaultName;
+  const resolvedEmail = isGuest ? guestEmail : defaultEmail;
+
   const initialOptions = useMemo<ReactPayPalScriptOptions>(
     () => ({
       clientId: process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ?? "",
@@ -127,7 +135,7 @@ export function CheckoutIsland({
     // with an empty bag drawer.
     useCartStore.getState().clear();
     // Clear the address draft — order is complete, no need to restore.
-    clearDraft(userId);
+    if (userId) clearDraft(userId);
     router.push(redirectTo);
   };
 
@@ -139,6 +147,44 @@ export function CheckoutIsland({
           aria-labelledby="ship-heading"
           className="order-1"
         >
+          {/* Guest details form — shown before address for unauthenticated users */}
+          {isGuest && (
+            <div className="mb-8 p-5 rounded-2xl border-2" style={{ borderColor: "#BFDBFE", backgroundColor: "#EFF6FF" }}>
+              <h2 className="font-[var(--font-heading)] text-xl mb-4">Your details</h2>
+              <div className="flex flex-col gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1" htmlFor="guest-name">
+                    Full name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="guest-name"
+                    type="text"
+                    required
+                    value={guestName}
+                    onChange={(e) => setGuestName(e.target.value)}
+                    placeholder="e.g. Ahmad bin Ali"
+                    className="w-full rounded-xl border-2 px-4 py-3 text-sm outline-none focus:border-blue-400"
+                    style={{ borderColor: "#BFDBFE" }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1" htmlFor="guest-email">
+                    Email <span className="text-slate-400 text-xs font-normal">(optional — for order confirmation)</span>
+                  </label>
+                  <input
+                    id="guest-email"
+                    type="email"
+                    value={guestEmail}
+                    onChange={(e) => setGuestEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="w-full rounded-xl border-2 px-4 py-3 text-sm outline-none focus:border-blue-400"
+                    style={{ borderColor: "#BFDBFE" }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           <h2
             id="ship-heading"
             className="font-[var(--font-heading)] text-2xl mb-4"
@@ -149,7 +195,7 @@ export function CheckoutIsland({
             defaultName={defaultName}
             onValidChange={setAddress}
             savedAddresses={savedAddresses}
-            userId={userId}
+            userId={userId ?? ""}
           />
 
           {/* Phase 9b — shipping-rate picker. Renders only once the address is
@@ -195,26 +241,37 @@ export function CheckoutIsland({
               <p className="text-[11px] uppercase tracking-wider text-zinc-500 mb-3 font-medium">
                 Pay
               </p>
-              <PayPalButton
-                address={address}
-                items={items}
-                appliedCouponCode={appliedCoupon?.code ?? null}
-                shipping={shipping}
-                onPaid={handlePaid}
-              />
+              {isGuest ? (
+                <div className="rounded-xl border-2 border-dashed border-slate-200 px-4 py-4 text-center">
+                  <p className="text-sm text-slate-500">
+                    <a href="/login?next=/checkout" className="font-semibold underline" style={{ color: "#1E8BFF" }}>Sign in</a>
+                    {" "}to pay with PayPal
+                  </p>
+                </div>
+              ) : (
+                <PayPalButton
+                  address={address}
+                  items={items}
+                  appliedCouponCode={appliedCoupon?.code ?? null}
+                  shipping={shipping}
+                  onPaid={handlePaid}
+                />
+              )}
               <WhatsAppBankTransferButton
                 items={items}
                 subtotal={subtotal}
                 shipping={shipping}
                 address={address}
-                customerName={defaultName}
-                customerEmail={defaultEmail}
+                customerName={resolvedName}
+                customerEmail={resolvedEmail}
                 couponCode={appliedCoupon?.code ?? null}
                 waNumber={whatsappNumber}
                 bankName={bankName}
                 bankAccountNumber={bankAccountNumber}
                 bankAccountHolder={bankAccountHolder}
-                disabled={items.length === 0}
+                guestName={isGuest ? guestName : undefined}
+                guestEmail={isGuest ? guestEmail : undefined}
+                disabled={items.length === 0 || (isGuest && !guestName.trim())}
               />
             </div>
           </div>
@@ -228,13 +285,16 @@ export function CheckoutIsland({
           onCouponChange={setAppliedCoupon}
           shipping={shipping}
           onPaid={handlePaid}
-          customerName={defaultName}
-          customerEmail={defaultEmail}
+          customerName={resolvedName}
+          customerEmail={resolvedEmail}
           couponCode={appliedCoupon?.code ?? null}
           waNumber={whatsappNumber}
           bankName={bankName}
           bankAccountNumber={bankAccountNumber}
           bankAccountHolder={bankAccountHolder}
+          isGuest={isGuest}
+          guestName={guestName}
+          guestEmail={guestEmail}
         />
       </div>
     </PayPalScriptProvider>

@@ -500,7 +500,6 @@ export const orders = mysqlTable("orders", {
     .primaryKey()
     .default(sql`(UUID())`),
   userId: varchar("user_id", { length: 36 })
-    .notNull()
     .references(() => user.id), // NO cascade — keep orders if user is deleted (PDPA audit, D3-23)
   status: mysqlEnum("status", orderStatusValues).notNull().default("pending"),
   // PayPal identifiers (nullable until each phase of the payment flow completes)

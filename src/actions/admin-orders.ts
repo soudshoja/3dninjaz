@@ -29,7 +29,7 @@ import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
 
 export type AdminOrderListRow = {
   id: string;
-  userId: string;
+  userId: string | null;
   status: OrderStatus;
   paypalOrderId: string | null;
   paypalCaptureId: string | null;
@@ -133,7 +133,7 @@ export async function listAdminOrders(
 
 export type AdminOrderDetail = {
   id: string;
-  userId: string;
+  userId: string | null;
   status: OrderStatus;
   paypalOrderId: string | null;
   paypalCaptureId: string | null;
@@ -365,7 +365,7 @@ export async function approveWhatsAppOrder(
   await requireAdmin();
 
   const [row] = await db
-    .select({ id: orders.id, status: orders.status, paymentMethod: orders.paymentMethod })
+    .select({ id: orders.id, status: orders.status, paymentMethod: orders.paymentMethod, customerEmail: orders.customerEmail })
     .from(orders)
     .where(eq(orders.id, orderId))
     .limit(1);
@@ -380,9 +380,13 @@ export async function approveWhatsAppOrder(
 
   await db.update(orders).set({ status: "paid" }).where(eq(orders.id, orderId));
 
-  void sendOrderConfirmationEmail(orderId).catch((err) =>
-    console.error("[admin-orders] approveWhatsApp email failed:", err),
-  );
+  // Skip email for guest orders with placeholder address (no real email to send to).
+  const isGuestPlaceholder = row.customerEmail?.endsWith("@3dninjaz.local");
+  if (!isGuestPlaceholder) {
+    void sendOrderConfirmationEmail(orderId).catch((err) =>
+      console.error("[admin-orders] approveWhatsApp email failed:", err),
+    );
+  }
 
   revalidatePath(`/admin/orders`);
   revalidatePath(`/admin/orders/${orderId}`);

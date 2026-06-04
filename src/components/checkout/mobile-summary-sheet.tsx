@@ -30,6 +30,7 @@ import type { SelectedShipping } from "./shipping-rate-picker";
  *   plus the PayPal button and WhatsApp bank-transfer CTA.
  * - Tap targets: total+button row meets 60px minimum for primary CTAs
  *   (D3-20).
+ * - For guests (isGuest=true): PayPal is replaced by a sign-in prompt.
  */
 export function MobileSummarySheet({
   items,
@@ -46,6 +47,9 @@ export function MobileSummarySheet({
   bankName,
   bankAccountNumber,
   bankAccountHolder,
+  isGuest,
+  guestName,
+  guestEmail,
 }: {
   items: HydratedCartItem[];
   subtotalMyr: number;
@@ -61,6 +65,9 @@ export function MobileSummarySheet({
   bankName?: string | null;
   bankAccountNumber?: string | null;
   bankAccountHolder?: string | null;
+  isGuest?: boolean;
+  guestName?: string;
+  guestEmail?: string;
 }) {
   const [open, setOpen] = useState(false);
   const discountedSubtotal = appliedCoupon
@@ -126,16 +133,25 @@ export function MobileSummarySheet({
             <p className="text-[11px] uppercase tracking-wider text-zinc-500 font-medium px-1 mb-1">
               Pay
             </p>
-            <PayPalButton
-              address={address}
-              items={items}
-              appliedCouponCode={appliedCoupon?.code ?? null}
-              shipping={shipping}
-              onPaid={(redirect) => {
-                setOpen(false);
-                onPaid(redirect);
-              }}
-            />
+            {isGuest ? (
+              <div className="rounded-xl border-2 border-dashed border-slate-200 px-4 py-4 text-center mb-2">
+                <p className="text-sm text-slate-500">
+                  <a href="/login?next=/checkout" className="font-semibold underline" style={{ color: "#1E8BFF" }}>Sign in</a>
+                  {" "}to pay with PayPal
+                </p>
+              </div>
+            ) : (
+              <PayPalButton
+                address={address}
+                items={items}
+                appliedCouponCode={appliedCoupon?.code ?? null}
+                shipping={shipping}
+                onPaid={(redirect) => {
+                  setOpen(false);
+                  onPaid(redirect);
+                }}
+              />
+            )}
             <WhatsAppBankTransferButton
               items={items}
               subtotal={subtotalMyr}
@@ -148,7 +164,9 @@ export function MobileSummarySheet({
               bankName={bankName}
               bankAccountNumber={bankAccountNumber}
               bankAccountHolder={bankAccountHolder}
-              disabled={items.length === 0}
+              guestName={isGuest ? guestName : undefined}
+              guestEmail={isGuest ? guestEmail : undefined}
+              disabled={items.length === 0 || (isGuest === true && !(guestName ?? "").trim())}
             />
           </DrawerFooter>
         </DrawerContent>

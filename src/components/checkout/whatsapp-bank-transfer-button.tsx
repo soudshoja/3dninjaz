@@ -127,6 +127,8 @@ export function WhatsAppBankTransferButton({
   bankName,
   bankAccountNumber,
   bankAccountHolder,
+  guestName,
+  guestEmail,
   disabled,
 }: {
   items: HydratedCartItem[];
@@ -140,6 +142,8 @@ export function WhatsAppBankTransferButton({
   bankName?: string | null;
   bankAccountNumber?: string | null;
   bankAccountHolder?: string | null;
+  guestName?: string;
+  guestEmail?: string;
   disabled?: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -164,6 +168,8 @@ export function WhatsAppBankTransferButton({
         items: bagLines,
         couponCode: couponCode ?? null,
         shippingServiceCode: shipping?.serviceCode ?? null,
+        guestName,
+        guestEmail,
       });
 
       if (!res.ok) {

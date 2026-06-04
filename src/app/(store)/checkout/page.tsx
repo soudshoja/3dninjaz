@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth-helpers";
 import { listMyAddresses } from "@/actions/addresses";
 import { CheckoutIsland } from "@/components/checkout/paypal-provider";
@@ -6,10 +5,10 @@ import { BRAND } from "@/lib/brand";
 import { getStoreSettingsCached } from "@/lib/store-settings";
 
 /**
- * /checkout — server component auth gate + layout shell (D3-03, D3-04, T-03-16).
+ * /checkout — server component layout shell (D3-03, D3-04, T-03-16).
  *
- * - Unauthenticated visitors are redirected to /login?next=/checkout before
- *   any client code runs (PROJECT.md "Account required for purchases").
+ * - Unauthenticated visitors (guests) are allowed through to the checkout page.
+ *   They can only use the WhatsApp bank-transfer button; PayPal requires login.
  * - The bag-empty gate runs on the client island (Zustand + localStorage)
  *   after hydration; see paypal-provider.tsx.
  * - `force-dynamic` because we read the session cookie — never cache the
@@ -20,16 +19,11 @@ export const dynamic = "force-dynamic";
 
 export default async function CheckoutPage() {
   const user = await getSessionUser();
-  if (!user) {
-    redirect("/login?next=/checkout");
-  }
 
-  // Phase 6 06-03 — fetch saved addresses for the AddressPicker. Server-side
-  // listMyAddresses re-validates session via requireUser(), but we already
-  // know the user is authenticated (gate above). Returns [] if none saved —
-  // the picker hides itself and the existing form path is preserved.
+  // Phase 6 06-03 — fetch saved addresses for the AddressPicker. Only for
+  // logged-in users; guests get an empty list and fill the form from scratch.
   const [savedAddresses, settings] = await Promise.all([
-    listMyAddresses(),
+    user ? listMyAddresses() : Promise.resolve([]),
     getStoreSettingsCached(),
   ]);
 
@@ -44,14 +38,17 @@ export default async function CheckoutPage() {
             Checkout
           </h1>
           <p className="mt-2 text-zinc-600">
-            Enter your shipping details and complete payment with PayPal.
+            {user
+              ? "Enter your shipping details and complete payment."
+              : "Enter your details below and pay via WhatsApp bank transfer."}
           </p>
         </header>
         <CheckoutIsland
-          defaultName={user.name ?? ""}
-          defaultEmail={user.email}
+          defaultName={user?.name ?? ""}
+          defaultEmail={user?.email ?? ""}
           savedAddresses={savedAddresses}
-          userId={user.id}
+          userId={user?.id ?? null}
+          isGuest={!user}
           whatsappNumber={settings.whatsappNumber ?? "60167203048"}
           bankName={settings.bankName}
           bankAccountNumber={settings.bankAccountNumber}

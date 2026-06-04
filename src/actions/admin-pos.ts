@@ -105,6 +105,7 @@ export type PosOrderInput = {
   customer: PosOrderCustomer;
   shippingOverride?: number;
   couponCode?: string;
+  shippingCourier?: { serviceCode: string; serviceName: string } | null;
 };
 
 export type CreatePosOrderResult =
@@ -196,7 +197,7 @@ async function resolvePosCustomerId(
       .where(eq(orders.shippingPhone, phone))
       .orderBy(desc(orders.createdAt))
       .limit(1);
-    if (phoneOrder && phoneOrder.userId !== adminUserId) {
+    if (phoneOrder && phoneOrder.userId && phoneOrder.userId !== adminUserId) {
       return phoneOrder.userId;
     }
   }
@@ -524,7 +525,7 @@ export async function createPosOrder(
 ): Promise<CreatePosOrderResult> {
   const session = await requireAdmin();
 
-  const { lines, customer, shippingOverride, couponCode } = input;
+  const { lines, customer, shippingOverride, couponCode, shippingCourier } = input;
 
   if (!lines || lines.length === 0) {
     return { ok: false, error: "At least one line is required." };
@@ -850,6 +851,9 @@ export async function createPosOrder(
         shippingState: customer.state,
         shippingPostcode: customer.postcode,
         shippingCountry: customer.country ?? "Malaysia",
+        shippingServiceCode: shippingCourier?.serviceCode ?? null,
+        shippingServiceName: shippingCourier?.serviceName ?? null,
+        shippingQuotedPrice: shippingCourier ? shippingCost.toFixed(2) : null,
         sourceType: "manual",
         // customItem* columns stay null for new POS orders (D-06 / REQ-20-2)
         customItemName: null,
@@ -971,9 +975,9 @@ export async function getPosCustomerSearch(
     .from(orders)
     .where(like(orders.shippingPhone, `%${trimmed}%`));
 
-  // Collect phone-derived userIds (unique, exclude duplicates)
+  // Collect phone-derived userIds (unique, exclude duplicates, filter out guest nulls)
   const phoneUserIdSet = new Set<string>(
-    phoneOrderRows.map((r) => r.userId),
+    phoneOrderRows.map((r) => r.userId).filter((id): id is string => id !== null),
   );
 
   // ── Build union of candidate ids ─────────────────────────────────────────
@@ -1027,6 +1031,7 @@ export async function getPosCustomerSearch(
 
   for (const row of orderRows) {
     const uid = row.userId;
+    if (!uid) continue; // skip guest orders (no userId)
     orderCount.set(uid, (orderCount.get(uid) ?? 0) + 1);
     if (!latestOrder.has(uid)) {
       latestOrder.set(uid, row); // Already sorted desc, so first seen = most recent

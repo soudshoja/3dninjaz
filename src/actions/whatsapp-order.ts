@@ -25,6 +25,8 @@ type CreateWhatsAppOrderInput = {
   items: BagLineInput[];
   couponCode?: string | null;
   shippingServiceCode?: string | null;
+  guestName?: string;   // required when not signed in
+  guestEmail?: string;  // optional even for guests
 };
 
 type CreateWhatsAppOrderResult =
@@ -44,8 +46,14 @@ export async function createWhatsAppOrder(
   input: CreateWhatsAppOrderInput,
 ): Promise<CreateWhatsAppOrderResult> {
   const user = await getSessionUser();
-  if (!user) {
-    return { ok: false, error: "You must be signed in to check out." };
+  const isGuest = !user;
+
+  // For guests, guestName is required (it replaces the account name).
+  if (isGuest) {
+    const name = input.guestName?.trim();
+    if (!name) {
+      return { ok: false, error: "Please enter your name to continue." };
+    }
   }
 
   const addr = orderAddressSchema.safeParse(input.address);
@@ -327,14 +335,14 @@ export async function createWhatsAppOrder(
   try {
     await db.insert(orders).values({
       id: internalOrderId,
-      userId: user.id,
+      userId: user?.id ?? null,
       status: "awaiting_payment_review",
       paymentMethod: "bank_transfer",
       subtotal: subtotalStr,
       shippingCost: shippingStr,
       totalAmount: totalStr,
       currency: "MYR",
-      customerEmail: user.email,
+      customerEmail: user?.email ?? (input.guestEmail?.trim() || "guest@3dninjaz.local"),
       shippingName: addr.data.recipientName,
       shippingPhone: addr.data.phone,
       shippingLine1: addr.data.addressLine1,
