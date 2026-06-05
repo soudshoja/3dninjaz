@@ -12,6 +12,11 @@ import { orderStatusValues } from "@/lib/db/schema";
 import { computeOrderCost, toNum, toNumOrNull } from "@/lib/profit";
 import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
 import { sendWhatsAppNotification, sendWhatsAppInvoicePdf } from "@/lib/whatsapp/sender";
+import { renderInvoicePdfBase64 } from "@/lib/pdf/render-invoice";
+import { sendMedia } from "@/lib/whatsapp/client";
+import { normalizeMsisdn } from "@/lib/whatsapp/events";
+import { getWhatsappStateFresh } from "@/lib/whatsapp/settings";
+// formatOrderNumber already imported on line 9
 
 // ============================================================================
 // Plan 03-04 admin order actions.
@@ -733,4 +738,64 @@ export async function deleteOrder(orderId: string): Promise<DeleteOrderResult> {
 
   revalidatePath(`/admin/orders`);
   return { ok: true };
+}
+
+// ============================================================================
+// WhatsApp invoice sending.
+// ============================================================================
+
+type SendInvoiceViaWhatsAppResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Send the invoice PDF for an order via WhatsApp to the customer's phone.
+ * Gates on the same connection + enabled checks as the existing WhatsApp sender.
+ */
+export async function sendInvoiceViaWhatsApp(
+  orderId: string,
+): Promise<SendInvoiceViaWhatsAppResult> {
+  await requireAdmin();
+
+  const [row] = await db
+    .select({
+      id: orders.id,
+      shippingPhone: orders.shippingPhone,
+      status: orders.status,
+    })
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+  if (!row) return { ok: false, "error": "Order not found." };
+
+  // Best-effort: never throw, always return a result.
+  try {
+    const number = normalizeMsisdn(row.shippingPhone);
+    if (!number) {
+      return { ok: false, error: "Customer phone number is not valid." };
+    }
+
+    const state = await getWhatsappStateFresh();
+    if (!state.notificationsEnabled) {
+      return { ok: false, error: "WhatsApp notifications are disabled." };
+    }
+    if (state.state !== "open") {
+      return { ok: false, error: "WhatsApp connection is not active." };
+    }
+
+    const base64 = await renderInvoicePdfBase64(orderId);
+    if (!base64) {
+      return { ok: false, error: "Failed to generate invoice PDF." };
+    }
+
+    const fileName = `invoice-${formatOrderNumber(orderId)}.pdf`;
+    const sent = await sendMedia({ number, base64, fileName });
+
+    if (!sent) {
+      return { ok: false, error: "Failed to send message via Evolution API." };
+    }
+
+    return { ok: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: msg };
+  }
 }
