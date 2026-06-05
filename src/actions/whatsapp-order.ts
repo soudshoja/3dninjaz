@@ -7,7 +7,7 @@ import { composeVariantLabel, resolveEffectivePrice } from "@/lib/variants";
 import { randomUUID } from "node:crypto";
 import { getSessionUser } from "@/lib/auth-helpers";
 import { orderAddressSchema, type OrderAddressInput } from "@/lib/validators";
-import { validateCoupon } from "@/actions/coupons";
+import { validateCoupon, redeemCoupon } from "@/actions/coupons";
 import { getShippingRate } from "@/actions/admin-shipping";
 import { quoteForCart } from "@/actions/shipping-quote";
 import { revalidatePath } from "next/cache";
@@ -320,10 +320,12 @@ export async function createWhatsAppOrder(
 
   // Coupon validation.
   let discount = 0;
+  let validatedCouponId: string | null = null;
   if (input.couponCode && typeof input.couponCode === "string") {
     const valid = await validateCoupon(input.couponCode, subtotal);
     if (valid.ok) {
       discount = valid.discount;
+      validatedCouponId = valid.couponId;
     }
   }
 
@@ -379,6 +381,29 @@ export async function createWhatsAppOrder(
           : null,
       })),
     );
+
+    // Count the coupon usage against its cap (guest or member). user?.id is
+    // null for guests — coupon_redemptions.user_id is nullable, so the
+    // redemption still increments usage_count. Same acceptable failure mode as
+    // PayPal: if the cap was hit in a race, the order keeps its discount but
+    // the audit row is skipped (logged, never throws).
+    if (validatedCouponId && discount > 0) {
+      try {
+        const redeemed = await redeemCoupon(
+          validatedCouponId,
+          internalOrderId,
+          user?.id ?? null,
+          subtotal,
+        );
+        if (!redeemed.ok) {
+          console.warn(
+            `[whatsapp-order] coupon ${input.couponCode} redemption refused for order ${internalOrderId}: ${redeemed.error}`,
+          );
+        }
+      } catch (err) {
+        console.error("[whatsapp-order] coupon redemption error:", err);
+      }
+    }
 
     revalidatePath("/admin/orders");
     revalidatePath("/orders");

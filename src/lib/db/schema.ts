@@ -960,9 +960,10 @@ export const couponRedemptions = mysqlTable(
     orderId: varchar("order_id", { length: 36 })
       .notNull()
       .references(() => orders.id, { onDelete: "cascade" }),
-    userId: varchar("user_id", { length: 36 })
-      .notNull()
-      .references(() => user.id), // NO cascade — PDPA audit (T-05-01-PDPA)
+    // Nullable — guest (no-account) redemptions still count against usage_cap
+    // but have no user to attribute. Members keep their attribution. NO cascade
+    // on the FK — audit survives user deletion (PDPA T-05-01-PDPA).
+    userId: varchar("user_id", { length: 36 }).references(() => user.id),
     amountApplied: decimal("amount_applied", { precision: 10, scale: 2 }).notNull(),
     redeemedAt: timestamp("redeemed_at").notNull().defaultNow(),
   },
