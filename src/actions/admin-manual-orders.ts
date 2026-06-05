@@ -7,6 +7,8 @@ import { randomUUID, randomBytes } from "node:crypto";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { manualOrderSchema, type ManualOrderInput } from "@/lib/validators";
 import { revalidatePath } from "next/cache";
+import { sendWhatsAppNotification } from "@/lib/whatsapp/sender";
+import { formatOrderNumber } from "@/lib/orders";
 
 /**
  * Phase 7 (07-03) — manual orders + payment links server actions.
@@ -159,6 +161,33 @@ export async function generatePaymentLink({
   }
 
   revalidatePath(`/admin/orders/${orderId}`);
+
+  // Fire order_pending WhatsApp notification — send the customer their payment link.
+  // Best-effort: fetch order contact fields and fire-and-forget.
+  void (async () => {
+    try {
+      const [orderRow] = await db
+        .select({
+          shippingPhone: orders.shippingPhone,
+          shippingName: orders.shippingName,
+          totalAmount: orders.totalAmount,
+        })
+        .from(orders)
+        .where(eq(orders.id, orderId))
+        .limit(1);
+      if (orderRow) {
+        await sendWhatsAppNotification("order_pending", orderRow.shippingPhone, {
+          customerName: orderRow.shippingName,
+          orderNumber: formatOrderNumber(orderId),
+          orderTotal: orderRow.totalAmount,
+          paymentLink: `${PUBLIC_LINK_BASE}/payment-links/${token}`,
+        });
+      }
+    } catch {
+      /* best-effort */
+    }
+  })();
+
   return {
     ok: true,
     linkId,

@@ -6,6 +6,7 @@ import { orderShipments, orders } from "@/lib/db/schema";
 import { sendOrderDeliveredEmail } from "@/actions/send-emails";
 import { formatOrderNumber } from "@/lib/orders";
 import { getDelyvaWebhookSecret } from "@/lib/delyva";
+import { sendWhatsAppNotification } from "@/lib/whatsapp/sender";
 
 // ============================================================================
 // Phase 9 (09-01) — Delyva webhook receiver.
@@ -180,6 +181,7 @@ export async function POST(req: NextRequest) {
                 id: orders.id,
                 customerEmail: orders.customerEmail,
                 shippingName: orders.shippingName,
+                shippingPhone: orders.shippingPhone,
               })
               .from(orders)
               .where(eq(orders.id, shipment[0].orderId))
@@ -194,6 +196,11 @@ export async function POST(req: NextRequest) {
               }).catch((err) =>
                 console.error("[delyva-webhook] delivery email failed:", err)
               );
+              void sendWhatsAppNotification("order_delivered", order[0].shippingPhone, {
+                customerName: order[0].shippingName,
+                orderNumber: formatOrderNumber(order[0].id),
+                orderUrl: `https://app.3dninjaz.com/orders/${order[0].id}`,
+              }).catch(() => {});
             }
           }
         } catch (err) {

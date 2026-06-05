@@ -34,7 +34,7 @@ import { OrderCostsPanel } from "@/components/admin/order-costs-panel";
 import { db } from "@/lib/db";
 import { paymentProofs, products } from "@/lib/db/schema";
 import { eq, desc, inArray } from "drizzle-orm";
-import { FileDown } from "lucide-react";
+import { FileDown, User, MapPin, Package, CreditCard, Truck, Activity, Settings, MessageSquare, RotateCcw, ChevronLeft } from "lucide-react";
 import { PaymentProofSection } from "@/components/admin/payment-proof-section";
 import { AdminUploadProofForm } from "@/components/admin/admin-upload-proof-form";
 
@@ -45,11 +45,81 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+// ── Shared card shell ──────────────────────────────────────────────────────────
+// Claymorphism treatment: chunky rounded-3xl, layered shadows, thick ink border.
+function AdminCard({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`rounded-3xl p-5 md:p-6 ${className}`}
+      style={{
+        backgroundColor: "#ffffff",
+        border: `2.5px solid ${BRAND.ink}12`,
+        boxShadow: `0 6px 0 ${BRAND.ink}0e, 0 16px 32px ${BRAND.ink}0a`,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ── Section header with coloured accent bar ────────────────────────────────────
+function SectionHeader({
+  icon: Icon,
+  label,
+  accent = BRAND.blue,
+}: {
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
+  label: string;
+  accent?: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 mb-4">
+      <div
+        className="flex items-center justify-center rounded-xl"
+        style={{
+          width: 36,
+          height: 36,
+          backgroundColor: `${accent}18`,
+          border: `1.5px solid ${accent}30`,
+          color: accent,
+          flexShrink: 0,
+        }}
+      >
+        <Icon size={17} strokeWidth={2.2} />
+      </div>
+      <h2
+        className="font-[var(--font-heading)] text-lg font-bold tracking-tight"
+        style={{ color: BRAND.ink }}
+      >
+        {label}
+      </h2>
+      {/* Accent bar */}
+      <div
+        className="flex-1 h-px ml-1"
+        style={{ backgroundColor: `${accent}25` }}
+      />
+    </div>
+  );
+}
+
 /**
- * /admin/orders/[id] — full admin detail view. Combines customer + address
- * snapshot + progress timeline + line items + status-transition form +
- * internal notes. Layout is one-column below 768px and two-column above
- * (D3-20 mobile-first rule).
+ * /admin/orders/[id] — full admin detail view (ui-ux-pro-max / Claymorphism).
+ *
+ * Layout zones:
+ *   1. Page header  — order number, status badge, Download Invoice, meta
+ *   2. Summary row  — Customer card + Ship-to card (2-col on desktop)
+ *   3. Items + totals (full width)
+ *   4. Payment zone — proof + upload form + payment link + PayPal financials
+ *   5. Fulfilment   — progress timeline + status update form
+ *   6. Courier      — shipment panel + refresh button
+ *   7. Financials   — costs + profit panel
+ *   8. Admin tools  — manage/discount + cancel/return requests + notes
  *
  * requireAdmin() gates the page; getAdminOrder does it again at the action
  * layer so an attacker cannot reach this data via a direct server-action call.
@@ -141,30 +211,62 @@ export default async function AdminOrderDetailPage({
       className="min-h-screen"
       style={{ backgroundColor: BRAND.cream, color: BRAND.ink }}
     >
-      <div className="mx-auto max-w-4xl px-4 py-8">
-        <nav className="mb-4 text-sm">
-          <Link href="/admin/orders" className="underline decoration-dotted">
-            &larr; All orders
+      <div className="mx-auto max-w-5xl px-4 py-8">
+
+        {/* ── Breadcrumb ────────────────────────────────────────────────────── */}
+        <nav className="mb-5">
+          <Link
+            href="/admin/orders"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold transition-opacity hover:opacity-70"
+            style={{ color: BRAND.blue }}
+          >
+            <ChevronLeft size={16} strokeWidth={2.5} />
+            All orders
           </Link>
         </nav>
 
-        <header className="mb-6 flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="font-[var(--font-heading)] text-3xl md:text-4xl">
+        {/* ══ ZONE 1 — Page header ═════════════════════════════════════════════ */}
+        <div
+          className="rounded-3xl px-6 py-5 mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+          style={{
+            background: `linear-gradient(135deg, ${BRAND.ink}f5 0%, ${BRAND.ink}e8 100%)`,
+            border: `2.5px solid ${BRAND.ink}`,
+            boxShadow: `0 8px 0 ${BRAND.ink}cc, 0 20px 40px ${BRAND.ink}40`,
+          }}
+        >
+          {/* Left — order identity */}
+          <div className="min-w-0">
+            <p
+              className="text-xs font-bold uppercase tracking-[0.18em] mb-1"
+              style={{ color: `${BRAND.blue}cc` }}
+            >
+              Order
+            </p>
+            <h1
+              className="font-[var(--font-heading)] text-3xl md:text-4xl font-extrabold tracking-tight break-words"
+              style={{ color: "#ffffff" }}
+            >
               {formatOrderNumber(row.id)}
             </h1>
-            <p className="text-slate-600 mt-1">
+            <p className="text-sm mt-1" style={{ color: "#ffffff99" }}>
               Placed {new Date(row.createdAt).toLocaleString("en-MY")}
             </p>
-            <p className="text-xs text-slate-500 font-mono mt-1 break-words">{row.id}</p>
+            <p
+              className="text-xs font-mono mt-1 break-words"
+              style={{ color: "#ffffff55" }}
+            >
+              {row.id}
+            </p>
             {row.paypalCaptureId ? (
-              <p className="text-xs text-slate-600 mt-2">
-                Payment reference:{" "}
+              <p className="text-xs mt-1.5" style={{ color: "#ffffff70" }}>
+                Payment ref:{" "}
                 <span className="font-mono break-words">{row.paypalCaptureId}</span>
               </p>
             ) : null}
           </div>
-          <div className="flex items-center gap-3 flex-wrap">
+
+          {/* Right — badge + invoice download */}
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
             {/* Phase 20 (20-11) — Download Invoice PDF button.
                 The ?t= cache-buster (re-stamped on every force-dynamic render)
                 guarantees the browser fetches a freshly-rendered PDF after the
@@ -173,104 +275,124 @@ export default async function AdminOrderDetailPage({
               href={`/orders/${row.id}/invoice.pdf?t=${Date.now()}`}
               target="_blank"
               rel="noopener"
-              className="inline-flex items-center gap-2 px-4 font-semibold rounded-[4px] border-2 border-slate-700 text-slate-700 hover:bg-slate-100 transition-colors duration-150"
-              style={{ minHeight: 48 }}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold transition-opacity hover:opacity-80"
+              style={{
+                background: "rgba(255,255,255,0.12)",
+                border: "1.5px solid rgba(255,255,255,0.25)",
+                color: "#ffffff",
+                minHeight: 44,
+              }}
             >
-              <FileDown size={20} />
-              Download Invoice (PDF)
+              <FileDown size={16} strokeWidth={2.2} />
+              Invoice PDF
             </a>
             <AdminOrderStatusBadge status={row.status} />
           </div>
-        </header>
+        </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
-          <section
-            className="rounded-2xl p-4 md:p-6"
-            style={{ backgroundColor: "#ffffff" }}
-          >
-            <h2 className="font-[var(--font-heading)] text-xl mb-3">Customer</h2>
-            <p className="font-semibold">{row.user?.name ?? row.shippingName}</p>
-            <p className="text-slate-700 break-words">
-              {row.user?.email ?? row.customerEmail}
+        {/* ══ ZONE 2 — Summary: Customer + Ship-to ════════════════════════════ */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+
+          {/* Customer card */}
+          <AdminCard>
+            <SectionHeader icon={User} label="Customer" accent={BRAND.blue} />
+            <p className="font-bold text-base" style={{ color: BRAND.ink }}>
+              {row.user?.name ?? row.shippingName}
             </p>
+            <p className="text-sm mt-0.5 break-words" style={{ color: "#475569" }}>
+              {(() => {
+                const email = row.user?.email ?? row.customerEmail;
+                // Guest checkout with no email uses a sentinel address — don't
+                // show the fake address; say "No email (guest)" instead.
+                return email.endsWith("@3dninjaz.local") ? (
+                  <span style={{ fontStyle: "italic", color: "#94a3b8" }}>
+                    No email (guest)
+                  </span>
+                ) : (
+                  email
+                );
+              })()}
+            </p>
+            {row.shippingPhone ? (
+              <p className="text-sm mt-0.5 font-mono break-words" style={{ color: "#475569" }}>
+                {row.shippingPhone}
+              </p>
+            ) : null}
+            {/* Guest / deleted-user disambiguation */}
             {row.user ? (
-              <p className="text-xs text-slate-500 font-mono mt-2 break-words">
-                user id: {row.user.id}
+              <p
+                className="text-xs font-mono mt-2 break-words px-2 py-1 rounded-lg"
+                style={{
+                  color: BRAND.blue,
+                  backgroundColor: `${BRAND.blue}10`,
+                  border: `1px solid ${BRAND.blue}20`,
+                }}
+              >
+                uid: {row.user.id}
+              </p>
+            ) : row.userId === null ? (
+              <p
+                className="text-xs mt-2 px-2 py-1.5 rounded-lg"
+                style={{
+                  color: "#b45309",
+                  backgroundColor: "#fef3c720",
+                  border: "1px solid #fbbf2440",
+                }}
+              >
+                Guest checkout — no account. Contact details are from the order.
               </p>
             ) : (
-              <p className="text-xs text-slate-500 mt-2">
+              <p
+                className="text-xs mt-2 px-2 py-1.5 rounded-lg"
+                style={{
+                  color: "#dc2626",
+                  backgroundColor: "#fee2e220",
+                  border: "1px solid #fca5a540",
+                }}
+              >
                 User record has been deleted — using snapshotted contact info.
               </p>
             )}
-          </section>
+          </AdminCard>
 
-          <section
-            className="rounded-2xl p-4 md:p-6"
-            style={{ backgroundColor: "#ffffff" }}
-          >
-            <h2 className="font-[var(--font-heading)] text-xl mb-3">Ship to</h2>
-            <address className="not-italic leading-relaxed text-slate-800">
-              {row.shippingName}<br />
+          {/* Ship-to card */}
+          <AdminCard>
+            <SectionHeader icon={MapPin} label="Ship to" accent={BRAND.purple} />
+            <address
+              className="not-italic text-sm leading-relaxed"
+              style={{ color: "#334155" }}
+            >
+              <span className="font-bold text-base" style={{ color: BRAND.ink }}>{row.shippingName}</span><br />
               {row.shippingLine1}<br />
               {row.shippingLine2 ? <>{row.shippingLine2}<br /></> : null}
               {row.shippingCity} {row.shippingPostcode}<br />
               {row.shippingState}, {row.shippingCountry}<br />
-              {row.shippingPhone}
+              <span className="font-mono text-xs" style={{ color: BRAND.blue }}>{row.shippingPhone}</span>
             </address>
-          </section>
+          </AdminCard>
+        </div>
 
-          {/* Phase 20 (20-11) — Payment Proof review section.
-              Rendered between Customer/Shipping cards and Order timeline.
-              PaymentProofSection early-returns null when proofRows is empty. */}
-          <div className="md:col-span-2 flex flex-col gap-4">
-            <PaymentProofSection
-              orderId={row.id}
-              proofs={proofRows.map((p) => ({
-                id: p.id,
-                imageUrl: p.imageUrl,
-                thumbnailUrl: p.thumbnailUrl ?? null,
-                mimeType: p.mimeType,
-                sizeBytes: p.sizeBytes,
-                uploadedBy: p.uploadedBy,
-                uploadedByUserId: p.uploadedByUserId ?? null,
-                status: p.status,
-                adminNote: p.adminNote ?? null,
-                createdAt: p.createdAt instanceof Date ? p.createdAt : new Date(p.createdAt),
-              }))}
-              orderTotal={row.totalAmount}
-            />
+        {/* ══ ZONE 3 — Items + totals ══════════════════════════════════════════ */}
+        <AdminCard className="mb-4">
+          <SectionHeader icon={Package} label="Items" accent={BRAND.green} />
 
-            {/* Admin slip upload — shown when order is still awaiting payment.
-                onSuccess is intentionally omitted: revalidatePath inside
-                adminUploadPaymentProof triggers the RSC re-render automatically.
-                Passing a function prop across the Server→Client boundary would
-                cause a runtime crash on force-dynamic pages (RSC boundary rule). */}
-            {showAdminUploadForm && (
-              <AdminUploadProofForm orderId={row.id} />
-            )}
-          </div>
-
-          <section
-            className="rounded-2xl p-4 md:p-6 md:col-span-2"
-            style={{ backgroundColor: "#ffffff" }}
-          >
-            <h2 className="font-[var(--font-heading)] text-xl mb-4">Progress</h2>
-            <AdminOrderTimeline status={row.status} />
-          </section>
-
+          {/* Custom item details (manual orders) */}
           {row.sourceType === "manual" ? (
-            <section
-              className="rounded-2xl p-4 md:p-6 md:col-span-2"
-              style={{ backgroundColor: "#ffffff" }}
+            <div
+              className="mb-4 px-4 py-3 rounded-2xl"
+              style={{
+                backgroundColor: `${BRAND.purple}08`,
+                border: `1.5px solid ${BRAND.purple}20`,
+              }}
             >
-              <h2 className="font-[var(--font-heading)] text-xl mb-3">
+              <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: BRAND.purple }}>
                 Custom item
-              </h2>
-              <p className="font-semibold">
+              </p>
+              <p className="font-semibold" style={{ color: BRAND.ink }}>
                 {row.customItemName ?? "(unnamed)"}
               </p>
               {row.customItemDescription ? (
-                <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">
+                <p className="mt-1 whitespace-pre-wrap text-sm" style={{ color: "#475569" }}>
                   {row.customItemDescription}
                 </p>
               ) : null}
@@ -282,7 +404,11 @@ export default async function AdminOrderDetailPage({
                       href={url}
                       target="_blank"
                       rel="noreferrer"
-                      className="block aspect-square overflow-hidden rounded-md border border-[var(--color-brand-border)] bg-slate-50"
+                      className="block aspect-square overflow-hidden rounded-xl border"
+                      style={{
+                        borderColor: `${BRAND.ink}15`,
+                        backgroundColor: `${BRAND.blue}10`,
+                      }}
                     >
                       {/* Plain img — these uploads may be legacy/raw paths */}
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -295,55 +421,34 @@ export default async function AdminOrderDetailPage({
                   ))}
                 </div>
               ) : null}
-            </section>
+            </div>
           ) : null}
 
-          {isManualUnpaid ? (
-            <section
-              className="rounded-2xl p-4 md:p-6 md:col-span-2"
-              style={{ backgroundColor: "#ffffff" }}
+          {row.items.length === 0 ? (
+            <p className="text-sm" style={{ color: "#64748b" }}>No line items on this order.</p>
+          ) : (
+            <ul
+              className="divide-y"
+              style={{ borderColor: `${BRAND.ink}0c` }}
             >
-              <h2 className="font-[var(--font-heading)] text-xl mb-3">
-                Payment link
-              </h2>
-              <PaymentLinkCard
-                orderId={row.id}
-                existingLinks={paymentLinks}
-                customerEmail={
-                  row.customerEmail.endsWith("@3dninjaz.local")
-                    ? null
-                    : row.customerEmail
-                }
-                itemName={row.customItemName}
-                totalAmount={row.totalAmount}
-              />
-            </section>
-          ) : null}
-
-          <section
-            className="rounded-2xl p-4 md:p-6 md:col-span-2"
-            style={{ backgroundColor: "#ffffff" }}
-          >
-            <h2 className="font-[var(--font-heading)] text-xl mb-4">Items</h2>
-            {row.items.length === 0 ? (
-              <p className="text-sm text-slate-600">No line items on this order.</p>
-            ) : (
-              <ul className="divide-y divide-black/10">
-                {row.items.map((i) => {
-                  // D-08 (Phase 20): manual lines have no product image — skip.
-                  // Otherwise prefer the snapshotted image, falling back to the
-                  // product's primary image (keychain/configurable items don't
-                  // snapshot one at add-to-bag).
-                  const itemImage = isManualLine(i)
-                    ? null
-                    : i.productImage ||
-                      (i.productId ? productImageFallback.get(i.productId) : null) ||
-                      null;
-                  return (
-                  <li key={i.id} className="flex gap-4 py-3">
+              {row.items.map((i) => {
+                // D-08 (Phase 20): manual lines have no product image — skip.
+                // Otherwise prefer the snapshotted image, falling back to the
+                // product's primary image (keychain/configurable items don't
+                // snapshot one at add-to-bag).
+                const itemImage = isManualLine(i)
+                  ? null
+                  : i.productImage ||
+                    (i.productId ? productImageFallback.get(i.productId) : null) ||
+                    null;
+                return (
+                  <li key={i.id} className="flex gap-4 py-3.5">
                     <div
-                      className="h-14 w-14 md:h-16 md:w-16 rounded-xl overflow-hidden shrink-0 relative"
-                      style={{ backgroundColor: `${BRAND.blue}15` }}
+                      className="h-14 w-14 md:h-16 md:w-16 rounded-2xl overflow-hidden shrink-0 relative"
+                      style={{
+                        backgroundColor: `${BRAND.blue}12`,
+                        border: `1.5px solid ${BRAND.ink}10`,
+                      }}
                     >
                       {itemImage ? (
                         <Image
@@ -358,8 +463,8 @@ export default async function AdminOrderDetailPage({
                     </div>
                     <div className="flex-1 min-w-0">
                       {/* D-08: manual lines render name directly — no Link to /products/<id> */}
-                      <p className="font-semibold truncate">{i.productName}</p>
-                      <p className="text-sm text-slate-600">
+                      <p className="font-semibold truncate" style={{ color: BRAND.ink }}>{i.productName}</p>
+                      <p className="text-sm mt-0.5" style={{ color: "#64748b" }}>
                         {(() => {
                           // D-08: manual lines have no variant/config data
                           if (isManualLine(i)) {
@@ -376,168 +481,243 @@ export default async function AdminOrderDetailPage({
                         const cfg = ensureOrderItemConfigData(i.configurationData);
                         if (!cfg) return null;
                         return (
-                          <details className="mt-1 text-xs text-slate-500">
-                            <summary className="cursor-pointer">Configuration JSON (printer manifest)</summary>
-                            <pre className="text-[11px] mt-1 p-2 bg-slate-50 rounded overflow-x-auto">
+                          <details className="mt-1 text-xs" style={{ color: "#94a3b8" }}>
+                            <summary className="cursor-pointer font-medium">Configuration JSON (printer manifest)</summary>
+                            <pre
+                              className="text-[11px] mt-1 p-2 rounded-xl overflow-x-auto"
+                              style={{ backgroundColor: `${BRAND.ink}05`, color: "#475569" }}
+                            >
                               {JSON.stringify(cfg.values, null, 2)}
                             </pre>
                           </details>
                         );
                       })()}
                     </div>
-                    <p className="font-[var(--font-heading)] text-lg whitespace-nowrap">
+                    <p
+                      className="font-[var(--font-heading)] text-lg whitespace-nowrap font-bold"
+                      style={{ color: BRAND.ink }}
+                    >
                       {formatMYR(i.lineTotal)}
                     </p>
                   </li>
-                  );
-                })}
-              </ul>
-            )}
-            <div className="mt-4 pt-3 border-t border-black/10 grid gap-1 text-sm">
-              <div className="flex justify-between">
-                <span className="text-slate-600">Subtotal</span>
-                <span>{formatMYR(row.subtotal)}</span>
-              </div>
-              {parseFloat(row.discountAmount || "0") > 0 ? (
-                <div className="flex justify-between" style={{ color: BRAND.green }}>
-                  <span>
-                    Discount
-                    {row.discountCode ? ` (${row.discountCode})` : ""}
-                  </span>
-                  <span>-{formatMYR(row.discountAmount)}</span>
-                </div>
-              ) : null}
-              <div className="flex justify-between">
-                <span className="text-slate-600">
-                  Shipping
-                  {row.shippingServiceName ? (
-                    <span className="block text-xs text-slate-500">
-                      {row.shippingServiceName}
-                      {row.shippingServiceCode
-                        ? ` (${row.shippingServiceCode})`
-                        : ""}
-                    </span>
-                  ) : null}
-                </span>
-                <span>{formatMYR(row.shippingCost)}</span>
-              </div>
-              <div className="flex justify-between pt-2 border-t border-black/10 font-bold text-base">
-                <span>Total</span>
-                <span>
-                  {formatMYR(row.totalAmount)} {row.currency}
-                </span>
-              </div>
-            </div>
-          </section>
+                );
+              })}
+            </ul>
+          )}
 
-          {/* Phase 10 (10-01) — profit panel. Always rendered; numbers go
-              to RM 0 for manual orders with no line items + no extra cost. */}
-          <section
-            className="rounded-2xl p-4 md:p-6 md:col-span-2"
-            style={{ backgroundColor: "#ffffff" }}
+          {/* Totals block */}
+          <div
+            className="mt-4 pt-4 rounded-2xl px-4 py-3 grid gap-2 text-sm"
+            style={{
+              backgroundColor: `${BRAND.ink}04`,
+              border: `1.5px solid ${BRAND.ink}0c`,
+            }}
           >
-            <OrderCostsPanel
-              orderId={row.id}
-              items={row.items.map((i) => ({
-                id: i.id,
-                productName: i.productName,
-                size: i.size,
-                unitPrice: i.unitPrice,
-                unitCost: i.unitCost,
-                quantity: i.quantity,
-              }))}
-              extraCost={row.extraCost}
-              extraCostNote={row.extraCostNote}
-            />
-          </section>
-
-          {paymentDetail ? (
-            <section
-              className="rounded-2xl p-4 md:p-6 md:col-span-2"
-              style={{ backgroundColor: "#ffffff" }}
+            <div className="flex justify-between">
+              <span style={{ color: "#64748b" }}>Subtotal</span>
+              <span className="font-semibold">{formatMYR(row.subtotal)}</span>
+            </div>
+            {parseFloat(row.discountAmount || "0") > 0 ? (
+              <div className="flex justify-between font-semibold" style={{ color: BRAND.greenDark }}>
+                <span>
+                  Discount
+                  {row.discountCode ? ` (${row.discountCode})` : ""}
+                </span>
+                <span>-{formatMYR(row.discountAmount)}</span>
+              </div>
+            ) : null}
+            <div className="flex justify-between">
+              <span style={{ color: "#64748b" }}>
+                Shipping
+                {row.shippingServiceName ? (
+                  <span className="block text-xs" style={{ color: "#94a3b8" }}>
+                    {row.shippingServiceName}
+                    {row.shippingServiceCode ? ` (${row.shippingServiceCode})` : ""}
+                  </span>
+                ) : null}
+              </span>
+              <span className="font-semibold">{formatMYR(row.shippingCost)}</span>
+            </div>
+            <div
+              className="flex justify-between pt-2.5 mt-1 font-extrabold text-base"
+              style={{
+                borderTop: `1.5px solid ${BRAND.ink}12`,
+                color: BRAND.ink,
+              }}
             >
-              <h2 className="font-[var(--font-heading)] text-xl mb-4">
-                PayPal financials
-              </h2>
+              <span>Total</span>
+              <span>{formatMYR(row.totalAmount)} {row.currency}</span>
+            </div>
+          </div>
+        </AdminCard>
+
+        {/* ══ ZONE 4 — Payment: proof + upload + payment link + PayPal ════════ */}
+        <div className="mb-4 flex flex-col gap-4">
+          {/* Phase 20 (20-11) — Payment Proof review section.
+              PaymentProofSection early-returns null when proofRows is empty. */}
+          <PaymentProofSection
+            orderId={row.id}
+            proofs={proofRows.map((p) => ({
+              id: p.id,
+              imageUrl: p.imageUrl,
+              thumbnailUrl: p.thumbnailUrl ?? null,
+              mimeType: p.mimeType,
+              sizeBytes: p.sizeBytes,
+              uploadedBy: p.uploadedBy,
+              uploadedByUserId: p.uploadedByUserId ?? null,
+              status: p.status,
+              adminNote: p.adminNote ?? null,
+              createdAt: p.createdAt instanceof Date ? p.createdAt : new Date(p.createdAt),
+            }))}
+            orderTotal={row.totalAmount}
+          />
+
+          {/* Admin slip upload — shown when order is still awaiting payment.
+              onSuccess is intentionally omitted: revalidatePath inside
+              adminUploadPaymentProof triggers the RSC re-render automatically.
+              Passing a function prop across the Server→Client boundary would
+              cause a runtime crash on force-dynamic pages (RSC boundary rule). */}
+          {showAdminUploadForm && (
+            <AdminUploadProofForm orderId={row.id} />
+          )}
+
+          {/* Payment link (manual unpaid orders only) */}
+          {isManualUnpaid ? (
+            <AdminCard>
+              <SectionHeader icon={CreditCard} label="Payment link" accent={BRAND.purple} />
+              <PaymentLinkCard
+                orderId={row.id}
+                existingLinks={paymentLinks}
+                customerEmail={
+                  row.customerEmail.endsWith("@3dninjaz.local")
+                    ? null
+                    : row.customerEmail
+                }
+                itemName={row.customItemName}
+                totalAmount={row.totalAmount}
+              />
+            </AdminCard>
+          ) : null}
+
+          {/* PayPal financials (paid orders only) */}
+          {paymentDetail ? (
+            <AdminCard>
+              <SectionHeader icon={CreditCard} label="PayPal financials" accent={BRAND.green} />
               <PaymentFinancialsPanel detail={paymentDetail} />
-              <p className="mt-3 text-xs text-slate-500">
+              <p className="mt-3 text-xs" style={{ color: "#64748b" }}>
                 <Link
                   href={`/admin/payments/${row.id}`}
-                  className="underline decoration-dotted"
+                  className="underline decoration-dotted hover:opacity-70 transition-opacity"
+                  style={{ color: BRAND.blue }}
                 >
                   Open payment detail page &rarr;
                 </Link>
               </p>
-            </section>
+            </AdminCard>
           ) : null}
+        </div>
 
-          <section
-            className="rounded-2xl p-4 md:p-6 md:col-span-2"
-            style={{ backgroundColor: "#ffffff" }}
+        {/* ══ ZONE 5 — Fulfilment: timeline + status update ═══════════════════ */}
+        <AdminCard className="mb-4">
+          <SectionHeader icon={Activity} label="Fulfilment" accent={BRAND.blue} />
+
+          {/* Progress timeline */}
+          <AdminOrderTimeline status={row.status} />
+
+          {/* Status update form — separated visually */}
+          <div
+            className="mt-5 pt-5"
+            style={{ borderTop: `1.5px solid ${BRAND.ink}0c` }}
           >
-            <h2 className="font-[var(--font-heading)] text-xl mb-3">Shipping</h2>
-            <OrderShipmentPanel
+            <p
+              className="text-xs font-bold uppercase tracking-wider mb-3"
+              style={{ color: "#64748b" }}
+            >
+              Update status
+            </p>
+            <AdminOrderStatusForm
               orderId={row.id}
-              shipment={shipment}
-              tracking={tracking}
+              current={row.status}
+              paymentMethod={row.paymentMethod ?? null}
             />
-            {/* Re-quote the selected courier live from Delyva and persist the
-                corrected shipping + total (the checkout quote can go stale).
-                Updates the order totals and the downloadable invoice. */}
-            {row.shippingServiceCode ? (
-              <RefreshShippingButton orderId={row.id} />
-            ) : null}
-          </section>
-
-          <section
-            className="rounded-2xl p-4 md:p-6 md:col-span-2"
-            style={{ backgroundColor: "#ffffff" }}
-          >
-            <h2 className="font-[var(--font-heading)] text-xl mb-3">Update status</h2>
-            <AdminOrderStatusForm orderId={row.id} current={row.status} paymentMethod={row.paymentMethod ?? null} />
             {row.paypalOrderId ? (
-              <p className="text-xs text-slate-500 mt-3 font-mono break-words">
+              <p className="text-xs font-mono mt-3 break-words" style={{ color: "#94a3b8" }}>
                 PayPal order ID: {row.paypalOrderId}
               </p>
             ) : null}
             {row.paypalCaptureId ? (
-              <p className="text-xs text-slate-500 mt-1 font-mono break-words">
+              <p className="text-xs font-mono mt-1 break-words" style={{ color: "#94a3b8" }}>
                 PayPal capture ID: {row.paypalCaptureId}
               </p>
             ) : null}
-          </section>
+          </div>
+        </AdminCard>
 
-          <section
-            className="rounded-2xl p-4 md:p-6 md:col-span-2"
-            style={{ backgroundColor: "#ffffff" }}
-          >
-            <h2 className="font-[var(--font-heading)] text-xl mb-4">Manage order</h2>
+        {/* ══ ZONE 6 — Courier / Shipping ══════════════════════════════════════ */}
+        <AdminCard className="mb-4">
+          <SectionHeader icon={Truck} label="Courier & shipping" accent={BRAND.purple} />
+          <OrderShipmentPanel
+            orderId={row.id}
+            shipment={shipment}
+            tracking={tracking}
+          />
+          {/* Re-quote the selected courier live from Delyva and persist the
+              corrected shipping + total (the checkout quote can go stale).
+              Updates the order totals and the downloadable invoice. */}
+          {row.shippingServiceCode ? (
+            <div className="mt-3">
+              <RefreshShippingButton orderId={row.id} />
+            </div>
+          ) : null}
+        </AdminCard>
+
+        {/* ══ ZONE 7 — Costs + profit ══════════════════════════════════════════ */}
+        {/* Phase 10 (10-01) — profit panel. Always rendered; numbers go
+            to RM 0 for manual orders with no line items + no extra cost. */}
+        <AdminCard className="mb-4">
+          <OrderCostsPanel
+            orderId={row.id}
+            items={row.items.map((i) => ({
+              id: i.id,
+              productName: i.productName,
+              size: i.size,
+              unitPrice: i.unitPrice,
+              unitCost: i.unitCost,
+              quantity: i.quantity,
+            }))}
+            extraCost={row.extraCost}
+            extraCostNote={row.extraCostNote}
+          />
+        </AdminCard>
+
+        {/* ══ ZONE 8 — Admin tools: manage + requests + notes ════════════════ */}
+        <div className="flex flex-col gap-4">
+
+          {/* Manage order (discount / cancel / delete) */}
+          <AdminCard>
+            <SectionHeader icon={Settings} label="Manage order" accent={BRAND.ink} />
             <AdminOrderManage
               orderId={row.id}
               status={row.status}
               discountAmount={row.discountAmount}
               discountCode={row.discountCode}
             />
-          </section>
+          </AdminCard>
 
-          <section
-            className="rounded-2xl p-4 md:p-6 md:col-span-2"
-            style={{ backgroundColor: "#ffffff" }}
-          >
-            <h2 className="font-[var(--font-heading)] text-xl mb-3">
-              Cancel / return requests
-            </h2>
+          {/* Cancel / return requests */}
+          <AdminCard>
+            <SectionHeader icon={RotateCcw} label="Cancel / return requests" accent={BRAND.purple} />
             <OrderRequestsAdmin
               requests={orderRequests as AdminOrderRequestRow[]}
             />
-          </section>
+          </AdminCard>
 
-          <section
-            className="rounded-2xl p-4 md:p-6 md:col-span-2"
-            style={{ backgroundColor: "#ffffff" }}
-          >
+          {/* Internal notes */}
+          <AdminCard>
+            <SectionHeader icon={MessageSquare} label="Internal notes" accent={BRAND.blue} />
             <AdminOrderNotesForm orderId={row.id} initial={row.notes ?? ""} />
-          </section>
+          </AdminCard>
+
         </div>
       </div>
     </main>

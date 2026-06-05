@@ -10,7 +10,11 @@
  * On Yes:
  *   1. generatePaymentLink(orderId) → get URL
  *   2. setOrderAwaitingCustomer(orderId) → transition pending → awaiting_customer
- *   3. Swap modal body to success state: copyable URL + WhatsApp + Email buttons.
+ *   3. Swap modal body to success state with three send options:
+ *        a. "Send via WhatsApp" (programmatic) — sendPosPaymentLinkWhatsApp(orderId)
+ *        b. "Open WhatsApp" (deep link, manual) — wa.me deep-link (unchanged)
+ *        c. "Open email draft" (mailto deep link, unchanged)
+ *      Plus: "Send invoice PDF via WhatsApp" — sendPosInvoicePdfWhatsApp(orderId)
  *
  * WhatsApp deeplink: https://wa.me/<phoneE164>?text=<encoded>
  *   - Phone normalisation: strip non-digits, prepend "6" if starts with "0"
@@ -31,6 +35,8 @@ import {
   Mail,
   X,
   Loader2,
+  Send,
+  FileText,
 } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import { generatePaymentLink } from "@/actions/admin-manual-orders";
@@ -38,6 +44,10 @@ import {
   setOrderAwaitingCustomer,
   getDraftLinkTemplate,
 } from "@/actions/admin-pos";
+import {
+  sendPosPaymentLinkWhatsApp,
+  sendPosInvoicePdfWhatsApp,
+} from "@/actions/pos-whatsapp";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -95,6 +105,14 @@ export function PosSendDraftModal({
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [draftTemplate, setDraftTemplate] = useState<string | null>(null);
+
+  // Programmatic WA send states
+  const [waSendLinkPending, startWaSendLinkTransition] = useTransition();
+  const [waSendInvoicePending, startWaSendInvoiceTransition] = useTransition();
+  const [waSendLinkStatus, setWaSendLinkStatus] = useState<"idle" | "ok" | "err">("idle");
+  const [waSendInvoiceStatus, setWaSendInvoiceStatus] = useState<"idle" | "ok" | "err">("idle");
+  const [waSendLinkError, setWaSendLinkError] = useState<string | null>(null);
+  const [waSendInvoiceError, setWaSendInvoiceError] = useState<string | null>(null);
 
   // Auto-focus the Yes button
   const yesBtnRef = useRef<HTMLButtonElement>(null);
@@ -160,6 +178,40 @@ export function PosSendDraftModal({
   function handleDone() {
     router.push(`/admin/orders/${orderId}`);
     onClose();
+  }
+
+  // ── Programmatic WA: send payment link ────────────────────────────────────
+
+  function handleSendPaymentLinkViaWhatsApp() {
+    setWaSendLinkStatus("idle");
+    setWaSendLinkError(null);
+    startWaSendLinkTransition(async () => {
+      const result = await sendPosPaymentLinkWhatsApp(orderId);
+      if (result.ok) {
+        setWaSendLinkStatus("ok");
+        // Update the displayed URL in case it regenerated
+        if (result.link && !paymentUrl) setPaymentUrl(result.link);
+      } else {
+        setWaSendLinkStatus("err");
+        setWaSendLinkError(result.error);
+      }
+    });
+  }
+
+  // ── Programmatic WA: send invoice PDF ────────────────────────────────────
+
+  function handleSendInvoicePdfViaWhatsApp() {
+    setWaSendInvoiceStatus("idle");
+    setWaSendInvoiceError(null);
+    startWaSendInvoiceTransition(async () => {
+      const result = await sendPosInvoicePdfWhatsApp(orderId);
+      if (result.ok) {
+        setWaSendInvoiceStatus("ok");
+      } else {
+        setWaSendInvoiceStatus("err");
+        setWaSendInvoiceError(result.error);
+      }
+    });
   }
 
   // ── Template rendering ─────────────────────────────────────────────────────
@@ -314,31 +366,98 @@ export function PosSendDraftModal({
               </button>
             </div>
 
-            {/* WhatsApp + Email buttons */}
-            <div className="flex flex-col gap-3 mb-6">
+            {/* ── Programmatic WhatsApp sends ── */}
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
+              Send via server (uses Notification Center)
+            </p>
+            <div className="flex flex-col gap-2 mb-4">
+              {/* Send payment link programmatically */}
+              <button
+                type="button"
+                onClick={handleSendPaymentLinkViaWhatsApp}
+                disabled={waSendLinkPending || waSendLinkStatus === "ok"}
+                className="flex w-full items-center justify-center gap-2 min-h-[48px] rounded-[4px] text-sm font-semibold text-white transition-colors disabled:opacity-60"
+                style={{ backgroundColor: "#25D366" }}
+              >
+                {waSendLinkPending ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Sending…
+                  </>
+                ) : waSendLinkStatus === "ok" ? (
+                  <>
+                    <Check size={16} />
+                    Payment link sent
+                  </>
+                ) : (
+                  <>
+                    <Send size={16} />
+                    Send payment link via WhatsApp
+                  </>
+                )}
+              </button>
+              {waSendLinkStatus === "err" && waSendLinkError && (
+                <p className="text-xs text-red-600 px-1">{waSendLinkError}</p>
+              )}
+
+              {/* Send invoice PDF programmatically */}
+              <button
+                type="button"
+                onClick={handleSendInvoicePdfViaWhatsApp}
+                disabled={waSendInvoicePending || waSendInvoiceStatus === "ok"}
+                className="flex w-full items-center justify-center gap-2 min-h-[48px] rounded-[4px] text-sm font-semibold text-white transition-colors disabled:opacity-60"
+                style={{ backgroundColor: "#128C7E" }}
+              >
+                {waSendInvoicePending ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Sending PDF…
+                  </>
+                ) : waSendInvoiceStatus === "ok" ? (
+                  <>
+                    <Check size={16} />
+                    Invoice PDF sent
+                  </>
+                ) : (
+                  <>
+                    <FileText size={16} />
+                    Send invoice PDF via WhatsApp
+                  </>
+                )}
+              </button>
+              {waSendInvoiceStatus === "err" && waSendInvoiceError && (
+                <p className="text-xs text-red-600 px-1">{waSendInvoiceError}</p>
+              )}
+            </div>
+
+            {/* ── Manual deep-link options (unchanged) ── */}
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
+              Open manually
+            </p>
+            <div className="flex flex-col gap-2 mb-6">
               <a
                 href={waUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex w-full items-center justify-center gap-2 min-h-[48px] rounded-[4px] border-2 text-sm font-semibold transition-colors"
+                className="flex w-full items-center justify-center gap-2 min-h-[44px] rounded-[4px] border-2 text-sm font-semibold transition-colors"
                 style={{
-                  borderColor: "#03C03C",
-                  color: "#03C03C",
-                  backgroundColor: "#03C03c0d",
+                  borderColor: "#25D366",
+                  color: "#25D366",
+                  backgroundColor: "#25D3660d",
                 }}
               >
-                <MessageCircle size={18} />
-                Open WhatsApp
+                <MessageCircle size={16} />
+                Open WhatsApp (manual)
               </a>
 
               <a
                 href={mailtoUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex w-full items-center justify-center gap-2 min-h-[48px] rounded-[4px] border-2 text-sm font-semibold transition-colors"
+                className="flex w-full items-center justify-center gap-2 min-h-[44px] rounded-[4px] border-2 text-sm font-semibold transition-colors"
                 style={{ borderColor: "#cbd5e1", color: BRAND.ink }}
               >
-                <Mail size={18} />
+                <Mail size={16} />
                 Open email draft
               </a>
             </div>
