@@ -98,9 +98,9 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   logo: {
-    // Bigger, prominent logo on page 1 (aligned next to the "Billed To" box).
-    height: 96,
-    maxWidth: 210,
+    // Large, prominent logo on page 1 (next to the "Billed To" box).
+    height: 132,
+    maxWidth: 320,
     objectFit: "contain",
   },
   // "Page X / Y" indicator — fixed, just above the footer bar, on every page.

@@ -300,7 +300,18 @@ export default async function AdminOrderDetailPage({
               {row.user?.name ?? row.shippingName}
             </p>
             <p className="text-sm mt-0.5 break-words" style={{ color: "#475569" }}>
-              {row.user?.email ?? row.customerEmail}
+              {(() => {
+                const email = row.user?.email ?? row.customerEmail;
+                // Guest checkout with no email uses a sentinel address — don't
+                // show the fake address; say "No email (guest)" instead.
+                return email.endsWith("@3dninjaz.local") ? (
+                  <span style={{ fontStyle: "italic", color: "#94a3b8" }}>
+                    No email (guest)
+                  </span>
+                ) : (
+                  email
+                );
+              })()}
             </p>
             {row.shippingPhone ? (
               <p className="text-sm mt-0.5 font-mono break-words" style={{ color: "#475569" }}>
