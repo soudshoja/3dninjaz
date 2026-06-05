@@ -11,6 +11,7 @@ import { ordersController, PAYPAL_CURRENCY } from "@/lib/paypal";
 import { CheckoutPaymentIntent } from "@paypal/paypal-server-sdk";
 import { formatOrderNumber } from "@/lib/orders";
 import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
+import { sendWhatsAppNotification } from "@/lib/whatsapp/sender";
 import { validateCoupon, redeemCoupon } from "@/actions/coupons";
 import { getShippingRate } from "@/actions/admin-shipping";
 import { quoteForCart } from "@/actions/shipping-quote";
@@ -760,6 +761,11 @@ export async function capturePayPalOrder({
   } catch (err) {
     console.error("[paypal] confirmation email dispatch failed:", err);
   }
+  void sendWhatsAppNotification("order_confirmation", existing.shippingPhone, {
+    customerName: existing.shippingName,
+    orderNumber: formatOrderNumber(existing.id),
+    orderUrl: `https://app.3dninjaz.com/orders/${existing.id}`,
+  }).catch(() => {});
 
   revalidatePath(`/orders/${existing.id}`);
   revalidatePath("/orders");

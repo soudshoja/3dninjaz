@@ -41,6 +41,8 @@ import {
   sendReturnRequestedEmail,
   sendReturnExpiredEmail,
 } from "@/actions/send-emails";
+import { sendWhatsAppNotification } from "@/lib/whatsapp/sender";
+import { formatOrderNumber } from "@/lib/orders";
 
 // ============================================================================
 // Shared row type (extended for return-specific fields)
@@ -272,6 +274,8 @@ export async function submitReturnRequest(input: unknown) {
       userId: orders.userId,
       status: orders.status,
       updatedAt: orders.updatedAt,
+      shippingPhone: orders.shippingPhone,
+      shippingName: orders.shippingName,
     })
     .from(orders)
     .where(eq(orders.id, parsed.data.orderId))
@@ -362,6 +366,10 @@ export async function submitReturnRequest(input: unknown) {
   void sendReturnRequestedEmail({ requestId: id, orderId: parsed.data.orderId }).catch(
     (e) => console.error("[submitReturnRequest] email failed", e),
   );
+  void sendWhatsAppNotification("return_requested", order.shippingPhone, {
+    customerName: order.shippingName,
+    orderNumber: formatOrderNumber(parsed.data.orderId),
+  }).catch(() => {});
 
   return {
     ok: true as const,

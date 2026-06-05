@@ -11,6 +11,7 @@ import { sendOrderProcessingEmail } from "@/actions/send-emails";
 import { orderStatusValues } from "@/lib/db/schema";
 import { computeOrderCost, toNum, toNumOrNull } from "@/lib/profit";
 import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
+import { sendWhatsAppNotification } from "@/lib/whatsapp/sender";
 
 // ============================================================================
 // Plan 03-04 admin order actions.
@@ -324,6 +325,7 @@ export async function updateOrderStatus(
       status: orders.status,
       customerEmail: orders.customerEmail,
       shippingName: orders.shippingName,
+      shippingPhone: orders.shippingPhone,
     })
     .from(orders)
     .where(eq(orders.id, orderId))
@@ -350,6 +352,11 @@ export async function updateOrderStatus(
     }).catch((err) =>
       console.error("[admin-orders] processing email dispatch failed:", err)
     );
+    void sendWhatsAppNotification("order_processing", row.shippingPhone, {
+      customerName: row.shippingName,
+      orderNumber: formatOrderNumber(orderId),
+      orderUrl: `https://app.3dninjaz.com/orders/${orderId}`,
+    }).catch(() => {});
   }
 
   revalidatePath(`/admin/orders`);
@@ -371,7 +378,14 @@ export async function approveWhatsAppOrder(
   await requireAdmin();
 
   const [row] = await db
-    .select({ id: orders.id, status: orders.status, paymentMethod: orders.paymentMethod, customerEmail: orders.customerEmail })
+    .select({
+      id: orders.id,
+      status: orders.status,
+      paymentMethod: orders.paymentMethod,
+      customerEmail: orders.customerEmail,
+      shippingName: orders.shippingName,
+      shippingPhone: orders.shippingPhone,
+    })
     .from(orders)
     .where(eq(orders.id, orderId))
     .limit(1);
@@ -393,6 +407,11 @@ export async function approveWhatsAppOrder(
       console.error("[admin-orders] approveWhatsApp email failed:", err),
     );
   }
+  void sendWhatsAppNotification("order_confirmation", row.shippingPhone, {
+    customerName: row.shippingName,
+    orderNumber: formatOrderNumber(orderId),
+    orderUrl: `https://app.3dninjaz.com/orders/${orderId}`,
+  }).catch(() => {});
 
   revalidatePath(`/admin/orders`);
   revalidatePath(`/admin/orders/${orderId}`);

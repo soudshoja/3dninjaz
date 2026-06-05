@@ -10,6 +10,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import type { OrderStatus } from "@/lib/orders";
 import { sendOrderRefundedEmail } from "@/actions/send-emails";
 import { formatOrderNumber } from "@/lib/orders";
+import { sendWhatsAppNotification } from "@/lib/whatsapp/sender";
 
 /**
  * Phase 7 (07-05) — refund server action.
@@ -126,6 +127,11 @@ export async function issueRefund(
   }).catch((err) =>
     console.error("[admin-refunds] refund email failed:", err)
   );
+  void sendWhatsAppNotification("order_refunded", row.shippingPhone, {
+    customerName: row.shippingName,
+    orderNumber: formatOrderNumber(input.orderId),
+    refundAmount: `RM ${newRefunded.toFixed(2)}`,
+  }).catch(() => {});
 
   revalidatePath(`/admin/payments/${input.orderId}`);
   revalidatePath(`/admin/orders/${input.orderId}`);

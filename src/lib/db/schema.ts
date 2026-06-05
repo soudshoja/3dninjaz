@@ -1039,6 +1039,48 @@ export const storeSettings = mysqlTable("store_settings", {
   updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
 });
 
+// ----------------------------------------------------------------------------
+// WhatsApp notifications (Evolution API / Baileys) — feat/whatsapp-notifications
+// ----------------------------------------------------------------------------
+
+export const whatsappConnectionStateValues = ["close", "connecting", "open"] as const;
+
+export const whatsappSettings = mysqlTable("whatsapp_settings", {
+  // Singleton — id='default'. API key is NOT stored here (env only).
+  id: varchar("id", { length: 36 }).primaryKey().default("default"),
+  instanceName: varchar("instance_name", { length: 64 }).notNull().default("3dninjaz"),
+  connectionState: mysqlEnum("connection_state", whatsappConnectionStateValues)
+    .notNull()
+    .default("close"),
+  connectedNumber: varchar("connected_number", { length: 32 }),
+  lastQrAt: timestamp("last_qr_at"),
+  lastConnectedAt: timestamp("last_connected_at"),
+  // Master toggle — when false, sender no-ops for ALL events.
+  notificationsEnabled: boolean("notifications_enabled").notNull().default(false),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+});
+
+export const whatsappNotifications = mysqlTable("whatsapp_notifications", {
+  // event_key is the PK so seed/upsert is naturally idempotent.
+  eventKey: varchar("event_key", { length: 64 }).primaryKey(),
+  enabled: boolean("enabled").notNull().default(true),
+  template: text("template").notNull(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+});
+
+export type WhatsappSettingsSeed = typeof whatsappSettings.$inferInsert;
+export type WhatsappNotificationSeed = typeof whatsappNotifications.$inferInsert;
+
+export function seedWhatsappSettings(): WhatsappSettingsSeed {
+  return {
+    id: "default",
+    instanceName: "3dninjaz",
+    connectionState: "close",
+    connectedNumber: null,
+    notificationsEnabled: false,
+  };
+}
+
 export const shippingRates = mysqlTable("shipping_rates", {
   id: varchar("id", { length: 36 })
     .primaryKey()

@@ -27,7 +27,7 @@ import {
   ensurePhotoArray,
 } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth-helpers";
-import { assertValidTransition, type OrderStatus } from "@/lib/orders";
+import { assertValidTransition, formatOrderNumber, type OrderStatus } from "@/lib/orders";
 import { isReturnShipExpired } from "@/lib/order-windows";
 import {
   sendReturnApprovedEmail,
@@ -35,6 +35,7 @@ import {
   sendReturnReceivedEmail,
   sendReturnExpiredEmail,
 } from "@/actions/send-emails";
+import { sendWhatsAppNotification } from "@/lib/whatsapp/sender";
 
 // ============================================================================
 // Shared admin row type
@@ -209,6 +210,30 @@ export async function approveOrderRequest(
       }).catch((e) =>
         console.error("[approveOrderRequest] return email failed", e),
       );
+      // WhatsApp: fetch order contact fields for the sender (fire-and-forget)
+      void (async () => {
+        try {
+          const [orderRow] = await db
+            .select({ shippingPhone: orders.shippingPhone, shippingName: orders.shippingName })
+            .from(orders)
+            .where(eq(orders.id, result.orderId))
+            .limit(1);
+          const [reqRow] = await db
+            .select({ approvedAt: orderRequests.approvedAt })
+            .from(orderRequests)
+            .where(eq(orderRequests.id, result.requestId))
+            .limit(1);
+          const shipByDate = reqRow?.approvedAt
+            ? new Date(new Date(reqRow.approvedAt).getTime() + 3 * 24 * 3600 * 1000)
+                .toLocaleDateString("en-MY", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+            : "within 3 days";
+          await sendWhatsAppNotification("return_approved", orderRow?.shippingPhone, {
+            customerName: orderRow?.shippingName,
+            orderNumber: formatOrderNumber(result.orderId),
+            shipByDate,
+          });
+        } catch { /* best-effort */ }
+      })();
     }
 
     return { ok: true };
@@ -255,6 +280,20 @@ export async function rejectOrderRequest(
     }).catch((e) =>
       console.error("[rejectOrderRequest] return email failed", e),
     );
+    void (async () => {
+      try {
+        const [orderRow] = await db
+          .select({ shippingPhone: orders.shippingPhone, shippingName: orders.shippingName })
+          .from(orders)
+          .where(eq(orders.id, req.orderId))
+          .limit(1);
+        await sendWhatsAppNotification("return_rejected", orderRow?.shippingPhone, {
+          customerName: orderRow?.shippingName,
+          orderNumber: formatOrderNumber(req.orderId),
+          reason: adminNotes ?? "No reason provided.",
+        });
+      } catch { /* best-effort */ }
+    })();
   }
 
   return { ok: true };
@@ -301,6 +340,19 @@ export async function markReturnReceived(
   }).catch((e) =>
     console.error("[markReturnReceived] email failed", e),
   );
+  void (async () => {
+    try {
+      const [orderRow] = await db
+        .select({ shippingPhone: orders.shippingPhone, shippingName: orders.shippingName })
+        .from(orders)
+        .where(eq(orders.id, req.orderId))
+        .limit(1);
+      await sendWhatsAppNotification("return_received", orderRow?.shippingPhone, {
+        customerName: orderRow?.shippingName,
+        orderNumber: formatOrderNumber(req.orderId),
+      });
+    } catch { /* best-effort */ }
+  })();
 
   return { ok: true };
 }

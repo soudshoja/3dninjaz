@@ -5,6 +5,8 @@ import { BRAND } from "@/lib/brand";
 import { SettingsForm } from "@/components/admin/settings-form";
 import { BankDetailsFieldset } from "@/components/admin/bank-details-fieldset";
 import { DraftTemplateFieldset } from "@/components/admin/draft-template-fieldset";
+import { WhatsappConnectPanel } from "@/components/admin/whatsapp-connect-panel";
+import { getWhatsappAdminState } from "@/actions/admin-whatsapp";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -14,7 +16,10 @@ export const metadata: Metadata = {
 
 export default async function AdminSettingsPage() {
   await requireAdmin();
-  const settings = await getStoreSettings();
+  const [settings, whatsapp] = await Promise.all([
+    getStoreSettings(),
+    getWhatsappAdminState(),
+  ]);
 
   return (
     <main
@@ -71,6 +76,9 @@ export default async function AdminSettingsPage() {
           <DraftTemplateFieldset
             initialTemplate={settings.draftLinkTemplate ?? null}
           />
+
+          {/* WhatsApp QR connect panel + master toggle */}
+          <WhatsappConnectPanel initial={whatsapp} />
         </div>
       </div>
     </main>
