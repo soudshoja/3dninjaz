@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
   // Content area sits above the footer and insets from edges
   content: {
     paddingHorizontal: 40,
-    paddingTop: 40,
+    paddingTop: 28,
     // paddingBottom gives space above the absolute footer (height ~44pt)
     paddingBottom: 80,
     flex: 1,
@@ -99,8 +99,8 @@ const styles = StyleSheet.create({
   },
   logo: {
     // Large, prominent logo on page 1 (next to the "Billed To" box).
-    height: 132,
-    maxWidth: 320,
+    height: 160,
+    maxWidth: 380,
     objectFit: "contain",
   },
   // "Page X / Y" indicator — fixed, just above the footer bar, on every page.
@@ -176,8 +176,11 @@ const styles = StyleSheet.create({
   tableHeadRow: {
     flexDirection: "row",
     paddingBottom: 8,
+    // Solid line under the column headings (No | Description | Price | Qty |
+    // Amount), then a gap before the first item row.
     borderBottom: 1.5,
     borderBottomColor: INK,
+    marginBottom: 10,
   },
   tableDataRow: {
     flexDirection: "row",
@@ -572,12 +575,9 @@ export function NinjazInvoiceDocument({
             {/* Main content area — paddingTop on every page gives the top
                 margin requested for page 2+. */}
             <View style={styles.content}>
-              {/* Top group — header (page 1 only) + items table. wrap=false prevents
-                  this content from splitting across pages (which would cause a page
-                  with just the bottom block after a partial items split). */}
-              <View wrap={false}>
+              {/* ── Page 1 only: header (logo + bill-to + hero + divider) ── */}
               {isFirst ? (
-                <>
+                <View wrap={false}>
                   {/* Header row: logo left, bill-to right */}
                   <View style={styles.headerRow}>
                     {business.logoBase64 ? (
@@ -618,13 +618,12 @@ export function NinjazInvoiceDocument({
                   </View>
 
                   <View style={styles.divider} />
-                </>
+                </View>
               ) : null /* Pages 2+: no logo/header — top margin comes from content paddingTop. */}
 
-              {/* Items table */}
+              {/* ── Items table — NO wrap=false so items can split across pages ── */}
               {tableHead()}
               {pageItems.map((item, i) => renderRow(item, startIndex + i))}
-              </View>
 
               {/* Bottom block — only on the LAST page. Pinned to the bottom of
                   the page (content justifyContent: space-between). wrap=false
