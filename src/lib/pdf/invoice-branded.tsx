@@ -200,11 +200,48 @@ const styles = StyleSheet.create({
   bottomRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-end",
+    // Top-align so the customer address (left) lines up with the totals box
+    // (right) instead of sinking to the baseline.
+    alignItems: "flex-start",
     marginTop: 16,
+  },
+  // Customer ship-to address block — bottom-left, aligned with the totals box.
+  addressBlock: {
+    flexDirection: "column",
+    width: "48%",
+  },
+  addressTitle: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 11,
+    marginBottom: 6,
+  },
+  addressLine: {
+    fontSize: 10,
+    color: SLATE,
+    marginBottom: 2,
+  },
+  // Continuation header on pages 2+ (keeps a clear top margin + context).
+  contHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 18,
+  },
+  contTitle: {
+    fontSize: 16,
+    fontFamily: "Helvetica-Bold",
+    color: INK,
+  },
+  pageNote: {
+    fontSize: 9,
+    color: SLATE,
   },
   paymentBlock: {
     flexDirection: "column",
+  },
+  paymentBlockSpaced: {
+    flexDirection: "column",
+    marginTop: 10,
   },
   paymentTitle: {
     fontFamily: "Helvetica-Bold",
@@ -379,181 +416,229 @@ export function NinjazInvoiceDocument({
         ? formatMYR(rawShipping)
         : null;
 
+  // Coupon discount (optional). Only shown when a positive discount exists so
+  // the invoice total reconciles with the order page (subtotal − discount +
+  // shipping = total).
+  const rawDiscount = parseFloat(order.discountAmount ?? "");
+  const hasDiscount = Number.isFinite(rawDiscount) && rawDiscount > 0;
+
+  // ── Pagination: max 11 line items per page; remainder flows to next page ──
+  const ITEMS_PER_PAGE = 11;
+  const pages: (typeof order.items)[] = [];
+  for (let i = 0; i < order.items.length; i += ITEMS_PER_PAGE) {
+    pages.push(order.items.slice(i, i + ITEMS_PER_PAGE));
+  }
+  // Always render at least one page even for an empty item list.
+  if (pages.length === 0) pages.push([]);
+  const pageCount = pages.length;
+
+  // ── Reusable fragments ────────────────────────────────────────────────────
+  // NOTE: these MUST be functions returning fresh elements. react-pdf's
+  // reconciler cannot reuse the same element instance across multiple <Page>s
+  // (throws "Cannot read properties of null (reading 'props')").
+  const tableHead = () => (
+    <View style={styles.tableHeadRow}>
+      <Text style={[styles.colNo, styles.tableHeadText]}>No</Text>
+      <Text style={[styles.colDesc, styles.tableHeadText]}>Item Description</Text>
+      <Text style={[styles.colPrice, styles.tableHeadText]}>Price</Text>
+      <Text style={[styles.colQty, styles.tableHeadText]}>Qty</Text>
+      <Text style={[styles.colAmount, styles.tableHeadText]}>Amount</Text>
+    </View>
+  );
+
+  function renderRow(item: (typeof order.items)[number], index: number) {
+    let displayName = item.productName;
+    if (!isManualLine(item)) {
+      const cfg = ensureOrderItemConfigData(item.configurationData);
+      const variant =
+        cfg?.computedSummary ??
+        item.variantLabel ??
+        (item.size ? `Size ${item.size}` : null);
+      displayName = variant ? `${item.productName} (${variant})` : item.productName;
+    }
+    return (
+      <View key={item.id} style={styles.tableDataRow}>
+        <Text style={[styles.colNo, styles.tableDataText]}>{String(index + 1)}</Text>
+        <Text style={[styles.colDesc, styles.tableDataText]}>{displayName}</Text>
+        <Text style={[styles.colPrice, styles.tableDataText]}>
+          {formatMYR(item.unitPrice)}
+        </Text>
+        <Text style={[styles.colQty, styles.tableDataText]}>
+          {String(item.quantity)}
+        </Text>
+        <Text style={[styles.colAmount, styles.tableDataText]}>
+          {formatMYR(item.lineTotal)}
+        </Text>
+      </View>
+    );
+  }
+
+  const footerBar = () => (
+    <View style={styles.footer} fixed>
+      <Text style={styles.footerText}>{business.whatsappDisplay}</Text>
+      <Text style={styles.footerText}>{business.contactEmail}</Text>
+      <Text style={styles.footerText}>{business.website}</Text>
+      <Text style={styles.footerText}>{business.city}</Text>
+    </View>
+  );
+
   return (
     <Document>
-      <Page size="A4" style={styles.page}>
-        {/* Diagonal stripes — rendered behind content */}
-        <DiagonalStripes />
+      {pages.map((pageItems, pageIndex) => {
+        const isFirst = pageIndex === 0;
+        const isLast = pageIndex === pageCount - 1;
+        // Running item number offset so "No" stays continuous across pages.
+        const startIndex = pageIndex * ITEMS_PER_PAGE;
 
-        {/* CANCELLED watermark — fixed so it does not contribute to flow */}
-        {isCancelled ? (
-          <Text fixed style={styles.watermark}>CANCELLED</Text>
-        ) : null}
+        return (
+          <Page key={pageIndex} size="A4" style={styles.page}>
+            {/* Diagonal stripes — behind content */}
+            <DiagonalStripes />
 
-        {/* Main content area */}
-        <View style={styles.content}>
+            {/* CANCELLED watermark — fixed so it does not contribute to flow */}
+            {isCancelled ? (
+              <Text fixed style={styles.watermark}>CANCELLED</Text>
+            ) : null}
 
-          {/* Header row: logo left, bill-to right */}
-          <View style={styles.headerRow}>
-            {/* Logo */}
-            {business.logoBase64 ? (
-              <Image src={business.logoBase64} style={styles.logo} />
-            ) : (
-              <Text style={styles.logoFallback}>{business.businessName}</Text>
-            )}
-
-            {/* Bill-to / dates */}
-            <View style={styles.billToBlock}>
-              <Text style={styles.grayLabel}>Billed To :</Text>
-              <Text style={styles.boldMd}>{order.shippingName}</Text>
-
-              <View style={styles.metaGap} />
-              <Text style={styles.grayLabel}>Invoice Date :</Text>
-              <Text style={styles.boldSm}>{formatInvoiceDate(createdAt)}</Text>
-
-              <View style={styles.metaGap} />
-              <Text style={styles.grayLabel}>Due Date :</Text>
-              <Text style={styles.boldLg}>{formatInvoiceDate(dueDate)}</Text>
-            </View>
-          </View>
-
-          {/* Hero */}
-          <View style={styles.heroRow}>
-            <Text style={styles.heroTitle}>Invoice</Text>
-            <Text style={styles.heroSub}>
-              {"Invoice no : " + formatOrderNumber(order.id)}
-            </Text>
-          </View>
-
-          {/* Divider */}
-          <View style={styles.divider} />
-
-          {/* Table */}
-          {/* Header */}
-          <View style={styles.tableHeadRow}>
-            <Text style={[styles.colNo, styles.tableHeadText]}>No</Text>
-            <Text style={[styles.colDesc, styles.tableHeadText]}>Item Description</Text>
-            <Text style={[styles.colPrice, styles.tableHeadText]}>Price</Text>
-            <Text style={[styles.colQty, styles.tableHeadText]}>Qty</Text>
-            <Text style={[styles.colAmount, styles.tableHeadText]}>Amount</Text>
-          </View>
-
-          {/* Data rows */}
-          {order.items.map((item, index) => {
-            if (isManualLine(item)) {
-              return (
-                <View key={item.id} style={styles.tableDataRow}>
-                  <Text style={[styles.colNo, styles.tableDataText]}>
-                    {String(index + 1)}
-                  </Text>
-                  <Text style={[styles.colDesc, styles.tableDataText]}>
-                    {item.productName}
-                  </Text>
-                  <Text style={[styles.colPrice, styles.tableDataText]}>
-                    {formatMYR(item.unitPrice)}
-                  </Text>
-                  <Text style={[styles.colQty, styles.tableDataText]}>
-                    {String(item.quantity)}
-                  </Text>
-                  <Text style={[styles.colAmount, styles.tableDataText]}>
-                    {formatMYR(item.lineTotal)}
-                  </Text>
-                </View>
-              );
-            }
-            const cfg = ensureOrderItemConfigData(item.configurationData);
-            const variant =
-              cfg?.computedSummary ??
-              item.variantLabel ??
-              (item.size ? `Size ${item.size}` : null);
-            const displayName = variant
-              ? `${item.productName} (${variant})`
-              : item.productName;
-            return (
-              <View key={item.id} style={styles.tableDataRow}>
-                <Text style={[styles.colNo, styles.tableDataText]}>
-                  {String(index + 1)}
-                </Text>
-                <Text style={[styles.colDesc, styles.tableDataText]}>
-                  {displayName}
-                </Text>
-                <Text style={[styles.colPrice, styles.tableDataText]}>
-                  {formatMYR(item.unitPrice)}
-                </Text>
-                <Text style={[styles.colQty, styles.tableDataText]}>
-                  {String(item.quantity)}
-                </Text>
-                <Text style={[styles.colAmount, styles.tableDataText]}>
-                  {formatMYR(item.lineTotal)}
-                </Text>
-              </View>
-            );
-          })}
-
-          {/* Flex spacer */}
-          <View style={styles.spacer} />
-
-          {/* Bottom row: payment info + total */}
-          <View style={styles.bottomRow}>
-            {/* Payment info */}
-            <View style={styles.paymentBlock}>
-              {hasBankInfo ? (
+            {/* Main content area — paddingTop on every page gives the top
+                margin requested for page 2+. */}
+            <View style={styles.content}>
+              {isFirst ? (
                 <>
-                  <Text style={styles.paymentTitle}>
-                    Please make payment via
-                  </Text>
-                  <Text style={styles.paymentLine}>
-                    {"Bank Name: " + (business.bankName ?? "")}
-                  </Text>
-                  <Text style={styles.paymentLine}>
-                    {"Account Number : " + (business.bankAccountNumber ?? "")}
-                  </Text>
-                  <Text style={styles.paymentLine}>
-                    {"Account Holder : " + (business.bankAccountHolder ?? "")}
-                  </Text>
+                  {/* Header row: logo left, bill-to right */}
+                  <View style={styles.headerRow}>
+                    {business.logoBase64 ? (
+                      <Image src={business.logoBase64} style={styles.logo} />
+                    ) : (
+                      <Text style={styles.logoFallback}>{business.businessName}</Text>
+                    )}
+
+                    <View style={styles.billToBlock}>
+                      <Text style={styles.grayLabel}>Billed To :</Text>
+                      <Text style={styles.boldMd}>{order.shippingName}</Text>
+
+                      <View style={styles.metaGap} />
+                      <Text style={styles.grayLabel}>Invoice Date :</Text>
+                      <Text style={styles.boldSm}>{formatInvoiceDate(createdAt)}</Text>
+
+                      <View style={styles.metaGap} />
+                      <Text style={styles.grayLabel}>Due Date :</Text>
+                      <Text style={styles.boldLg}>{formatInvoiceDate(dueDate)}</Text>
+                    </View>
+                  </View>
+
+                  {/* Hero */}
+                  <View style={styles.heroRow}>
+                    <Text style={styles.heroTitle}>Invoice</Text>
+                    <Text style={styles.heroSub}>
+                      {"Invoice no : " + formatOrderNumber(order.id)}
+                    </Text>
+                  </View>
+
+                  <View style={styles.divider} />
                 </>
-              ) : null}
-            </View>
-
-            {/* Total breakdown + grand total */}
-            <View style={styles.totalBlock}>
-              {/* Subtotal row */}
-              {hasBreakdown ? (
-                <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>Subtotal</Text>
-                  <Text style={styles.breakdownValue}>
-                    {formatMYR(rawSubtotal)}
+              ) : (
+                /* Continuation header on pages 2+ — compact, with a clear top
+                   margin (content paddingTop) above it. */
+                <View style={styles.contHeaderRow}>
+                  <Text style={styles.contTitle}>
+                    {"Invoice " + formatOrderNumber(order.id) + " (continued)"}
+                  </Text>
+                  <Text style={styles.pageNote}>
+                    {"Page " + (pageIndex + 1) + " of " + pageCount}
                   </Text>
                 </View>
-              ) : null}
+              )}
 
-              {/* Shipping row */}
-              {hasBreakdown ? (
-                <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>Shipping</Text>
-                  <Text style={styles.breakdownValue}>{shippingFormatted}</Text>
+              {/* Items table */}
+              {tableHead()}
+              {pageItems.map((item, i) => renderRow(item, startIndex + i))}
+
+              {/* Flex spacer pushes the totals/address block to the bottom */}
+              <View style={styles.spacer} />
+
+              {/* Bottom block — only on the LAST page: customer address (left)
+                  aligned with the totals box (right). */}
+              {isLast ? (
+                <View style={styles.bottomRow}>
+                  {/* Customer ship-to address */}
+                  <View style={styles.addressBlock}>
+                    <Text style={styles.addressTitle}>Bill / Ship To</Text>
+                    <Text style={styles.addressLine}>{order.shippingName}</Text>
+                    <Text style={styles.addressLine}>{order.shippingLine1}</Text>
+                    {order.shippingLine2 ? (
+                      <Text style={styles.addressLine}>{order.shippingLine2}</Text>
+                    ) : null}
+                    <Text style={styles.addressLine}>
+                      {order.shippingPostcode + " " + order.shippingCity}
+                    </Text>
+                    <Text style={styles.addressLine}>
+                      {order.shippingState + ", " + order.shippingCountry}
+                    </Text>
+                    {order.shippingPhone ? (
+                      <Text style={styles.addressLine}>{order.shippingPhone}</Text>
+                    ) : null}
+
+                    {/* Bank payment info beneath the address (when configured) */}
+                    {hasBankInfo ? (
+                      <View style={styles.paymentBlockSpaced}>
+                        <Text style={styles.paymentTitle}>Please make payment via</Text>
+                        <Text style={styles.paymentLine}>
+                          {"Bank Name: " + (business.bankName ?? "")}
+                        </Text>
+                        <Text style={styles.paymentLine}>
+                          {"Account Number : " + (business.bankAccountNumber ?? "")}
+                        </Text>
+                        <Text style={styles.paymentLine}>
+                          {"Account Holder : " + (business.bankAccountHolder ?? "")}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+
+                  {/* Total breakdown + grand total */}
+                  <View style={styles.totalBlock}>
+                    {hasBreakdown ? (
+                      <View style={styles.breakdownRow}>
+                        <Text style={styles.breakdownLabel}>Subtotal</Text>
+                        <Text style={styles.breakdownValue}>
+                          {formatMYR(rawSubtotal)}
+                        </Text>
+                      </View>
+                    ) : null}
+
+                    {hasDiscount ? (
+                      <View style={styles.breakdownRow}>
+                        <Text style={styles.breakdownLabel}>
+                          {order.discountCode ? "Discount (" + order.discountCode + ")" : "Discount"}
+                        </Text>
+                        <Text style={styles.breakdownValue}>
+                          {"-" + formatMYR(rawDiscount)}
+                        </Text>
+                      </View>
+                    ) : null}
+
+                    {hasBreakdown ? (
+                      <View style={styles.breakdownRow}>
+                        <Text style={styles.breakdownLabel}>Shipping</Text>
+                        <Text style={styles.breakdownValue}>{shippingFormatted}</Text>
+                      </View>
+                    ) : null}
+
+                    {hasBreakdown ? <View style={styles.breakdownDivider} /> : null}
+
+                    <Text style={styles.totalLabel}>Total Amount Due</Text>
+                    <Text style={styles.totalAmount}>{totalFormatted}</Text>
+                  </View>
                 </View>
               ) : null}
-
-              {/* Divider before grand total */}
-              {hasBreakdown ? (
-                <View style={styles.breakdownDivider} />
-              ) : null}
-
-              <Text style={styles.totalLabel}>Total Amount Due</Text>
-              <Text style={styles.totalAmount}>{totalFormatted}</Text>
             </View>
-          </View>
-        </View>
 
-        {/* Footer bar */}
-        <View style={styles.footer} fixed>
-          <Text style={styles.footerText}>{business.whatsappDisplay}</Text>
-          <Text style={styles.footerText}>{business.contactEmail}</Text>
-          <Text style={styles.footerText}>{business.website}</Text>
-          <Text style={styles.footerText}>{business.city}</Text>
-        </View>
-      </Page>
+            {/* Footer bar */}
+            {footerBar()}
+          </Page>
+        );
+      })}
     </Document>
   );
 }
