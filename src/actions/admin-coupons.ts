@@ -89,9 +89,16 @@ export async function getCoupon(id: string): Promise<CouponListRow | null> {
 
 type MutateResult = { ok: true; id?: string } | { ok: false; error: string };
 
-function parseCouponForm(formData: FormData) {
+function parseCouponForm(formData: FormData, fallbackCode?: string) {
+  // In edit mode the `code` input is disabled and therefore absent from
+  // FormData.  If the caller passes a fallbackCode (the stored code) we use
+  // it so the schema's code-format regex still passes.  updateCoupon strips
+  // the code from the UPDATE payload anyway, so the value is only needed to
+  // satisfy the shared couponSchema.
+  const rawCode = String(formData.get("code") ?? "").toUpperCase().trim();
+  const code = rawCode || fallbackCode?.toUpperCase().trim() || "";
   return couponSchema.safeParse({
-    code: String(formData.get("code") ?? "").toUpperCase().trim(),
+    code,
     type: formData.get("type"),
     amount: formData.get("amount"),
     minSpend: formData.get("minSpend") || null,
@@ -145,7 +152,16 @@ export async function updateCoupon(
   formData: FormData,
 ): Promise<MutateResult> {
   await requireAdmin();
-  const parsed = parseCouponForm(formData);
+  // Fetch the stored code so parseCouponForm can use it as a fallback.
+  // The `code` input is disabled in edit mode and therefore absent from
+  // FormData; without the fallback the couponSchema code-regex fails.
+  const [existing] = await db
+    .select({ code: coupons.code })
+    .from(coupons)
+    .where(eq(coupons.id, id))
+    .limit(1);
+  if (!existing) return { ok: false, error: "Coupon not found" };
+  const parsed = parseCouponForm(formData, existing.code);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0].message };
   }

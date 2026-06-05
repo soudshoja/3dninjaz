@@ -302,6 +302,11 @@ export default async function AdminOrderDetailPage({
             <p className="text-sm mt-0.5 break-words" style={{ color: "#475569" }}>
               {row.user?.email ?? row.customerEmail}
             </p>
+            {row.shippingPhone ? (
+              <p className="text-sm mt-0.5 font-mono break-words" style={{ color: "#475569" }}>
+                {row.shippingPhone}
+              </p>
+            ) : null}
             {/* Guest / deleted-user disambiguation */}
             {row.user ? (
               <p
