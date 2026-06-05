@@ -262,37 +262,6 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: SLATE,
   },
-  // Customer ship-to address block — bottom-left, aligned with the totals box.
-  addressBlock: {
-    flexDirection: "column",
-    width: "48%",
-  },
-  addressTitle: {
-    fontFamily: "Helvetica-Bold",
-    fontSize: 11,
-    marginBottom: 6,
-  },
-  addressLine: {
-    fontSize: 10,
-    color: SLATE,
-    marginBottom: 2,
-  },
-  // Continuation header on pages 2+ (keeps a clear top margin + context).
-  contHeaderRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 18,
-  },
-  contTitle: {
-    fontSize: 16,
-    fontFamily: "Helvetica-Bold",
-    color: INK,
-  },
-  pageNote: {
-    fontSize: 9,
-    color: SLATE,
-  },
   paymentBlock: {
     flexDirection: "column",
   },
