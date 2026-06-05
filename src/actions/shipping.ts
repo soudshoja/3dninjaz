@@ -33,9 +33,9 @@ import type { ShippingConfigRow as ShippingConfigRowType } from "@/lib/shipping-
 import { filterByEnabledCatalog } from "@/lib/delyva-filter";
 import { sendOrderShippedEmail } from "@/actions/send-emails";
 import { formatOrderNumber } from "@/lib/orders";
-import { ensureConfigJson, ensureConfigurationData } from "@/lib/config-fields";
+import { ensureConfigJson, ensureConfigurationData, ensureTiers } from "@/lib/config-fields";
 import type { SelectFieldConfig } from "@/lib/config-fields";
-import { resolveOptionWeightKg } from "@/lib/option-weight";
+import { resolveOptionWeightKg, resolveTierWeightKg } from "@/lib/option-weight";
 import type { FieldWeightEntry } from "@/lib/option-weight";
 
 // ============================================================================
@@ -440,11 +440,21 @@ async function sumOrderWeight(
     .select({
       id: products.id,
       weight: products.shippingWeightKg,
+      unitField: products.unitField,
+      weightTiers: products.weightTiers,
     })
     .from(products);
   const productWeights = new Map<string, number>();
+  const productTierWeights = new Map<
+    string,
+    { unitField: string | null; weightTiers: Record<string, number> }
+  >();
   for (const p of prodRows) {
     if (p.weight) productWeights.set(p.id, Number(p.weight));
+    const wt = ensureTiers(p.weightTiers);
+    if (Object.keys(wt).length > 0) {
+      productTierWeights.set(p.id, { unitField: p.unitField ?? null, weightTiers: wt });
+    }
   }
 
   // Batch-fetch per-variant weights (AD-08)
@@ -510,13 +520,20 @@ async function sumOrderWeight(
     // order_items.configurationData is a JSON STRING column — parse via
     // ensureConfigurationData() before reading .values.
     const configData = ensureConfigurationData(i.configurationData);
-    const optKg =
-      configData?.values && Object.keys(configData.values).length > 0
-        ? resolveOptionWeightKg(configData.values, fieldsByProduct.get(i.productId) ?? [])
-        : null;
+    const hasConfig =
+      !!configData?.values && Object.keys(configData.values).length > 0;
+    const optKg = hasConfig
+      ? resolveOptionWeightKg(configData!.values, fieldsByProduct.get(i.productId) ?? [])
+      : null;
+    const tw = productTierWeights.get(i.productId);
+    const tierKg = hasConfig && tw
+      ? resolveTierWeightKg(tw.unitField, configData!.values, tw.weightTiers)
+      : null;
+    const configKg =
+      optKg !== null || tierKg !== null ? (optKg ?? 0) + (tierKg ?? 0) : null;
 
-    if (optKg !== null) {
-      w = optKg;
+    if (configKg !== null) {
+      w = configKg;
     } else {
       const variantWeightG = variantWeights.get(i.variantId) ?? null;
       if (variantWeightG !== null) {
@@ -613,9 +630,21 @@ async function _bookShipmentInternal(
   const fallbackWeight = Number(cfg.defaultWeightKg);
   const inventory: InventoryItem[] = items.map((i) => {
     const p = prodById.get(i.productId);
+    // Tier 0: per-tier weight (keychain/clicker) from the order's config
+    // snapshot. Mirrors quoteForCart so the dispatched parcel weight matches
+    // the weight the customer was quoted on.
+    const configData = ensureConfigurationData(i.configurationData);
+    const tierWeights = ensureTiers(p?.weightTiers);
+    const tierKg =
+      configData?.values && Object.keys(tierWeights).length > 0
+        ? resolveTierWeightKg(p?.unitField ?? null, configData.values, tierWeights)
+        : null;
     const variantWeightG = variantWeights.get(i.variantId) ?? null;
     let weight: number;
-    if (variantWeightG !== null) {
+    if (tierKg !== null) {
+      // Tier 0: per-tier weight
+      weight = tierKg;
+    } else if (variantWeightG !== null) {
       // Tier 1: per-variant weight_g (grams → kg)
       weight = variantWeightG / 1000;
     } else {

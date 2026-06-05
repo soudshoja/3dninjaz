@@ -31,6 +31,8 @@ type Props = {
   productId: string;
   initialMaxUnitCount: number | null;
   initialPriceTiers: Record<string, number>;
+  /** Per-tier shipping weight in GRAMS, keyed by unit count (same keys as price). */
+  initialWeightTiers: Record<string, number>;
   initialUnitField: string | null;
   /** Text/number config fields on the product — unitField select uses this */
   fieldOptions: FieldOption[];
@@ -54,12 +56,16 @@ export function TierTableEditor({
   productId,
   initialMaxUnitCount,
   initialPriceTiers,
+  initialWeightTiers,
   initialUnitField,
   fieldOptions,
   onSaved,
 }: Props) {
   const [maxUnit, setMaxUnit] = useState<number>(initialMaxUnitCount ?? 1);
   const [tiers, setTiers] = useState<Record<string, number>>(initialPriceTiers);
+  // Per-tier shipping weight in GRAMS, keyed by unit count. Optional per tier —
+  // a blank/0 weight falls back to the variant/product/default ladder at quote.
+  const [weights, setWeights] = useState<Record<string, number>>(initialWeightTiers);
   const [unitField, setUnitField] = useState<string>(initialUnitField ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,8 +77,8 @@ export function TierTableEditor({
   // from the main product-form and configurator drafts.
   // -------------------------------------------------------------------------
   const tierDraftValue = useMemo(
-    () => ({ maxUnit, tiers, unitField }),
-    [maxUnit, tiers, unitField],
+    () => ({ maxUnit, tiers, weights, unitField }),
+    [maxUnit, tiers, weights, unitField],
   );
   const tierDraft = useProductDraft(productId, tierDraftValue, { scope: "tiers" });
   const [tierBannerDismissed, setTierBannerDismissed] = useState(false);
@@ -100,6 +106,15 @@ export function TierTableEditor({
     } else {
       console.warn("[tiers autosave] Dropped invalid tiers map from draft.");
     }
+    if (v.weights && typeof v.weights === "object" && !Array.isArray(v.weights)) {
+      const safeW: Record<string, number> = {};
+      for (const [k, val] of Object.entries(v.weights)) {
+        if (typeof val === "number" && Number.isFinite(val) && val >= 0) {
+          safeW[k] = val;
+        }
+      }
+      setWeights(safeW);
+    }
     if (typeof v.unitField === "string") {
       setUnitField(v.unitField);
     }
@@ -120,6 +135,7 @@ export function TierTableEditor({
 
   // Bulk apply
   const [bulkValue, setBulkValue] = useState<string>("");
+  const [bulkWeight, setBulkWeight] = useState<string>("");
 
   const [, startTransition] = useTransition();
   const firstInputRef = useRef<HTMLInputElement>(null);
@@ -152,6 +168,12 @@ export function TierTableEditor({
     setTiers((prev) => ({ ...prev, [String(n)]: price }));
   };
 
+  const getTierWeight = (n: number): number => weights[String(n)] ?? 0;
+
+  const setTierWeight = (n: number, grams: number) => {
+    setWeights((prev) => ({ ...prev, [String(n)]: grams }));
+  };
+
   // -------------------------------------------------------------------------
   // handleMaxChange — truncate confirm when reducing
   // -------------------------------------------------------------------------
@@ -170,11 +192,14 @@ export function TierTableEditor({
     }
 
     const next: Record<string, number> = {};
+    const nextW: Record<string, number> = {};
     for (let i = 1; i <= newMax; i++) {
       next[String(i)] = tiers[String(i)] ?? 0;
+      nextW[String(i)] = weights[String(i)] ?? 0;
     }
     setMaxUnit(newMax);
     setTiers(next);
+    setWeights(nextW);
   };
 
   // -------------------------------------------------------------------------
@@ -219,6 +244,34 @@ export function TierTableEditor({
     setBulkValue("");
   };
 
+  const handleBulkWeightApply = () => {
+    const val = parseInt(bulkWeight, 10);
+    if (!Number.isFinite(val) || val < 0) return;
+    const next: Record<string, number> = {};
+    for (let i = 1; i <= maxUnit; i++) {
+      next[String(i)] = val;
+    }
+    setWeights(next);
+    setBulkWeight("");
+  };
+
+  // Linear weight fill — interpolate grams from first to last across all tiers.
+  // The common clicker case: weight grows roughly linearly with character count.
+  const [autoWeightFirst, setAutoWeightFirst] = useState<string>("");
+  const [autoWeightLast, setAutoWeightLast] = useState<string>("");
+
+  const handleAutoWeightFill = () => {
+    const first = parseFloat(autoWeightFirst);
+    const last = parseFloat(autoWeightLast);
+    if (!Number.isFinite(first) || !Number.isFinite(last)) return;
+    const next: Record<string, number> = {};
+    for (let i = 1; i <= maxUnit; i++) {
+      const fraction = maxUnit > 1 ? (i - 1) / (maxUnit - 1) : 0;
+      next[String(i)] = Math.round(first + (last - first) * fraction);
+    }
+    setWeights(next);
+  };
+
   // -------------------------------------------------------------------------
   // Save
   // -------------------------------------------------------------------------
@@ -238,7 +291,7 @@ export function TierTableEditor({
 
     setSaving(true);
     startTransition(async () => {
-      const result = await saveTierTable(productId, maxUnit, tiers, unitField);
+      const result = await saveTierTable(productId, maxUnit, tiers, unitField, weights);
       setSaving(false);
       if (!result.ok) {
         setError(result.error);
@@ -503,6 +556,78 @@ export function TierTableEditor({
             Apply all
           </Button>
         </div>
+
+        {/* Divider */}
+        <div className="border-t border-border" />
+
+        {/* Weight tools */}
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Shipping weight (grams) — optional
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="autoWeightFirst" className="text-xs">First (g)</Label>
+              <Input
+                id="autoWeightFirst"
+                type="number"
+                min={0}
+                step={1}
+                value={autoWeightFirst}
+                onChange={(e) => setAutoWeightFirst(e.target.value)}
+                className="h-8 w-24"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="autoWeightLast" className="text-xs">Last (g)</Label>
+              <Input
+                id="autoWeightLast"
+                type="number"
+                min={0}
+                step={1}
+                value={autoWeightLast}
+                onChange={(e) => setAutoWeightLast(e.target.value)}
+                className="h-8 w-24"
+              />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleAutoWeightFill}
+              className="h-8 gap-1.5 text-xs self-end"
+            >
+              <Wand2 className="h-3 w-3" />
+              Fill weights
+            </Button>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="bulkWeight" className="text-xs">Set all (g)</Label>
+              <Input
+                id="bulkWeight"
+                type="number"
+                min={0}
+                step={1}
+                placeholder="e.g. 15"
+                value={bulkWeight}
+                onChange={(e) => setBulkWeight(e.target.value)}
+                className="h-8 w-28"
+              />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleBulkWeightApply}
+              disabled={bulkWeight === ""}
+              className="h-8 gap-1.5 text-xs self-end"
+            >
+              <Tag className="h-3 w-3" />
+              Apply all
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Per-tier parcel weight used for live shipping quotes. Leave a tier
+            blank to fall back to the product/default weight.
+          </p>
+        </div>
       </div>
 
       {/* ------------------------------------------------------------------ */}
@@ -525,9 +650,10 @@ export function TierTableEditor({
       {hasTiers && (
         <div className="rounded-xl border border-border overflow-hidden" data-tier-table>
           {/* Table header */}
-          <div className="grid grid-cols-[3rem_1fr_auto] gap-3 border-b border-border bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="grid grid-cols-[2.5rem_1fr_6rem_auto] gap-3 border-b border-border bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             <span>#</span>
             <span>Price (MYR)</span>
+            <span>Weight (g)</span>
             <span className="text-right pr-1">Per unit</span>
           </div>
 
@@ -541,7 +667,7 @@ export function TierTableEditor({
               return (
                 <div
                   key={n}
-                  className={`grid grid-cols-[3rem_1fr_auto] items-center gap-3 px-4 py-2 transition-colors ${
+                  className={`grid grid-cols-[2.5rem_1fr_6rem_auto] items-center gap-3 px-4 py-2 transition-colors ${
                     isBest ? "bg-green-50" : "hover:bg-accent/30"
                   }`}
                 >
@@ -584,6 +710,18 @@ export function TierTableEditor({
                     }}
                     aria-label={`Price for ${n} unit${n === 1 ? "" : "s"}`}
                     className="h-8 w-32"
+                  />
+
+                  {/* Weight input (grams) */}
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={getTierWeight(n) === 0 ? "" : getTierWeight(n)}
+                    placeholder="—"
+                    onChange={(e) => setTierWeight(n, parseInt(e.target.value, 10) || 0)}
+                    aria-label={`Shipping weight in grams for ${n} unit${n === 1 ? "" : "s"}`}
+                    className="h-8 w-20"
                   />
 
                   {/* Per-unit display */}

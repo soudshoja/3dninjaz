@@ -3,7 +3,7 @@
  *
  * Helper that inserts the 4 fixed (locked) config fields for a keychain
  * product:
- *   position 0 — text   "Your name" (locked: true, maxLength 8, A-Z, uppercase, profanityCheck)
+ *   position 0 — text   "Your name" (locked: true, maxLength 8, A-Z letters only, uppercase, profanityCheck)
  *   position 1 — colour "Base"      (locked: true)
  *   position 2 — colour "Clicker"   (locked: true)
  *   position 3 — colour "Letter"    (locked: true)
@@ -73,7 +73,7 @@ export async function seedKeychainFields(
     label: "Your name",
     // Helper text is generated dynamically on the storefront from the config
     // (allowed chars + max length); this stored value is just an admin hint.
-    helpText: "Letters & numbers (uppercase).",
+    helpText: "Letters only (uppercase).",
     required: true,
     locked: true,
     configJson: JSON.stringify({
