@@ -178,7 +178,7 @@ export function ShippingRatePicker({ address, items, onChange }: Props) {
           style={{ borderColor: `${BRAND.ink}22`, color: BRAND.ink }}
           aria-live="polite"
         >
-          Fetching live rates from Delyva…
+          Fetching live courier rates…
         </div>
       ) : null}
 
