@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db";
 import { orders, orderItems, productVariants, productOptionValues, products } from "@/lib/db/schema";
-import { and, eq, gte, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { composeVariantLabel, resolveEffectivePrice } from "@/lib/variants";
 import { randomUUID } from "node:crypto";
 import { getSessionUser } from "@/lib/auth-helpers";
@@ -331,32 +331,6 @@ export async function createWhatsAppOrder(
 
   const totalNum = Math.max(0, +(subtotal - discount + shippingNum).toFixed(2));
   const totalStr = totalNum.toFixed(2);
-
-  // Layer 2 — server idempotency: check for a recent duplicate order before
-  // inserting. Same phone + same total + awaiting_payment_review bank_transfer
-  // within 15 minutes → return the existing order id (no new insert, no double
-  // coupon redemption). If the query itself fails, fall through to normal creation.
-  try {
-    const cutoff = new Date(Date.now() - 15 * 60 * 1000);
-    const existing = await db
-      .select({ id: orders.id })
-      .from(orders)
-      .where(
-        and(
-          eq(orders.shippingPhone, addr.data.phone),
-          eq(orders.totalAmount, totalStr),
-          eq(orders.status, "awaiting_payment_review"),
-          eq(orders.paymentMethod, "bank_transfer"),
-          gte(orders.createdAt, cutoff),
-        ),
-      )
-      .limit(1);
-    if (existing.length > 0) {
-      return { ok: true, orderId: existing[0].id };
-    }
-  } catch (dedupErr) {
-    console.warn("[whatsapp-order] dedup query failed, continuing with new order:", dedupErr);
-  }
 
   // Insert order row with bank_transfer + awaiting_payment_review.
   const internalOrderId = randomUUID();

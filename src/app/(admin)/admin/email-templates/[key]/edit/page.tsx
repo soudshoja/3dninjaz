@@ -15,6 +15,7 @@ export const metadata: Metadata = {
 
 const VALID_KEYS: TemplateKey[] = [
   "order_confirmation",
+  "order_processing",
   "order_shipped",
   "order_delivered",
   "order_refunded",
@@ -26,6 +27,11 @@ const VALID_KEYS: TemplateKey[] = [
   "newsletter_unsubscribed",
   "dispute_opened_customer",
   "dispute_opened_admin",
+  "return_requested",
+  "return_approved",
+  "return_rejected",
+  "return_received",
+  "return_expired",
 ];
 
 type PageProps = { params: Promise<{ key: string }> };

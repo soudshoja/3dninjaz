@@ -164,20 +164,10 @@ export function WhatsAppBankTransferButton({
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  // Layer 1 — client lock: once an order is placed, store the result and lock
-  // the button for the lifetime of this mounted component instance. A second tap
-  // (or a page re-render that keeps the same instance) re-opens the SAME WhatsApp
-  // URL without calling createWhatsAppOrder again.
-  const [placed, setPlaced] = useState<{ orderId: string; waUrl: string } | null>(null);
 
   const isDisabled = disabled || items.length === 0 || !address || !shipping || isPending;
 
   function handleClick() {
-    // If already placed, just re-open the same WhatsApp deep-link.
-    if (placed) {
-      window.open(placed.waUrl, "_blank", "noopener,noreferrer");
-      return;
-    }
     if (isDisabled) return;
     setError(null);
 
@@ -217,10 +207,8 @@ export function WhatsAppBankTransferButton({
         bankAccountNumber,
         bankAccountHolder,
       });
-      const waUrl = `https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`;
-      // Lock the button before opening WhatsApp so any subsequent tap reuses this url.
-      setPlaced({ orderId: res.orderId, waUrl });
-      window.open(waUrl, "_blank", "noopener,noreferrer");
+      const url = `https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`;
+      window.open(url, "_blank", "noopener,noreferrer");
     });
   }
 
@@ -232,21 +220,15 @@ export function WhatsAppBankTransferButton({
         <button
           type="button"
           onClick={handleClick}
-          disabled={!placed && isDisabled}
-          aria-label={placed ? "Order placed — open WhatsApp again" : "Pay via WhatsApp direct bank transfer"}
+          disabled={isDisabled}
+          aria-label="Pay via WhatsApp direct bank transfer"
           className="w-full h-[55px] flex items-center justify-center gap-2 rounded-full px-3 font-bold text-sm text-black shadow-[0_4px_0_rgba(0,0,0,0.25)] active:translate-y-[1px] active:shadow-[0_2px_0_rgba(0,0,0,0.25)] transition disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
-          style={{ backgroundColor: placed ? "#1FA300" : "#25D366" }}
+          style={{ backgroundColor: "#25D366" }}
         >
           <WhatsAppIcon className="h-5 w-5 shrink-0" />
-          <span className="truncate">
-            {isPending ? "Placing…" : placed ? "✓ Order placed — open WhatsApp again" : "Pay via WhatsApp"}
-          </span>
+          <span className="truncate">{isPending ? "Placing…" : "Pay via WhatsApp"}</span>
         </button>
-        {placed ? (
-          <p className="text-green-700 text-xs mt-2 text-center">
-            Your order is saved. We&apos;ll confirm once payment is received.
-          </p>
-        ) : error ? (
+        {error ? (
           <p className="text-red-600 text-xs mt-2 text-center">{error}</p>
         ) : null}
       </div>
@@ -264,45 +246,27 @@ export function WhatsAppBankTransferButton({
         <div className="flex-1 h-px bg-zinc-200" />
       </div>
 
-      {placed ? (
-        /* Post-placement: explanatory confirmation + re-open button */
-        <>
-          <p className="text-xs text-slate-500 text-center mb-3">
-            Your order is saved. We&apos;ll confirm once payment is received.
-          </p>
-          <button
-            type="button"
-            onClick={handleClick}
-            aria-label="Order placed — open WhatsApp again"
-            className="w-full flex items-center justify-center gap-2 rounded-full py-3 px-6 font-bold text-sm text-black shadow-[0_4px_0_rgba(0,0,0,0.25)] active:translate-y-[1px] active:shadow-[0_2px_0_rgba(0,0,0,0.25)] transition"
-            style={{ backgroundColor: "#1FA300" }}
-          >
-            <WhatsAppIcon className="h-5 w-5 shrink-0" />
-            ✓ Order placed — open WhatsApp again
-          </button>
-        </>
-      ) : (
-        /* Pre-placement: normal explanatory copy + CTA */
-        <>
-          <p className="text-xs text-slate-500 text-center mb-3">
-            Message us on WhatsApp — send your transfer screenshot and we&apos;ll confirm your order.
-          </p>
-          <button
-            type="button"
-            onClick={handleClick}
-            disabled={isDisabled}
-            aria-label="Pay via WhatsApp direct bank transfer"
-            className="w-full flex items-center justify-center gap-2 rounded-full py-3 px-6 font-bold text-sm text-black shadow-[0_4px_0_rgba(0,0,0,0.25)] active:translate-y-[1px] active:shadow-[0_2px_0_rgba(0,0,0,0.25)] transition disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
-            style={{ backgroundColor: "#25D366" }}
-          >
-            <WhatsAppIcon className="h-5 w-5 shrink-0" />
-            {isPending ? "Placing order…" : "Pay via WhatsApp"}
-          </button>
-          {error ? (
-            <p className="text-red-600 text-xs mt-2 text-center">{error}</p>
-          ) : null}
-        </>
-      )}
+      {/* Explanatory copy */}
+      <p className="text-xs text-slate-500 text-center mb-3">
+        Message us on WhatsApp — send your transfer screenshot and we&apos;ll confirm your order.
+      </p>
+
+      {/* WhatsApp CTA */}
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={isDisabled}
+        aria-label="Pay via WhatsApp direct bank transfer"
+        className="w-full flex items-center justify-center gap-2 rounded-full py-3 px-6 font-bold text-sm text-black shadow-[0_4px_0_rgba(0,0,0,0.25)] active:translate-y-[1px] active:shadow-[0_2px_0_rgba(0,0,0,0.25)] transition disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
+        style={{ backgroundColor: "#25D366" }}
+      >
+        <WhatsAppIcon className="h-5 w-5 shrink-0" />
+        {isPending ? "Placing order…" : "Pay via WhatsApp"}
+      </button>
+
+      {error ? (
+        <p className="text-red-600 text-xs mt-2 text-center">{error}</p>
+      ) : null}
     </div>
   );
 }

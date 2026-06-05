@@ -572,10 +572,10 @@ export function NinjazInvoiceDocument({
             {/* Main content area — paddingTop on every page gives the top
                 margin requested for page 2+. */}
             <View style={styles.content}>
-              {/* Top group — header (page 1 only) + items table. Wrapped so the
-                  content View can pin the bottom block to the page bottom
-                  (content uses justifyContent: space-between). */}
-              <View>
+              {/* Top group — header (page 1 only) + items table. wrap=false prevents
+                  this content from splitting across pages (which would cause a page
+                  with just the bottom block after a partial items split). */}
+              <View wrap={false}>
               {isFirst ? (
                 <>
                   {/* Header row: logo left, bill-to right */}
