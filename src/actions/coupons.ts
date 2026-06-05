@@ -126,7 +126,7 @@ export type RedeemResult =
 export async function redeemCoupon(
   couponId: string,
   orderId: string,
-  userId: string,
+  userId: string | null,
   subtotalMYR: number,
 ): Promise<RedeemResult> {
   return await db.transaction(async (tx) => {
@@ -177,7 +177,7 @@ export async function redeemCoupon(
       id: randomUUID(),
       couponId,
       orderId,
-      userId,
+      userId, // null for guest redemptions — still counts against usage_cap
       amountApplied: discount.toFixed(2),
     });
 
