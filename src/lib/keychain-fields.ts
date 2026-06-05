@@ -78,7 +78,7 @@ export async function seedKeychainFields(
     locked: true,
     configJson: JSON.stringify({
       maxLength: 8,
-      allowedChars: "A-Z0-9",
+      allowedChars: "A-Z",
       uppercase: true,
       profanityCheck: true,
     }),
