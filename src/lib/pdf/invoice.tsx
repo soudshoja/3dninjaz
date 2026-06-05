@@ -107,6 +107,9 @@ export type InvoiceOrder = {
   subtotal: string;
   shippingCost: string;
   totalAmount: string;
+  /** Optional coupon discount applied to the order (so the invoice total reconciles). */
+  discountAmount?: string | null;
+  discountCode?: string | null;
   items: Array<{
     id: string;
     productId: string;    // Phase 20 (20-13) — D-08 isManualLine guard

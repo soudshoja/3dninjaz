@@ -153,6 +153,13 @@ export async function getAdminUserDetail(
       createdAt: orders.createdAt,
       paypalCaptureId: orders.paypalCaptureId,
       shippingPhone: orders.shippingPhone,
+      shippingName: orders.shippingName,
+      shippingLine1: orders.shippingLine1,
+      shippingLine2: orders.shippingLine2,
+      shippingCity: orders.shippingCity,
+      shippingState: orders.shippingState,
+      shippingPostcode: orders.shippingPostcode,
+      shippingCountry: orders.shippingCountry,
     })
     .from(orders)
     .where(eq(orders.userId, userId))
@@ -191,6 +198,45 @@ export async function getAdminUserDetail(
   // Phone from most recent order's shipping_phone
   const phone = userOrders.length > 0 ? (userOrders[0].shippingPhone ?? null) : null;
 
+  // Address list: prefer the customer's saved address book. When empty (guest
+  // / checkout-only customers never persist to the addresses table), fall back
+  // to the shipping address they entered on their most recent order so the CRM
+  // profile still shows where they are.
+  let addressList = userAddresses.map((a) => ({
+    id: a.id,
+    fullName: a.fullName,
+    phone: a.phone,
+    line1: a.line1,
+    line2: a.line2 ?? null,
+    city: a.city,
+    state: a.state,
+    postcode: a.postcode,
+    country: a.country,
+    isDefault: a.isDefault,
+    createdAt: a.createdAt,
+  }));
+
+  if (addressList.length === 0) {
+    const latest = userOrders.find((o) => o.shippingLine1 && o.shippingLine1.trim());
+    if (latest) {
+      addressList = [
+        {
+          id: `order:${latest.id}`,
+          fullName: latest.shippingName,
+          phone: latest.shippingPhone ?? "",
+          line1: latest.shippingLine1,
+          line2: latest.shippingLine2 ?? null,
+          city: latest.shippingCity,
+          state: latest.shippingState,
+          postcode: latest.shippingPostcode,
+          country: latest.shippingCountry,
+          isDefault: true,
+          createdAt: new Date(latest.createdAt),
+        },
+      ];
+    }
+  }
+
   return {
     id: u.id,
     name: u.name,
@@ -201,19 +247,7 @@ export async function getAdminUserDetail(
     createdAt: u.createdAt,
     isSentinelEmail: u.email.endsWith("@3dninjaz.local"),
     pdpaConsentAt: u.pdpaConsentAt ?? null,
-    addresses: userAddresses.map((a) => ({
-      id: a.id,
-      fullName: a.fullName,
-      phone: a.phone,
-      line1: a.line1,
-      line2: a.line2 ?? null,
-      city: a.city,
-      state: a.state,
-      postcode: a.postcode,
-      country: a.country,
-      isDefault: a.isDefault,
-      createdAt: a.createdAt,
-    })),
+    addresses: addressList,
     stats: {
       orderCount,
       lifetimeSpend,

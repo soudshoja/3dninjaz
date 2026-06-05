@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { getAdminOrder } from "@/actions/admin-orders";
-import { ensureOrderItemConfigData } from "@/lib/config-fields";
+import { ensureOrderItemConfigData, ensureImagesV2 } from "@/lib/config-fields";
 import { BRAND } from "@/lib/brand";
 import { formatOrderNumber, isManualLine } from "@/lib/orders";
 import { formatMYR } from "@/lib/format";
@@ -31,8 +31,8 @@ import { OrderShipmentPanel } from "@/components/admin/order-shipment-panel";
 import { OrderCostsPanel } from "@/components/admin/order-costs-panel";
 // Phase 20 (20-11) — payment proof review surface + Download Invoice button.
 import { db } from "@/lib/db";
-import { paymentProofs } from "@/lib/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { paymentProofs, products } from "@/lib/db/schema";
+import { eq, desc, inArray } from "drizzle-orm";
 import { FileDown } from "lucide-react";
 import { PaymentProofSection } from "@/components/admin/payment-proof-section";
 import { AdminUploadProofForm } from "@/components/admin/admin-upload-proof-form";
@@ -105,6 +105,28 @@ export default async function AdminOrderDetailPage({
     .where(eq(paymentProofs.orderId, id))
     .orderBy(desc(paymentProofs.createdAt));
 
+  // Product-image fallback: configurable/keychain items don't snapshot a
+  // product_image at add-to-bag, so order_items.product_image is NULL. Look up
+  // each product's primary image by product_id so the thumbnail still shows.
+  const missingImgProductIds = Array.from(
+    new Set(
+      row.items
+        .filter((i) => !i.productImage && !isManualLine(i) && i.productId)
+        .map((i) => i.productId as string),
+    ),
+  );
+  const productImageFallback = new Map<string, string>();
+  if (missingImgProductIds.length > 0) {
+    const imgRows = await db
+      .select({ id: products.id, images: products.images })
+      .from(products)
+      .where(inArray(products.id, missingImgProductIds));
+    for (const p of imgRows) {
+      const first = ensureImagesV2(p.images)[0]?.url;
+      if (first) productImageFallback.set(p.id, first);
+    }
+  }
+
   // Mount admin upload form when order is still awaiting payment confirmation
   // or is an unconfirmed bank-transfer order (no PayPal capture yet and not paid).
   // Status-based guard: show for pending / awaiting_customer / awaiting_payment_review.
@@ -142,9 +164,12 @@ export default async function AdminOrderDetailPage({
             ) : null}
           </div>
           <div className="flex items-center gap-3 flex-wrap">
-            {/* Phase 20 (20-11) — Download Invoice PDF button */}
+            {/* Phase 20 (20-11) — Download Invoice PDF button.
+                The ?t= cache-buster (re-stamped on every force-dynamic render)
+                guarantees the browser fetches a freshly-rendered PDF after the
+                admin changes shipping, discount, or items — never a cached tab. */}
             <a
-              href={`/orders/${row.id}/invoice.pdf`}
+              href={`/orders/${row.id}/invoice.pdf?t=${Date.now()}`}
               target="_blank"
               rel="noopener"
               className="inline-flex items-center gap-2 px-4 font-semibold rounded-[4px] border-2 border-slate-700 text-slate-700 hover:bg-slate-100 transition-colors duration-150"
@@ -303,16 +328,25 @@ export default async function AdminOrderDetailPage({
               <p className="text-sm text-slate-600">No line items on this order.</p>
             ) : (
               <ul className="divide-y divide-black/10">
-                {row.items.map((i) => (
+                {row.items.map((i) => {
+                  // D-08 (Phase 20): manual lines have no product image — skip.
+                  // Otherwise prefer the snapshotted image, falling back to the
+                  // product's primary image (keychain/configurable items don't
+                  // snapshot one at add-to-bag).
+                  const itemImage = isManualLine(i)
+                    ? null
+                    : i.productImage ||
+                      (i.productId ? productImageFallback.get(i.productId) : null) ||
+                      null;
+                  return (
                   <li key={i.id} className="flex gap-4 py-3">
                     <div
                       className="h-14 w-14 md:h-16 md:w-16 rounded-xl overflow-hidden shrink-0 relative"
                       style={{ backgroundColor: `${BRAND.blue}15` }}
                     >
-                      {/* D-08 (Phase 20): manual lines have no product image — skip fetch */}
-                      {i.productImage && !isManualLine(i) ? (
+                      {itemImage ? (
                         <Image
-                          src={i.productImage}
+                          src={itemImage}
                           alt=""
                           fill
                           sizes="64px"
@@ -354,7 +388,8 @@ export default async function AdminOrderDetailPage({
                       {formatMYR(i.lineTotal)}
                     </p>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
             <div className="mt-4 pt-3 border-t border-black/10 grid gap-1 text-sm">
