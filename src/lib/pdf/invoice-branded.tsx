@@ -489,8 +489,8 @@ export function NinjazInvoiceDocument({
   const rawDiscount = parseFloat(order.discountAmount ?? "");
   const hasDiscount = Number.isFinite(rawDiscount) && rawDiscount > 0;
 
-  // ── Pagination: max 10 line items per page; remainder flows to next page ──
-  const ITEMS_PER_PAGE = 10;
+  // ── Pagination: max 12 line items per page; remainder flows to next page ──
+  const ITEMS_PER_PAGE = 12;
   const pages: (typeof order.items)[] = [];
   for (let i = 0; i < order.items.length; i += ITEMS_PER_PAGE) {
     pages.push(order.items.slice(i, i + ITEMS_PER_PAGE));
