@@ -11,7 +11,7 @@ import { sendOrderProcessingEmail } from "@/actions/send-emails";
 import { orderStatusValues } from "@/lib/db/schema";
 import { computeOrderCost, toNum, toNumOrNull } from "@/lib/profit";
 import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
-import { sendWhatsAppNotification } from "@/lib/whatsapp/sender";
+import { sendWhatsAppNotification, sendWhatsAppInvoicePdf } from "@/lib/whatsapp/sender";
 
 // ============================================================================
 // Plan 03-04 admin order actions.
@@ -407,11 +407,15 @@ export async function approveWhatsAppOrder(
       console.error("[admin-orders] approveWhatsApp email failed:", err),
     );
   }
-  void sendWhatsAppNotification("order_confirmation", row.shippingPhone, {
+  // order_approved = "admin confirmed payment" (distinct from order_confirmation
+  // which fires on PayPal capture). Both are sent here so the customer receives
+  // whichever template the admin has customised.
+  void sendWhatsAppNotification("order_approved", row.shippingPhone, {
     customerName: row.shippingName,
     orderNumber: formatOrderNumber(orderId),
     orderUrl: `https://app.3dninjaz.com/orders/${orderId}`,
   }).catch(() => {});
+  void sendWhatsAppInvoicePdf(orderId, row.shippingPhone).catch(() => {});
 
   revalidatePath(`/admin/orders`);
   revalidatePath(`/admin/orders/${orderId}`);

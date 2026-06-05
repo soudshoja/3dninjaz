@@ -86,6 +86,9 @@ const styles = StyleSheet.create({
     // paddingBottom gives space above the absolute footer (height ~44pt)
     paddingBottom: 80,
     flex: 1,
+    // Top group at the top, the bottom block (Bill/Ship-To + totals) pinned to
+    // the bottom of every page.
+    justifyContent: "space-between",
   },
 
   // ── Header row ──────────────────────────────────────────────────────────
@@ -95,10 +98,9 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   logo: {
-    // Sized by height so it visually matches the "Billed To" box height next
-    // to it; maxWidth keeps a wide logo from crowding the bill-to column.
-    height: 60,
-    maxWidth: 160,
+    // Bigger, prominent logo on page 1 (aligned next to the "Billed To" box).
+    height: 96,
+    maxWidth: 210,
     objectFit: "contain",
   },
   // "Page X / Y" indicator — fixed, just above the footer bar, on every page.
@@ -529,6 +531,10 @@ export function NinjazInvoiceDocument({
             {/* Main content area — paddingTop on every page gives the top
                 margin requested for page 2+. */}
             <View style={styles.content}>
+              {/* Top group — header (page 1 only) + items table. Wrapped so the
+                  content View can pin the bottom block to the page bottom
+                  (content uses justifyContent: space-between). */}
+              <View>
               {isFirst ? (
                 <>
                   {/* Header row: logo left, bill-to right */}
@@ -563,27 +569,18 @@ export function NinjazInvoiceDocument({
 
                   <View style={styles.divider} />
                 </>
-              ) : (
-                /* Continuation pages (2+): the content paddingTop already gives
-                   a clear top margin; just a small logo for branding, no
-                   "continued" text. Page number is shown via the fixed element. */
-                business.logoBase64 ? (
-                  <View style={styles.contHeaderRow}>
-                    <Image src={business.logoBase64} style={styles.logoSmall} />
-                  </View>
-                ) : (
-                  <View style={styles.contHeaderRow} />
-                )
-              )}
+              ) : null /* Pages 2+: no logo/header — top margin comes from content paddingTop. */}
 
               {/* Items table */}
               {tableHead()}
               {pageItems.map((item, i) => renderRow(item, startIndex + i))}
+              </View>
 
-              {/* Bottom block — only on the LAST page: customer address (left)
-                  aligned with the totals box (right). */}
+              {/* Bottom block — only on the LAST page. Pinned to the bottom of
+                  the page (content justifyContent: space-between). wrap=false
+                  keeps Bill/Ship-To + totals together on one page. */}
               {isLast ? (
-                <View style={styles.bottomRow}>
+                <View style={styles.bottomRow} wrap={false}>
                   {/* Customer ship-to address */}
                   <View style={styles.addressBlock}>
                     <Text style={styles.addressTitle}>Bill / Ship To</Text>

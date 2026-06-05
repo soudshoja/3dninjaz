@@ -134,6 +134,40 @@ export async function sendText(opts: {
 }
 
 /**
+ * Send a media document via Evolution. Returns true on HTTP 2xx, false otherwise.
+ * Never throws. Best-effort — swallows all errors.
+ *
+ * @param number   - E.164 MSISDN without the + prefix, e.g. "601125434730"
+ * @param base64   - Raw base64-encoded file data (no data: URI prefix)
+ * @param fileName - Filename shown to the recipient, e.g. "invoice-ORD-001.pdf"
+ * @param caption  - Optional caption text below the document
+ */
+export async function sendMedia(opts: {
+  number: string;
+  base64: string;
+  fileName: string;
+  caption?: string;
+  instanceName?: string;
+}): Promise<boolean> {
+  const name = opts.instanceName ?? WHATSAPP_INSTANCE_NAME;
+  try {
+    const res = await evoFetch(`/message/sendMedia/${name}`, {
+      method: "POST",
+      body: JSON.stringify({
+        number: opts.number,
+        mediatype: "document",
+        media: opts.base64,
+        fileName: opts.fileName,
+        caption: opts.caption ?? "",
+      }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Register a webhook URL on an Evolution instance (best-effort — swallows errors).
  *
  * Evolution v2 wraps the config under a "webhook" key:

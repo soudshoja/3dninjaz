@@ -7,7 +7,7 @@ import { ordersController, PAYPAL_CURRENCY } from "@/lib/paypal";
 import { CheckoutPaymentIntent } from "@paypal/paypal-server-sdk";
 import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
 import { revalidatePath } from "next/cache";
-import { sendWhatsAppNotification } from "@/lib/whatsapp/sender";
+import { sendWhatsAppNotification, sendWhatsAppInvoicePdf } from "@/lib/whatsapp/sender";
 import { writePaymentProof } from "@/lib/payment-proof-storage";
 import { assertValidTransition } from "@/lib/orders";
 import crypto from "node:crypto";
@@ -530,6 +530,7 @@ export async function capturePaymentLinkPayment({
     orderNumber: shortOrderNumber(orderRow.id),
     orderUrl: `https://app.3dninjaz.com/orders/${orderRow.id}`,
   }).catch(() => {});
+  void sendWhatsAppInvoicePdf(orderRow.id, orderRow.shippingPhone).catch(() => {});
 
   revalidatePath(`/admin/orders/${orderRow.id}`);
   revalidatePath("/admin/payments");
