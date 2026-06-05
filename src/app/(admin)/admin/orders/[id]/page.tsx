@@ -27,6 +27,7 @@ import { PaymentFinancialsPanel } from "@/components/admin/payment-financials-pa
 // Phase 9 (09-02) — live tracking view shared with the customer page.
 import { getOrderShipment, getAdminOrderTracking } from "@/actions/shipping";
 import { OrderShipmentPanel } from "@/components/admin/order-shipment-panel";
+import { RefreshShippingButton } from "@/components/admin/refresh-shipping-button";
 // Phase 10 (10-01) — cost + profit panel with inline edits.
 import { OrderCostsPanel } from "@/components/admin/order-costs-panel";
 // Phase 20 (20-11) — payment proof review surface + Download Invoice button.
@@ -480,6 +481,12 @@ export default async function AdminOrderDetailPage({
               shipment={shipment}
               tracking={tracking}
             />
+            {/* Re-quote the selected courier live from Delyva and persist the
+                corrected shipping + total (the checkout quote can go stale).
+                Updates the order totals and the downloadable invoice. */}
+            {row.shippingServiceCode ? (
+              <RefreshShippingButton orderId={row.id} />
+            ) : null}
           </section>
 
           <section

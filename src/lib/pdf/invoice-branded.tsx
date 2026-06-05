@@ -95,7 +95,25 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   logo: {
-    width: 130,
+    // Sized by height so it visually matches the "Billed To" box height next
+    // to it; maxWidth keeps a wide logo from crowding the bill-to column.
+    height: 60,
+    maxWidth: 160,
+    objectFit: "contain",
+  },
+  // "Page X / Y" indicator — fixed, just above the footer bar, on every page.
+  pageNumber: {
+    position: "absolute",
+    bottom: 52,
+    right: 40,
+    fontSize: 9,
+    color: SLATE,
+  },
+  // Smaller logo for continuation pages (2+).
+  logoSmall: {
+    height: 34,
+    maxWidth: 110,
+    objectFit: "contain",
   },
   logoFallback: {
     fontSize: 18,
@@ -129,7 +147,8 @@ const styles = StyleSheet.create({
 
   // ── Hero ────────────────────────────────────────────────────────────────
   heroRow: {
-    marginTop: 24,
+    // Pulled up — less gap between the logo/header and the "Invoice" title.
+    marginTop: 10,
   },
   heroTitle: {
     fontSize: 52,
@@ -160,7 +179,10 @@ const styles = StyleSheet.create({
   },
   tableDataRow: {
     flexDirection: "row",
-    paddingVertical: 8,
+    // Cells vertically centred so the row's separator line sits centred
+    // relative to the text.
+    alignItems: "center",
+    paddingVertical: 6,
     borderBottom: 1,
     borderBottomColor: DIVIDER,
   },
@@ -170,6 +192,8 @@ const styles = StyleSheet.create({
   },
   tableDataText: {
     fontSize: 11,
+    // 2pt top/bottom so the text is centred within the row line.
+    marginVertical: 2,
   },
   colNo: {
     flex: 0.4,
@@ -203,7 +227,9 @@ const styles = StyleSheet.create({
     // Top-align so the customer address (left) lines up with the totals box
     // (right) instead of sinking to the baseline.
     alignItems: "flex-start",
-    marginTop: 16,
+    // Space below the items table (the flex spacer was removed — it caused an
+    // extra blank page on multi-page invoices).
+    marginTop: 28,
   },
   // Customer ship-to address block — bottom-left, aligned with the totals box.
   addressBlock: {
@@ -422,8 +448,8 @@ export function NinjazInvoiceDocument({
   const rawDiscount = parseFloat(order.discountAmount ?? "");
   const hasDiscount = Number.isFinite(rawDiscount) && rawDiscount > 0;
 
-  // ── Pagination: max 11 line items per page; remainder flows to next page ──
-  const ITEMS_PER_PAGE = 11;
+  // ── Pagination: max 10 line items per page; remainder flows to next page ──
+  const ITEMS_PER_PAGE = 10;
   const pages: (typeof order.items)[] = [];
   for (let i = 0; i < order.items.length; i += ITEMS_PER_PAGE) {
     pages.push(order.items.slice(i, i + ITEMS_PER_PAGE));
@@ -538,24 +564,21 @@ export function NinjazInvoiceDocument({
                   <View style={styles.divider} />
                 </>
               ) : (
-                /* Continuation header on pages 2+ — compact, with a clear top
-                   margin (content paddingTop) above it. */
-                <View style={styles.contHeaderRow}>
-                  <Text style={styles.contTitle}>
-                    {"Invoice " + formatOrderNumber(order.id) + " (continued)"}
-                  </Text>
-                  <Text style={styles.pageNote}>
-                    {"Page " + (pageIndex + 1) + " of " + pageCount}
-                  </Text>
-                </View>
+                /* Continuation pages (2+): the content paddingTop already gives
+                   a clear top margin; just a small logo for branding, no
+                   "continued" text. Page number is shown via the fixed element. */
+                business.logoBase64 ? (
+                  <View style={styles.contHeaderRow}>
+                    <Image src={business.logoBase64} style={styles.logoSmall} />
+                  </View>
+                ) : (
+                  <View style={styles.contHeaderRow} />
+                )
               )}
 
               {/* Items table */}
               {tableHead()}
               {pageItems.map((item, i) => renderRow(item, startIndex + i))}
-
-              {/* Flex spacer pushes the totals/address block to the bottom */}
-              <View style={styles.spacer} />
 
               {/* Bottom block — only on the LAST page: customer address (left)
                   aligned with the totals box (right). */}
@@ -633,6 +656,15 @@ export function NinjazInvoiceDocument({
                 </View>
               ) : null}
             </View>
+
+            {/* Page number — "Page X / Y", auto-computed by react-pdf */}
+            <Text
+              style={styles.pageNumber}
+              fixed
+              render={({ pageNumber, totalPages }) =>
+                `Page ${pageNumber} / ${totalPages}`
+              }
+            />
 
             {/* Footer bar */}
             {footerBar()}
