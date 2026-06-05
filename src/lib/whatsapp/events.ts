@@ -14,6 +14,8 @@
 import type { WhatsappNotificationSeed } from "@/lib/db/schema";
 
 export const WHATSAPP_EVENT_KEYS = [
+  "order_pending",
+  "order_approved",
   "order_confirmation",
   "order_processing",
   "order_shipped",
@@ -24,12 +26,15 @@ export const WHATSAPP_EVENT_KEYS = [
   "return_approved",
   "return_rejected",
   "return_received",
+  "return_expired",
 ] as const;
 
 export type WhatsappEventKey = (typeof WHATSAPP_EVENT_KEYS)[number];
 
 export const WHATSAPP_EVENT_LABELS: Record<WhatsappEventKey, string> = {
-  order_confirmation: "Order confirmed / paid",
+  order_pending: "Order pending — payment link",
+  order_approved: "Order approved / payment confirmed",
+  order_confirmation: "Order confirmed / paid (PayPal)",
   order_processing: "Order processing",
   order_shipped: "Order shipped",
   order_delivered: "Order delivered",
@@ -39,10 +44,13 @@ export const WHATSAPP_EVENT_LABELS: Record<WhatsappEventKey, string> = {
   return_approved: "Return approved",
   return_rejected: "Return rejected",
   return_received: "Return received",
+  return_expired: "Return window expired",
 };
 
 // Variables each event template may use (surfaced in the editor sidebar).
 export const WHATSAPP_EVENT_VARIABLES: Record<WhatsappEventKey, string[]> = {
+  order_pending:      ["customerName", "orderNumber", "orderTotal", "paymentLink"],
+  order_approved:     ["customerName", "orderNumber", "orderUrl"],
   order_confirmation: ["customerName", "orderNumber", "orderTotal", "orderUrl"],
   order_processing:   ["customerName", "orderNumber", "orderUrl"],
   order_shipped:      ["customerName", "orderNumber", "courierName", "trackingNo", "trackingUrl"],
@@ -53,9 +61,14 @@ export const WHATSAPP_EVENT_VARIABLES: Record<WhatsappEventKey, string[]> = {
   return_approved:    ["customerName", "orderNumber", "shipByDate"],
   return_rejected:    ["customerName", "orderNumber", "reason"],
   return_received:    ["customerName", "orderNumber"],
+  return_expired:     ["customerName", "orderNumber"],
 };
 
 const DEFAULT_TEMPLATES: Record<WhatsappEventKey, string> = {
+  order_pending:
+    "Hi {{customerName}}, your 3D Ninjaz order {{orderNumber}} (RM {{orderTotal}}) is reserved! Complete payment here: {{paymentLink}} — link valid for 30 days.",
+  order_approved:
+    "Hi {{customerName}}, great news! Your payment for order {{orderNumber}} has been confirmed. We'll start preparing it soon. Track it: {{orderUrl}}",
   order_confirmation:
     "Hi {{customerName}}! 🥷 Your 3D Ninjaz order {{orderNumber}} is confirmed. Total: {{orderTotal}}. Track it: {{orderUrl}}",
   order_processing:
@@ -76,6 +89,8 @@ const DEFAULT_TEMPLATES: Record<WhatsappEventKey, string> = {
     "Hi {{customerName}}, your return request for order {{orderNumber}} was not approved. {{reason}}",
   return_received:
     "Hi {{customerName}}, we've received your returned item for order {{orderNumber}}. Thank you!",
+  return_expired:
+    "Hi {{customerName}}, your return window for order {{orderNumber}} has expired as the item was not shipped within the required timeframe. Please contact support if you need help.",
 };
 
 export function seedWhatsappNotifications(): WhatsappNotificationSeed[] {

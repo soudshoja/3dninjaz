@@ -407,7 +407,10 @@ export async function approveWhatsAppOrder(
       console.error("[admin-orders] approveWhatsApp email failed:", err),
     );
   }
-  void sendWhatsAppNotification("order_confirmation", row.shippingPhone, {
+  // order_approved = "admin confirmed payment" (distinct from order_confirmation
+  // which fires on PayPal capture). Both are sent here so the customer receives
+  // whichever template the admin has customised.
+  void sendWhatsAppNotification("order_approved", row.shippingPhone, {
     customerName: row.shippingName,
     orderNumber: formatOrderNumber(orderId),
     orderUrl: `https://app.3dninjaz.com/orders/${orderId}`,
