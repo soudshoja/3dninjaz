@@ -27,14 +27,16 @@ import {
   ensurePhotoArray,
 } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth-helpers";
-import { assertValidTransition, type OrderStatus } from "@/lib/orders";
+import { assertValidTransition, formatOrderNumber, type OrderStatus } from "@/lib/orders";
 import { isReturnShipExpired } from "@/lib/order-windows";
 import {
   sendReturnApprovedEmail,
   sendReturnRejectedEmail,
   sendReturnReceivedEmail,
   sendReturnExpiredEmail,
+  sendOrderCancelledEmail,
 } from "@/actions/send-emails";
+import { sendWhatsAppNotification } from "@/lib/whatsapp/sender";
 
 // ============================================================================
 // Shared admin row type
@@ -97,6 +99,22 @@ async function expireStaleReturnsAdmin(
       void sendReturnExpiredEmail({ requestId: r.id, orderId: r.orderId }).catch(
         (e) => console.error("[expireStaleReturnsAdmin] email failed", e),
       );
+      // Fire return_expired WhatsApp notification (best-effort, async lookup)
+      void (async () => {
+        try {
+          const [orderRow] = await db
+            .select({ shippingPhone: orders.shippingPhone, shippingName: orders.shippingName })
+            .from(orders)
+            .where(eq(orders.id, r.orderId))
+            .limit(1);
+          if (orderRow) {
+            await sendWhatsAppNotification("return_expired", orderRow.shippingPhone, {
+              customerName: orderRow.shippingName,
+              orderNumber: formatOrderNumber(r.orderId),
+            });
+          }
+        } catch { /* best-effort */ }
+      })();
     } catch (e) {
       console.error("[expireStaleReturnsAdmin] DB update failed for", r.id, e);
     }
@@ -209,6 +227,61 @@ export async function approveOrderRequest(
       }).catch((e) =>
         console.error("[approveOrderRequest] return email failed", e),
       );
+      // WhatsApp: fetch order contact fields for the sender (fire-and-forget)
+      void (async () => {
+        try {
+          const [orderRow] = await db
+            .select({ shippingPhone: orders.shippingPhone, shippingName: orders.shippingName })
+            .from(orders)
+            .where(eq(orders.id, result.orderId))
+            .limit(1);
+          const [reqRow] = await db
+            .select({ approvedAt: orderRequests.approvedAt })
+            .from(orderRequests)
+            .where(eq(orderRequests.id, result.requestId))
+            .limit(1);
+          const shipByDate = reqRow?.approvedAt
+            ? new Date(new Date(reqRow.approvedAt).getTime() + 3 * 24 * 3600 * 1000)
+                .toLocaleDateString("en-MY", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+            : "within 3 days";
+          await sendWhatsAppNotification("return_approved", orderRow?.shippingPhone, {
+            customerName: orderRow?.shippingName,
+            orderNumber: formatOrderNumber(result.orderId),
+            shipByDate,
+          });
+        } catch { /* best-effort */ }
+      })();
+    }
+
+    // Fire order_cancelled email + WhatsApp for cancel requests (fire-and-forget)
+    if (result.type === "cancel") {
+      void (async () => {
+        try {
+          const [orderRow] = await db
+            .select({
+              shippingPhone: orders.shippingPhone,
+              shippingName: orders.shippingName,
+              customerEmail: orders.customerEmail,
+            })
+            .from(orders)
+            .where(eq(orders.id, result.orderId))
+            .limit(1);
+          if (orderRow) {
+            void sendOrderCancelledEmail({
+              customerEmail: orderRow.customerEmail,
+              customerName: orderRow.shippingName,
+              orderNumber: formatOrderNumber(result.orderId),
+              cancellationReason: "Your cancellation request has been approved.",
+              orderId: result.orderId,
+            }).catch((e) => console.error("[approveOrderRequest] cancel email failed", e));
+            await sendWhatsAppNotification("order_cancelled", orderRow.shippingPhone, {
+              customerName: orderRow.shippingName,
+              orderNumber: formatOrderNumber(result.orderId),
+              reason: "Your cancellation request has been approved.",
+            });
+          }
+        } catch { /* best-effort */ }
+      })();
     }
 
     return { ok: true };
@@ -255,6 +328,20 @@ export async function rejectOrderRequest(
     }).catch((e) =>
       console.error("[rejectOrderRequest] return email failed", e),
     );
+    void (async () => {
+      try {
+        const [orderRow] = await db
+          .select({ shippingPhone: orders.shippingPhone, shippingName: orders.shippingName })
+          .from(orders)
+          .where(eq(orders.id, req.orderId))
+          .limit(1);
+        await sendWhatsAppNotification("return_rejected", orderRow?.shippingPhone, {
+          customerName: orderRow?.shippingName,
+          orderNumber: formatOrderNumber(req.orderId),
+          reason: adminNotes ?? "No reason provided.",
+        });
+      } catch { /* best-effort */ }
+    })();
   }
 
   return { ok: true };
@@ -301,6 +388,19 @@ export async function markReturnReceived(
   }).catch((e) =>
     console.error("[markReturnReceived] email failed", e),
   );
+  void (async () => {
+    try {
+      const [orderRow] = await db
+        .select({ shippingPhone: orders.shippingPhone, shippingName: orders.shippingName })
+        .from(orders)
+        .where(eq(orders.id, req.orderId))
+        .limit(1);
+      await sendWhatsAppNotification("return_received", orderRow?.shippingPhone, {
+        customerName: orderRow?.shippingName,
+        orderNumber: formatOrderNumber(req.orderId),
+      });
+    } catch { /* best-effort */ }
+  })();
 
   return { ok: true };
 }

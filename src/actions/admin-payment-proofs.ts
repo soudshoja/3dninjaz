@@ -5,10 +5,11 @@ import { paymentProofs, orders, paymentLinks } from "@/lib/db/schema";
 import { eq, isNull, count } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { requireAdmin } from "@/lib/auth-helpers";
-import { assertValidTransition } from "@/lib/orders";
+import { assertValidTransition, formatOrderNumber } from "@/lib/orders";
 import { writePaymentProof } from "@/lib/payment-proof-storage";
 import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
 import { revalidatePath } from "next/cache";
+import { sendWhatsAppNotification, sendWhatsAppInvoicePdf } from "@/lib/whatsapp/sender";
 
 /**
  * Phase 20 (20-07) — payment proof review actions.
@@ -134,6 +135,12 @@ export async function confirmPaymentProof(
   void sendOrderConfirmationEmail(order.id).catch((err) =>
     console.error("[admin-payment-proofs] email send failed:", err),
   );
+  void sendWhatsAppNotification("order_confirmation", order.shippingPhone, {
+    customerName: order.shippingName,
+    orderNumber: formatOrderNumber(order.id),
+    orderUrl: `https://app.3dninjaz.com/orders/${order.id}`,
+  }).catch(() => {});
+  void sendWhatsAppInvoicePdf(order.id, order.shippingPhone).catch(() => {});
 
   revalidatePath("/admin/orders");
   revalidatePath(`/admin/orders/${order.id}`);

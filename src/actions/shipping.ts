@@ -33,6 +33,7 @@ import type { ShippingConfigRow as ShippingConfigRowType } from "@/lib/shipping-
 import { filterByEnabledCatalog } from "@/lib/delyva-filter";
 import { sendOrderShippedEmail } from "@/actions/send-emails";
 import { formatOrderNumber } from "@/lib/orders";
+import { sendWhatsAppNotification } from "@/lib/whatsapp/sender";
 import { ensureConfigJson, ensureConfigurationData, ensureTiers } from "@/lib/config-fields";
 import type { SelectFieldConfig } from "@/lib/config-fields";
 import { resolveOptionWeightKg, resolveTierWeightKg } from "@/lib/option-weight";
@@ -856,6 +857,13 @@ async function _bookShipmentInternal(
     }).catch((err) =>
       console.error("[bookShipment] shipped email failed:", err)
     );
+    void sendWhatsAppNotification("order_shipped", order.shippingPhone, {
+      customerName: order.shippingName,
+      orderNumber: formatOrderNumber(order.id),
+      courierName,
+      trackingNo: details?.trackingNo || "pending",
+      trackingUrl: `https://app.3dninjaz.com/orders/${order.id}`,
+    }).catch(() => {});
 
     return {
       ok: true,

@@ -77,6 +77,16 @@ const styles = StyleSheet.create({
     color: "rgba(220, 38, 38, 0.18)",
     transform: "rotate(-20deg)",
   },
+  watermarkPaid: {
+    position: "absolute",
+    top: 260,
+    left: 0,
+    right: 0,
+    textAlign: "center",
+    fontSize: 72,
+    color: "rgba(34, 197, 94, 0.18)",
+    transform: "rotate(-20deg)",
+  },
   footer: {
     position: "absolute",
     bottom: 40,
@@ -138,14 +148,19 @@ export function InvoiceDocument({
   order: InvoiceOrder;
   business: InvoiceBusiness;
 }) {
-  const isCancelled = order.status === "cancelled";
-  const paid = order.status !== "pending" && order.status !== "cancelled";
+  const PAID_STATUSES_MINIMAL = new Set([
+    "paid", "processing", "shipped", "delivered", "completed",
+  ]);
+  const isCancelled = order.status?.toLowerCase() === "cancelled";
+  const isPaid = !isCancelled && PAID_STATUSES_MINIMAL.has(order.status?.toLowerCase() ?? "");
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
         {isCancelled ? (
           <Text style={styles.watermark}>CANCELLED</Text>
+        ) : isPaid ? (
+          <Text style={styles.watermarkPaid}>PAID</Text>
         ) : null}
 
         <Text style={styles.heading}>{business.businessName}</Text>
@@ -163,7 +178,7 @@ export function InvoiceDocument({
         </View>
         <View style={styles.row}>
           <Text style={styles.label}>Payment</Text>
-          <Text>{paid ? "Paid via PayPal" : "Unpaid"}</Text>
+          <Text>{isPaid ? "Paid" : "Unpaid"}</Text>
         </View>
 
         <Text style={styles.sectionTitle}>Ship to</Text>
@@ -222,7 +237,7 @@ export function InvoiceDocument({
             <Text>{formatMYR(order.shippingCost)}</Text>
           </View>
           <View style={styles.totalRow}>
-            <Text>Total</Text>
+            <Text>{isPaid ? "Total Paid" : "Total Amount Due"}</Text>
             <Text>
               {formatMYR(order.totalAmount)} {order.currency}
             </Text>

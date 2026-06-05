@@ -86,6 +86,9 @@ const styles = StyleSheet.create({
     // paddingBottom gives space above the absolute footer (height ~44pt)
     paddingBottom: 80,
     flex: 1,
+    // Top group at the top, the bottom block (Bill/Ship-To + totals) pinned to
+    // the bottom of every page.
+    justifyContent: "space-between",
   },
 
   // ── Header row ──────────────────────────────────────────────────────────
@@ -95,10 +98,9 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   logo: {
-    // Sized by height so it visually matches the "Billed To" box height next
-    // to it; maxWidth keeps a wide logo from crowding the bill-to column.
-    height: 60,
-    maxWidth: 160,
+    // Large, prominent logo on page 1 (next to the "Billed To" box).
+    height: 132,
+    maxWidth: 320,
     objectFit: "contain",
   },
   // "Page X / Y" indicator — fixed, just above the footer bar, on every page.
@@ -352,6 +354,35 @@ const styles = StyleSheet.create({
     color: "rgba(220,38,38,0.18)",
     transform: "rotate(-20deg)",
   },
+  // ── PAID watermark ──────────────────────────────────────────────────────
+  watermarkPaid: {
+    position: "absolute",
+    top: 260,
+    left: 0,
+    right: 0,
+    textAlign: "center",
+    fontSize: 72,
+    color: "rgba(34,197,94,0.18)",
+    transform: "rotate(-20deg)",
+  },
+  // ── PAID badge (hero area) ───────────────────────────────────────────────
+  paidBadge: {
+    backgroundColor: "rgba(34,197,94,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,0.5)",
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    alignSelf: "flex-start",
+    marginTop: 6,
+  },
+  paidBadgeText: {
+    fontSize: 10,
+    fontFamily: "Helvetica-Bold",
+    color: "#16a34a",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
 });
 
 // ── Diagonal stripes SVG ─────────────────────────────────────────────────────
@@ -404,6 +435,15 @@ function DiagonalStripes() {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+/** Statuses that represent a completed payment. */
+const PAID_STATUSES = new Set([
+  "paid",
+  "processing",
+  "shipped",
+  "delivered",
+  "completed",
+]);
+
 export function NinjazInvoiceDocument({
   order,
   business,
@@ -411,7 +451,8 @@ export function NinjazInvoiceDocument({
   order: InvoiceOrder;
   business: NinjazInvoiceBusiness;
 }) {
-  const isCancelled = order.status === "cancelled";
+  const isCancelled = order.status?.toLowerCase() === "cancelled";
+  const isPaid = !isCancelled && PAID_STATUSES.has(order.status?.toLowerCase() ?? "");
 
   const createdAt = order.createdAt instanceof Date
     ? order.createdAt
@@ -524,11 +565,17 @@ export function NinjazInvoiceDocument({
             {/* CANCELLED watermark — fixed so it does not contribute to flow */}
             {isCancelled ? (
               <Text fixed style={styles.watermark}>CANCELLED</Text>
+            ) : isPaid ? (
+              <Text fixed style={styles.watermarkPaid}>PAID</Text>
             ) : null}
 
             {/* Main content area — paddingTop on every page gives the top
                 margin requested for page 2+. */}
             <View style={styles.content}>
+              {/* Top group — header (page 1 only) + items table. Wrapped so the
+                  content View can pin the bottom block to the page bottom
+                  (content uses justifyContent: space-between). */}
+              <View>
               {isFirst ? (
                 <>
                   {/* Header row: logo left, bill-to right */}
@@ -547,9 +594,13 @@ export function NinjazInvoiceDocument({
                       <Text style={styles.grayLabel}>Invoice Date :</Text>
                       <Text style={styles.boldSm}>{formatInvoiceDate(createdAt)}</Text>
 
-                      <View style={styles.metaGap} />
-                      <Text style={styles.grayLabel}>Due Date :</Text>
-                      <Text style={styles.boldLg}>{formatInvoiceDate(dueDate)}</Text>
+                      {!isPaid ? (
+                        <>
+                          <View style={styles.metaGap} />
+                          <Text style={styles.grayLabel}>Due Date :</Text>
+                          <Text style={styles.boldLg}>{formatInvoiceDate(dueDate)}</Text>
+                        </>
+                      ) : null}
                     </View>
                   </View>
 
@@ -559,31 +610,27 @@ export function NinjazInvoiceDocument({
                     <Text style={styles.heroSub}>
                       {"Invoice no : " + formatOrderNumber(order.id)}
                     </Text>
+                    {isPaid ? (
+                      <View style={styles.paidBadge}>
+                        <Text style={styles.paidBadgeText}>Paid</Text>
+                      </View>
+                    ) : null}
                   </View>
 
                   <View style={styles.divider} />
                 </>
-              ) : (
-                /* Continuation pages (2+): the content paddingTop already gives
-                   a clear top margin; just a small logo for branding, no
-                   "continued" text. Page number is shown via the fixed element. */
-                business.logoBase64 ? (
-                  <View style={styles.contHeaderRow}>
-                    <Image src={business.logoBase64} style={styles.logoSmall} />
-                  </View>
-                ) : (
-                  <View style={styles.contHeaderRow} />
-                )
-              )}
+              ) : null /* Pages 2+: no logo/header — top margin comes from content paddingTop. */}
 
               {/* Items table */}
               {tableHead()}
               {pageItems.map((item, i) => renderRow(item, startIndex + i))}
+              </View>
 
-              {/* Bottom block — only on the LAST page: customer address (left)
-                  aligned with the totals box (right). */}
+              {/* Bottom block — only on the LAST page. Pinned to the bottom of
+                  the page (content justifyContent: space-between). wrap=false
+                  keeps Bill/Ship-To + totals together on one page. */}
               {isLast ? (
-                <View style={styles.bottomRow}>
+                <View style={styles.bottomRow} wrap={false}>
                   {/* Customer ship-to address */}
                   <View style={styles.addressBlock}>
                     <Text style={styles.addressTitle}>Bill / Ship To</Text>
@@ -602,8 +649,8 @@ export function NinjazInvoiceDocument({
                       <Text style={styles.addressLine}>{order.shippingPhone}</Text>
                     ) : null}
 
-                    {/* Bank payment info beneath the address (when configured) */}
-                    {hasBankInfo ? (
+                    {/* Bank payment info — only shown for unpaid orders */}
+                    {!isPaid && hasBankInfo ? (
                       <View style={styles.paymentBlockSpaced}>
                         <Text style={styles.paymentTitle}>Please make payment via</Text>
                         <Text style={styles.paymentLine}>
@@ -650,7 +697,9 @@ export function NinjazInvoiceDocument({
 
                     {hasBreakdown ? <View style={styles.breakdownDivider} /> : null}
 
-                    <Text style={styles.totalLabel}>Total Amount Due</Text>
+                    <Text style={styles.totalLabel}>
+                      {isPaid ? "Total Paid" : "Total Amount Due"}
+                    </Text>
                     <Text style={styles.totalAmount}>{totalFormatted}</Text>
                   </View>
                 </View>
