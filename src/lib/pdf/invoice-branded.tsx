@@ -354,6 +354,35 @@ const styles = StyleSheet.create({
     color: "rgba(220,38,38,0.18)",
     transform: "rotate(-20deg)",
   },
+  // ── PAID watermark ──────────────────────────────────────────────────────
+  watermarkPaid: {
+    position: "absolute",
+    top: 260,
+    left: 0,
+    right: 0,
+    textAlign: "center",
+    fontSize: 72,
+    color: "rgba(34,197,94,0.18)",
+    transform: "rotate(-20deg)",
+  },
+  // ── PAID badge (hero area) ───────────────────────────────────────────────
+  paidBadge: {
+    backgroundColor: "rgba(34,197,94,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,0.5)",
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    alignSelf: "flex-start",
+    marginTop: 6,
+  },
+  paidBadgeText: {
+    fontSize: 10,
+    fontFamily: "Helvetica-Bold",
+    color: "#16a34a",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
 });
 
 // ── Diagonal stripes SVG ─────────────────────────────────────────────────────
@@ -406,6 +435,15 @@ function DiagonalStripes() {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+/** Statuses that represent a completed payment. */
+const PAID_STATUSES = new Set([
+  "paid",
+  "processing",
+  "shipped",
+  "delivered",
+  "completed",
+]);
+
 export function NinjazInvoiceDocument({
   order,
   business,
@@ -413,7 +451,8 @@ export function NinjazInvoiceDocument({
   order: InvoiceOrder;
   business: NinjazInvoiceBusiness;
 }) {
-  const isCancelled = order.status === "cancelled";
+  const isCancelled = order.status?.toLowerCase() === "cancelled";
+  const isPaid = !isCancelled && PAID_STATUSES.has(order.status?.toLowerCase() ?? "");
 
   const createdAt = order.createdAt instanceof Date
     ? order.createdAt
@@ -526,6 +565,8 @@ export function NinjazInvoiceDocument({
             {/* CANCELLED watermark — fixed so it does not contribute to flow */}
             {isCancelled ? (
               <Text fixed style={styles.watermark}>CANCELLED</Text>
+            ) : isPaid ? (
+              <Text fixed style={styles.watermarkPaid}>PAID</Text>
             ) : null}
 
             {/* Main content area — paddingTop on every page gives the top
@@ -553,9 +594,13 @@ export function NinjazInvoiceDocument({
                       <Text style={styles.grayLabel}>Invoice Date :</Text>
                       <Text style={styles.boldSm}>{formatInvoiceDate(createdAt)}</Text>
 
-                      <View style={styles.metaGap} />
-                      <Text style={styles.grayLabel}>Due Date :</Text>
-                      <Text style={styles.boldLg}>{formatInvoiceDate(dueDate)}</Text>
+                      {!isPaid ? (
+                        <>
+                          <View style={styles.metaGap} />
+                          <Text style={styles.grayLabel}>Due Date :</Text>
+                          <Text style={styles.boldLg}>{formatInvoiceDate(dueDate)}</Text>
+                        </>
+                      ) : null}
                     </View>
                   </View>
 
@@ -565,6 +610,11 @@ export function NinjazInvoiceDocument({
                     <Text style={styles.heroSub}>
                       {"Invoice no : " + formatOrderNumber(order.id)}
                     </Text>
+                    {isPaid ? (
+                      <View style={styles.paidBadge}>
+                        <Text style={styles.paidBadgeText}>Paid</Text>
+                      </View>
+                    ) : null}
                   </View>
 
                   <View style={styles.divider} />
@@ -599,8 +649,8 @@ export function NinjazInvoiceDocument({
                       <Text style={styles.addressLine}>{order.shippingPhone}</Text>
                     ) : null}
 
-                    {/* Bank payment info beneath the address (when configured) */}
-                    {hasBankInfo ? (
+                    {/* Bank payment info — only shown for unpaid orders */}
+                    {!isPaid && hasBankInfo ? (
                       <View style={styles.paymentBlockSpaced}>
                         <Text style={styles.paymentTitle}>Please make payment via</Text>
                         <Text style={styles.paymentLine}>
@@ -647,7 +697,9 @@ export function NinjazInvoiceDocument({
 
                     {hasBreakdown ? <View style={styles.breakdownDivider} /> : null}
 
-                    <Text style={styles.totalLabel}>Total Amount Due</Text>
+                    <Text style={styles.totalLabel}>
+                      {isPaid ? "Total Paid" : "Total Amount Due"}
+                    </Text>
                     <Text style={styles.totalAmount}>{totalFormatted}</Text>
                   </View>
                 </View>
