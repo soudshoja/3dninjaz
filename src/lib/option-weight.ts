@@ -48,3 +48,34 @@ export function resolveOptionWeightKg(
   }
   return found ? totalGrams / 1000 : null;
 }
+
+/**
+ * Resolve per-tier shipping weight in KG for a configurable line whose price/
+ * weight scales with the character count of a unit field (keychain / clicker).
+ *
+ * The unit count = length of the customer's value in the unit field. The
+ * weight is looked up from products.weightTiers (GRAMS keyed by count, same
+ * key space as priceTiers), then converted to kg.
+ *
+ * Returns null when there is no unit field, the unit value is empty, or the
+ * resolved length has no matching tier — the caller then falls through to the
+ * existing variant -> product -> default weight ladder.
+ *
+ * Server re-reads weightTiers from the products row; a client-supplied weight
+ * is NEVER accepted (T-17-09 guard). configValues carries only string field
+ * values — the grams live exclusively in the DB-fetched weightTiers map.
+ */
+export function resolveTierWeightKg(
+  unitFieldId: string | null,
+  configValues: Record<string, string>,
+  weightTiers: Record<string, number>,
+): number | null {
+  if (!unitFieldId) return null;
+  const v = configValues[unitFieldId];
+  if (typeof v !== "string" || v.length === 0) return null;
+  const grams = weightTiers[String(v.length)];
+  if (typeof grams !== "number" || !Number.isFinite(grams) || grams < 0) {
+    return null;
+  }
+  return grams / 1000;
+}

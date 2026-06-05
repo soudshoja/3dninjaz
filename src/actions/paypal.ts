@@ -719,10 +719,10 @@ export async function capturePayPalOrder({
   // discount on the audit trail but the customer already paid the
   // discounted amount (it was sent to PayPal as the order total). This is
   // an acceptable failure mode — log it for the operator. Guest orders
-  // (userId null) cannot record a coupon_redemptions row because that table's
-  // userId is NOT NULL — the discount was already applied to the PayPal total,
-  // only the audit row is lost, which is acceptable for v1 guest flow.
-  if (appliedCouponCode && existing.userId) {
+  // (userId null) DO redeem now — coupon_redemptions.user_id is nullable, so a
+  // guest redemption still increments usage_count against the cap; the audit
+  // row just has no user attached.
+  if (appliedCouponCode) {
     try {
       const subtotalNum = parseFloat(existing.subtotal);
       const valid = await validateCoupon(appliedCouponCode, subtotalNum);
@@ -730,7 +730,7 @@ export async function capturePayPalOrder({
         const redeemed = await redeemCoupon(
           valid.couponId,
           existing.id,
-          existing.userId,
+          existing.userId ?? null,
           subtotalNum,
         );
         if (!redeemed.ok) {

@@ -281,8 +281,13 @@ export function ConfigurableProductView({
   // ── Text value for preview ────────────────────────────────────────────────
   const textFields = useMemo(() => fields.filter((f) => f.fieldType === "text"), [fields]);
   const textValue = textFields.length > 0 ? (values[textFields[0].id] ?? "") : "";
+  // The tier table's maxUnitCount is the source of truth for how many
+  // characters the customer may type (the "number defined" by the admin). It
+  // takes precedence over the field's stored config.maxLength so the name
+  // length always matches the configured tier range. Falls back to the field
+  // config (then 8) for configurables that have no tier table.
   const maxLength = textFields.length > 0
-    ? ((textFields[0].config as { maxLength?: number }).maxLength ?? maxUnitCount ?? 8)
+    ? (maxUnitCount ?? (textFields[0].config as { maxLength?: number }).maxLength ?? 8)
     : (maxUnitCount ?? 8);
 
   // ── Mobile sticky preview strip visibility ────────────────────────────────
