@@ -425,6 +425,99 @@ export async function quoteRatesForOrder(orderId: string): Promise<
   }
 }
 
+/**
+ * Re-quote the order's selected courier live from Delyva and PERSIST the
+ * corrected shipping cost + recomputed total onto the order. The stored
+ * shipping quoted at checkout can go stale (Delyva re-prices); this refreshes
+ * it so the order page, the invoice, and the customer all show the same
+ * up-to-date figure (the invoice reads orders.shipping_cost, so it needs no
+ * change of its own).
+ *
+ * Applies the SAME markup + free-shipping rules as the customer checkout quote
+ * (quoteForCart), so admin and customer pricing stay identical.
+ */
+export async function refreshOrderShipping(orderId: string): Promise<
+  { ok: true; shipping: number; total: number } | { ok: false; error: string }
+> {
+  await requireAdmin();
+  const row = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+  if (row.length === 0) return { ok: false, error: "Order not found" };
+  const order = row[0];
+  if (!order.shippingServiceCode) {
+    return { ok: false, error: "No courier selected on this order to re-quote." };
+  }
+
+  const cfg = await loadShippingConfig();
+  const weight = await sumOrderWeight(orderId, Number(cfg.defaultWeightKg));
+
+  let services: NormalizedService[];
+  try {
+    const q = await delyvaApi.quote({
+      origin: {
+        address1: cfg.originAddress1,
+        address2: cfg.originAddress2 ?? undefined,
+        city: cfg.originCity,
+        state: cfg.originState,
+        postcode: cfg.originPostcode,
+        country: cfg.originCountry,
+      },
+      destination: {
+        address1: order.shippingLine1,
+        address2: order.shippingLine2 ?? undefined,
+        city: order.shippingCity,
+        state: order.shippingState,
+        postcode: order.shippingPostcode,
+        country: "MY",
+      },
+      weight: { unit: "kg", value: Math.max(weight, Number(cfg.defaultWeightKg)) },
+      itemType: resolveItemType(cfg.defaultItemType),
+    });
+    services = await filterByEnabledCatalog(parseQuoteServices(q), cfg);
+  } catch (e) {
+    if (e instanceof DelyvaError) return { ok: false, error: `${e.code}: ${e.message}` };
+    return { ok: false, error: (e as Error).message };
+  }
+
+  const match = services.find((s) => s.serviceCode === order.shippingServiceCode);
+  if (!match) {
+    return {
+      ok: false,
+      error: `${order.shippingServiceName ?? order.shippingServiceCode} is no longer offered by Delyva for this destination.`,
+    };
+  }
+
+  // Mirror quoteForCart: marked = base + base*markupPct/100 + markupFlat; free
+  // when subtotal >= threshold.
+  const base = Number(match.price.amount);
+  const markupPct = Number(cfg.markupPercent ?? 0);
+  const markupFlat = Number(cfg.markupFlat ?? 0);
+  const subtotalNum = Number(order.subtotal);
+  const threshold = cfg.freeShippingThreshold ? Number(cfg.freeShippingThreshold) : null;
+  const freeShip = threshold !== null && subtotalNum >= threshold;
+  const shipping = freeShip
+    ? 0
+    : Math.round((base + (base * markupPct) / 100 + markupFlat) * 100) / 100;
+
+  const discount = Number(order.discountAmount ?? 0);
+  const extra = Number(order.extraCost ?? 0);
+  const total = Math.max(
+    0,
+    Math.round((subtotalNum - discount + shipping + extra) * 100) / 100,
+  );
+
+  await db
+    .update(orders)
+    .set({
+      shippingCost: shipping.toFixed(2),
+      shippingQuotedPrice: shipping.toFixed(2),
+      totalAmount: total.toFixed(2),
+    })
+    .where(eq(orders.id, orderId));
+
+  revalidatePath(`/admin/orders/${orderId}`);
+  return { ok: true, shipping, total };
+}
+
 async function sumOrderWeight(
   orderId: string,
   fallbackKg: number,
