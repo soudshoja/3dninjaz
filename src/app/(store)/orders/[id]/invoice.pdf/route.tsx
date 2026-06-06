@@ -157,6 +157,8 @@ export async function GET(
     id: order.id,
     status: order.status,
     createdAt: order.createdAt,
+    paypalSettleDate: order.paypalSettleDate ?? null,
+    updatedAt: order.updatedAt ?? null,
     currency: order.currency,
     customerEmail: order.customerEmail,
     shippingName: order.shippingName,

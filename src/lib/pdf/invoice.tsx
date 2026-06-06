@@ -104,6 +104,10 @@ export type InvoiceOrder = {
   id: string;
   status: string;
   createdAt: Date;
+  /** PayPal settlement timestamp — null for non-PayPal / unpaid orders. */
+  paypalSettleDate?: Date | string | null;
+  /** Last status-transition time (admin mark-paid, slip upload, shipping). */
+  updatedAt?: Date | string | null;
   currency: string;
   customerEmail: string;
   shippingName: string;
