@@ -49,6 +49,7 @@ const GROUPS: NavGroup[] = [
         ninjaIcon: "download",
         badge: "paymentProofsAwaitingReview" as const,
       },
+      { href: "/admin/production", label: "Production", ninjaIcon: "services" },
       { href: "/admin/disputes", label: "Disputes", ninjaIcon: "warning" },
     ],
   },
