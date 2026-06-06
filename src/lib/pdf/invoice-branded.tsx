@@ -74,21 +74,23 @@ const WHITE = "#ffffff";
 const styles = StyleSheet.create({
   page: {
     backgroundColor: WHITE,
-    padding: 0,
+    // Margins live on the Page (not the content View) so they repeat on EVERY
+    // physical page when content flows/wraps — this is what keeps the fixed
+    // footer clear of the items table on multi-page invoices. The fixed footer
+    // + page-number use absolute offsets measured from the page edge, so this
+    // bottom padding does not push them up.
+    paddingTop: 22,
+    paddingBottom: 92,
+    paddingHorizontal: 40,
     fontFamily: "Helvetica",
     fontSize: 11,
     color: INK,
   },
-  // Content area sits above the footer and insets from edges
+  // Fills the page height so the bottom block (Bill/Ship-To + totals) can pin
+  // to the bottom of the page. justifyContent is set per page: "space-between"
+  // on the last page (pins the bottom block down), "flex-start" otherwise.
   content: {
-    paddingHorizontal: 40,
-    paddingTop: 28,
-    // paddingBottom gives space above the absolute footer (height ~44pt)
-    paddingBottom: 80,
-    flex: 1,
-    // Top group at the top, the bottom block (Bill/Ship-To + totals) pinned to
-    // the bottom of every page.
-    justifyContent: "space-between",
+    flexGrow: 1,
   },
 
   // ── Header row ──────────────────────────────────────────────────────────
@@ -98,9 +100,9 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   logo: {
-    // Large, prominent logo on page 1 (next to the "Billed To" box).
-    height: 160,
-    maxWidth: 380,
+    // Compact logo so 9 item rows fit on page 1 (next to the "Billed To" box).
+    height: 96,
+    maxWidth: 240,
     objectFit: "contain",
   },
   // "Page X / Y" indicator — fixed, just above the footer bar, on every page.
@@ -125,35 +127,38 @@ const styles = StyleSheet.create({
   billToBlock: {
     flexDirection: "column",
     alignItems: "flex-end",
+    // Nudge the block down a little so the dates aren't cramped against the top
+    // edge / clipped. Only affects this block, not the whole page.
+    marginTop: 16,
   },
   grayLabel: {
-    fontSize: 10,
+    fontSize: 11,
     color: SLATE,
     marginBottom: 2,
   },
   boldMd: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: "Helvetica-Bold",
   },
   boldSm: {
-    fontSize: 11,
-    fontFamily: "Helvetica-Bold",
-  },
-  boldLg: {
     fontSize: 12,
     fontFamily: "Helvetica-Bold",
   },
+  boldLg: {
+    fontSize: 13,
+    fontFamily: "Helvetica-Bold",
+  },
   metaGap: {
-    marginTop: 8,
+    marginTop: 5,
   },
 
   // ── Hero ────────────────────────────────────────────────────────────────
   heroRow: {
     // Pulled up — less gap between the logo/header and the "Invoice" title.
-    marginTop: 10,
+    marginTop: 4,
   },
   heroTitle: {
-    fontSize: 52,
+    fontSize: 38,
     fontFamily: "Helvetica-Bold",
     color: INK,
     lineHeight: 1,
@@ -161,33 +166,33 @@ const styles = StyleSheet.create({
   heroSub: {
     fontSize: 11,
     color: SLATE,
-    marginTop: 4,
+    marginTop: 2,
   },
 
   // ── Divider ─────────────────────────────────────────────────────────────
   divider: {
     borderBottom: 1,
     borderBottomColor: DIVIDER,
-    marginTop: 16,
-    marginBottom: 16,
+    marginTop: 8,
+    marginBottom: 8,
   },
 
   // ── Table ───────────────────────────────────────────────────────────────
   tableHeadRow: {
     flexDirection: "row",
-    paddingBottom: 8,
+    paddingBottom: 6,
     // Solid line under the column headings (No | Description | Price | Qty |
     // Amount), then a gap before the first item row.
     borderBottom: 1.5,
     borderBottomColor: INK,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   tableDataRow: {
     flexDirection: "row",
     // Cells vertically centred so the row's separator line sits centred
     // relative to the text.
     alignItems: "center",
-    paddingVertical: 6,
+    paddingVertical: 4,
     borderBottom: 1,
     borderBottomColor: DIVIDER,
   },
@@ -197,8 +202,8 @@ const styles = StyleSheet.create({
   },
   tableDataText: {
     fontSize: 11,
-    // 2pt top/bottom so the text is centred within the row line.
-    marginVertical: 2,
+    // 1pt top/bottom so the text is centred within the row line.
+    marginVertical: 1,
   },
   colNo: {
     flex: 0.4,
@@ -241,10 +246,16 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     width: "48%",
   },
+  // Section title with a bold separator line under it (between the title and
+  // the details below). Border on the Text itself so it always renders.
   addressTitle: {
     fontFamily: "Helvetica-Bold",
     fontSize: 11,
-    marginBottom: 6,
+    width: "100%",
+    borderBottomWidth: 1.5,
+    borderBottomColor: INK,
+    paddingBottom: 5,
+    marginBottom: 8,
   },
   addressLine: {
     fontSize: 10,
@@ -287,6 +298,18 @@ const styles = StyleSheet.create({
   totalBlock: {
     flexDirection: "column",
     alignItems: "flex-end",
+    width: "44%",
+  },
+  // Totals-side section title with the same bold separator as addressTitle.
+  summaryTitle: {
+    fontFamily: "Helvetica-Bold",
+    fontSize: 11,
+    width: "100%",
+    textAlign: "right",
+    borderBottomWidth: 1.5,
+    borderBottomColor: INK,
+    paddingBottom: 5,
+    marginBottom: 8,
   },
   // Subtotal / shipping breakdown rows
   breakdownRow: {
@@ -417,7 +440,9 @@ function DiagonalStripes() {
   return (
     <Svg
       fixed
-      style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
+      // Explicit A4 point dimensions (not 100%) so the full-bleed background
+      // still covers edge-to-edge now that the Page carries padding.
+      style={{ position: "absolute", top: 0, left: 0, width: W, height: H }}
       viewBox={`0 0 ${W} ${H}`}
     >
       {lines.map((l, i) => (
@@ -492,20 +517,91 @@ export function NinjazInvoiceDocument({
   const rawDiscount = parseFloat(order.discountAmount ?? "");
   const hasDiscount = Number.isFinite(rawDiscount) && rawDiscount > 0;
 
-  // ── Pagination: max 10 line items per page; remainder flows to next page ──
-  const ITEMS_PER_PAGE = 10;
-  const pages: (typeof order.items)[] = [];
-  for (let i = 0; i < order.items.length; i += ITEMS_PER_PAGE) {
-    pages.push(order.items.slice(i, i + ITEMS_PER_PAGE));
+  // ── Paid / status date ─────────────────────────────────────────────────────
+  // For a paid order show a "Paid Date". Prefer the real PayPal settlement when
+  // present; otherwise fall back to the last status-transition time (updatedAt
+  // is touched on every status change — admin mark-paid, slip upload, shipping
+  // — via onUpdateNow), then the order date. This makes the date reflect
+  // backend/admin actions, not just PayPal.
+  const toDate = (v: Date | string | null | undefined): Date | null => {
+    if (!v) return null;
+    const d = v instanceof Date ? v : new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+  const paidDate =
+    toDate(order.paypalSettleDate) ?? toDate(order.updatedAt) ?? createdAt;
+
+  // ── Display name (shared by height estimate AND render so they agree) ───────
+  function displayNameOf(item: (typeof order.items)[number]): string {
+    if (isManualLine(item)) return item.productName;
+    const cfg = ensureOrderItemConfigData(item.configurationData);
+    const variant =
+      cfg?.computedSummary ??
+      item.variantLabel ??
+      (item.size ? `Size ${item.size}` : null);
+    return variant ? `${item.productName} (${variant})` : item.productName;
   }
-  // Always render at least one page even for an empty item list.
-  if (pages.length === 0) pages.push([]);
-  const pageCount = pages.length;
+
+  // ── Pagination: up to 10 line items per page, height-aware ──────────────────
+  // Cap at 10 rows/page, but also pack by ESTIMATED row height so a page never
+  // overflows (overflow makes react-pdf spill into a messy/near-blank page).
+  // The Bill/Ship-To + totals block sits on the LAST page, pinned to the page
+  // bottom (justifyContent: space-between). Estimates round UP — that only
+  // costs a row, while under-estimating would reintroduce the gap page.
+  const ITEMS_PER_PAGE = 10;
+  const PAGE_CONTENT_H = 728; // A4 842 − page paddingTop 22 − paddingBottom 92
+  const HEADER_BLOCK_H = 200; // page-1 logo + bill-to + hero + divider
+  const TABLE_HEAD_H = 30; // column-heading row + its gap
+  const BOTTOM_BLOCK_H = 150; // address + totals block
+  const DESC_CHARS_PER_LINE = 46; // chars that fit the description column
+  const ROW_BASE_H = 13; // row padding + border
+  const LINE_H = 13; // per wrapped description line
+
+  function estRowHeight(item: (typeof order.items)[number]): number {
+    const lines = Math.max(
+      1,
+      Math.ceil(displayNameOf(item).length / DESC_CHARS_PER_LINE),
+    );
+    return ROW_BASE_H + lines * LINE_H;
+  }
+
+  type PageChunk = {
+    rows: Array<{ item: (typeof order.items)[number]; index: number }>;
+    hasBottom: boolean;
+  };
+  // Single-page orders reserve the bottom block on page 1. Multi-page orders let
+  // page 1 fill (it is never last) and reserve the bottom on later pages, so the
+  // last page always carries some rows plus the pinned totals — never blank.
+  const totalRowsH = order.items.reduce((s, it) => s + estRowHeight(it), 0);
+  const singlePage =
+    order.items.length <= ITEMS_PER_PAGE &&
+    HEADER_BLOCK_H + TABLE_HEAD_H + totalRowsH + BOTTOM_BLOCK_H <= PAGE_CONTENT_H;
+  const pageBudget = (pageIndex: number) =>
+    PAGE_CONTENT_H -
+    (pageIndex === 0 ? HEADER_BLOCK_H : 0) -
+    TABLE_HEAD_H -
+    (pageIndex === 0 && !singlePage ? 0 : BOTTOM_BLOCK_H);
+
+  const chunks: PageChunk[] = [];
+  let curRows: PageChunk["rows"] = [];
+  let curUsed = 0;
+  order.items.forEach((item, index) => {
+    const h = estRowHeight(item);
+    const full =
+      curRows.length >= ITEMS_PER_PAGE ||
+      (curRows.length > 0 && curUsed + h > pageBudget(chunks.length));
+    if (full) {
+      chunks.push({ rows: curRows, hasBottom: false });
+      curRows = [];
+      curUsed = 0;
+    }
+    curRows.push({ item, index });
+    curUsed += h;
+  });
+  chunks.push({ rows: curRows, hasBottom: true });
+  chunks.forEach((c, i) => (c.hasBottom = i === chunks.length - 1));
 
   // ── Reusable fragments ────────────────────────────────────────────────────
-  // NOTE: these MUST be functions returning fresh elements. react-pdf's
-  // reconciler cannot reuse the same element instance across multiple <Page>s
-  // (throws "Cannot read properties of null (reading 'props')").
   const tableHead = () => (
     <View style={styles.tableHeadRow}>
       <Text style={[styles.colNo, styles.tableHeadText]}>No</Text>
@@ -517,17 +613,9 @@ export function NinjazInvoiceDocument({
   );
 
   function renderRow(item: (typeof order.items)[number], index: number) {
-    let displayName = item.productName;
-    if (!isManualLine(item)) {
-      const cfg = ensureOrderItemConfigData(item.configurationData);
-      const variant =
-        cfg?.computedSummary ??
-        item.variantLabel ??
-        (item.size ? `Size ${item.size}` : null);
-      displayName = variant ? `${item.productName} (${variant})` : item.productName;
-    }
+    const displayName = displayNameOf(item);
     return (
-      <View key={item.id} style={styles.tableDataRow}>
+      <View key={item.id} style={styles.tableDataRow} wrap={false}>
         <Text style={[styles.colNo, styles.tableDataText]}>{String(index + 1)}</Text>
         <Text style={[styles.colDesc, styles.tableDataText]}>{displayName}</Text>
         <Text style={[styles.colPrice, styles.tableDataText]}>
@@ -552,157 +640,168 @@ export function NinjazInvoiceDocument({
     </View>
   );
 
+  const bottomBlock = () => (
+    <View style={styles.bottomRow} wrap={false}>
+      {/* Customer ship-to address */}
+      <View style={styles.addressBlock}>
+        {/* Title carries a bold separator line under it (see addressTitle). */}
+        <Text style={styles.addressTitle}>Bill / Ship To</Text>
+        <Text style={styles.addressLine}>{order.shippingName}</Text>
+        <Text style={styles.addressLine}>{order.shippingLine1}</Text>
+        {order.shippingLine2 ? (
+          <Text style={styles.addressLine}>{order.shippingLine2}</Text>
+        ) : null}
+        <Text style={styles.addressLine}>
+          {order.shippingPostcode + " " + order.shippingCity}
+        </Text>
+        <Text style={styles.addressLine}>
+          {order.shippingState + ", " + order.shippingCountry}
+        </Text>
+        {order.shippingPhone ? (
+          <Text style={styles.addressLine}>{order.shippingPhone}</Text>
+        ) : null}
+
+        {/* Bank payment info — only shown for unpaid orders */}
+        {!isPaid && hasBankInfo ? (
+          <View style={styles.paymentBlockSpaced}>
+            <Text style={styles.paymentTitle}>Please make payment via</Text>
+            <Text style={styles.paymentLine}>
+              {"Bank Name: " + (business.bankName ?? "")}
+            </Text>
+            <Text style={styles.paymentLine}>
+              {"Account Number : " + (business.bankAccountNumber ?? "")}
+            </Text>
+            <Text style={styles.paymentLine}>
+              {"Account Holder : " + (business.bankAccountHolder ?? "")}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
+      {/* Total breakdown + grand total */}
+      <View style={styles.totalBlock}>
+        <Text style={styles.summaryTitle}>Payment Summary</Text>
+        {hasBreakdown ? (
+          <View style={styles.breakdownRow}>
+            <Text style={styles.breakdownLabel}>Subtotal</Text>
+            <Text style={styles.breakdownValue}>{formatMYR(rawSubtotal)}</Text>
+          </View>
+        ) : null}
+
+        {hasDiscount ? (
+          <View style={styles.breakdownRow}>
+            <Text style={styles.breakdownLabel}>
+              {order.discountCode ? "Discount (" + order.discountCode + ")" : "Discount"}
+            </Text>
+            <Text style={styles.breakdownValue}>{"-" + formatMYR(rawDiscount)}</Text>
+          </View>
+        ) : null}
+
+        {hasBreakdown ? (
+          <View style={styles.breakdownRow}>
+            <Text style={styles.breakdownLabel}>Shipping</Text>
+            <Text style={styles.breakdownValue}>{shippingFormatted}</Text>
+          </View>
+        ) : null}
+
+        {hasBreakdown ? <View style={styles.breakdownDivider} /> : null}
+
+        <Text style={styles.totalLabel}>
+          {isPaid ? "Total Paid" : "Total Amount Due"}
+        </Text>
+        <Text style={styles.totalAmount}>{totalFormatted}</Text>
+      </View>
+    </View>
+  );
+
   return (
     <Document>
-      {pages.map((pageItems, pageIndex) => {
+      {chunks.map((chunk, pageIndex) => {
         const isFirst = pageIndex === 0;
-        const isLast = pageIndex === pageCount - 1;
-        // Running item number offset so "No" stays continuous across pages.
-        const startIndex = pageIndex * ITEMS_PER_PAGE;
+        const showHead = chunk.rows.length > 0 || isFirst;
 
         return (
           <Page key={pageIndex} size="A4" style={styles.page}>
-            {/* Diagonal stripes — behind content */}
+            {/* Diagonal stripes — full-bleed background behind content */}
             <DiagonalStripes />
 
-            {/* CANCELLED watermark — fixed so it does not contribute to flow */}
+            {/* CANCELLED / PAID watermark — fixed, repeats per page */}
             {isCancelled ? (
               <Text fixed style={styles.watermark}>CANCELLED</Text>
             ) : isPaid ? (
               <Text fixed style={styles.watermarkPaid}>PAID</Text>
             ) : null}
 
-            {/* Main content area — paddingTop on every page gives the top
-                margin requested for page 2+. */}
-            <View style={styles.content}>
-              {/* ── Page 1 only: header (logo + bill-to + hero + divider) ── */}
-              {isFirst ? (
-                <View wrap={false}>
-                  {/* Header row: logo left, bill-to right */}
-                  <View style={styles.headerRow}>
-                    {business.logoBase64 ? (
-                      <Image src={business.logoBase64} style={styles.logo} />
-                    ) : (
-                      <Text style={styles.logoFallback}>{business.businessName}</Text>
-                    )}
+            {/* content fills the page height; on the last page (hasBottom) the
+                Bill/Ship-To + totals block is pinned to the page bottom via
+                justifyContent: space-between. */}
+            <View
+              style={[
+                styles.content,
+                { justifyContent: chunk.hasBottom ? "space-between" : "flex-start" },
+              ]}
+            >
+              <View>
+                {/* Header (logo + bill-to + hero + divider) — page 1 only */}
+                {isFirst ? (
+                  <View wrap={false}>
+                    <View style={styles.headerRow}>
+                      {business.logoBase64 ? (
+                        <Image src={business.logoBase64} style={styles.logo} />
+                      ) : (
+                        <Text style={styles.logoFallback}>{business.businessName}</Text>
+                      )}
 
-                    <View style={styles.billToBlock}>
-                      <Text style={styles.grayLabel}>Billed To :</Text>
-                      <Text style={styles.boldMd}>{order.shippingName}</Text>
+                      <View style={styles.billToBlock}>
+                        <Text style={styles.grayLabel}>Billed To :</Text>
+                        <Text style={styles.boldMd}>{order.shippingName}</Text>
 
-                      <View style={styles.metaGap} />
-                      <Text style={styles.grayLabel}>Invoice Date :</Text>
-                      <Text style={styles.boldSm}>{formatInvoiceDate(createdAt)}</Text>
+                        <View style={styles.metaGap} />
+                        <Text style={styles.grayLabel}>Invoice Date :</Text>
+                        <Text style={styles.boldSm}>{formatInvoiceDate(createdAt)}</Text>
 
-                      {!isPaid ? (
-                        <>
-                          <View style={styles.metaGap} />
-                          <Text style={styles.grayLabel}>Due Date :</Text>
-                          <Text style={styles.boldLg}>{formatInvoiceDate(dueDate)}</Text>
-                        </>
+                        {/* Paid orders show the Paid Date; unpaid show Due Date */}
+                        {isPaid ? (
+                          <>
+                            <View style={styles.metaGap} />
+                            <Text style={styles.grayLabel}>Paid Date :</Text>
+                            <Text style={styles.boldSm}>{formatInvoiceDate(paidDate)}</Text>
+                          </>
+                        ) : (
+                          <>
+                            <View style={styles.metaGap} />
+                            <Text style={styles.grayLabel}>Due Date :</Text>
+                            <Text style={styles.boldLg}>{formatInvoiceDate(dueDate)}</Text>
+                          </>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Hero */}
+                    <View style={styles.heroRow}>
+                      <Text style={styles.heroTitle}>Invoice</Text>
+                      <Text style={styles.heroSub}>
+                        {"Invoice no : " + formatOrderNumber(order.id)}
+                      </Text>
+                      {isPaid ? (
+                        <View style={styles.paidBadge}>
+                          <Text style={styles.paidBadgeText}>Paid</Text>
+                        </View>
                       ) : null}
                     </View>
+
+                    <View style={styles.divider} />
                   </View>
+                ) : null}
 
-                  {/* Hero */}
-                  <View style={styles.heroRow}>
-                    <Text style={styles.heroTitle}>Invoice</Text>
-                    <Text style={styles.heroSub}>
-                      {"Invoice no : " + formatOrderNumber(order.id)}
-                    </Text>
-                    {isPaid ? (
-                      <View style={styles.paidBadge}>
-                        <Text style={styles.paidBadgeText}>Paid</Text>
-                      </View>
-                    ) : null}
-                  </View>
+                {/* Items table — rows pre-measured so they never overflow a
+                    page (no gap page). Each row wrap=false. */}
+                {showHead ? tableHead() : null}
+                {chunk.rows.map(({ item, index }) => renderRow(item, index))}
+              </View>
 
-                  <View style={styles.divider} />
-                </View>
-              ) : null /* Pages 2+: no logo/header — top margin comes from content paddingTop. */}
-
-              {/* ── Items table — NO wrap=false so items can split across pages ── */}
-              {tableHead()}
-              {pageItems.map((item, i) => renderRow(item, startIndex + i))}
-
-              {/* Bottom block — only on the LAST page. Pinned to the bottom of
-                  the page (content justifyContent: space-between). wrap=false
-                  keeps Bill/Ship-To + totals together on one page. */}
-              {isLast ? (
-                <View style={styles.bottomRow} wrap={false}>
-                  {/* Customer ship-to address */}
-                  <View style={styles.addressBlock}>
-                    <Text style={styles.addressTitle}>Bill / Ship To</Text>
-                    <Text style={styles.addressLine}>{order.shippingName}</Text>
-                    <Text style={styles.addressLine}>{order.shippingLine1}</Text>
-                    {order.shippingLine2 ? (
-                      <Text style={styles.addressLine}>{order.shippingLine2}</Text>
-                    ) : null}
-                    <Text style={styles.addressLine}>
-                      {order.shippingPostcode + " " + order.shippingCity}
-                    </Text>
-                    <Text style={styles.addressLine}>
-                      {order.shippingState + ", " + order.shippingCountry}
-                    </Text>
-                    {order.shippingPhone ? (
-                      <Text style={styles.addressLine}>{order.shippingPhone}</Text>
-                    ) : null}
-
-                    {/* Bank payment info — only shown for unpaid orders */}
-                    {!isPaid && hasBankInfo ? (
-                      <View style={styles.paymentBlockSpaced}>
-                        <Text style={styles.paymentTitle}>Please make payment via</Text>
-                        <Text style={styles.paymentLine}>
-                          {"Bank Name: " + (business.bankName ?? "")}
-                        </Text>
-                        <Text style={styles.paymentLine}>
-                          {"Account Number : " + (business.bankAccountNumber ?? "")}
-                        </Text>
-                        <Text style={styles.paymentLine}>
-                          {"Account Holder : " + (business.bankAccountHolder ?? "")}
-                        </Text>
-                      </View>
-                    ) : null}
-                  </View>
-
-                  {/* Total breakdown + grand total */}
-                  <View style={styles.totalBlock}>
-                    {hasBreakdown ? (
-                      <View style={styles.breakdownRow}>
-                        <Text style={styles.breakdownLabel}>Subtotal</Text>
-                        <Text style={styles.breakdownValue}>
-                          {formatMYR(rawSubtotal)}
-                        </Text>
-                      </View>
-                    ) : null}
-
-                    {hasDiscount ? (
-                      <View style={styles.breakdownRow}>
-                        <Text style={styles.breakdownLabel}>
-                          {order.discountCode ? "Discount (" + order.discountCode + ")" : "Discount"}
-                        </Text>
-                        <Text style={styles.breakdownValue}>
-                          {"-" + formatMYR(rawDiscount)}
-                        </Text>
-                      </View>
-                    ) : null}
-
-                    {hasBreakdown ? (
-                      <View style={styles.breakdownRow}>
-                        <Text style={styles.breakdownLabel}>Shipping</Text>
-                        <Text style={styles.breakdownValue}>{shippingFormatted}</Text>
-                      </View>
-                    ) : null}
-
-                    {hasBreakdown ? <View style={styles.breakdownDivider} /> : null}
-
-                    <Text style={styles.totalLabel}>
-                      {isPaid ? "Total Paid" : "Total Amount Due"}
-                    </Text>
-                    <Text style={styles.totalAmount}>{totalFormatted}</Text>
-                  </View>
-                </View>
-              ) : null}
+              {/* Bottom block — only on the last page, pinned to the bottom */}
+              {chunk.hasBottom ? bottomBlock() : null}
             </View>
 
             {/* Page number — "Page X / Y", auto-computed by react-pdf */}
