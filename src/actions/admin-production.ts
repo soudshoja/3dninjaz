@@ -25,7 +25,14 @@ const PRODUCTION_STATUSES = ["paid", "processing"] as const;
 
 export type ProductionItem = {
   id: string;
+  /** Full single-line label (product + details) — used where space is tight. */
   name: string;
+  /** Base product name (heading). */
+  productName: string;
+  /** Configured/variant details, one chip each — what to actually produce. */
+  details: string[];
+  /** Size (S/M/L) if the product carries one. */
+  size: string | null;
   quantity: number;
   done: boolean;
   sort: number | null;
@@ -44,6 +51,9 @@ export type ProductionOrder = {
 export type ProductionLineItem = {
   id: string;
   name: string;
+  productName: string;
+  details: string[];
+  size: string | null;
   quantity: number;
   orderId: string;
   invoiceNumber: string;
@@ -56,15 +66,38 @@ export type ProductionBoard = {
   lineItems: ProductionLineItem[];
 };
 
-/** Human-readable line name — mirrors the invoice/PDP display logic. */
-function itemName(item: typeof orderItems.$inferSelect): string {
-  if (isManualLine(item)) return item.productName;
-  const cfg = ensureOrderItemConfigData(item.configurationData);
-  const variant =
-    cfg?.computedSummary ??
-    item.variantLabel ??
-    (item.size ? `Size ${item.size}` : null);
-  return variant ? `${item.productName} (${variant})` : item.productName;
+/**
+ * Break a line into the detail needed to actually produce/print it:
+ * the base product name plus each configured/variant attribute as its own
+ * chip (e.g. `"ELLIE" (5 your name)`, `Matte Pastel Periwinkle base`, …).
+ */
+function itemView(item: typeof orderItems.$inferSelect): {
+  name: string;
+  productName: string;
+  details: string[];
+  size: string | null;
+} {
+  const productName = item.productName;
+  const size = item.size ?? null;
+  let details: string[] = [];
+  if (!isManualLine(item)) {
+    const cfg = ensureOrderItemConfigData(item.configurationData);
+    if (cfg?.computedSummary) {
+      details = cfg.computedSummary
+        .split("·")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    } else if (item.variantLabel) {
+      details = item.variantLabel
+        .split("/")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+  }
+  const name = details.length
+    ? `${productName} (${details.join(" · ")})`
+    : productName;
+  return { name, productName, details, size };
 }
 
 /**
@@ -111,13 +144,19 @@ export async function getProductionBoard(): Promise<ProductionBoard> {
       a.id.localeCompare(b.id),
     );
     if (its.length === 0) continue; // nothing to make
-    const mapped: ProductionItem[] = its.map((it) => ({
-      id: it.id,
-      name: itemName(it),
-      quantity: it.quantity,
-      done: it.productionDone,
-      sort: it.productionSort,
-    }));
+    const mapped: ProductionItem[] = its.map((it) => {
+      const v = itemView(it);
+      return {
+        id: it.id,
+        name: v.name,
+        productName: v.productName,
+        details: v.details,
+        size: v.size,
+        quantity: it.quantity,
+        done: it.productionDone,
+        sort: it.productionSort,
+      };
+    });
     const doneCount = mapped.filter((m) => m.done).length;
     const card: ProductionOrder = {
       id: o.id,
@@ -151,7 +190,7 @@ export async function getProductionBoard(): Promise<ProductionBoard> {
         processed.find((p) => p.id === it.orderId);
       return {
         it,
-        name: itemName(it),
+        view: itemView(it),
         clientName: card?.clientName ?? "",
         invoiceNumber: card?.invoiceNumber ?? formatOrderNumber(it.orderId),
       };
@@ -167,9 +206,12 @@ export async function getProductionBoard(): Promise<ProductionBoard> {
         (orderCreatedAt.get(b.it.orderId) ?? 0)
       );
     })
-    .map(({ it, name, clientName, invoiceNumber }) => ({
+    .map(({ it, view, clientName, invoiceNumber }) => ({
       id: it.id,
-      name,
+      name: view.name,
+      productName: view.productName,
+      details: view.details,
+      size: view.size,
       quantity: it.quantity,
       orderId: it.orderId,
       invoiceNumber,

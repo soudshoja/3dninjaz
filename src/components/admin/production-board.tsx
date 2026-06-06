@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import {
   Check,
   ChevronDown,
@@ -83,17 +83,21 @@ export function ProductionBoardView({ board }: { board: Board }) {
       return nowComplete ? sortByCreated([...without, updated]) : without;
     });
     // keep the line-queue in sync (done lines leave the queue)
+    const src = order.items.find((i) => i.id === itemId);
     setLineItems((prev) =>
       done
         ? prev.filter((l) => l.id !== itemId)
-        : prev.some((l) => l.id === itemId)
+        : prev.some((l) => l.id === itemId) || !src
           ? prev
           : [
               ...prev,
               {
-                id: itemId,
-                name: order.items.find((i) => i.id === itemId)?.name ?? "",
-                quantity: order.items.find((i) => i.id === itemId)?.quantity ?? 1,
+                id: src.id,
+                name: src.name,
+                productName: src.productName,
+                details: src.details,
+                size: src.size,
+                quantity: src.quantity,
                 orderId: order.id,
                 invoiceNumber: order.invoiceNumber,
                 clientName: order.clientName,
@@ -130,6 +134,9 @@ export function ProductionBoardView({ board }: { board: Board }) {
             const re = order.items.map((i) => ({
               id: i.id,
               name: i.name,
+              productName: i.productName,
+              details: i.details,
+              size: i.size,
               quantity: i.quantity,
               orderId: order.id,
               invoiceNumber: order.invoiceNumber,
@@ -181,7 +188,9 @@ export function ProductionBoardView({ board }: { board: Board }) {
         </div>
       ) : null}
 
-      <Tabs defaultValue="production" className="gap-4">
+      {/* flex-col forces the tab bar on top and the panels/cards below it
+          (the shadcn Tabs root defaults to flex-row otherwise). */}
+      <Tabs defaultValue="production" className="flex-col gap-4">
         <div className="flex items-center justify-between gap-3">
           <TabsList variant="line" className="h-auto">
             <TabsTrigger value="production" className="px-3 py-2 text-sm">
@@ -245,7 +254,7 @@ export function ProductionBoardView({ board }: { board: Board }) {
                       onDragOverRow(line.id);
                     }}
                     onDragEnd={onDropPersist}
-                    className="flex items-center gap-3 rounded-xl border bg-white px-3 py-2.5 transition-shadow hover:shadow-sm"
+                    className="flex items-start gap-3 rounded-xl border bg-white px-3 py-2.5 transition-shadow hover:shadow-sm"
                     style={{
                       borderColor: "rgba(11,16,32,0.10)",
                       opacity: dragId === line.id ? 0.5 : 1,
@@ -253,14 +262,22 @@ export function ProductionBoardView({ board }: { board: Board }) {
                     }}
                   >
                     <GripVertical
-                      className="h-4 w-4 shrink-0 text-foreground/30"
+                      className="mt-1 h-4 w-4 shrink-0 text-foreground/30"
                       aria-hidden
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold" style={{ color: INK }}>
-                        {line.name}
+                      <p className="text-sm font-bold" style={{ color: INK }}>
+                        {line.productName}
                       </p>
-                      <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-foreground/55">
+                      {line.details.length > 0 || line.size ? (
+                        <div className="mt-1 flex flex-wrap gap-1.5">
+                          {line.size ? <Chip strong>Size {line.size}</Chip> : null}
+                          {line.details.map((d, i) => (
+                            <Chip key={i}>{d}</Chip>
+                          ))}
+                        </div>
+                      ) : null}
+                      <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-foreground/55">
                         <span className="inline-flex items-center gap-1">
                           <Hash className="h-3 w-3" />
                           {line.invoiceNumber}
@@ -269,9 +286,14 @@ export function ProductionBoardView({ board }: { board: Board }) {
                           <User className="h-3 w-3" />
                           {line.clientName}
                         </span>
-                        <span className="font-medium tabular-nums">×{line.quantity}</span>
                       </p>
                     </div>
+                    <span
+                      className="mt-0.5 shrink-0 rounded-lg px-2.5 py-1 text-xs font-bold tabular-nums"
+                      style={{ background: "rgba(24,119,242,0.10)", color: "#0A4FB3" }}
+                    >
+                      ×{line.quantity}
+                    </span>
                     <TickButton
                       done={false}
                       label={`Mark ${line.name} made`}
@@ -340,40 +362,44 @@ function OrderCard({
         type="button"
         onClick={onToggleOpen}
         aria-expanded={open}
-        className="flex w-full cursor-pointer items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-[rgba(24,119,242,0.04)]"
+        className="flex w-full cursor-pointer flex-col gap-1.5 px-4 py-3 text-left transition-colors hover:bg-[rgba(24,119,242,0.04)]"
         style={{ minHeight: 56 }}
       >
-        <span
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl"
-          style={{
-            background: processed ? "rgba(31,163,0,0.12)" : "rgba(24,119,242,0.10)",
-            color: processed ? GREEN : "#0A4FB3",
-          }}
-        >
-          {processed ? (
-            <PackageCheck className="h-5 w-5" />
-          ) : (
-            <Hash className="h-5 w-5" />
-          )}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-bold" style={{ color: INK }}>
+        {/* Label row — client name (top) + chevron */}
+        <span className="flex w-full items-center gap-2">
+          <span
+            className="min-w-0 flex-1 truncate text-[15px] font-bold"
+            style={{ color: INK }}
+          >
             {order.clientName}
           </span>
-          <span className="mt-0.5 flex items-center gap-2 text-xs text-foreground/55">
-            <span className="font-semibold">{order.invoiceNumber}</span>
-            <span aria-hidden>·</span>
-            <span>
-              {order.totalCount} item{order.totalCount === 1 ? "" : "s"}
-            </span>
+          {processed ? (
+            <PackageCheck
+              className="h-4 w-4 shrink-0"
+              style={{ color: GREEN }}
+              aria-hidden
+            />
+          ) : null}
+          <ChevronDown
+            className="h-5 w-5 shrink-0 text-foreground/40 transition-transform"
+            style={{ transform: open ? "rotate(180deg)" : "none" }}
+            aria-hidden
+          />
+        </span>
+        {/* Meta row — invoice no · item count · progress pill */}
+        <span className="flex w-full items-center gap-2 text-xs text-foreground/55">
+          <span className="inline-flex items-center gap-1 font-semibold">
+            <Hash className="h-3 w-3" />
+            {order.invoiceNumber}
+          </span>
+          <span aria-hidden>·</span>
+          <span>
+            {order.totalCount} item{order.totalCount === 1 ? "" : "s"}
+          </span>
+          <span className="ml-auto">
+            <ProgressPill done={order.doneCount} total={order.totalCount} />
           </span>
         </span>
-        <ProgressPill done={order.doneCount} total={order.totalCount} />
-        <ChevronDown
-          className="h-5 w-5 shrink-0 text-foreground/40 transition-transform"
-          style={{ transform: open ? "rotate(180deg)" : "none" }}
-          aria-hidden
-        />
       </button>
 
       {open ? (
@@ -381,28 +407,48 @@ function OrderCard({
           className="border-t px-4 py-3"
           style={{ borderColor: "rgba(11,16,32,0.08)" }}
         >
-          <ul className="flex flex-col gap-1.5">
+          <ul className="flex flex-col gap-2">
             {order.items.map((item) => (
               <li
                 key={item.id}
-                className="flex items-center gap-3 rounded-lg px-2 py-1.5"
-                style={{ background: item.done ? "rgba(31,163,0,0.06)" : "transparent" }}
+                className="flex items-start gap-3 rounded-xl border px-3 py-2.5"
+                style={{
+                  background: item.done ? "rgba(31,163,0,0.05)" : "#fff",
+                  borderColor: item.done
+                    ? "rgba(31,163,0,0.30)"
+                    : "rgba(11,16,32,0.10)",
+                }}
               >
-                <TickButton
-                  done={item.done}
-                  label={`${item.done ? "Unmark" : "Mark"} ${item.name} made`}
-                  onClick={() => onToggleItem(item.id, !item.done)}
-                />
+                <div className="pt-0.5">
+                  <TickButton
+                    done={item.done}
+                    label={`${item.done ? "Unmark" : "Mark"} ${item.name} made`}
+                    onClick={() => onToggleItem(item.id, !item.done)}
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p
+                    className="text-sm font-bold"
+                    style={{
+                      color: item.done ? "rgba(11,16,32,0.45)" : INK,
+                      textDecoration: item.done ? "line-through" : "none",
+                    }}
+                  >
+                    {item.productName}
+                  </p>
+                  {item.details.length > 0 || item.size ? (
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {item.size ? <Chip strong>Size {item.size}</Chip> : null}
+                      {item.details.map((d, i) => (
+                        <Chip key={i}>{d}</Chip>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
                 <span
-                  className="min-w-0 flex-1 text-sm"
-                  style={{
-                    color: item.done ? "rgba(11,16,32,0.45)" : INK,
-                    textDecoration: item.done ? "line-through" : "none",
-                  }}
+                  className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-bold tabular-nums"
+                  style={{ background: "rgba(24,119,242,0.10)", color: "#0A4FB3" }}
                 >
-                  {item.name}
-                </span>
-                <span className="shrink-0 text-xs font-semibold tabular-nums text-foreground/50">
                   ×{item.quantity}
                 </span>
               </li>
@@ -462,6 +508,22 @@ function TickButton({
     >
       <Check className="h-4 w-4" strokeWidth={3} />
     </button>
+  );
+}
+
+/** Detail chip — one produced/printed attribute (colour, name text, size…). */
+function Chip({ children, strong = false }: { children: ReactNode; strong?: boolean }) {
+  return (
+    <span
+      className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium"
+      style={
+        strong
+          ? { background: "rgba(24,119,242,0.12)", color: "#0A4FB3" }
+          : { background: "rgba(11,16,32,0.05)", color: "rgba(11,16,32,0.72)" }
+      }
+    >
+      {children}
+    </span>
   );
 }
 
