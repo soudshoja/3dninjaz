@@ -188,7 +188,9 @@ export function ProductionBoardView({ board }: { board: Board }) {
         </div>
       ) : null}
 
-      <Tabs defaultValue="production" className="gap-4">
+      {/* flex-col forces the tab bar on top and the panels/cards below it
+          (the shadcn Tabs root defaults to flex-row otherwise). */}
+      <Tabs defaultValue="production" className="flex-col gap-4">
         <div className="flex items-center justify-between gap-3">
           <TabsList variant="line" className="h-auto">
             <TabsTrigger value="production" className="px-3 py-2 text-sm">
