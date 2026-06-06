@@ -622,6 +622,11 @@ export const orderItems = mysqlTable("order_items", {
   unitCost: decimal("unit_cost", { precision: 10, scale: 2 }),
   quantity: int("quantity").notNull(),
   lineTotal: decimal("line_total", { precision: 10, scale: 2 }).notNull(),
+  // Production board (admin fulfilment). productionDone flips when the admin
+  // ticks the line as made; productionSort is the admin-chosen ordering for the
+  // line-wise production queue (NULL = unsorted, falls back to created order).
+  productionDone: boolean("production_done").notNull().default(false),
+  productionSort: int("production_sort"),
 });
 
 export const ordersRelations = relations(orders, ({ one, many }) => ({
