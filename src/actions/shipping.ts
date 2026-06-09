@@ -753,6 +753,13 @@ async function _bookShipmentInternal(
         weight = fallbackWeight;
       }
     }
+    // Only declare a parcel dimension when the product has REAL dimensions set.
+    // Previously this fell back to a hardcoded 20×20×20 cm box, which Delyva
+    // bills as volumetric weight (L×W×H ÷ 5000 = 1.6 kg PER ITEM). For light
+    // items with no dims that silently inflated the dispatched/billed weight far
+    // above the weight-only customer quote (e.g. 18 items → 28.8 kg → RM 33.60
+    // billed vs RM 5.00 quoted). Omitting dimension makes booking bill on actual
+    // weight — identical to how quoteForCart quotes (weight only, no dimension).
     const dim =
       p?.shippingLengthCm && p?.shippingWidthCm && p?.shippingHeightCm
         ? {
@@ -760,13 +767,13 @@ async function _bookShipmentInternal(
             width: p.shippingWidthCm,
             height: p.shippingHeightCm,
           }
-        : { length: 20, width: 20, height: 20 };
+        : undefined;
     return {
       name: i.productName,
       type: resolveItemType(cfg.defaultItemType),
       price: { currency: "MYR", amount: Number(i.unitPrice) },
       weight: { unit: "kg", value: weight },
-      dimension: dim,
+      ...(dim ? { dimension: dim } : {}),
       quantity: i.quantity,
     };
   });
@@ -968,6 +975,67 @@ export async function cancelShipment(
       return { ok: false, error: `${e.code}: ${e.message}` };
     return { ok: false, error: (e as Error).message };
   }
+}
+
+/**
+ * Rebook a courier for an order whose parcel has NOT been picked up yet —
+ * e.g. it was booked at the wrong weight, or cancelled (here or directly in
+ * Delyva) and needs a fresh consignment.
+ *
+ * Flow:
+ *   1. Block when the parcel is already delivered (statusCode >= 400, !=500).
+ *   2. Best-effort cancel the live Delyva consignment. Errors are swallowed —
+ *      the consignment may already be cancelled (e.g. cancelled in the Delyva
+ *      console), in which case Delyva returns an error we intentionally ignore.
+ *   3. DELETE the order_shipments mirror row. `uq_shipments_order` enforces a
+ *      strict 1:1, so the old row MUST go before a new booking can be inserted.
+ *
+ * After this returns, the order has no shipment mirror, so OrderShipmentPanel
+ * re-shows the Book-courier picker and the admin dispatches again — now with
+ * the corrected weight-only parcel declaration (no phantom 20x20x20 box).
+ *
+ * Admin-only. Only click this for parcels that have NOT been collected — the
+ * UI confirms this; the delivered-guard is a backstop, not a full safety net.
+ */
+export async function rebookShipment(
+  orderId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
+  const s = await db
+    .select()
+    .from(orderShipments)
+    .where(eq(orderShipments.orderId, orderId))
+    .limit(1);
+  if (s.length === 0) {
+    // Nothing booked — the picker is already showing. No-op success.
+    return { ok: true };
+  }
+  const shipment = s[0];
+  const code = shipment.statusCode;
+  // Backstop: never reset a delivered parcel (>=400, excluding the 500 error
+  // sentinel). Mirrors the delivered check in OrderShipmentPanel.
+  if (typeof code === "number" && code >= 400 && code !== 500) {
+    return {
+      ok: false,
+      error: "Parcel already delivered — cannot rebook.",
+    };
+  }
+  // Best-effort cancel the live consignment. Swallow errors: it may already be
+  // cancelled in Delyva, in which case the API rejects the duplicate cancel.
+  if (shipment.delyvaOrderId) {
+    try {
+      await delyvaApi.cancel(shipment.delyvaOrderId);
+    } catch (e) {
+      console.warn(
+        "[rebookShipment] Delyva cancel failed (continuing — may already be cancelled):",
+        e instanceof DelyvaError ? `${e.code}: ${e.message}` : (e as Error).message,
+      );
+    }
+  }
+  // Drop the 1:1 mirror row so a fresh booking can be inserted.
+  await db.delete(orderShipments).where(eq(orderShipments.orderId, orderId));
+  revalidatePath(`/admin/orders/${orderId}`);
+  return { ok: true };
 }
 
 // --------------------------- Tracking view (customer + admin) ---------------------------
