@@ -753,6 +753,13 @@ async function _bookShipmentInternal(
         weight = fallbackWeight;
       }
     }
+    // Only declare a parcel dimension when the product has REAL dimensions set.
+    // Previously this fell back to a hardcoded 20×20×20 cm box, which Delyva
+    // bills as volumetric weight (L×W×H ÷ 5000 = 1.6 kg PER ITEM). For light
+    // items with no dims that silently inflated the dispatched/billed weight far
+    // above the weight-only customer quote (e.g. 18 items → 28.8 kg → RM 33.60
+    // billed vs RM 5.00 quoted). Omitting dimension makes booking bill on actual
+    // weight — identical to how quoteForCart quotes (weight only, no dimension).
     const dim =
       p?.shippingLengthCm && p?.shippingWidthCm && p?.shippingHeightCm
         ? {
@@ -760,13 +767,13 @@ async function _bookShipmentInternal(
             width: p.shippingWidthCm,
             height: p.shippingHeightCm,
           }
-        : { length: 20, width: 20, height: 20 };
+        : undefined;
     return {
       name: i.productName,
       type: resolveItemType(cfg.defaultItemType),
       price: { currency: "MYR", amount: Number(i.unitPrice) },
       weight: { unit: "kg", value: weight },
-      dimension: dim,
+      ...(dim ? { dimension: dim } : {}),
       quantity: i.quantity,
     };
   });
