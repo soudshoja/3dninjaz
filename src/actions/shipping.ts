@@ -977,6 +977,67 @@ export async function cancelShipment(
   }
 }
 
+/**
+ * Rebook a courier for an order whose parcel has NOT been picked up yet —
+ * e.g. it was booked at the wrong weight, or cancelled (here or directly in
+ * Delyva) and needs a fresh consignment.
+ *
+ * Flow:
+ *   1. Block when the parcel is already delivered (statusCode >= 400, !=500).
+ *   2. Best-effort cancel the live Delyva consignment. Errors are swallowed —
+ *      the consignment may already be cancelled (e.g. cancelled in the Delyva
+ *      console), in which case Delyva returns an error we intentionally ignore.
+ *   3. DELETE the order_shipments mirror row. `uq_shipments_order` enforces a
+ *      strict 1:1, so the old row MUST go before a new booking can be inserted.
+ *
+ * After this returns, the order has no shipment mirror, so OrderShipmentPanel
+ * re-shows the Book-courier picker and the admin dispatches again — now with
+ * the corrected weight-only parcel declaration (no phantom 20x20x20 box).
+ *
+ * Admin-only. Only click this for parcels that have NOT been collected — the
+ * UI confirms this; the delivered-guard is a backstop, not a full safety net.
+ */
+export async function rebookShipment(
+  orderId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
+  const s = await db
+    .select()
+    .from(orderShipments)
+    .where(eq(orderShipments.orderId, orderId))
+    .limit(1);
+  if (s.length === 0) {
+    // Nothing booked — the picker is already showing. No-op success.
+    return { ok: true };
+  }
+  const shipment = s[0];
+  const code = shipment.statusCode;
+  // Backstop: never reset a delivered parcel (>=400, excluding the 500 error
+  // sentinel). Mirrors the delivered check in OrderShipmentPanel.
+  if (typeof code === "number" && code >= 400 && code !== 500) {
+    return {
+      ok: false,
+      error: "Parcel already delivered — cannot rebook.",
+    };
+  }
+  // Best-effort cancel the live consignment. Swallow errors: it may already be
+  // cancelled in Delyva, in which case the API rejects the duplicate cancel.
+  if (shipment.delyvaOrderId) {
+    try {
+      await delyvaApi.cancel(shipment.delyvaOrderId);
+    } catch (e) {
+      console.warn(
+        "[rebookShipment] Delyva cancel failed (continuing — may already be cancelled):",
+        e instanceof DelyvaError ? `${e.code}: ${e.message}` : (e as Error).message,
+      );
+    }
+  }
+  // Drop the 1:1 mirror row so a fresh booking can be inserted.
+  await db.delete(orderShipments).where(eq(orderShipments.orderId, orderId));
+  revalidatePath(`/admin/orders/${orderId}`);
+  return { ok: true };
+}
+
 // --------------------------- Tracking view (customer + admin) ---------------------------
 
 /**
