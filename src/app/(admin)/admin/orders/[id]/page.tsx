@@ -14,6 +14,7 @@ import { AdminOrderTimeline } from "@/components/admin/admin-order-timeline";
 import { AdminOrderStatusForm } from "@/components/admin/admin-order-status-form";
 import { AdminOrderManage } from "@/components/admin/admin-order-manage";
 import { AdminOrderNotesForm } from "@/components/admin/admin-order-notes-form";
+import { OrderShipToEdit } from "@/components/admin/order-shipto-edit";
 // Phase 6 06-06 — admin approval surface for cancel/return requests.
 // 260601-afs — listOrderRequestsForOrder now returns AdminOrderRequestRow[]
 import { listOrderRequestsForOrder } from "@/actions/admin-order-requests";
@@ -375,6 +376,18 @@ export default async function AdminOrderDetailPage({
               {row.shippingState}, {row.shippingCountry}<br />
               <span className="font-mono text-xs" style={{ color: BRAND.blue }}>{row.shippingPhone}</span>
             </address>
+            <OrderShipToEdit
+              orderId={row.id}
+              initial={{
+                shippingName: row.shippingName,
+                shippingPhone: row.shippingPhone ?? "",
+                shippingLine1: row.shippingLine1,
+                shippingLine2: row.shippingLine2 ?? null,
+                shippingCity: row.shippingCity,
+                shippingState: row.shippingState,
+                shippingPostcode: row.shippingPostcode,
+              }}
+            />
           </AdminCard>
         </div>
 
