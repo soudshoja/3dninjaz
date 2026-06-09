@@ -660,7 +660,7 @@ async function sumOrderWeight(
 async function _bookShipmentInternal(
   orderId: string,
   serviceCode: string,
-  opts?: { quotedPrice?: string | null },
+  opts?: { quotedPrice?: string | null; notify?: boolean },
 ): Promise<
   | {
       ok: true;
@@ -851,26 +851,30 @@ async function _bookShipmentInternal(
 
     revalidatePath(`/admin/orders/${orderId}`);
 
-    // Send order shipped notification email (fire-and-forget).
-    const courierName = order.shippingServiceName || "Your courier";
-    void sendOrderShippedEmail({
-      customerEmail: order.customerEmail,
-      customerName: order.shippingName,
-      orderNumber: formatOrderNumber(order.id),
-      courierName,
-      trackingNo: details?.trackingNo || "pending",
-      consignmentNo: details?.consignmentNo || "pending",
-      orderId: order.id,
-    }).catch((err) =>
-      console.error("[bookShipment] shipped email failed:", err)
-    );
-    void sendWhatsAppNotification("order_shipped", order.shippingPhone, {
-      customerName: order.shippingName,
-      orderNumber: formatOrderNumber(order.id),
-      courierName,
-      trackingNo: details?.trackingNo || "pending",
-      trackingUrl: `https://app.3dninjaz.com/orders/${order.id}`,
-    }).catch(() => {});
+    // Customer "order shipped" notifications (fire-and-forget). Suppressed when
+    // notify === false — used by a silent rebook (admin reprints a corrected
+    // label without re-pinging a customer who was already told it shipped).
+    if (opts?.notify !== false) {
+      const courierName = order.shippingServiceName || "Your courier";
+      void sendOrderShippedEmail({
+        customerEmail: order.customerEmail,
+        customerName: order.shippingName,
+        orderNumber: formatOrderNumber(order.id),
+        courierName,
+        trackingNo: details?.trackingNo || "pending",
+        consignmentNo: details?.consignmentNo || "pending",
+        orderId: order.id,
+      }).catch((err) =>
+        console.error("[bookShipment] shipped email failed:", err)
+      );
+      void sendWhatsAppNotification("order_shipped", order.shippingPhone, {
+        customerName: order.shippingName,
+        orderNumber: formatOrderNumber(order.id),
+        courierName,
+        trackingNo: details?.trackingNo || "pending",
+        trackingUrl: `https://app.3dninjaz.com/orders/${order.id}`,
+      }).catch(() => {});
+    }
 
     return {
       ok: true,
@@ -978,64 +982,83 @@ export async function cancelShipment(
 }
 
 /**
- * Rebook a courier for an order whose parcel has NOT been picked up yet —
- * e.g. it was booked at the wrong weight, or cancelled (here or directly in
- * Delyva) and needs a fresh consignment.
+ * Silent one-click rebook — re-dispatch a fresh consignment on the SAME courier
+ * for an order whose current booking is wrong (e.g. booked at the inflated
+ * weight, or cancelled here / in the Delyva console) and needs a corrected
+ * label. Designed for the case where the admin manually flipped the order
+ * status to shipped/delivered but the parcel never actually went out.
  *
  * Flow:
- *   1. Block when the parcel is already delivered (statusCode >= 400, !=500).
- *   2. Best-effort cancel the live Delyva consignment. Errors are swallowed —
- *      the consignment may already be cancelled (e.g. cancelled in the Delyva
- *      console), in which case Delyva returns an error we intentionally ignore.
- *   3. DELETE the order_shipments mirror row. `uq_shipments_order` enforces a
- *      strict 1:1, so the old row MUST go before a new booking can be inserted.
+ *   1. Best-effort cancel the live Delyva consignment (errors swallowed — it
+ *      may already be cancelled, in which case Delyva rejects the duplicate).
+ *   2. DELETE the order_shipments mirror row (`uq_shipments_order` is 1:1, so
+ *      the old row must go before _bookShipmentInternal will insert a new one).
+ *   3. Re-book the SAME serviceCode via _bookShipmentInternal with
+ *      `notify: false` — NO customer shipped email/WhatsApp, so the client is
+ *      not pinged. Order status + totals are left untouched (booking never
+ *      changes them).
  *
- * After this returns, the order has no shipment mirror, so OrderShipmentPanel
- * re-shows the Book-courier picker and the admin dispatches again — now with
- * the corrected weight-only parcel declaration (no phantom 20x20x20 box).
+ * Unlike a first booking this is allowed regardless of the mirror status
+ * (including "delivered"), because the admin may have set that status manually.
+ * The UI gates this behind an explicit confirm. Admin-only.
  *
- * Admin-only. Only click this for parcels that have NOT been collected — the
- * UI confirms this; the delivered-guard is a backstop, not a full safety net.
+ * On success the panel re-renders with the NEW consignment, and "Print label"
+ * serves the corrected label. The new parcel is declared weight-only (no
+ * phantom 20x20x20 box) so it bills on actual weight.
  */
 export async function rebookShipment(
   orderId: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; consignmentNo: string | null }
+  | { ok: false; error: string }
+> {
   await requireAdmin();
+
+  // Need the order's courier service to re-book the same way.
+  const orderRows = await db
+    .select()
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+  if (orderRows.length === 0) return { ok: false, error: "Order not found" };
+  const order = orderRows[0];
+  if (!order.shippingServiceCode) {
+    return {
+      ok: false,
+      error:
+        "No courier service on this order to rebook. Use Book courier to pick one.",
+    };
+  }
+
+  // Cancel the existing consignment (best-effort) then drop the 1:1 mirror row.
   const s = await db
     .select()
     .from(orderShipments)
     .where(eq(orderShipments.orderId, orderId))
     .limit(1);
-  if (s.length === 0) {
-    // Nothing booked — the picker is already showing. No-op success.
-    return { ok: true };
-  }
-  const shipment = s[0];
-  const code = shipment.statusCode;
-  // Backstop: never reset a delivered parcel (>=400, excluding the 500 error
-  // sentinel). Mirrors the delivered check in OrderShipmentPanel.
-  if (typeof code === "number" && code >= 400 && code !== 500) {
-    return {
-      ok: false,
-      error: "Parcel already delivered — cannot rebook.",
-    };
-  }
-  // Best-effort cancel the live consignment. Swallow errors: it may already be
-  // cancelled in Delyva, in which case the API rejects the duplicate cancel.
-  if (shipment.delyvaOrderId) {
-    try {
-      await delyvaApi.cancel(shipment.delyvaOrderId);
-    } catch (e) {
-      console.warn(
-        "[rebookShipment] Delyva cancel failed (continuing — may already be cancelled):",
-        e instanceof DelyvaError ? `${e.code}: ${e.message}` : (e as Error).message,
-      );
+  if (s.length > 0) {
+    if (s[0].delyvaOrderId) {
+      try {
+        await delyvaApi.cancel(s[0].delyvaOrderId);
+      } catch (e) {
+        console.warn(
+          "[rebookShipment] Delyva cancel failed (continuing — may already be cancelled):",
+          e instanceof DelyvaError ? `${e.code}: ${e.message}` : (e as Error).message,
+        );
+      }
     }
+    await db.delete(orderShipments).where(eq(orderShipments.orderId, orderId));
   }
-  // Drop the 1:1 mirror row so a fresh booking can be inserted.
-  await db.delete(orderShipments).where(eq(orderShipments.orderId, orderId));
+
+  // Re-book the same service silently (no customer notification).
+  const res = await _bookShipmentInternal(orderId, order.shippingServiceCode, {
+    quotedPrice: order.shippingQuotedPrice ?? null,
+    notify: false,
+  });
+  if (!res.ok) return res;
+
   revalidatePath(`/admin/orders/${orderId}`);
-  return { ok: true };
+  return { ok: true, consignmentNo: res.consignmentNo };
 }
 
 // --------------------------- Tracking view (customer + admin) ---------------------------
