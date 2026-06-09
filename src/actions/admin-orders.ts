@@ -5,6 +5,7 @@ import { orders, orderItems, orderShipments, user } from "@/lib/db/schema";
 import { and, eq, desc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-helpers";
+import { MALAYSIAN_STATES } from "@/lib/validators";
 import { validateCoupon } from "@/actions/coupons";
 import { assertValidTransition, formatOrderNumber, type OrderStatus } from "@/lib/orders";
 import { sendOrderProcessingEmail } from "@/actions/send-emails";
@@ -463,6 +464,74 @@ export async function updateOrderNotes(
     .where(eq(orders.id, orderId));
 
   revalidatePath(`/admin/orders/${orderId}`);
+  return { ok: true };
+}
+
+/**
+ * Edit the ship-to / recipient details on an order (recipient name, phone, and
+ * full Malaysian address). Admin-only.
+ *
+ * Intentionally NOT gated by payment/fulfilment status: admins need to correct
+ * a wrong address or phone on shipped/manual orders in order to re-dispatch a
+ * fresh courier label (see rebookShipment). It does not touch order totals or
+ * status. After saving, rebook the courier so the new label carries the
+ * corrected destination.
+ */
+export async function updateOrderShipTo(
+  orderId: string,
+  input: {
+    shippingName: string;
+    shippingPhone: string;
+    shippingLine1: string;
+    shippingLine2?: string;
+    shippingCity: string;
+    shippingState: string;
+    shippingPostcode: string;
+  },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
+
+  const name = (input.shippingName ?? "").trim();
+  const phone = (input.shippingPhone ?? "").trim();
+  const line1 = (input.shippingLine1 ?? "").trim();
+  const line2 = (input.shippingLine2 ?? "").trim();
+  const city = (input.shippingCity ?? "").trim();
+  const state = (input.shippingState ?? "").trim();
+  const postcode = (input.shippingPostcode ?? "").trim();
+
+  if (!name) return { ok: false, error: "Recipient name is required." };
+  if (!phone) return { ok: false, error: "Phone is required." };
+  if (!line1) return { ok: false, error: "Address line 1 is required." };
+  if (!city) return { ok: false, error: "City is required." };
+  if (!/^\d{5}$/.test(postcode))
+    return { ok: false, error: "Postcode must be exactly 5 digits." };
+  if (!(MALAYSIAN_STATES as readonly string[]).includes(state))
+    return { ok: false, error: "Select a valid Malaysian state." };
+  if (name.length > 200 || line1.length > 255 || line2.length > 255)
+    return { ok: false, error: "One of the fields is too long." };
+
+  const [row] = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+  if (!row) return { ok: false, error: "Order not found." };
+
+  await db
+    .update(orders)
+    .set({
+      shippingName: name,
+      shippingPhone: phone,
+      shippingLine1: line1,
+      shippingLine2: line2.length === 0 ? null : line2,
+      shippingCity: city,
+      shippingState: state,
+      shippingPostcode: postcode,
+    })
+    .where(eq(orders.id, orderId));
+
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath(`/orders/${orderId}`);
   return { ok: true };
 }
 
