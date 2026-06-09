@@ -6,6 +6,7 @@ import { BRAND } from "@/lib/brand";
 import {
   bookShipmentForOrder,
   cancelShipment,
+  rebookShipment,
   refreshShipmentStatus,
   quoteRatesForOrder,
   type ShipmentRow,
@@ -125,6 +126,23 @@ export function OrderShipmentPanel({ orderId, shipment, tracking }: Props) {
     startTransition(async () => {
       const res = await cancelShipment(orderId);
       if (!res.ok) setError(res.error);
+      else router.refresh();
+    });
+  };
+
+  const rebook = () => {
+    if (
+      !confirm(
+        "Rebook this order?\n\nThis cancels the current consignment and clears the booking so you can pick a service and book a fresh label. Only do this if the parcel has NOT been picked up yet.",
+      )
+    )
+      return;
+    setError(null);
+    startTransition(async () => {
+      const res = await rebookShipment(orderId);
+      if (!res.ok) setError(res.error);
+      // On success the shipment row is gone → router.refresh() re-renders the
+      // panel into the Book-courier picker so the admin dispatches again.
       else router.refresh();
     });
   };
@@ -284,6 +302,20 @@ export function OrderShipmentPanel({ orderId, shipment, tracking }: Props) {
             style={{ backgroundColor: "#fee2e2", color: "#991b1b" }}
           >
             Cancel booking
+          </button>
+        ) : null}
+        {/* Rebook — cancel the current consignment + clear the booking so the
+            admin can dispatch a fresh label (e.g. after a wrong-weight booking).
+            Shown for any not-yet-delivered shipment, including cancelled ones. */}
+        {!delivered ? (
+          <button
+            type="button"
+            onClick={rebook}
+            disabled={pending}
+            className="rounded-full px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            style={{ backgroundColor: BRAND.purple }}
+          >
+            {pending ? "Working…" : "Rebook (new label)"}
           </button>
         ) : null}
       </div>
