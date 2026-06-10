@@ -6,6 +6,7 @@ import {
   orderItems,
   products,
   productVariants,
+  productConfigFields,
   coupons,
   user,
 } from "@/lib/db/schema";
@@ -22,7 +23,8 @@ import { pickImage } from "@/lib/image-manifest";
 import { hydrateProductVariants } from "@/lib/variants";
 import { getConfigurableProductData } from "@/lib/configurable-product-data";
 import { renderDescription } from "@/lib/render-description";
-import { ensureImagesV2 } from "@/lib/config-fields";
+import { ensureImagesV2, ensureConfigJson } from "@/lib/config-fields";
+import { sanitizeCustomText, customKey, buildConfigSummaryServer } from "@/lib/custom-text";
 import type { PictureData } from "@/lib/image-manifest";
 import type { PublicConfigField } from "@/lib/configurable-product-data";
 
@@ -709,6 +711,93 @@ export async function createPosOrder(
       // configurable products with no variant axis (D-06)
       const variantId = line.variantId ?? "manual";
 
+      // quick task 260610-kh3 — T-kh3-01: server re-validation of customInput options.
+      // Admin-entered configValues are still re-validated (defense-in-depth).
+      let sanitizedConfigData = line.configurationData ?? null;
+      if (sanitizedConfigData) {
+        let parsedCfg: { values: Record<string, string>; computedPrice: number; computedSummary: string } | null = null;
+        try {
+          parsedCfg = typeof sanitizedConfigData === "string"
+            ? JSON.parse(sanitizedConfigData)
+            : sanitizedConfigData as typeof parsedCfg;
+        } catch {
+          // Unparseable configurationData — let it through as-is.
+        }
+
+        if (parsedCfg && parsedCfg.values) {
+          // Fetch select fields for this product.
+          const configFieldRows = await db
+            .select({
+              id: productConfigFields.id,
+              productId: productConfigFields.productId,
+              fieldType: productConfigFields.fieldType,
+              label: productConfigFields.label,
+              configJson: productConfigFields.configJson,
+            })
+            .from(productConfigFields)
+            .where(
+              and(
+                eq(productConfigFields.productId, line.productId),
+              ),
+            );
+
+          type SelectFieldMeta = {
+            id: string;
+            label: string;
+            options: Array<{ label: string; value: string; customInput?: boolean; customMaxLength?: number }>;
+          };
+          const selectFields: SelectFieldMeta[] = [];
+          for (const row of configFieldRows) {
+            if (row.fieldType !== "select") continue;
+            try {
+              const cfg = ensureConfigJson("select", row.configJson) as { options: SelectFieldMeta["options"] };
+              selectFields.push({ id: row.id, label: row.label, options: cfg.options });
+            } catch {
+              // skip corrupt rows
+            }
+          }
+
+          const values = parsedCfg.values;
+          for (const sf of selectFields) {
+            const chosenValue = values[sf.id];
+            if (!chosenValue) continue;
+            const opt = sf.options.find((o) => o.value === chosenValue);
+            if (!opt) continue;
+
+            if (opt.customInput) {
+              const raw = values[customKey(sf.id)] ?? "";
+              const sanitized = sanitizeCustomText(raw, opt.customMaxLength ?? 30);
+              if (sanitized.length === 0) {
+                return {
+                  ok: false,
+                  error: `Please enter the required text for "${opt.label}".`,
+                };
+              }
+              values[customKey(sf.id)] = sanitized;
+            } else {
+              delete values[customKey(sf.id)];
+            }
+          }
+
+          if (selectFields.length > 0) {
+            const existingParts = (parsedCfg.computedSummary ?? "")
+              .split(" · ")
+              .filter((p) =>
+                !selectFields.some((sf) =>
+                  p.startsWith(sf.label + ": ") || p.startsWith(sf.label + ":"),
+                ),
+              );
+            parsedCfg.computedSummary = buildConfigSummaryServer(
+              selectFields,
+              values,
+              existingParts,
+            );
+          }
+
+          sanitizedConfigData = JSON.stringify(parsedCfg);
+        }
+      }
+
       resolvedLines.push({
         productId: line.productId,
         variantId,
@@ -718,7 +807,7 @@ export async function createPosOrder(
         variantLabel: null,
         unitPrice,
         quantity: line.quantity,
-        configurationData: line.configurationData ?? null,
+        configurationData: sanitizedConfigData,
       });
       continue;
     }
