@@ -42,6 +42,7 @@ import type { PublicConfigField } from "@/lib/configurable-product-data";
 import type { HydratedOption, HydratedVariant } from "@/lib/variants";
 import type { PictureData } from "@/lib/image-manifest";
 import type { TextareaFieldConfig, SelectFieldConfig } from "@/lib/config-fields";
+import { customKey, CUSTOM_TEXT_SUFFIX } from "@/lib/custom-text";
 import type { PosAddToOrderLine } from "@/components/store/product-detail";
 
 // ============================================================================
@@ -111,7 +112,19 @@ function buildSimpleSummary(
     } else if (f.fieldType === "colour") {
       const c = f.resolvedColours?.find((x) => x.id === v);
       if (c) parts.push(`${c.name} ${f.label.toLowerCase()}`);
-    } else if (f.fieldType === "number" || f.fieldType === "select") {
+    } else if (f.fieldType === "select") {
+      // quick task 260610-kh3 — if the chosen option has customInput, emit the
+      // typed text as `Label: "TEXT"` so it flows to bag/admin/production/invoice.
+      // (Was missed here when configurable-product-view got the same branch.)
+      const cfg = f.config as SelectFieldConfig;
+      const opt = cfg.options?.find((o) => o.value === v);
+      if (opt?.customInput) {
+        const typed = values[customKey(f.id)] ?? "";
+        parts.push(typed ? `${f.label}: "${typed}"` : `${f.label}: ${opt.label}`);
+      } else {
+        parts.push(`${f.label}: ${v}`);
+      }
+    } else if (f.fieldType === "number") {
       parts.push(`${f.label}: ${v}`);
     }
   }
@@ -225,6 +238,24 @@ export function SimpleProductView({
     [inputFields, values],
   );
 
+  // quick task 260610-kh3 — every select whose CHOSEN option has customInput
+  // must also have non-empty typed text before the CTA unlocks. Mirrors the
+  // identical gate in configurable-product-view (was missed here).
+  const customInputsSatisfied = useMemo(
+    () =>
+      inputFields
+        .filter((f) => f.fieldType === "select")
+        .every((f) => {
+          const v = values[f.id] ?? "";
+          if (!v) return true; // unselected handled by requiredFilled
+          const cfg = f.config as SelectFieldConfig;
+          const opt = cfg.options?.find((o) => o.value === v);
+          if (!opt?.customInput) return true;
+          return (values[customKey(f.id)] ?? "").trim().length > 0;
+        }),
+    [inputFields, values],
+  );
+
   // Pre-order detection mirrors stocked PDP. Only applies in variant branch.
   const isPreorderSelected =
     hasVariants &&
@@ -248,7 +279,7 @@ export function SimpleProductView({
 
   const canAdd = hasVariants
     ? !soldOut && !!selectedHydrated
-    : flatPrice !== null && requiredFilled;
+    : flatPrice !== null && requiredFilled && customInputsSatisfied;
 
   const addItem = useCartStore((s) => s.addItem);
   const setDrawerOpen = useCartStore((s) => s.setDrawerOpen);
@@ -282,10 +313,20 @@ export function SimpleProductView({
     if (flatPrice === null) return;
 
     // Strip textarea field IDs from values — admin content, not customer data.
+    // quick task 260610-kh3 — ALSO keep `${fieldId}__custom` sibling keys
+    // (customer-typed text for flagged select options). The previous exact-id
+    // filter silently dropped them, so the typed name never reached the
+    // summary/snapshot and server validation rejected checkout.
     const inputIds = new Set(inputFields.map((f) => f.id));
     const customerValues: Record<string, string> = {};
     for (const [k, v] of Object.entries(values)) {
-      if (inputIds.has(k)) customerValues[k] = v;
+      if (
+        inputIds.has(k) ||
+        (k.endsWith(CUSTOM_TEXT_SUFFIX) &&
+          inputIds.has(k.slice(0, -CUSTOM_TEXT_SUFFIX.length)))
+      ) {
+        customerValues[k] = v;
+      }
     }
 
     const summary = buildSimpleSummary(fields, customerValues);
@@ -327,7 +368,7 @@ export function SimpleProductView({
       return isPreorderSelected ? `Pre-order · ${priceLabel}` : `${addLabel} · ${priceLabel}`;
     }
     if (canAdd) return `${addLabel} · ${formatMYR(flatPrice!)}`;
-    if (!requiredFilled) return "Fill in all fields first";
+    if (!requiredFilled || !customInputsSatisfied) return "Fill in all fields first";
     return "Enter your details";
   })();
 
