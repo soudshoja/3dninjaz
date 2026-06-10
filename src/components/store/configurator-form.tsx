@@ -20,6 +20,7 @@ import { useRef } from "react";
 import { Check } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import { VariantOptionPicker } from "@/components/store/variant-option-picker";
+import { customKey } from "@/lib/custom-text";
 import type { PublicConfigField } from "@/lib/configurable-product-data";
 import type {
   TextFieldConfig,
@@ -352,34 +353,60 @@ function isLightColor(hex: string): boolean {
 function SelectField({
   field,
   value,
-  onChange,
+  allValues,
+  onValuesChange,
   onTouch,
   touched,
   basePrice,
 }: {
   field: PublicConfigField;
   value: string;
-  onChange: (v: string) => void;
+  /** Full values map — needed to read/write the __custom sibling key. */
+  allValues: Record<string, string>;
+  /** Replaces the full values map (option value + optional __custom text). */
+  onValuesChange: (next: Record<string, string>) => void;
   onTouch: () => void;
   touched: React.MutableRefObject<boolean>;
   basePrice?: number;
 }) {
   const cfg = field.config as SelectFieldConfig;
+  const selectedOpt = cfg.options.find((o) => o.value === value);
+  const customValue = allValues[customKey(field.id)] ?? "";
 
-  function handleChange(v: string) {
-    onChange(v);
+  // Derived named boolean — "option chosen but required text is blank"
+  const customTextError = !!selectedOpt?.customInput && customValue.trim().length === 0;
+
+  function handleOptionChange(v: string) {
+    // When option changes, clear any stale __custom text from the previous selection.
+    const next = { ...allValues, [field.id]: v };
+    delete next[customKey(field.id)];
+    onValuesChange(next);
     if (!touched.current && v) {
       touched.current = true;
       onTouch();
     }
   }
 
+  function handleCustomTextChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const maxLen = selectedOpt?.customMaxLength ?? 30;
+    const typed = e.currentTarget.value.slice(0, maxLen);
+    onValuesChange({ ...allValues, [customKey(field.id)]: typed });
+    if (!touched.current) {
+      touched.current = true;
+      onTouch();
+    }
+  }
+
+  const maxLen = selectedOpt?.customMaxLength ?? 30;
+  const remaining = maxLen - customValue.length;
+  const atLimit = customValue.length >= maxLen;
+
   return (
     <div className="flex flex-col gap-1.5">
       <VariantOptionPicker
         options={cfg.options}
         value={value}
-        onChange={handleChange}
+        onChange={handleOptionChange}
         label={field.label}
         placeholder={`Select ${field.label.toLowerCase()}…`}
         basePrice={basePrice}
@@ -387,6 +414,61 @@ function SelectField({
       {field.helpText ? (
         <p className="text-xs px-1" style={{ color: "#6b7280" }}>{field.helpText}</p>
       ) : null}
+
+      {/* quick task 260610-kh3 — custom text input revealed when the selected option has customInput */}
+      {selectedOpt?.customInput && (
+        <div className="flex flex-col gap-1 mt-1">
+          <div className="relative">
+            <input
+              type="text"
+              value={customValue}
+              onChange={handleCustomTextChange}
+              maxLength={maxLen}
+              placeholder="Type your text here…"
+              aria-required
+              aria-label={`${field.label} — your text`}
+              aria-invalid={customTextError ? "true" : undefined}
+              className="w-full px-5 py-4 rounded-2xl text-lg font-bold tracking-widest outline-none transition-all duration-200"
+              style={{
+                minHeight: 56,
+                background: "#fff",
+                border: `2.5px solid ${customValue.length > 0 ? BRAND.blue : (customTextError ? "#be123c" : "#d1d5db")}`,
+                color: BRAND.ink,
+                boxShadow: customValue.length > 0
+                  ? `0 0 0 3px ${BRAND.blue}20, 0 4px 0 ${BRAND.blueDark}30`
+                  : customTextError
+                  ? `0 0 0 3px #be123c18`
+                  : `0 2px 0 #d1d5db40`,
+              }}
+            />
+            {/* Character count badge inside input */}
+            <span
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold tabular-nums"
+              style={{ color: atLimit ? "#be123c" : "#94a3b8", pointerEvents: "none" }}
+              aria-hidden="true"
+            >
+              {customValue.length}/{maxLen}
+            </span>
+          </div>
+          {/* Limit warning */}
+          {atLimit && (
+            <span className="text-xs font-semibold px-1" style={{ color: "#be123c" }}>
+              Maximum reached
+            </span>
+          )}
+          {!atLimit && remaining <= 3 && customValue.length > 0 && (
+            <span className="text-xs font-semibold px-1" style={{ color: "#f59e0b" }}>
+              {remaining} left
+            </span>
+          )}
+          {/* Named customTextError microcopy — independent of showRequiredError */}
+          {customTextError && (
+            <p className="text-xs font-semibold px-1" style={{ color: "#be123c" }}>
+              This field is required
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -476,7 +558,8 @@ export function ConfiguratorForm({ fields, values, onChange, onTouch, basePrice,
               <SelectField
                 field={field}
                 value={value}
-                onChange={handleFieldChange}
+                allValues={values}
+                onValuesChange={onChange}
                 onTouch={onTouch}
                 touched={touchedRef}
                 basePrice={basePrice}
