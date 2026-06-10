@@ -248,6 +248,13 @@ export type OrderDetails = {
   id: number;
   statusCode: number;
   statusMessage?: string;
+  /**
+   * Raw textual status from /order/{id} (e.g. "ready"). The live API often
+   * sends this INSTEAD of statusMessage — observed 2026-06-10: a fresh
+   * consignment awaiting drop-off returns statusCode 500 + status "ready"
+   * (docs claim 500 = failed delivery). Used to disambiguate that case.
+   */
+  status?: string;
   consignmentNo?: string;
   trackingNo?: string;
   serviceCode?: string;
