@@ -7,6 +7,7 @@ import {
 import { eq } from "drizzle-orm";
 import { sanitiseEmailHtml, escapeHtml } from "@/lib/email/sanitize";
 import { BUSINESS } from "@/lib/business-info";
+import { publicOrigin } from "@/lib/public-url";
 
 // ----------------------------------------------------------------------------
 // Common branding variables injected into EVERY template render.
@@ -24,7 +25,7 @@ import { BUSINESS } from "@/lib/business-info";
 // ----------------------------------------------------------------------------
 const BASE_TEMPLATE_VARS: Record<string, string> = {
   store_name: "3D Ninjaz",
-  store_url: "https://app.3dninjaz.com",
+  store_url: publicOrigin(),
   support_email: BUSINESS.contactEmail,
 };
 

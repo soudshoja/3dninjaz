@@ -17,6 +17,7 @@ import {
 } from "@/lib/db/schema";
 import { requireAdmin, getSessionUser } from "@/lib/auth-helpers";
 import { delyvaApi, DelyvaError, parseQuoteServices, getDelyvaWebhookSecret } from "@/lib/delyva";
+import { publicUrl } from "@/lib/public-url";
 import type { InventoryItem, DelyvaContact, OrderDetails } from "@/lib/delyva";
 import {
   buildTrackingView,
@@ -872,7 +873,7 @@ async function _bookShipmentInternal(
         orderNumber: formatOrderNumber(order.id),
         courierName,
         trackingNo: details?.trackingNo || "pending",
-        trackingUrl: `https://app.3dninjaz.com/orders/${order.id}`,
+        trackingUrl: publicUrl(`/orders/${order.id}`),
       }).catch(() => {});
     }
 

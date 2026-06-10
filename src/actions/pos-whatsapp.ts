@@ -31,9 +31,10 @@ import { eq } from "drizzle-orm";
 import { generatePaymentLink } from "@/actions/admin-manual-orders";
 import { sendWhatsAppNotification, sendWhatsAppInvoicePdf } from "@/lib/whatsapp/sender";
 import { formatOrderNumber } from "@/lib/orders";
+import { publicOrigin } from "@/lib/public-url";
 
 const PUBLIC_LINK_BASE =
-  process.env.NEXT_PUBLIC_BASE_URL ?? "https://app.3dninjaz.com";
+  process.env.NEXT_PUBLIC_BASE_URL ?? publicOrigin();
 
 // ─── sendPosPaymentLinkWhatsApp ───────────────────────────────────────────────
 

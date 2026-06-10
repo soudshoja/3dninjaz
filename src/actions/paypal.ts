@@ -13,6 +13,7 @@ import { formatOrderNumber } from "@/lib/orders";
 import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
 import { sendWhatsAppNotification, sendWhatsAppInvoicePdf } from "@/lib/whatsapp/sender";
 import { validateCoupon, redeemCoupon } from "@/actions/coupons";
+import { publicUrl } from "@/lib/public-url";
 import { getShippingRate } from "@/actions/admin-shipping";
 import { quoteForCart } from "@/actions/shipping-quote";
 import { revalidatePath } from "next/cache";
@@ -764,7 +765,7 @@ export async function capturePayPalOrder({
   void sendWhatsAppNotification("order_confirmation", existing.shippingPhone, {
     customerName: existing.shippingName,
     orderNumber: formatOrderNumber(existing.id),
-    orderUrl: `https://app.3dninjaz.com/orders/${existing.id}`,
+    orderUrl: publicUrl(`/orders/${existing.id}`),
   }).catch(() => {});
   void sendWhatsAppInvoicePdf(existing.id, existing.shippingPhone).catch(() => {});
 
