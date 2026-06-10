@@ -11,6 +11,7 @@ import { sendWhatsAppNotification, sendWhatsAppInvoicePdf } from "@/lib/whatsapp
 import { writePaymentProof } from "@/lib/payment-proof-storage";
 import { assertValidTransition } from "@/lib/orders";
 import crypto from "node:crypto";
+import { publicUrl } from "@/lib/public-url";
 
 /**
  * Phase 7 (07-03) — PUBLIC payment-link actions.
@@ -528,7 +529,7 @@ export async function capturePaymentLinkPayment({
   void sendWhatsAppNotification("order_confirmation", orderRow.shippingPhone, {
     customerName: orderRow.shippingName,
     orderNumber: shortOrderNumber(orderRow.id),
-    orderUrl: `https://app.3dninjaz.com/orders/${orderRow.id}`,
+    orderUrl: publicUrl(`/orders/${orderRow.id}`),
   }).catch(() => {});
   void sendWhatsAppInvoicePdf(orderRow.id, orderRow.shippingPhone).catch(() => {});
 

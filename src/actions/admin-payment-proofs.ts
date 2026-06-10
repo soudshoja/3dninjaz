@@ -10,6 +10,7 @@ import { writePaymentProof } from "@/lib/payment-proof-storage";
 import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
 import { revalidatePath } from "next/cache";
 import { sendWhatsAppNotification, sendWhatsAppInvoicePdf } from "@/lib/whatsapp/sender";
+import { publicUrl } from "@/lib/public-url";
 
 /**
  * Phase 20 (20-07) — payment proof review actions.
@@ -138,7 +139,7 @@ export async function confirmPaymentProof(
   void sendWhatsAppNotification("order_confirmation", order.shippingPhone, {
     customerName: order.shippingName,
     orderNumber: formatOrderNumber(order.id),
-    orderUrl: `https://app.3dninjaz.com/orders/${order.id}`,
+    orderUrl: publicUrl(`/orders/${order.id}`),
   }).catch(() => {});
   void sendWhatsAppInvoicePdf(order.id, order.shippingPhone).catch(() => {});
 
