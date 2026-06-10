@@ -1,12 +1,12 @@
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { orders as ordersTable, orderItems as orderItemsTable } from "@/lib/db/schema";
+import { orders as ordersTable, orderItems as orderItemsTable, products as productsTable } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/auth-helpers";
 import { getMyOrder } from "@/actions/orders";
-import { ensureOrderItemConfigData } from "@/lib/config-fields";
+import { ensureOrderItemConfigData, ensureImagesV2 } from "@/lib/config-fields";
 import { BRAND } from "@/lib/brand";
 import { formatOrderNumber, isManualLine } from "@/lib/orders";
 import { formatMYR } from "@/lib/format";
@@ -31,6 +31,35 @@ type GuestOrderRow = typeof ordersTable.$inferSelect & {
 };
 
 /**
+ * Product-image fallback (mirrors the admin order page): configurable /
+ * keychain items don't snapshot a product_image at add-to-bag, so
+ * order_items.product_image is NULL. Look up each product's primary image by
+ * product_id so the thumbnail still shows. Returns productId -> imageUrl.
+ */
+async function productImageFallback(
+  items: Array<{ productImage: string | null; productId: string; variantId: string }>,
+): Promise<Record<string, string>> {
+  const missing = Array.from(
+    new Set(
+      items
+        .filter((i) => !i.productImage && !isManualLine(i) && i.productId)
+        .map((i) => i.productId),
+    ),
+  );
+  if (missing.length === 0) return {};
+  const rows = await db
+    .select({ id: productsTable.id, images: productsTable.images })
+    .from(productsTable)
+    .where(inArray(productsTable.id, missing));
+  const map: Record<string, string> = {};
+  for (const p of rows) {
+    const first = ensureImagesV2(p.images)[0]?.url;
+    if (first) map[p.id] = first;
+  }
+  return map;
+}
+
+/**
  * Read-only order view for guests accessing via tokenized email link.
  * No cancel/return, no invoice download, no receipt resend — just the
  * order details and progress so the guest can track their order.
@@ -38,9 +67,11 @@ type GuestOrderRow = typeof ordersTable.$inferSelect & {
 function GuestOrderView({
   row,
   justPaid,
+  imgFallback,
 }: {
   row: GuestOrderRow;
   justPaid: boolean;
+  imgFallback: Record<string, string>;
 }) {
 
   return (
@@ -125,10 +156,10 @@ function GuestOrderView({
                     className="h-16 w-16 md:h-20 md:w-20 rounded-xl overflow-hidden shrink-0"
                     style={{ backgroundColor: `${BRAND.blue}15` }}
                   >
-                    {i.productImage && !isManualLine(i) ? (
+                    {!isManualLine(i) && (i.productImage || imgFallback[i.productId]) ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={i.productImage}
+                        src={i.productImage || imgFallback[i.productId]}
                         alt=""
                         className="h-full w-full object-cover"
                       />
@@ -261,8 +292,15 @@ export default async function OrderDetailPage({
         .where(eq(orderItemsTable.orderId, orderRow.id));
 
       const row = { ...orderRow, items };
+      const guestImgFallback = await productImageFallback(items);
       // Render a simplified view for the guest (no cancel/return, no review).
-      return <GuestOrderView row={row} justPaid={from === "checkout"} />;
+      return (
+        <GuestOrderView
+          row={row}
+          justPaid={from === "checkout"}
+          imgFallback={guestImgFallback}
+        />
+      );
     }
     // No token and no session — redirect to login.
     redirect(`/login?next=/orders/${id}`);
@@ -270,6 +308,9 @@ export default async function OrderDetailPage({
 
   const row = await getMyOrder(id);
   if (!row) notFound();
+
+  // Thumbnail fallback for configurable items (no image snapshot at add-to-bag).
+  const imgFallback = await productImageFallback(row.items);
 
   // "Just paid" shows the green banner. Either the capture action tacked
   // `?from=checkout` on the redirect, or the order transitioned to paid
@@ -407,10 +448,10 @@ export default async function OrderDetailPage({
                   style={{ backgroundColor: `${BRAND.blue}15` }}
                 >
                   {/* D-08 (Phase 20): manual lines have no product image — no fetch */}
-                  {i.productImage && !isManualLine(i) ? (
+                  {!isManualLine(i) && (i.productImage || imgFallback[i.productId]) ? (
                     // eslint-disable-next-line @next/next/no-img-element -- product may be deleted
                     <img
-                      src={i.productImage}
+                      src={i.productImage || imgFallback[i.productId]}
                       alt=""
                       className="h-full w-full object-cover"
                     />
@@ -468,21 +509,32 @@ export default async function OrderDetailPage({
           </div>
         </section>
 
-        {/* Phase 6 06-05 — per-item Review your items section. Hidden when
-            order isn't in a buyer-qualifying status. */}
+        {/* Phase 6 06-05 — Review section. Hidden when order isn't in a
+            buyer-qualifying status. */}
         {/* D-08 (Phase 20): filter out manual lines — they have no product record */}
+        {/* One review per PRODUCT, not per line item: an order with 8 lines of
+            the same configurable product (e.g. 8 named clickers) should show a
+            single review card, not 8. Dedupe by productId, keep first line. */}
         <ReviewsSection
           status={row.status}
-          items={row.items
-            .filter((i) => !isManualLine(i))
-            .map((i) => ({
-              id: i.id,
-              productId: i.productId,
-              productSlug: i.productSlug,
-              productName: i.productName,
-              size: i.size,
-              variantLabel: i.variantLabel ?? null,
-            }))}
+          items={Array.from(
+            row.items
+              .filter((i) => !isManualLine(i))
+              .reduce((acc, i) => {
+                if (!acc.has(i.productId)) {
+                  acc.set(i.productId, {
+                    id: i.id,
+                    productId: i.productId,
+                    productSlug: i.productSlug,
+                    productName: i.productName,
+                    size: i.size,
+                    variantLabel: i.variantLabel ?? null,
+                  });
+                }
+                return acc;
+              }, new Map<string, { id: string; productId: string; productSlug: string; productName: string; size: string | null; variantLabel: string | null }>())
+              .values(),
+          )}
         />
 
         {/* Phase 6 06-06 / 06-07 — Cancel / return action panel. Renders only
