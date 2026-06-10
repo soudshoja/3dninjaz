@@ -62,6 +62,18 @@ export type SelectFieldConfig = {
      * the variant/product/default ladder.
      */
     weight?: number;
+    /**
+     * quick task 260610-kh3 — when true, selecting this option reveals a
+     * required free-text input on the PDP. The typed text is stored under
+     * `values[fieldId + "__custom"]` so price/SKU/weight lookups (which key
+     * off `values[fieldId]`) remain untouched.
+     */
+    customInput?: boolean;
+    /**
+     * quick task 260610-kh3 — admin-set character cap for the custom-text
+     * input. Defaults to 30 when absent. Schema enforces 1–200.
+     */
+    customMaxLength?: number;
   }>;
 };
 
@@ -140,6 +152,10 @@ export const SelectFieldConfigSchema: z.ZodType<SelectFieldConfig> = z.object({
         sku: z.string().optional(),
         imageUrl: z.string().optional(),
         weight: z.number().int().min(0).max(50_000).optional(),
+        /** quick task 260610-kh3 — per-option custom-text flag */
+        customInput: z.boolean().optional(),
+        /** quick task 260610-kh3 — character cap for custom-text input (1–200) */
+        customMaxLength: z.number().int().min(1).max(200).optional(),
       }),
     )
     .min(1),

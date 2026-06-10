@@ -302,6 +302,10 @@ type SelectOption = {
   sku?: string;
   imageUrl?: string;
   weight?: number;
+  /** quick task 260610-kh3 — per-option custom-text flag */
+  customInput?: boolean;
+  /** quick task 260610-kh3 — character cap for the custom-text input (1–200) */
+  customMaxLength?: number;
 };
 
 // Internal per-option image button — 40×40 square.
@@ -598,91 +602,134 @@ export function SelectConfigForm({
       {options.map((opt, i) => (
         <div
           key={i}
-          className="grid grid-cols-[minmax(0,1fr)_96px_96px_88px_auto_28px] items-center gap-2 py-2 border-b border-zinc-100 last:border-b-0"
+          className="py-2 border-b border-zinc-100 last:border-b-0"
         >
-          {/* Label input — grid column 1 */}
-          <Input
-            placeholder="Label"
-            value={opt.label}
-            onChange={(e) =>
-              updateOption(i, {
-                label: e.target.value,
-                value: e.target.value.toLowerCase().replace(/\s+/g, "-"),
-              })
-            }
-            className="h-9"
-            title="Display label for this option"
-            aria-label={`Option ${i + 1} label`}
-          />
+          {/* Main option row — 6-col grid (unchanged layout) */}
+          <div className="grid grid-cols-[minmax(0,1fr)_96px_96px_88px_auto_28px] items-center gap-2">
+            {/* Label input — grid column 1 */}
+            <Input
+              placeholder="Label"
+              value={opt.label}
+              onChange={(e) =>
+                updateOption(i, {
+                  label: e.target.value,
+                  value: e.target.value.toLowerCase().replace(/\s+/g, "-"),
+                })
+              }
+              className="h-9"
+              title="Display label for this option"
+              aria-label={`Option ${i + 1} label`}
+            />
 
-          {/* Price override */}
-          <Input
-            placeholder="—"
-            type="number"
-            min={0}
-            step={0.01}
-            value={opt.price ?? ""}
-            onChange={(e) =>
-              updateOption(i, {
-                price: e.target.value === "" ? undefined : Number(e.target.value),
-              })
-            }
-            className="h-9"
-            title="Override price — replaces the tier price when this option is selected"
-            aria-label={`Option ${i + 1} price override (RM)`}
-          />
+            {/* Price override */}
+            <Input
+              placeholder="—"
+              type="number"
+              min={0}
+              step={0.01}
+              value={opt.price ?? ""}
+              onChange={(e) =>
+                updateOption(i, {
+                  price: e.target.value === "" ? undefined : Number(e.target.value),
+                })
+              }
+              className="h-9"
+              title="Override price — replaces the tier price when this option is selected"
+              aria-label={`Option ${i + 1} price override (RM)`}
+            />
 
-          {/* SKU */}
-          <Input
-            placeholder="SKU-001"
-            value={opt.sku ?? ""}
-            onChange={(e) =>
-              updateOption(i, { sku: e.target.value || undefined })
-            }
-            className="h-9 font-mono text-xs"
-            title="SKU for this option (for order fulfilment)"
-            aria-label={`Option ${i + 1} SKU`}
-          />
+            {/* SKU */}
+            <Input
+              placeholder="SKU-001"
+              value={opt.sku ?? ""}
+              onChange={(e) =>
+                updateOption(i, { sku: e.target.value || undefined })
+              }
+              className="h-9 font-mono text-xs"
+              title="SKU for this option (for order fulfilment)"
+              aria-label={`Option ${i + 1} SKU`}
+            />
 
-          {/* Weight (g) */}
-          <Input
-            type="number"
-            min={0}
-            step={1}
-            value={opt.weight ?? ""}
-            onChange={(e) =>
-              updateOption(i, {
-                weight:
-                  e.target.value === ""
-                    ? undefined
-                    : Math.round(Number(e.target.value)),
-              })
-            }
-            placeholder="—"
-            className="h-9"
-            title="Per-option shipping weight in grams — used for the Delyva shipping quote"
-            aria-label={`Option ${i + 1} weight (grams)`}
-          />
+            {/* Weight (g) */}
+            <Input
+              type="number"
+              min={0}
+              step={1}
+              value={opt.weight ?? ""}
+              onChange={(e) =>
+                updateOption(i, {
+                  weight:
+                    e.target.value === ""
+                      ? undefined
+                      : Math.round(Number(e.target.value)),
+                })
+              }
+              placeholder="—"
+              className="h-9"
+              title="Per-option shipping weight in grams — used for the Delyva shipping quote"
+              aria-label={`Option ${i + 1} weight (grams)`}
+            />
 
-          {/* Image — camera + gallery buttons */}
-          <SelectOptionImageCell
-            opt={opt}
-            fieldId={fieldId}
-            productId={productId ?? "new"}
-            onImageUrl={(url) => updateOption(i, { imageUrl: url })}
-            onSaveFieldFirst={onSaveFieldFirst}
-          />
+            {/* Image — camera + gallery buttons */}
+            <SelectOptionImageCell
+              opt={opt}
+              fieldId={fieldId}
+              productId={productId ?? "new"}
+              onImageUrl={(url) => updateOption(i, { imageUrl: url })}
+              onSaveFieldFirst={onSaveFieldFirst}
+            />
 
-          {/* Delete */}
-          <button
-            type="button"
-            onClick={() => removeOption(i)}
-            className="flex items-center justify-center rounded text-zinc-400 hover:text-red-500 transition-colors duration-150 disabled:opacity-30 shrink-0 h-9"
-            aria-label="Remove option"
-            disabled={options.length <= 1}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
+            {/* Delete */}
+            <button
+              type="button"
+              onClick={() => removeOption(i)}
+              className="flex items-center justify-center rounded text-zinc-400 hover:text-red-500 transition-colors duration-150 disabled:opacity-30 shrink-0 h-9"
+              aria-label="Remove option"
+              disabled={options.length <= 1}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          {/* quick task 260610-kh3 — per-option "Customer types text" sub-row */}
+          <div className="flex items-center gap-3 mt-1.5 pl-1">
+            <Switch
+              id={`customInput-${i}`}
+              checked={opt.customInput ?? false}
+              onCheckedChange={(v) =>
+                updateOption(i, v
+                  ? { customInput: true, customMaxLength: opt.customMaxLength ?? 30 }
+                  : { customInput: false, customMaxLength: undefined })
+              }
+            />
+            <Label
+              htmlFor={`customInput-${i}`}
+              className="text-xs cursor-pointer text-zinc-500 select-none"
+            >
+              Customer types text
+            </Label>
+            {opt.customInput && (
+              <div className="flex items-center gap-1.5 ml-2">
+                <Label className="text-xs text-zinc-400 whitespace-nowrap">Max length</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={opt.customMaxLength ?? 30}
+                  onChange={(e) =>
+                    updateOption(i, {
+                      customMaxLength:
+                        e.target.value === ""
+                          ? 30
+                          : Math.min(200, Math.max(1, Math.round(Number(e.target.value)))),
+                    })
+                  }
+                  className="h-7 w-16 text-xs"
+                  aria-label={`Option ${i + 1} custom text max length`}
+                />
+              </div>
+            )}
+          </div>
         </div>
       ))}
 

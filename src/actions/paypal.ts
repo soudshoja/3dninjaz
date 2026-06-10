@@ -18,6 +18,9 @@ import { getShippingRate } from "@/actions/admin-shipping";
 import { quoteForCart } from "@/actions/shipping-quote";
 import { revalidatePath } from "next/cache";
 import type { ConfigurationData } from "@/lib/config-fields";
+import { ensureConfigJson } from "@/lib/config-fields";
+import { productConfigFields } from "@/lib/db/schema";
+import { sanitizeCustomText, customKey, buildConfigSummaryServer } from "@/lib/custom-text";
 
 type BagLineInput = {
   variantId: string;
@@ -299,6 +302,96 @@ export async function createPayPalOrder(
           .where(inArray(products.id, configurableProductIds))
       : [];
   const productById = new Map(configurableProductRows.map((p) => [p.id, p]));
+
+  // quick task 260610-kh3 — T-kh3-01: server re-validation of customInput options.
+  // Re-read select config fields from DB for all configurable products, then
+  // sanitize/enforce required+maxLength on every __custom value before snapshot.
+  // Pricing/SKU/weight resolution is NOT touched (D-4).
+  if (configurableProductIds.length > 0) {
+    const configFieldRows = await db
+      .select({
+        id: productConfigFields.id,
+        productId: productConfigFields.productId,
+        fieldType: productConfigFields.fieldType,
+        label: productConfigFields.label,
+        configJson: productConfigFields.configJson,
+      })
+      .from(productConfigFields)
+      .where(
+        inArray(productConfigFields.productId, configurableProductIds),
+      );
+
+    // Build map: productId -> fieldId -> { label, options }
+    type SelectFieldMeta = {
+      id: string;
+      label: string;
+      options: Array<{ label: string; value: string; customInput?: boolean; customMaxLength?: number }>;
+    };
+    const selectFieldsByProduct = new Map<string, SelectFieldMeta[]>();
+    for (const row of configFieldRows) {
+      if (row.fieldType !== "select") continue;
+      try {
+        const cfg = ensureConfigJson("select", row.configJson) as { options: SelectFieldMeta["options"] };
+        const existing = selectFieldsByProduct.get(row.productId) ?? [];
+        existing.push({ id: row.id, label: row.label, options: cfg.options });
+        selectFieldsByProduct.set(row.productId, existing);
+      } catch {
+        // Corrupt configJson — skip; don't block checkout for unrelated fields.
+      }
+    }
+
+    // Mutate each configurable line's values in-place.
+    for (const line of configurableInputLines) {
+      if (!line.configurationData) continue;
+      const pid = line.productId ?? "";
+      const selectFields = selectFieldsByProduct.get(pid) ?? [];
+      const values = line.configurationData.values as Record<string, string>;
+
+      for (const sf of selectFields) {
+        const chosenValue = values[sf.id];
+        if (!chosenValue) continue;
+        const opt = sf.options.find((o) => o.value === chosenValue);
+        if (!opt) continue;
+
+        if (opt.customInput) {
+          // Required: read, sanitize, enforce non-empty.
+          const raw = values[customKey(sf.id)] ?? "";
+          const sanitized = sanitizeCustomText(raw, opt.customMaxLength ?? 30);
+          if (sanitized.length === 0) {
+            return {
+              ok: false,
+              error: `Please enter the required text for "${opt.label}".`,
+            };
+          }
+          values[customKey(sf.id)] = sanitized;
+        } else {
+          // Non-flagged option: strip any smuggled __custom value (T-kh3-03).
+          delete values[customKey(sf.id)];
+        }
+      }
+
+      // Rebuild computedSummary server-side from sanitized values (T-kh3-02).
+      if (selectFields.length > 0) {
+        // Collect non-select parts from the existing client summary by splitting
+        // on " · " and filtering out parts we will rebuild from select fields.
+        // Simpler: re-derive all parts from scratch for select fields; keep the
+        // client summary for non-select fields (text/colour/number) unchanged.
+        const existingParts = (line.configurationData.computedSummary ?? "")
+          .split(" · ")
+          .filter((p) => {
+            // Filter out any part whose label matches a select field we will rebuild.
+            return !selectFields.some((sf) =>
+              p.startsWith(sf.label + ": ") || p.startsWith(sf.label + ":"),
+            );
+          });
+        line.configurationData.computedSummary = buildConfigSummaryServer(
+          selectFields,
+          values,
+          existingParts,
+        );
+      }
+    }
+  }
 
   type ConfigSnap = typeof snapshots[0] & { configurationData: ConfigurationData | null };
   const allSnapshots: ConfigSnap[] = [
