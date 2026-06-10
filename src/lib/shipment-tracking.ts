@@ -197,12 +197,23 @@ export function buildTrackingView(args: {
 
   // Seed timeline from the mirror row when live call failed and we have no
   // events — at minimum show the latest known status so the UI never looks
-  // blank for a booked shipment.
+  // blank for a booked shipment. The synthetic note must use the SAME
+  // 500-disambiguation as the banner (statusText + parcel progress), or a
+  // fresh "ready" consignment seeds a scary "Delivery issue" event.
   if (timeline.length === 0 && statusCode !== null) {
     timeline.push({
       at: shipment.updatedAt,
       statusCode,
-      note: statusMessage ?? fallbackNote(statusCode),
+      note:
+        statusMessage ??
+        bucketLabel(
+          bucketForStatusCode(statusCode, true, {
+            statusText: statusMessage,
+            hasProgress: Boolean(
+              trackingNo ?? shipment.personnelName ?? null,
+            ),
+          }),
+        ),
     });
   }
 
