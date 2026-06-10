@@ -7,6 +7,7 @@ import { sendOrderDeliveredEmail } from "@/actions/send-emails";
 import { formatOrderNumber } from "@/lib/orders";
 import { getDelyvaWebhookSecret } from "@/lib/delyva";
 import { sendWhatsAppNotification } from "@/lib/whatsapp/sender";
+import { publicUrl } from "@/lib/public-url";
 
 // ============================================================================
 // Phase 9 (09-01) — Delyva webhook receiver.
@@ -199,7 +200,7 @@ export async function POST(req: NextRequest) {
               void sendWhatsAppNotification("order_delivered", order[0].shippingPhone, {
                 customerName: order[0].shippingName,
                 orderNumber: formatOrderNumber(order[0].id),
-                orderUrl: `https://app.3dninjaz.com/orders/${order[0].id}`,
+                orderUrl: publicUrl(`/orders/${order[0].id}`),
               }).catch(() => {});
             }
           }

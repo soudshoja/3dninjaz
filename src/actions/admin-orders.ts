@@ -17,6 +17,7 @@ import { renderInvoicePdfBase64 } from "@/lib/pdf/render-invoice";
 import { sendMedia } from "@/lib/whatsapp/client";
 import { normalizeMsisdn } from "@/lib/whatsapp/events";
 import { getWhatsappStateFresh } from "@/lib/whatsapp/settings";
+import { publicUrl } from "@/lib/public-url";
 // formatOrderNumber already imported on line 9
 
 // ============================================================================
@@ -361,7 +362,7 @@ export async function updateOrderStatus(
     void sendWhatsAppNotification("order_processing", row.shippingPhone, {
       customerName: row.shippingName,
       orderNumber: formatOrderNumber(orderId),
-      orderUrl: `https://app.3dninjaz.com/orders/${orderId}`,
+      orderUrl: publicUrl(`/orders/${orderId}`),
     }).catch(() => {});
   }
 
@@ -419,7 +420,7 @@ export async function approveWhatsAppOrder(
   void sendWhatsAppNotification("order_approved", row.shippingPhone, {
     customerName: row.shippingName,
     orderNumber: formatOrderNumber(orderId),
-    orderUrl: `https://app.3dninjaz.com/orders/${orderId}`,
+    orderUrl: publicUrl(`/orders/${orderId}`),
   }).catch(() => {});
   void sendWhatsAppInvoicePdf(orderId, row.shippingPhone).catch(() => {});
 

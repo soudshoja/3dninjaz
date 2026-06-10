@@ -27,9 +27,10 @@ import type {
   ConnectResult,
   StateResult,
 } from "@/lib/whatsapp/types";
+import { publicOrigin } from "@/lib/public-url";
 
 const APP_BASE_URL =
-  process.env.APP_BASE_URL ?? "https://app.3dninjaz.com";
+  process.env.APP_BASE_URL ?? publicOrigin();
 
 // ---------------------------------------------------------------------------
 // getWhatsappAdminState
