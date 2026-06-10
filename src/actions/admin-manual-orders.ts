@@ -9,6 +9,7 @@ import { manualOrderSchema, type ManualOrderInput } from "@/lib/validators";
 import { revalidatePath } from "next/cache";
 import { sendWhatsAppNotification } from "@/lib/whatsapp/sender";
 import { formatOrderNumber } from "@/lib/orders";
+import { publicOrigin } from "@/lib/public-url";
 
 /**
  * Phase 7 (07-03) — manual orders + payment links server actions.
@@ -27,7 +28,7 @@ import { formatOrderNumber } from "@/lib/orders";
 
 const PAYMENT_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const PUBLIC_LINK_BASE =
-  process.env.NEXT_PUBLIC_BASE_URL ?? "https://app.3dninjaz.com";
+  process.env.NEXT_PUBLIC_BASE_URL ?? publicOrigin();
 const SENTINEL_EMAIL_DOMAIN = "@3dninjaz.local";
 
 export type CreateManualOrderResult =

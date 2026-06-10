@@ -168,8 +168,11 @@ export function buildTrackingView(args: {
   const trackingNo = live?.trackingNo ?? shipment.trackingNo ?? null;
   const serviceCode = live?.serviceCode ?? shipment.serviceCode ?? null;
   const statusCode = live?.statusCode ?? shipment.statusCode ?? null;
+  // Live /order/{id} often carries the textual state in `status` (e.g.
+  // "ready") rather than statusMessage — keep it in the chain so the UI and
+  // the 500-disambiguation below can see it.
   const statusMessage =
-    live?.statusMessage ?? shipment.statusMessage ?? null;
+    live?.statusMessage ?? live?.status ?? shipment.statusMessage ?? null;
 
   const delivered =
     typeof statusCode === "number" && statusCode >= 400 && statusCode !== 500;
@@ -306,11 +309,32 @@ export type TrackingBucket =
 export function bucketForStatusCode(
   code: number | null,
   hasShipment: boolean,
+  opts?: {
+    /** Textual status from Delyva (statusMessage or raw `status`, e.g. "ready"). */
+    statusText?: string | null;
+    /**
+     * Whether the parcel shows any courier progress (tracking number issued,
+     * personnel assigned, or real tracking events). A genuine failed delivery
+     * always has progress; a fresh not-yet-dropped-off consignment has none.
+     */
+    hasProgress?: boolean;
+  },
 ): TrackingBucket {
   if (!hasShipment) return "awaiting";
   if (code === null) return "awaiting";
   if (code === 90) return "cancelled";
-  if (code === 500) return "exception";
+  if (code === 500) {
+    // Delyva double-books code 500: docs say "failed delivery", but the live
+    // API also returns 500 with status "ready" for a freshly-created
+    // consignment that hasn't been handed to the courier yet (observed
+    // 2026-06-10, SPX DROP). Showing "Delivery issue" for those scared
+    // customers over parcels that simply hadn't shipped. Treat 500 as a real
+    // exception only when the text or the parcel's progress says otherwise.
+    const text = opts?.statusText?.trim().toLowerCase() ?? "";
+    if (/\b(ready|created|pending|process)/.test(text)) return "awaiting";
+    if (opts?.hasProgress === false) return "awaiting";
+    return "exception";
+  }
   if (code >= 400) return "delivered";
   if (code >= 300) return "out_for_delivery";
   if (code >= 200) return "in_transit";

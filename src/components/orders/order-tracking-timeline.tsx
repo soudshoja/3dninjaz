@@ -64,7 +64,13 @@ export function OrderTrackingTimeline({
     );
   }
 
-  const bucket = bucketForStatusCode(view.statusCode, true);
+  const bucket = bucketForStatusCode(view.statusCode, true, {
+    statusText: view.statusMessage,
+    // No tracking number and no courier personnel = the parcel hasn't been
+    // handed over yet — lets the bucket helper tell a fresh code-500 "ready"
+    // consignment apart from a genuine failed delivery.
+    hasProgress: Boolean(view.trackingNo || view.personnel),
+  });
   const banner = bannerFor(bucket);
 
   return (
@@ -154,7 +160,9 @@ export function OrderTrackingTimeline({
           </h3>
           <ol className="space-y-3">
             {view.timeline.map((evt, i) => {
-              const evtBucket = bucketForStatusCode(evt.statusCode, true);
+              const evtBucket = bucketForStatusCode(evt.statusCode, true, {
+                statusText: evt.note,
+              });
               const dot = dotColorFor(evtBucket);
               const latest = i === 0;
               return (

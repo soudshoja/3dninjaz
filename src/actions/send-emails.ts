@@ -9,6 +9,7 @@
 import "server-only";
 import { renderTemplate } from "@/lib/email/templates";
 import { sendMail } from "@/lib/mailer";
+import { publicUrl, publicOrigin } from "@/lib/public-url";
 
 // ============================================================================
 // Welcome Email (after signup)
@@ -22,9 +23,9 @@ export async function sendWelcomeEmail(
     const { subject, html, text } = await renderTemplate("welcome", {
       customer_name: customerName,
       store_name: "3D Ninjaz",
-      store_url: "https://app.3dninjaz.com",
+      store_url: publicOrigin(),
       current_year: new Date().getFullYear(),
-      shop_link: "https://app.3dninjaz.com/shop",
+      shop_link: publicUrl("/shop"),
     });
 
     await sendMail({
@@ -57,7 +58,7 @@ export async function sendPasswordChangedEmail(
       {
         customer_name: customerName,
         store_name: "3D Ninjaz",
-        store_url: "https://app.3dninjaz.com",
+        store_url: publicOrigin(),
         current_year: new Date().getFullYear(),
         support_email: "support@3dninjaz.com",
       }
@@ -87,14 +88,14 @@ export async function sendNewsletterWelcomeEmail(
   unsubscribeToken: string
 ): Promise<void> {
   try {
-    const unsubscribeLink = `https://app.3dninjaz.com/api/unsubscribe?token=${unsubscribeToken}`;
+    const unsubscribeLink = publicUrl(`/api/unsubscribe?token=${unsubscribeToken}`);
 
     const { subject, html, text } = await renderTemplate(
       "newsletter_welcome",
       {
         subscriber_email: subscriberEmail,
         store_name: "3D Ninjaz",
-        store_url: "https://app.3dninjaz.com",
+        store_url: publicOrigin(),
         current_year: new Date().getFullYear(),
         unsubscribe_link: unsubscribeLink,
       }
@@ -128,7 +129,7 @@ export async function sendNewsletterUnsubscribedEmail(
       {
         subscriber_email: subscriberEmail,
         store_name: "3D Ninjaz",
-        store_url: "https://app.3dninjaz.com",
+        store_url: publicOrigin(),
         current_year: new Date().getFullYear(),
       }
     );
@@ -162,7 +163,7 @@ export async function sendOrderProcessingEmail(opts: {
   if (opts.customerEmail.endsWith("@3dninjaz.local")) return;
 
   try {
-    const orderUrl = `https://app.3dninjaz.com/orders/${opts.orderId}`;
+    const orderUrl = publicUrl(`/orders/${opts.orderId}`);
 
     const { subject, html, text } = await renderTemplate("order_processing", {
       customer_name: opts.customerName,
@@ -202,8 +203,8 @@ export async function sendOrderShippedEmail(opts: {
   if (opts.customerEmail.endsWith("@3dninjaz.local")) return;
 
   try {
-    const trackingLink = `https://app.3dninjaz.com/orders/${opts.orderId}`;
-    const orderLink = `https://app.3dninjaz.com/orders/${opts.orderId}`;
+    const trackingLink = publicUrl(`/orders/${opts.orderId}`);
+    const orderLink = publicUrl(`/orders/${opts.orderId}`);
 
     const { subject, html, text } = await renderTemplate("order_shipped", {
       customer_name: opts.customerName,
@@ -214,7 +215,7 @@ export async function sendOrderShippedEmail(opts: {
       tracking_link: trackingLink,
       order_link: orderLink,
       store_name: "3D Ninjaz",
-      store_url: "https://app.3dninjaz.com",
+      store_url: publicOrigin(),
       current_year: new Date().getFullYear(),
     });
 
@@ -247,14 +248,14 @@ export async function sendOrderDeliveredEmail(opts: {
   if (opts.customerEmail.endsWith("@3dninjaz.local")) return;
 
   try {
-    const orderLink = `https://app.3dninjaz.com/orders/${opts.orderId}`;
+    const orderLink = publicUrl(`/orders/${opts.orderId}`);
 
     const { subject, html, text } = await renderTemplate("order_delivered", {
       customer_name: opts.customerName,
       order_number: opts.orderNumber,
       order_link: orderLink,
       store_name: "3D Ninjaz",
-      store_url: "https://app.3dninjaz.com",
+      store_url: publicOrigin(),
       current_year: new Date().getFullYear(),
     });
 
@@ -288,7 +289,7 @@ export async function sendOrderRefundedEmail(opts: {
   if (opts.customerEmail.endsWith("@3dninjaz.local")) return;
 
   try {
-    const orderLink = `https://app.3dninjaz.com/orders/${opts.orderId}`;
+    const orderLink = publicUrl(`/orders/${opts.orderId}`);
 
     const { subject, html, text } = await renderTemplate("order_refunded", {
       customer_name: opts.customerName,
@@ -297,7 +298,7 @@ export async function sendOrderRefundedEmail(opts: {
       order_link: orderLink,
       support_email: "support@3dninjaz.com",
       store_name: "3D Ninjaz",
-      store_url: "https://app.3dninjaz.com",
+      store_url: publicOrigin(),
       current_year: new Date().getFullYear(),
     });
 
@@ -331,7 +332,7 @@ export async function sendOrderCancelledEmail(opts: {
   if (opts.customerEmail.endsWith("@3dninjaz.local")) return;
 
   try {
-    const orderLink = `https://app.3dninjaz.com/orders/${opts.orderId}`;
+    const orderLink = publicUrl(`/orders/${opts.orderId}`);
 
     const { subject, html, text } = await renderTemplate("order_cancelled", {
       customer_name: opts.customerName,
@@ -340,7 +341,7 @@ export async function sendOrderCancelledEmail(opts: {
       order_link: orderLink,
       support_email: "support@3dninjaz.com",
       store_name: "3D Ninjaz",
-      store_url: "https://app.3dninjaz.com",
+      store_url: publicOrigin(),
       current_year: new Date().getFullYear(),
     });
 
@@ -429,7 +430,7 @@ export async function sendReturnRequestedEmail(opts: {
   if (ctx.customerEmail.endsWith("@3dninjaz.local")) return;
 
   try {
-    const orderLink = `https://app.3dninjaz.com/orders/${opts.orderId}`;
+    const orderLink = publicUrl(`/orders/${opts.orderId}`);
     const { subject, html, text } = await renderTemplate("return_requested", {
       customer_name: ctx.customerName,
       order_number: ctx.orderNumber,
@@ -466,7 +467,7 @@ export async function sendReturnApprovedEmail(opts: {
   if (ctx.customerEmail.endsWith("@3dninjaz.local")) return;
 
   try {
-    const orderLink = `https://app.3dninjaz.com/orders/${opts.orderId}`;
+    const orderLink = publicUrl(`/orders/${opts.orderId}`);
     const shipByDate = approvedAt
       ? addDays(approvedAt, 3).toLocaleDateString("en-MY", {
           weekday: "long",
@@ -499,7 +500,7 @@ export async function sendReturnRejectedEmail(opts: {
   if (ctx.customerEmail.endsWith("@3dninjaz.local")) return;
 
   try {
-    const orderLink = `https://app.3dninjaz.com/orders/${opts.orderId}`;
+    const orderLink = publicUrl(`/orders/${opts.orderId}`);
     const { subject, html, text } = await renderTemplate("return_rejected", {
       customer_name: ctx.customerName,
       order_number: ctx.orderNumber,
@@ -521,7 +522,7 @@ export async function sendReturnReceivedEmail(opts: {
   if (ctx.customerEmail.endsWith("@3dninjaz.local")) return;
 
   try {
-    const orderLink = `https://app.3dninjaz.com/orders/${opts.orderId}`;
+    const orderLink = publicUrl(`/orders/${opts.orderId}`);
     const { subject, html, text } = await renderTemplate("return_received", {
       customer_name: ctx.customerName,
       order_number: ctx.orderNumber,
@@ -543,7 +544,7 @@ export async function sendReturnExpiredEmail(opts: {
   if (ctx.customerEmail.endsWith("@3dninjaz.local")) return;
 
   try {
-    const orderLink = `https://app.3dninjaz.com/orders/${opts.orderId}`;
+    const orderLink = publicUrl(`/orders/${opts.orderId}`);
     const { subject, html, text } = await renderTemplate("return_expired", {
       customer_name: ctx.customerName,
       order_number: ctx.orderNumber,
@@ -567,7 +568,7 @@ export async function sendDisputeOpenedCustomerEmail(opts: {
   orderId: string;
 }): Promise<void> {
   try {
-    const orderLink = `https://app.3dninjaz.com/orders/${opts.orderId}`;
+    const orderLink = publicUrl(`/orders/${opts.orderId}`);
 
     const { subject, html, text } = await renderTemplate(
       "dispute_opened_customer",
@@ -578,7 +579,7 @@ export async function sendDisputeOpenedCustomerEmail(opts: {
         order_link: orderLink,
         support_email: "support@3dninjaz.com",
         store_name: "3D Ninjaz",
-        store_url: "https://app.3dninjaz.com",
+        store_url: publicOrigin(),
         current_year: new Date().getFullYear(),
       }
     );
@@ -607,7 +608,7 @@ export async function sendDisputeOpenedAdminEmail(opts: {
   disputeId: string;
 }): Promise<void> {
   try {
-    const adminLink = `https://app.3dninjaz.com/admin/disputes/${opts.disputeId}`;
+    const adminLink = publicUrl(`/admin/disputes/${opts.disputeId}`);
 
     const { subject, html, text } = await renderTemplate(
       "dispute_opened_admin",
