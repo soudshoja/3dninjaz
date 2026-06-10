@@ -23,6 +23,7 @@ import { ShoppingBag, Heart } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
 import { lookupTierPrice, type SelectFieldConfig } from "@/lib/config-fields";
+import { customKey, CUSTOM_TEXT_SUFFIX } from "@/lib/custom-text";
 import { useCartStore } from "@/stores/cart-store";
 import { ConfiguratorForm } from "@/components/store/configurator-form";
 import { ConfigurableImageGallery } from "@/components/store/configurable-image-gallery";
@@ -99,7 +100,16 @@ function buildSummary(
     } else if (f.fieldType === "number") {
       parts.push(`${f.label}: ${v}`);
     } else if (f.fieldType === "select") {
-      parts.push(`${f.label}: ${v}`);
+      // quick task 260610-kh3 — if the chosen option has customInput, emit
+      // the typed text as `Label: "TEXT"` so it flows to admin/production/invoice.
+      const cfg = f.config as SelectFieldConfig;
+      const opt = cfg.options.find((o) => o.value === v);
+      if (opt?.customInput) {
+        const typed = values[customKey(f.id)] ?? "";
+        parts.push(typed ? `${f.label}: "${typed}"` : `${f.label}: ${opt.label}`);
+      } else {
+        parts.push(`${f.label}: ${v}`);
+      }
     }
   }
   void price;
@@ -261,7 +271,29 @@ export function ConfigurableProductView({
     [fields, values],
   );
 
-  const canAdd = currentPrice !== null && requiredFilled && !outOfTable;
+  // quick task 260610-kh3 — a select field whose selected option has customInput
+  // must ALSO have a non-empty __custom value before the CTA unlocks.
+  // This is independent of requiredFilled (which checks whether an option is chosen).
+  const customInputsSatisfied = useMemo(() => {
+    return fields
+      .filter((f) => f.fieldType === "select")
+      .every((f) => {
+        const chosenValue = values[f.id];
+        if (!chosenValue) return true; // no option chosen yet — gated by requiredFilled
+        const cfg = f.config as SelectFieldConfig;
+        const opt = cfg.options.find((o) => o.value === chosenValue);
+        if (!opt?.customInput) return true; // non-flagged option — no text needed
+        return (values[customKey(f.id)] ?? "").trim().length > 0;
+      });
+  }, [fields, values]);
+
+  // Suppress __custom keys leaking into any chip surfaces: these keys are never
+  // iterated by production/order rendering (all surfaces render computedSummary
+  // as a string). The CUSTOM_TEXT_SUFFIX import is available for defensive
+  // filtering if such a surface is ever added.
+  void CUSTOM_TEXT_SUFFIX;
+
+  const canAdd = currentPrice !== null && requiredFilled && customInputsSatisfied && !outOfTable;
 
   // ── Colour values for KeychainPreview ────────────────────────────────────
   const colourFields = useMemo(() => fields.filter((f) => f.fieldType === "colour"), [fields]);
@@ -390,7 +422,7 @@ export function ConfigurableProductView({
     ? `${addLabel} · ${formatMYR(currentPrice!)}`
     : outOfTable
     ? "Too many characters"
-    : !requiredFilled
+    : !requiredFilled || !customInputsSatisfied
     ? "Fill in all fields first"
     : "Enter your details";
 
