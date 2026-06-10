@@ -34,8 +34,10 @@ import { RefreshShippingButton } from "@/components/admin/refresh-shipping-butto
 import { OrderCostsPanel } from "@/components/admin/order-costs-panel";
 // Phase 20 (20-11) — payment proof review surface + Download Invoice button.
 import { db } from "@/lib/db";
-import { paymentProofs, products } from "@/lib/db/schema";
+import { paymentProofs, products, orders } from "@/lib/db/schema";
 import { eq, desc, inArray } from "drizzle-orm";
+import { publicUrl } from "@/lib/public-url";
+import { CopyTrackingButton } from "@/components/orders/copy-tracking-button";
 import { FileDown, User, MapPin, Package, CreditCard, Truck, Activity, Settings, MessageSquare, RotateCcw, ChevronLeft, Send } from "lucide-react";
 import { PaymentProofSection } from "@/components/admin/payment-proof-section";
 import { AdminUploadProofForm } from "@/components/admin/admin-upload-proof-form";
@@ -136,6 +138,19 @@ export default async function AdminOrderDetailPage({
   const { id } = await params;
   const row = await getAdminOrder(id);
   if (!row) notFound();
+
+  // Customer-facing tracking link — shown so the admin can copy/send it when
+  // a customer asks. Guest/manual orders get the tokenized `?t=` form (works
+  // without login — same token path the order emails use); account orders get
+  // the plain link (customer logs in).
+  const [tokenRow] = await db
+    .select({ guestAccessToken: orders.guestAccessToken })
+    .from(orders)
+    .where(eq(orders.id, id))
+    .limit(1);
+  const customerTrackingUrl = publicUrl(
+    `/orders/${row.id}${tokenRow?.guestAccessToken ? `?t=${tokenRow.guestAccessToken}` : ""}`,
+  );
 
   // Phase 6 06-06 — pending + resolved cancel/return requests for the
   // approve/reject UI. Empty state handled inside OrderRequestsAdmin.
@@ -360,6 +375,29 @@ export default async function AdminOrderDetailPage({
                 User record has been deleted — using snapshotted contact info.
               </p>
             )}
+
+            {/* Customer tracking link — copy/send when a customer asks where
+                their parcel is. Tokenized for guest orders (no login needed). */}
+            <div
+              className="mt-4 pt-3 flex flex-wrap items-center gap-2"
+              style={{ borderTop: `1.5px solid ${BRAND.ink}0c` }}
+            >
+              <div className="flex-1 min-w-0">
+                <p
+                  className="text-xs font-bold uppercase tracking-wider mb-1"
+                  style={{ color: "#64748b" }}
+                >
+                  Customer tracking link
+                </p>
+                <p
+                  className="text-xs font-mono break-all"
+                  style={{ color: BRAND.blue }}
+                >
+                  {customerTrackingUrl}
+                </p>
+              </div>
+              <CopyTrackingButton value={customerTrackingUrl} />
+            </div>
           </AdminCard>
 
           {/* Ship-to card */}
