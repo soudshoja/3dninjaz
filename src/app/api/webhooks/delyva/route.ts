@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import crypto from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, notInArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { orderShipments, orders } from "@/lib/db/schema";
 import { sendOrderDeliveredEmail } from "@/actions/send-emails";
@@ -177,6 +177,17 @@ export async function POST(req: NextRequest) {
             .limit(1);
 
           if (shipment.length > 0) {
+            // Auto-transition order to delivered (skip if already delivered or cancelled)
+            await db
+              .update(orders)
+              .set({ status: "delivered" })
+              .where(
+                and(
+                  eq(orders.id, shipment[0].orderId),
+                  notInArray(orders.status, ["delivered", "cancelled"]),
+                ),
+              );
+
             const order = await db
               .select({
                 id: orders.id,

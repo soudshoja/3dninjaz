@@ -201,19 +201,22 @@ export function buildTrackingView(args: {
   // 500-disambiguation as the banner (statusText + parcel progress), or a
   // fresh "ready" consignment seeds a scary "Delivery issue" event.
   if (timeline.length === 0 && statusCode !== null) {
+    // Raw Delyva state strings ("ready", "created", etc.) are internal codes —
+    // replace with the friendly bucket label so customers never see "ready".
+    const RAW_DELYVA_STATES = /^(ready|created|pending|process|booked|draft)$/i;
+    const humanNote =
+      statusMessage && !RAW_DELYVA_STATES.test(statusMessage.trim())
+        ? statusMessage
+        : bucketLabel(
+            bucketForStatusCode(statusCode, true, {
+              statusText: statusMessage,
+              hasProgress: Boolean(trackingNo ?? shipment.personnelName ?? null),
+            }),
+          );
     timeline.push({
       at: shipment.updatedAt,
       statusCode,
-      note:
-        statusMessage ??
-        bucketLabel(
-          bucketForStatusCode(statusCode, true, {
-            statusText: statusMessage,
-            hasProgress: Boolean(
-              trackingNo ?? shipment.personnelName ?? null,
-            ),
-          }),
-        ),
+      note: humanNote,
     });
   }
 
