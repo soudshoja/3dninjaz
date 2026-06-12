@@ -366,6 +366,26 @@ export async function updateOrderStatus(
     }).catch(() => {});
   }
 
+  // Status → paid via the generic control mirrors PayPal capture /
+  // approveWhatsAppOrder: payment-confirmed WhatsApp + the PAID-stamped
+  // invoice PDF (the row is already "paid" at render time), plus the
+  // confirmation email when we have a real address. Runs only on the
+  // transition, so it cannot double-send.
+  if (newStatus === "paid") {
+    const isGuestPlaceholder = row.customerEmail?.endsWith("@3dninjaz.local");
+    if (!isGuestPlaceholder) {
+      void sendOrderConfirmationEmail(orderId).catch((err) =>
+        console.error("[admin-orders] paid confirmation email failed:", err),
+      );
+    }
+    void sendWhatsAppNotification("order_approved", row.shippingPhone, {
+      customerName: row.shippingName,
+      orderNumber: formatOrderNumber(orderId),
+      orderUrl: publicUrl(`/orders/${orderId}`),
+    }).catch(() => {});
+    void sendWhatsAppInvoicePdf(orderId, row.shippingPhone).catch(() => {});
+  }
+
   revalidatePath(`/admin/orders`);
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath(`/orders/${orderId}`);
