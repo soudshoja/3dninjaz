@@ -419,6 +419,7 @@ export async function createWhatsAppOrder(
   // with the same total from this customer (email/phone) are auto-cancelled.
   try {
     const dedupe = await dedupeUnpaidOrders({
+      requesterUserId: user?.id ?? null,
       email: user?.email ?? (input.guestEmail?.trim() || null),
       phone: addr.data.phone,
       totalStr,

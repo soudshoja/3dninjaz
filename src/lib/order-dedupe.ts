@@ -19,6 +19,11 @@ import { and, eq, gte, inArray, isNull } from "drizzle-orm";
  *
  * Orders with an uploaded payment proof are NEVER touched — the customer has
  * engaged with that row and an admin may be mid-review.
+ *
+ * Identity scoping (anti-spoofing): phone/email are requester-supplied, so an
+ * authenticated requester only ever matches their OWN orders (userId =), and a
+ * guest requester only matches guest orders (userId IS NULL). An anonymous
+ * attempt can never cancel or reuse an order tied to a real account.
  * A superseded pending PayPal row that later captures anyway is safe:
  * capturePayPalOrder has no status guard and flips it straight to "paid".
  */
@@ -58,11 +63,15 @@ export type DedupeResult = {
 };
 
 export async function dedupeUnpaidOrders({
+  requesterUserId,
   email,
   phone,
   totalStr,
   reuseSignature,
 }: {
+  /** Session user id, or null for guest checkout. Scopes which rows are
+   *  touchable: own orders when authenticated, guest-only orders otherwise. */
+  requesterUserId: string | null;
   /** Real customer email, or null when unknown (guest without email). */
   email: string | null;
   /** Shipping phone of the new attempt (always present on the address form). */
@@ -102,6 +111,11 @@ export async function dedupeUnpaidOrders({
         eq(orders.totalAmount, totalStr),
         eq(orders.sourceType, "web"),
         gte(orders.createdAt, since),
+        // Identity scope — see header comment. Spoofed phone/email from an
+        // anonymous checkout must never reach an account holder's orders.
+        requesterUserId
+          ? eq(orders.userId, requesterUserId)
+          : isNull(orders.userId),
       ),
     );
 
