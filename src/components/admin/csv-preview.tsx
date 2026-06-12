@@ -129,7 +129,8 @@ export function CsvPreview({ fileName }: { fileName: string }) {
           className="rounded-2xl overflow-hidden bg-white"
           style={{ color: BRAND.ink }}
         >
-          <div className="overflow-x-auto">
+          {/* ── Desktop table (md+) ── */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="min-w-[820px] w-full text-sm">
               <thead style={{ backgroundColor: `${BRAND.ink}0d` }}>
                 <tr className="text-left">
@@ -149,12 +150,14 @@ export function CsvPreview({ fileName }: { fileName: string }) {
                     <td className="p-3 font-semibold">{v.data.name}</td>
                     <td className="p-3 text-xs font-mono">{v.data.slug}</td>
                     <td className="p-3 text-xs">
-                      {v.data.options.map((o: { name: string; values: string[] }) => (
-                        <div key={o.name}>
-                          <span className="font-semibold">{o.name}:</span>{" "}
-                          {o.values.join(", ")}
-                        </div>
-                      ))}
+                      {v.data.options.map(
+                        (o: { name: string; values: string[] }) => (
+                          <div key={o.name}>
+                            <span className="font-semibold">{o.name}:</span>{" "}
+                            {o.values.join(", ")}
+                          </div>
+                        ),
+                      )}
                     </td>
                     <td className="p-3 text-xs font-mono text-center">
                       {v.data.variantCount}
@@ -173,13 +176,64 @@ export function CsvPreview({ fileName }: { fileName: string }) {
               </p>
             ) : null}
           </div>
+
+          {/* ── Mobile card list (< md) ── */}
+          <div className="md:hidden divide-y divide-black/10">
+            {result.validRows.slice(0, 100).map((v) => (
+              <div key={v.rowIndex} className="p-4 space-y-1">
+                <div className="flex items-start gap-2 min-w-0">
+                  <span className="shrink-0 font-mono text-xs text-slate-400 mt-0.5">
+                    #{v.rowIndex}
+                  </span>
+                  <span className="font-semibold break-words min-w-0">
+                    {v.data.name}
+                  </span>
+                </div>
+                <p className="text-xs font-mono text-slate-500 break-words">
+                  {v.data.slug}
+                </p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-slate-600">
+                  <span>
+                    <span className="text-slate-400">Variants: </span>
+                    <span className="font-mono">{v.data.variantCount}</span>
+                  </span>
+                  <span>
+                    <span className="text-slate-400">Category: </span>
+                    {v.data.categoryId ? "Linked" : "—"}
+                  </span>
+                  <span>
+                    <span className="text-slate-400">Images: </span>
+                    {v.data.images.length}
+                  </span>
+                </div>
+                {v.data.options.length > 0 && (
+                  <div className="text-xs text-slate-600 space-y-0.5">
+                    {v.data.options.map(
+                      (o: { name: string; values: string[] }) => (
+                        <div key={o.name} className="break-words">
+                          <span className="font-semibold">{o.name}:</span>{" "}
+                          {o.values.join(", ")}
+                        </div>
+                      ),
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+            {result.validRows.length > 100 ? (
+              <p className="p-4 text-xs text-slate-500">
+                Showing first 100 of {result.validRows.length} valid rows.
+              </p>
+            ) : null}
+          </div>
         </div>
       ) : (
         <div
           className="rounded-2xl overflow-hidden bg-white"
           style={{ color: BRAND.ink }}
         >
-          <div className="overflow-x-auto">
+          {/* ── Desktop table (md+) ── */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="min-w-[700px] w-full text-sm">
               <thead style={{ backgroundColor: `${BRAND.ink}0d` }}>
                 <tr className="text-left">
@@ -212,6 +266,30 @@ export function CsvPreview({ fileName }: { fileName: string }) {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* ── Mobile card list (< md) ── */}
+          <div className="md:hidden divide-y divide-black/10">
+            {result.invalidRows.map((r) => (
+              <div key={r.rowIndex} className="p-4 space-y-2">
+                <p className="font-mono text-xs text-slate-400">
+                  Row #{r.rowIndex}
+                </p>
+                <ul
+                  className="list-disc pl-4 space-y-1 text-xs"
+                  style={{ color: "#dc2626" }}
+                >
+                  {r.errors.map((e, i) => (
+                    <li key={i}>{e}</li>
+                  ))}
+                </ul>
+                <pre className="text-xs font-mono whitespace-pre-wrap break-words text-slate-500 bg-slate-50 rounded p-2">
+                  {Object.entries(r.raw)
+                    .map(([k, v]) => `${k}: ${v}`)
+                    .join("\n")}
+                </pre>
+              </div>
+            ))}
           </div>
         </div>
       )}

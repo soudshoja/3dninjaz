@@ -55,7 +55,8 @@ export default async function AdminCouponsPage() {
             className="rounded-2xl overflow-hidden"
             style={{ backgroundColor: "#ffffff" }}
           >
-            <div className="overflow-x-auto">
+            {/* ── Desktop table (md+) ── */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="min-w-[820px] w-full text-sm">
                 <thead>
                   <tr
@@ -119,6 +120,76 @@ export default async function AdminCouponsPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* ── Mobile cards (below md) ── */}
+            <div className="md:hidden divide-y divide-black/10">
+              {rows.map((c) => (
+                <div key={c.id} className="p-4 flex flex-col gap-3">
+                  {/* Code + status */}
+                  <div className="flex items-center justify-between gap-2 min-w-0">
+                    <span className="font-mono text-base font-bold break-words min-w-0">
+                      {c.code}
+                    </span>
+                    {c.active ? (
+                      <span
+                        className="inline-flex items-center rounded-full px-3 py-1 text-xs font-bold text-white shrink-0"
+                        style={{ backgroundColor: BRAND.green }}
+                      >
+                        Active
+                      </span>
+                    ) : (
+                      <span
+                        className="inline-flex items-center rounded-full px-3 py-1 text-xs font-bold text-white shrink-0"
+                        style={{ backgroundColor: "#6b7280" }}
+                      >
+                        Inactive
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Secondary fields */}
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+                    <span>
+                      <span className="font-semibold text-slate-800">Type:</span>{" "}
+                      <span className="capitalize">{c.type}</span>
+                    </span>
+                    <span>
+                      <span className="font-semibold text-slate-800">
+                        Amount:
+                      </span>{" "}
+                      {c.type === "percentage"
+                        ? `${parseFloat(c.amount)}%`
+                        : formatMYR(c.amount)}
+                    </span>
+                    <span>
+                      <span className="font-semibold text-slate-800">
+                        Min spend:
+                      </span>{" "}
+                      {c.minSpend ? formatMYR(c.minSpend) : "—"}
+                    </span>
+                    <span>
+                      <span className="font-semibold text-slate-800">
+                        Usage:
+                      </span>{" "}
+                      <span className="font-mono">
+                        {c.usageCount}
+                        {c.usageCap !== null ? ` / ${c.usageCap}` : ""}
+                      </span>
+                    </span>
+                  </div>
+
+                  {/* Actions */}
+                  <CouponRowActions
+                    row={{
+                      id: c.id,
+                      code: c.code,
+                      active: c.active,
+                      usageCount: c.usageCount,
+                    }}
+                  />
+                </div>
+              ))}
             </div>
           </div>
         )}

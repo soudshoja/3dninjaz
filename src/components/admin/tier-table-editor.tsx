@@ -649,8 +649,8 @@ export function TierTableEditor({
       {/* ------------------------------------------------------------------ */}
       {hasTiers && (
         <div className="rounded-xl border border-border overflow-hidden" data-tier-table>
-          {/* Table header */}
-          <div className="grid grid-cols-[2.5rem_1fr_6rem_auto] gap-3 border-b border-border bg-muted/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {/* Table header — tighter tracks on small phones, full layout on sm+ */}
+          <div className="grid grid-cols-[1.5rem_1fr_5rem_auto] sm:grid-cols-[2.5rem_1fr_6rem_auto] gap-2 sm:gap-3 border-b border-border bg-muted/40 px-3 sm:px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             <span>#</span>
             <span>Price (MYR)</span>
             <span>Weight (g)</span>
@@ -667,7 +667,7 @@ export function TierTableEditor({
               return (
                 <div
                   key={n}
-                  className={`grid grid-cols-[2.5rem_1fr_6rem_auto] items-center gap-3 px-4 py-2 transition-colors ${
+                  className={`grid grid-cols-[1.5rem_1fr_5rem_auto] sm:grid-cols-[2.5rem_1fr_6rem_auto] items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 transition-colors ${
                     isBest ? "bg-green-50" : "hover:bg-accent/30"
                   }`}
                 >
@@ -709,7 +709,7 @@ export function TierTableEditor({
                       }
                     }}
                     aria-label={`Price for ${n} unit${n === 1 ? "" : "s"}`}
-                    className="h-8 w-32"
+                    className="h-8 w-full sm:w-32"
                   />
 
                   {/* Weight input (grams) */}
@@ -721,12 +721,12 @@ export function TierTableEditor({
                     placeholder="—"
                     onChange={(e) => setTierWeight(n, parseInt(e.target.value, 10) || 0)}
                     aria-label={`Shipping weight in grams for ${n} unit${n === 1 ? "" : "s"}`}
-                    className="h-8 w-20"
+                    className="h-8 w-full sm:w-20"
                   />
 
                   {/* Per-unit display */}
                   <span
-                    className="text-xs tabular-nums text-right pr-1 w-20"
+                    className="text-xs tabular-nums text-right pr-1 w-auto sm:w-20"
                     style={{ color: isBest ? BRAND.green : undefined }}
                     aria-label={`${ppu ? `RM ${ppu} per unit` : ""}`}
                   >

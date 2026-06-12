@@ -99,62 +99,147 @@ export default async function AdminProductsPage() {
           </Link>
         </div>
       ) : (
-        <div className="rounded-lg border border-[var(--color-brand-border)] bg-white overflow-x-auto">
-          <Table className="min-w-[640px]">
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-16">Image</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Price</TableHead>
-                <TableHead className="w-24">Type</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-16 text-center">Featured</TableHead>
-                <TableHead className="w-16 text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {list.map((product) => {
-                const firstImage = product.images?.[0];
-                return (
-                  <TableRow key={product.id}>
-                    <TableCell>
-                      {firstImage ? (
-                        <Image
-                          src={firstImage}
-                          alt={product.name}
-                          width={48}
-                          height={48}
-                          className="h-12 w-12 rounded object-cover"
+        <>
+          {/* ── Desktop table (md+) ── */}
+          <div className="hidden md:block rounded-lg border border-[var(--color-brand-border)] bg-white overflow-x-auto">
+            <Table className="min-w-[640px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-16">Image</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Price</TableHead>
+                  <TableHead className="w-24">Type</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-16 text-center">Featured</TableHead>
+                  <TableHead className="w-16 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {list.map((product) => {
+                  const firstImage = product.images?.[0];
+                  return (
+                    <TableRow key={product.id}>
+                      <TableCell>
+                        {firstImage ? (
+                          <Image
+                            src={firstImage}
+                            alt={product.name}
+                            width={48}
+                            height={48}
+                            className="h-12 w-12 rounded object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-12 w-12 items-center justify-center rounded bg-gray-100">
+                            <Package className="h-5 w-5 text-gray-400" />
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {product.name}
+                      </TableCell>
+                      <TableCell>
+                        {product.category?.name ?? (
+                          <span className="text-[var(--color-brand-text-muted)]">
+                            Uncategorized
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {formatPriceRange(
+                          product.variants,
+                          product.productType,
+                          product.priceTiers,
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] uppercase tracking-wide"
+                        >
+                          {product.productType ?? "stocked"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {product.isActive ? (
+                          <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+                            Active
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-100">
+                            Inactive
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Star
+                          className={
+                            product.isFeatured
+                              ? "mx-auto h-4 w-4 fill-yellow-400 text-yellow-500"
+                              : "mx-auto h-4 w-4 text-gray-300"
+                          }
                         />
-                      ) : (
-                        <div className="flex h-12 w-12 items-center justify-center rounded bg-gray-100">
-                          <Package className="h-5 w-5 text-gray-400" />
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell className="font-medium">
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <ProductRowActions
+                          id={product.id}
+                          name={product.name}
+                          isActive={product.isActive}
+                          isFeatured={product.isFeatured}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* ── Mobile card list (< md) ── */}
+          <div className="md:hidden divide-y divide-[var(--color-brand-border)] rounded-lg border border-[var(--color-brand-border)] bg-white">
+            {list.map((product) => {
+              const firstImage = product.images?.[0];
+              return (
+                <div key={product.id} className="flex gap-3 p-4">
+                  {/* Thumbnail */}
+                  <div className="shrink-0">
+                    {firstImage ? (
+                      <Image
+                        src={firstImage}
+                        alt={product.name}
+                        width={56}
+                        height={56}
+                        className="h-14 w-14 rounded object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-14 w-14 items-center justify-center rounded bg-gray-100">
+                        <Package className="h-5 w-5 text-gray-400" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Details */}
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="font-medium break-words leading-snug">
                       {product.name}
-                    </TableCell>
-                    <TableCell>
-                      {product.category?.name ?? (
-                        <span className="text-[var(--color-brand-text-muted)]">
-                          Uncategorized
-                        </span>
+                    </p>
+                    <p className="text-xs text-[var(--color-brand-text-muted)] break-words">
+                      {product.category?.name ?? "Uncategorized"}
+                    </p>
+                    <p className="text-xs font-medium">
+                      {formatPriceRange(
+                        product.variants,
+                        product.productType,
+                        product.priceTiers,
                       )}
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {formatPriceRange(product.variants, product.productType, product.priceTiers)}
-                    </TableCell>
-                    <TableCell>
+                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                       <Badge
                         variant="secondary"
                         className="text-[10px] uppercase tracking-wide"
                       >
                         {product.productType ?? "stocked"}
                       </Badge>
-                    </TableCell>
-                    <TableCell>
                       {product.isActive ? (
                         <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
                           Active
@@ -164,30 +249,26 @@ export default async function AdminProductsPage() {
                           Inactive
                         </Badge>
                       )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Star
-                        className={
-                          product.isFeatured
-                            ? "mx-auto h-4 w-4 fill-yellow-400 text-yellow-500"
-                            : "mx-auto h-4 w-4 text-gray-300"
-                        }
-                      />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <ProductRowActions
-                        id={product.id}
-                        name={product.name}
-                        isActive={product.isActive}
-                        isFeatured={product.isFeatured}
-                      />
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+                      {product.isFeatured && (
+                        <Star className="h-4 w-4 fill-yellow-400 text-yellow-500" />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="shrink-0 flex items-start min-h-[44px]">
+                    <ProductRowActions
+                      id={product.id}
+                      name={product.name}
+                      isActive={product.isActive}
+                      isFeatured={product.isFeatured}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );

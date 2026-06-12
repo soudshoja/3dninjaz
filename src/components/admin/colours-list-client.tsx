@@ -201,7 +201,8 @@ export function ColoursListClient({ rows: initialRows }: Props) {
             className="rounded-2xl overflow-hidden"
             style={{ backgroundColor: "#ffffff" }}
           >
-            <div className="overflow-x-auto">
+            {/* ── Desktop table (md+) ── */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="min-w-[820px] w-full text-sm">
                 <thead>
                   <tr
@@ -292,7 +293,11 @@ export function ColoursListClient({ rows: initialRows }: Props) {
                             }
                           }}
                           className="h-4 w-4 rounded border-gray-300 text-[#7360F2] focus:ring-[#7360F2]"
-                          title={c.isMyColour ? "Click to remove from My Colours" : "Click to add to My Colours"}
+                          title={
+                            c.isMyColour
+                              ? "Click to remove from My Colours"
+                              : "Click to add to My Colours"
+                          }
                         />
                       </td>
                       <td className="p-3">
@@ -326,6 +331,131 @@ export function ColoursListClient({ rows: initialRows }: Props) {
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* ── Mobile cards (below md) ── */}
+            <div className="md:hidden divide-y divide-black/10">
+              {filtered.map((c) => (
+                <div key={c.id} className="p-4 flex flex-col gap-3">
+                  {/* Identity row: swatch + name + status */}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span
+                      className="inline-block w-10 h-10 rounded-full shrink-0"
+                      style={{
+                        backgroundColor: c.hex,
+                        border: "1px solid #E2E8F0",
+                      }}
+                      aria-label={`Swatch ${c.hex}`}
+                      title={c.hex}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold leading-tight break-words">
+                        {c.name}
+                      </p>
+                      {c.familySubtype && (
+                        <p className="text-xs text-slate-500 leading-tight mt-0.5 break-words">
+                          {c.familySubtype}
+                        </p>
+                      )}
+                    </div>
+                    {c.isActive ? (
+                      <span
+                        className="inline-flex items-center rounded-full px-3 py-1 text-xs font-bold text-white shrink-0"
+                        style={{ backgroundColor: BRAND.green }}
+                      >
+                        Active
+                      </span>
+                    ) : (
+                      <span
+                        className="inline-flex items-center rounded-full px-3 py-1 text-xs font-bold text-white shrink-0"
+                        style={{ backgroundColor: "#6b7280" }}
+                      >
+                        Archived
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Secondary fields */}
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+                    <span>
+                      <span className="font-semibold text-slate-800">
+                        Brand:
+                      </span>{" "}
+                      <span
+                        className="inline-flex items-center rounded-full border-2 px-2 py-0.5 font-semibold"
+                        style={{
+                          borderColor:
+                            c.brand === "Bambu"
+                              ? BRAND.green
+                              : c.brand === "Polymaker"
+                                ? BRAND.blue
+                                : "#CBD5E1",
+                          color: BRAND.ink,
+                        }}
+                      >
+                        {c.brand}
+                      </span>
+                    </span>
+                    <span>
+                      <span className="font-semibold text-slate-800">
+                        Family:
+                      </span>{" "}
+                      {c.familyType}
+                    </span>
+                    {c.code && (
+                      <span>
+                        <span className="font-semibold text-slate-800">
+                          Code:
+                        </span>{" "}
+                        <span className="font-mono">{c.code}</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* My Colour toggle — 44px tap target */}
+                  <label className="flex items-center gap-2 text-sm cursor-pointer min-h-[44px]">
+                    <input
+                      type="checkbox"
+                      checked={c.isMyColour}
+                      onChange={async () => {
+                        setRows((prev) =>
+                          prev.map((r) =>
+                            r.id === c.id
+                              ? { ...r, isMyColour: !r.isMyColour }
+                              : r,
+                          ),
+                        );
+                        const res = await toggleMyColour(c.id);
+                        if (!res.ok) {
+                          setRows((prev) =>
+                            prev.map((r) =>
+                              r.id === c.id
+                                ? { ...r, isMyColour: !r.isMyColour }
+                                : r,
+                            ),
+                          );
+                        }
+                      }}
+                      className="h-5 w-5 rounded border-gray-300 text-[#7360F2] focus:ring-[#7360F2]"
+                    />
+                    <span className="font-semibold select-none">
+                      My Colour
+                    </span>
+                  </label>
+
+                  {/* Actions */}
+                  <div className="flex justify-end">
+                    <ColourRowActions
+                      row={{
+                        id: c.id,
+                        name: c.name,
+                        isActive: c.isActive,
+                        isMyColour: c.isMyColour,
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
