@@ -59,7 +59,8 @@ export default async function AdminReconListPage() {
             className="rounded-2xl overflow-hidden"
             style={{ backgroundColor: "#ffffff" }}
           >
-            <div className="overflow-x-auto">
+            {/* Desktop table — hidden on mobile */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="min-w-[700px] w-full text-sm">
                 <thead>
                   <tr
@@ -112,6 +113,67 @@ export default async function AdminReconListPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* Mobile card list — shown below md */}
+            <div className="md:hidden divide-y divide-black/10">
+              {rows.map((r) => (
+                <Link
+                  key={r.id}
+                  href={`/admin/recon/${r.id}`}
+                  className="block p-3 space-y-1"
+                  style={{ color: BRAND.ink }}
+                >
+                  {/* Run date + status */}
+                  <div className="flex items-center justify-between gap-2 min-w-0">
+                    <span className="font-mono text-xs font-semibold">
+                      {r.runDate}
+                    </span>
+                    <span
+                      className="inline-flex items-center rounded-full px-3 py-1 text-xs font-bold text-white shrink-0"
+                      style={{ backgroundColor: statusColor(r.status) }}
+                    >
+                      {r.status}
+                    </span>
+                  </div>
+
+                  {/* Txn counts */}
+                  <p className="text-xs text-slate-600">
+                    PayPal:{" "}
+                    <span className="font-mono font-semibold">
+                      {r.totalPaypalTxns}
+                    </span>
+                    {" · Local: "}
+                    <span className="font-mono font-semibold">
+                      {r.totalLocalTxns}
+                    </span>
+                    {" · Drift: "}
+                    <span
+                      className="font-mono font-semibold"
+                      style={{
+                        color: r.driftCount > 0 ? "#f59e0b" : "inherit",
+                      }}
+                    >
+                      {r.driftCount}
+                    </span>
+                  </p>
+
+                  {/* Ran at */}
+                  <p className="text-xs text-slate-500">
+                    {new Date(r.ranAt).toLocaleString("en-MY")}
+                  </p>
+
+                  {/* View button */}
+                  <div className="pt-1">
+                    <span
+                      className="inline-flex items-center justify-center rounded-full px-4 text-sm font-semibold min-h-[44px] w-full"
+                      style={{ backgroundColor: BRAND.ink, color: "#ffffff" }}
+                    >
+                      View run
+                    </span>
+                  </div>
+                </Link>
+              ))}
             </div>
           </div>
         )}

@@ -809,7 +809,8 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
             </div>
           )}
 
-          <div className="overflow-x-auto">
+          {/* ── Desktop table (md+) ── */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm min-w-[900px]">
               <thead className="bg-[var(--color-brand-surface)] text-[var(--color-brand-text-muted)]">
                 <tr>
@@ -822,16 +823,29 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
                       title="Select all"
                     />
                   </th>
-                  <th className="text-left px-4 py-3 font-medium sticky left-10 bg-[var(--color-brand-surface)] z-10 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">Variant</th>
-                  <th className="text-left px-4 py-3 font-medium">Price (MYR)</th>
-                  <th className="text-left px-4 py-3 font-medium">Sale price</th>
+                  <th className="text-left px-4 py-3 font-medium sticky left-10 bg-[var(--color-brand-surface)] z-10 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]">
+                    Variant
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium">
+                    Price (MYR)
+                  </th>
+                  <th className="text-left px-4 py-3 font-medium">
+                    Sale price
+                  </th>
                   <th className="text-left px-4 py-3 font-medium">Stock</th>
                   <th className="text-left px-4 py-3 font-medium">Track</th>
-                  <th className="text-left px-4 py-3 font-medium" title="When tracked AND stock=0, allow pre-order keeps the variant visible. Default off — hides OOS variants from PDP.">Pre-order</th>
+                  <th
+                    className="text-left px-4 py-3 font-medium"
+                    title="When tracked AND stock=0, allow pre-order keeps the variant visible. Default off — hides OOS variants from PDP."
+                  >
+                    Pre-order
+                  </th>
                   <th className="text-left px-4 py-3 font-medium">Active</th>
                   <th className="text-left px-4 py-3 font-medium">Default</th>
                   <th className="text-left px-4 py-3 font-medium">SKU</th>
-                  <th className="text-left px-4 py-3 font-medium">Weight (g)</th>
+                  <th className="text-left px-4 py-3 font-medium">
+                    Weight (g)
+                  </th>
                   <th className="text-left px-4 py-3 font-medium">Image</th>
                   <th className="px-4 py-3"></th>
                 </tr>
@@ -857,6 +871,41 @@ export function VariantEditor({ productId, productSlug, initialOptions, initialV
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* ── Mobile card list (< md) ── */}
+          <div className="md:hidden divide-y divide-[var(--color-brand-border)]">
+            {/* Select-all bar */}
+            <div className="flex items-center gap-2 px-4 py-2 bg-[var(--color-brand-surface)]">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleSelectAll}
+                className="rounded"
+                title="Select all"
+              />
+              <span className="text-xs text-[var(--color-brand-text-muted)]">
+                Select all
+              </span>
+            </div>
+            {variants.map((v) => (
+              <VariantRowMobile
+                key={v.id}
+                variant={v}
+                productSlug={productSlug}
+                isSelected={selectedIds.has(v.id)}
+                onToggleSelect={toggleSelect}
+                onUpdate={handleUpdateVariantField}
+                onDelete={handleDeleteVariant}
+                onSetDefault={handleSetDefault}
+                onUploadImage={handleUploadImage}
+                onRemoveImage={handleRemoveImage}
+                isUploading={uploadingIds.has(v.id)}
+                isPending={isPending}
+                restoredEdits={rowEdits[v.id]}
+                onRowEdit={handleRowEdit}
+              />
+            ))}
           </div>
         </div>
       )}
@@ -1296,5 +1345,390 @@ function VariantRow({
         </Button>
       </td>
     </tr>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Mobile variant card — same props + state as VariantRow; renders a stacked
+// card instead of a <tr>. State is independent per card (same pattern as
+// VariantRow) — onRowEdit + onUpdate keep it synced to the parent.
+// All editable fields, toggles, and actions (save/delete/default/image) are
+// reachable on a 375px viewport.
+// ---------------------------------------------------------------------------
+
+function VariantRowMobile({
+  variant,
+  productSlug,
+  isSelected,
+  onToggleSelect,
+  onUpdate,
+  onDelete,
+  onSetDefault,
+  onUploadImage,
+  onRemoveImage,
+  isUploading,
+  isPending,
+  onRowEdit,
+  restoredEdits,
+}: {
+  variant: HydratedVariant;
+  productSlug: string;
+  isSelected: boolean;
+  onToggleSelect: (id: string) => void;
+  onUpdate: (variantId: string, field: string, value: unknown) => void;
+  onDelete: (variantId: string) => void;
+  onSetDefault: (variantId: string) => void;
+  onUploadImage: (variantId: string, file: File) => void;
+  onRemoveImage: (variantId: string) => void;
+  isUploading: boolean;
+  isPending: boolean;
+  onRowEdit?: (variantId: string, edits: Partial<RowEditFields>) => void;
+  restoredEdits?: Partial<RowEditFields>;
+}) {
+  const [price, setPrice] = useState(restoredEdits?.price ?? variant.price);
+  const [salePrice, setSalePrice] = useState(
+    restoredEdits?.salePrice ?? (variant.salePrice ?? ""),
+  );
+  const [sku, setSku] = useState(restoredEdits?.sku ?? (variant.sku ?? ""));
+  const [weightG, setWeightG] = useState(
+    restoredEdits?.weightG ??
+      (variant.weightG !== null ? String(variant.weightG) : ""),
+  );
+  const [showSchedule, setShowSchedule] = useState(
+    restoredEdits?.showSchedule ?? false,
+  );
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Keep price in sync after bulk refetch (mirrors VariantRow sync guard)
+  const prevVariantRef = useRef(variant);
+  if (
+    prevVariantRef.current.id !== variant.id ||
+    prevVariantRef.current.price !== variant.price
+  ) {
+    setPrice(variant.price);
+    prevVariantRef.current = variant;
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) onUploadImage(variant.id, file);
+    e.target.value = "";
+  };
+
+  const valueLabels = variant.label
+    ? variant.label.split(" / ").filter(Boolean)
+    : [];
+  const autoSku = generateVariantSku(productSlug, valueLabels);
+
+  return (
+    <div className={`p-4 space-y-3 ${isSelected ? "bg-blue-50" : ""}`}>
+      {/* Header: checkbox + label + default star + delete */}
+      <div className="flex items-start gap-2 min-w-0">
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={() => onToggleSelect(variant.id)}
+          className="rounded mt-1 shrink-0"
+        />
+        <span className="flex-1 font-medium text-sm break-words min-w-0 text-[var(--color-brand-text-primary)]">
+          {variant.label || (
+            <span className="text-[var(--color-brand-text-muted)] italic">
+              unlabeled
+            </span>
+          )}
+        </span>
+        {/* Default star */}
+        <button
+          type="button"
+          title={variant.isDefault ? "Default variant" : "Set as default"}
+          onClick={() => onSetDefault(variant.id)}
+          disabled={isPending}
+          className="shrink-0 p-1 rounded hover:bg-yellow-50 transition min-h-[44px] min-w-[44px] flex items-center justify-center"
+        >
+          <Star
+            className="h-4 w-4"
+            fill={variant.isDefault ? "#f59e0b" : "none"}
+            stroke={variant.isDefault ? "#f59e0b" : "#9ca3af"}
+          />
+        </button>
+        {/* Delete */}
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-[44px] w-[44px] shrink-0 text-red-400 hover:text-red-600"
+          onClick={() => onDelete(variant.id)}
+          disabled={isPending}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {/* Editable fields — 2-column grid */}
+      <div className="grid grid-cols-2 gap-2">
+        {/* Price */}
+        <div className="space-y-0.5">
+          <label className="text-xs text-[var(--color-brand-text-muted)]">
+            Price (MYR)
+          </label>
+          <Input
+            value={price}
+            onChange={(e) => {
+              setPrice(e.target.value);
+              onRowEdit?.(variant.id, { price: e.target.value });
+            }}
+            onBlur={() => {
+              if (
+                /^\d+(\.\d{1,2})?$/.test(price) &&
+                price !== variant.price
+              ) {
+                onUpdate(variant.id, "price", price);
+              }
+            }}
+            className="h-9 text-sm"
+          />
+        </div>
+
+        {/* Sale price */}
+        <div className="space-y-0.5">
+          <label className="text-xs text-[var(--color-brand-text-muted)]">
+            Sale price
+          </label>
+          <Input
+            value={salePrice}
+            onChange={(e) => {
+              setSalePrice(e.target.value);
+              onRowEdit?.(variant.id, { salePrice: e.target.value });
+            }}
+            onBlur={() => {
+              const val = salePrice.trim();
+              const current = variant.salePrice ?? "";
+              if (val !== current) {
+                onUpdate(variant.id, "salePrice", val || null);
+              }
+            }}
+            placeholder="—"
+            className="h-9 text-sm"
+          />
+        </div>
+
+        {/* Stock */}
+        <div className="space-y-0.5">
+          <label className="text-xs text-[var(--color-brand-text-muted)]">
+            Stock
+          </label>
+          <Input
+            type="number"
+            value={variant.stock}
+            onChange={(e) =>
+              onUpdate(
+                variant.id,
+                "stock",
+                parseInt(e.target.value, 10) || 0,
+              )
+            }
+            className="h-9 text-sm"
+            min={0}
+          />
+        </div>
+
+        {/* Weight */}
+        <div className="space-y-0.5">
+          <label className="text-xs text-[var(--color-brand-text-muted)]">
+            Weight (g)
+          </label>
+          <Input
+            type="number"
+            value={weightG}
+            onChange={(e) => {
+              setWeightG(e.target.value);
+              onRowEdit?.(variant.id, { weightG: e.target.value });
+            }}
+            onBlur={() => {
+              const num =
+                weightG.trim() === "" ? null : parseInt(weightG, 10);
+              if (num !== variant.weightG) {
+                onUpdate(variant.id, "weightG", num);
+              }
+            }}
+            placeholder="inherit"
+            className="h-9 text-sm"
+            min={0}
+            max={50000}
+          />
+        </div>
+      </div>
+
+      {/* SKU full-width */}
+      <div className="space-y-0.5">
+        <label className="text-xs text-[var(--color-brand-text-muted)]">
+          SKU
+        </label>
+        <Input
+          value={sku}
+          onChange={(e) => {
+            setSku(e.target.value);
+            onRowEdit?.(variant.id, { sku: e.target.value });
+          }}
+          onBlur={() => {
+            if (sku !== (variant.sku ?? "")) {
+              onUpdate(variant.id, "sku", sku || null);
+            }
+          }}
+          placeholder={autoSku}
+          className="h-9 text-sm font-mono"
+        />
+        {!sku && (
+          <button
+            type="button"
+            className="text-xs text-blue-600 hover:underline"
+            onClick={() => {
+              setSku(autoSku);
+              onRowEdit?.(variant.id, { sku: autoSku });
+              onUpdate(variant.id, "sku", autoSku);
+            }}
+          >
+            Use auto
+          </button>
+        )}
+      </div>
+
+      {/* Sale schedule toggle */}
+      <button
+        type="button"
+        className="text-xs text-blue-600 hover:underline"
+        onClick={() => {
+          const next = !showSchedule;
+          setShowSchedule(next);
+          onRowEdit?.(variant.id, { showSchedule: next });
+        }}
+      >
+        {showSchedule ? "▲ Hide schedule" : "▼ Schedule sale dates"}
+      </button>
+      {showSchedule && (
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-0.5">
+            <label className="text-xs text-[var(--color-brand-text-muted)]">
+              From (your timezone)
+            </label>
+            <input
+              type="datetime-local"
+              defaultValue={toDatetimeLocal(variant.saleFrom)}
+              onBlur={(e) => {
+                const isoUtc = fromDatetimeLocal(e.target.value);
+                onUpdate(variant.id, "saleFrom", isoUtc);
+              }}
+              className="h-9 w-full text-xs border rounded px-2"
+            />
+          </div>
+          <div className="space-y-0.5">
+            <label className="text-xs text-[var(--color-brand-text-muted)]">
+              To (your timezone)
+            </label>
+            <input
+              type="datetime-local"
+              defaultValue={toDatetimeLocal(variant.saleTo)}
+              onBlur={(e) => {
+                const isoUtc = fromDatetimeLocal(e.target.value);
+                onUpdate(variant.id, "saleTo", isoUtc);
+              }}
+              className="h-9 w-full text-xs border rounded px-2"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Toggles row */}
+      <div className="flex flex-wrap gap-x-4 gap-y-2">
+        <div className="flex items-center gap-2">
+          <Switch
+            checked={variant.trackStock}
+            onCheckedChange={(checked) =>
+              onUpdate(variant.id, "trackStock", checked)
+            }
+            disabled={isPending}
+          />
+          <span className="text-xs text-[var(--color-brand-text-muted)]">
+            Track stock
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch
+            checked={variant.allowPreorder}
+            onCheckedChange={(checked) =>
+              onUpdate(variant.id, "allowPreorder", checked)
+            }
+            disabled={isPending}
+          />
+          <span className="text-xs text-[var(--color-brand-text-muted)]">
+            Pre-order
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch
+            checked={variant.inStock}
+            onCheckedChange={(checked) =>
+              onUpdate(variant.id, "inStock", checked)
+            }
+            disabled={isPending}
+          />
+          <span className="text-xs text-[var(--color-brand-text-muted)]">
+            Active
+          </span>
+        </div>
+      </div>
+
+      {/* Image */}
+      <div className="space-y-1">
+        <span className="text-xs text-[var(--color-brand-text-muted)]">
+          Image
+        </span>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+        {variant.imageUrl ? (
+          <div className="flex items-center gap-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`${variant.imageUrl}/800w.jpg`}
+              alt="variant"
+              className="h-10 w-10 object-cover rounded border"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = variant.imageUrl!;
+              }}
+            />
+            <button
+              type="button"
+              title="Remove image"
+              onClick={() => onRemoveImage(variant.id)}
+              disabled={isPending}
+              className="text-red-400 hover:text-red-600 min-h-[44px] px-2"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-[44px] text-sm gap-1"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isPending || isUploading}
+          >
+            {isUploading ? (
+              "Uploading…"
+            ) : (
+              <>
+                <Upload className="h-4 w-4" />
+                Upload image
+              </>
+            )}
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }

@@ -78,3 +78,63 @@ export function AdminOrderRow({ order }: { order: AdminOrderRowData }) {
     </tr>
   );
 }
+
+/**
+ * Mobile card (≤md) for /admin/orders — same props as AdminOrderRow.
+ * Renders every field and the View action at a 44px tap target.
+ */
+export function AdminOrderCard({ order }: { order: AdminOrderRowData }) {
+  const email = order.user?.email ?? order.customerEmail;
+  return (
+    <Link
+      href={`/admin/orders/${order.id}`}
+      className="block p-3 space-y-1"
+      style={{ color: BRAND.ink }}
+    >
+      {/* Order # + status on one row */}
+      <div className="flex items-center justify-between gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          {order.slipThumbnailUrl && (
+            <Image
+              src={order.slipThumbnailUrl}
+              alt="Payment slip"
+              width={24}
+              height={24}
+              className="rounded object-cover shrink-0"
+              style={{ width: 24, height: 24 }}
+            />
+          )}
+          <span className="font-mono text-xs font-semibold truncate">
+            {formatOrderNumber(order.id)}
+          </span>
+        </div>
+        <AdminOrderStatusBadge status={order.status} />
+      </div>
+
+      {/* Customer name + email */}
+      <p className="font-semibold text-sm break-words min-w-0">{order.shippingName}</p>
+      <p className="text-xs text-slate-600 break-words min-w-0">{email}</p>
+
+      {/* Date · items · total */}
+      <p className="text-xs text-slate-600">
+        {new Date(order.createdAt).toLocaleDateString("en-MY")}
+        {" · "}
+        {order.itemCount} {order.itemCount === 1 ? "item" : "items"}
+        {" · "}
+        <span className="font-bold" style={{ color: BRAND.ink }}>
+          {formatMYR(order.totalAmount)}
+        </span>
+      </p>
+
+      {/* View button */}
+      <div className="pt-1">
+        <span
+          className="inline-flex items-center justify-center rounded-full px-4 text-sm font-semibold min-h-[44px] w-full"
+          style={{ backgroundColor: BRAND.ink, color: "#ffffff" }}
+        >
+          View order
+        </span>
+      </div>
+    </Link>
+  );
+}
