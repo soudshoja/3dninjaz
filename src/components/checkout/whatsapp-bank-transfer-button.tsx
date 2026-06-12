@@ -208,7 +208,13 @@ export function WhatsAppBankTransferButton({
         bankAccountHolder,
       });
       const url = `https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`;
-      window.open(url, "_blank", "noopener,noreferrer");
+      // Same-tab navigation — window.open() after an await loses the user-
+      // gesture context and gets popup-blocked on mobile browsers and in-app
+      // webviews (incident 2026-06-12: order saved, WhatsApp never opened,
+      // customers retried into duplicate orders). location.assign cannot be
+      // blocked. If the customer comes back, re-clicking is safe: the server
+      // reuses the same order for an identical retry.
+      window.location.assign(url);
     });
   }
 
