@@ -21,6 +21,7 @@ import type { ConfigurationData } from "@/lib/config-fields";
 import { ensureConfigJson } from "@/lib/config-fields";
 import { productConfigFields } from "@/lib/db/schema";
 import { sanitizeCustomText, customKey, buildConfigSummaryServer } from "@/lib/custom-text";
+import { dedupeUnpaidOrders } from "@/lib/order-dedupe";
 
 type BagLineInput = {
   variantId: string;
@@ -594,6 +595,32 @@ export async function createPayPalOrder(
       ok: false,
       error: "Unable to start PayPal checkout. Please try again.",
     };
+  }
+
+  // Duplicate guard (incident 2026-06-12): auto-cancel this customer's older
+  // unpaid attempts with the same total (abandoned PayPal pendings, unproofed
+  // bank-transfer retries) so only this attempt stays live. No reuse here —
+  // every PayPal click needs its own fresh paypal_order_id. Safe even if an
+  // old popup captures later: capturePayPalOrder flips the row to paid
+  // regardless of its current status.
+  try {
+    const dedupe = await dedupeUnpaidOrders({
+      requesterUserId: user?.id ?? null,
+      email:
+        resolvedEmail && !resolvedEmail.endsWith("@3dninjaz.local")
+          ? resolvedEmail
+          : null,
+      phone: addr.data.phone,
+      totalStr,
+      reuseSignature: null,
+    });
+    if (dedupe.cancelledIds.length > 0) {
+      console.info(
+        `[paypal] superseded stale attempts: ${dedupe.cancelledIds.join(", ")}`,
+      );
+    }
+  } catch (err) {
+    console.error("[paypal] dedupe guard failed:", err);
   }
 
   // Insert pending order + items. Deterministic internal UUID so we don't
