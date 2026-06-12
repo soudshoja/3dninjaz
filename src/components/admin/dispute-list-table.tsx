@@ -40,7 +40,8 @@ export function DisputeListTable({ rows }: { rows: DisputeRow[] }) {
       className="rounded-2xl overflow-hidden"
       style={{ backgroundColor: "#ffffff" }}
     >
-      <div className="overflow-x-auto">
+      {/* Desktop table — hidden on mobile */}
+      <div className="hidden md:block overflow-x-auto">
         <table className="min-w-[860px] w-full text-sm">
           <thead>
             <tr
@@ -104,6 +105,71 @@ export function DisputeListTable({ rows }: { rows: DisputeRow[] }) {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile card list — shown below md */}
+      <div className="md:hidden divide-y divide-black/10">
+        {rows.map((d) => (
+          <Link
+            key={d.id}
+            href={`/admin/disputes/${encodeURIComponent(d.disputeId)}`}
+            className="block p-3 space-y-1"
+            style={{ color: BRAND.ink }}
+          >
+            {/* Dispute ID + status */}
+            <div className="flex items-start justify-between gap-2 min-w-0">
+              <span className="font-mono text-xs break-words min-w-0">
+                {d.disputeId}
+              </span>
+              <span
+                className="inline-flex items-center rounded-full px-3 py-1 text-xs font-bold text-white shrink-0"
+                style={{ backgroundColor: statusColor(d.status) }}
+              >
+                {d.status}
+              </span>
+            </div>
+
+            {/* Reason */}
+            {d.reason && (
+              <p className="text-xs text-slate-700 break-words">{d.reason}</p>
+            )}
+
+            {/* Amount + date */}
+            <p className="text-xs text-slate-600">
+              {d.amount ? (
+                <span className="font-bold" style={{ color: BRAND.ink }}>
+                  {formatMYR(d.amount)} {d.currency ?? ""}
+                </span>
+              ) : (
+                "No amount"
+              )}
+              {" · "}
+              {new Date(d.createDate).toLocaleDateString("en-MY")}
+            </p>
+
+            {/* Linked order */}
+            <p className="text-xs text-slate-600">
+              Order:{" "}
+              {d.orderId ? (
+                <span className="underline decoration-dotted">
+                  {formatOrderNumber(d.orderId)}
+                </span>
+              ) : (
+                <span className="text-amber-700">Not mapped</span>
+              )}
+            </p>
+
+            {/* View button */}
+            <div className="pt-1">
+              <span
+                className="inline-flex items-center justify-center rounded-full px-4 text-sm font-semibold min-h-[44px] w-full"
+                style={{ backgroundColor: BRAND.ink, color: "#ffffff" }}
+              >
+                View dispute
+              </span>
+            </div>
+          </Link>
+        ))}
       </div>
     </div>
   );

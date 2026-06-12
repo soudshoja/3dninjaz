@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { paymentProofs } from "@/lib/db/schema";
 import { eq, inArray, desc } from "drizzle-orm";
 import { BRAND } from "@/lib/brand";
-import { AdminOrderRow } from "@/components/admin/admin-order-row";
+import { AdminOrderRow, AdminOrderCard } from "@/components/admin/admin-order-row";
 import { AdminOrderFilter } from "@/components/admin/admin-order-filter";
 import type { OrderStatus } from "@/lib/orders";
 
@@ -119,7 +119,9 @@ export default async function AdminOrdersPage({
               Horizontal scroll lives INSIDE the card (D3-20). The page itself
               must never scroll sideways at 320 / 375 / 390 / 768 / 1024 / 1440.
             */}
-            <div className="overflow-x-auto">
+
+            {/* Desktop table — hidden on mobile */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="min-w-[760px] w-full text-sm">
                 <thead>
                   <tr
@@ -147,6 +149,19 @@ export default async function AdminOrdersPage({
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* Mobile card list — shown below md */}
+            <div className="md:hidden divide-y divide-black/10">
+              {rows.map((o) => (
+                <AdminOrderCard
+                  key={o.id}
+                  order={{
+                    ...o,
+                    slipThumbnailUrl: slipThumbnailByOrder.get(o.id) ?? null,
+                  }}
+                />
+              ))}
             </div>
           </div>
         )}

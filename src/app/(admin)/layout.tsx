@@ -145,7 +145,10 @@ export default async function AdminLayout({
           <SignOutButton />
         </div>
       </aside>
-      <div className="flex flex-1 flex-col">
+      {/* min-w-0 — without it this flex item's min-width:auto inherits the
+          mobile nav strip's ~1600px min-content width, forcing the whole
+          admin column wide and clipping every page on phones. */}
+      <div className="flex min-w-0 flex-1 flex-col">
         <header className="border-b border-[var(--color-brand-border)] bg-white px-4 py-3 md:hidden">
           <div className="flex items-center justify-between gap-3">
             <Link href="/admin" className="flex items-center gap-2">
