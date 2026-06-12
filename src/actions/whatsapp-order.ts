@@ -15,6 +15,7 @@ import type { ConfigurationData } from "@/lib/config-fields";
 import { ensureConfigJson } from "@/lib/config-fields";
 import { productConfigFields } from "@/lib/db/schema";
 import { sanitizeCustomText, customKey, buildConfigSummaryServer } from "@/lib/custom-text";
+import { dedupeUnpaidOrders, itemSignature } from "@/lib/order-dedupe";
 
 type BagLineInput = {
   variantId: string;
@@ -412,6 +413,39 @@ export async function createWhatsAppOrder(
 
   const totalNum = Math.max(0, +(subtotal - discount + shippingNum).toFixed(2));
   const totalStr = totalNum.toFixed(2);
+
+  // Duplicate guard (incident 2026-06-12): identical retry → return the
+  // existing order instead of inserting; older non-identical unpaid attempts
+  // with the same total from this customer (email/phone) are auto-cancelled.
+  try {
+    const dedupe = await dedupeUnpaidOrders({
+      email: user?.email ?? (input.guestEmail?.trim() || null),
+      phone: addr.data.phone,
+      totalStr,
+      reuseSignature: itemSignature(
+        allSnapshots.map((s) => ({
+          productId: s.productId,
+          variantId: s.variantId,
+          quantity: s.quantity,
+          configJson: s.configurationData
+            ? JSON.stringify(s.configurationData)
+            : null,
+        })),
+      ),
+    });
+    if (dedupe.cancelledIds.length > 0) {
+      console.info(
+        `[whatsapp-order] superseded stale attempts: ${dedupe.cancelledIds.join(", ")}`,
+      );
+    }
+    if (dedupe.reuseOrderId) {
+      revalidatePath("/admin/orders");
+      return { ok: true, orderId: dedupe.reuseOrderId };
+    }
+  } catch (err) {
+    // Guard must never block checkout.
+    console.error("[whatsapp-order] dedupe guard failed:", err);
+  }
 
   // Insert order row with bank_transfer + awaiting_payment_review.
   const internalOrderId = randomUUID();
