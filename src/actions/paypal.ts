@@ -605,6 +605,7 @@ export async function createPayPalOrder(
   // regardless of its current status.
   try {
     const dedupe = await dedupeUnpaidOrders({
+      requesterUserId: user?.id ?? null,
       email:
         resolvedEmail && !resolvedEmail.endsWith("@3dninjaz.local")
           ? resolvedEmail
