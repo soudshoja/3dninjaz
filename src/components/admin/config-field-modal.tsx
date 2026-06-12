@@ -463,11 +463,11 @@ function SelectOptionImageCell({
             className="h-full w-full object-cover"
             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
           />
-          {/* Remove button revealed on hover */}
+          {/* Remove button — always visible on touch/mobile, hover-revealed on desktop */}
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); handleRemove(); }}
-            className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+            className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity duration-150"
             aria-label="Remove image"
             title="Remove image"
           >
@@ -588,8 +588,8 @@ export function SelectConfigForm({
 
   return (
     <div className="space-y-1">
-      {/* Column header row */}
-      <div className="grid grid-cols-[minmax(0,1fr)_96px_96px_88px_auto_28px] items-center gap-2 px-3 py-2 text-[10px] uppercase tracking-wide text-zinc-500">
+      {/* Column header row — hidden on mobile (labels appear inline per field) */}
+      <div className="hidden md:grid grid-cols-[minmax(0,1fr)_96px_96px_88px_auto_28px] items-center gap-2 px-3 py-2 text-[10px] uppercase tracking-wide text-zinc-500">
         <span>Label / Value</span>
         <span>Price RM</span>
         <span>SKU</span>
@@ -604,8 +604,8 @@ export function SelectConfigForm({
           key={i}
           className="py-2 border-b border-zinc-100 last:border-b-0"
         >
-          {/* Main option row — 6-col grid (unchanged layout) */}
-          <div className="grid grid-cols-[minmax(0,1fr)_96px_96px_88px_auto_28px] items-center gap-2">
+          {/* Main option row — stacks on mobile, 6-col fixed grid on md+ */}
+          <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_96px_96px_88px_auto_28px] items-start md:items-center gap-2">
             {/* Label input — grid column 1 */}
             <Input
               placeholder="Label"

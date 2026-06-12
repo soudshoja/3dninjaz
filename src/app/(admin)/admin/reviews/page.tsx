@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { requireAdmin } from "@/lib/auth-helpers";
 import {
   listAdminReviews,
@@ -7,6 +8,7 @@ import {
 import { BRAND } from "@/lib/brand";
 import { ReviewRow } from "@/components/admin/review-row";
 import { ReviewStatusFilter } from "@/components/admin/review-status-filter";
+import { ReviewRowActions } from "@/components/admin/review-row-actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -73,7 +75,8 @@ export default async function AdminReviewsPage({ searchParams }: PageProps) {
             className="rounded-2xl overflow-hidden"
             style={{ backgroundColor: "#ffffff" }}
           >
-            <div className="overflow-x-auto">
+            {/* ── Desktop table (md+) ── */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="min-w-[1000px] w-full text-sm">
                 <thead style={{ backgroundColor: `${BRAND.ink}0d` }}>
                   <tr className="text-left">
@@ -92,6 +95,96 @@ export default async function AdminReviewsPage({ searchParams }: PageProps) {
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* ── Mobile cards (below md) ── */}
+            <div className="md:hidden divide-y divide-black/10">
+              {rows.map((r) => {
+                const statusStyle = {
+                  pending: {
+                    label: "Pending",
+                    bg: "#fef3c7",
+                    color: "#92400e",
+                  },
+                  approved: {
+                    label: "Approved",
+                    bg: "#dcfce7",
+                    color: "#166534",
+                  },
+                  hidden: { label: "Hidden", bg: "#e2e8f0", color: "#334155" },
+                }[r.status];
+                const safeRating = Math.max(0, Math.min(5, r.rating));
+
+                return (
+                  <div key={r.id} className="p-4 flex flex-col gap-3">
+                    {/* Product + status */}
+                    <div className="flex items-start justify-between gap-2 min-w-0">
+                      <div className="min-w-0 flex-1">
+                        {r.productSlug ? (
+                          <Link
+                            href={`/products/${r.productSlug}`}
+                            className="font-semibold underline decoration-dotted break-words"
+                            style={{ color: BRAND.ink }}
+                          >
+                            {r.productName}
+                          </Link>
+                        ) : (
+                          <span className="font-semibold break-words">
+                            {r.productName}
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        className="inline-flex items-center rounded-full px-3 py-1 text-xs font-bold shrink-0"
+                        style={{
+                          backgroundColor: statusStyle.bg,
+                          color: statusStyle.color,
+                        }}
+                      >
+                        {statusStyle.label}
+                      </span>
+                    </div>
+
+                    {/* Rating + date */}
+                    <div className="flex items-center gap-3 text-xs text-slate-600">
+                      <span
+                        className="text-yellow-500 font-mono"
+                        aria-label={`Rating ${safeRating} out of 5`}
+                      >
+                        {"★".repeat(safeRating)}
+                        <span className="opacity-30">
+                          {"★".repeat(5 - safeRating)}
+                        </span>
+                      </span>
+                      <span>
+                        {new Date(r.createdAt).toLocaleDateString("en-MY")}
+                      </span>
+                    </div>
+
+                    {/* Reviewer */}
+                    <div className="text-xs text-slate-600">
+                      <span className="font-semibold text-slate-800">
+                        {r.userName}
+                      </span>
+                      {" · "}
+                      <span className="break-words">{r.userEmail}</span>
+                    </div>
+
+                    {/* Review body */}
+                    {r.body && (
+                      <p
+                        className="text-sm line-clamp-3 break-words"
+                        style={{ color: BRAND.ink }}
+                      >
+                        {r.body}
+                      </p>
+                    )}
+
+                    {/* Actions — same ReviewRowActions used by desktop */}
+                    <ReviewRowActions row={{ id: r.id, status: r.status }} />
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

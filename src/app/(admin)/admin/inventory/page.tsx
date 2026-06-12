@@ -39,9 +39,14 @@ export default async function AdminInventoryPage() {
 
   if (productRows.length === 0) {
     return (
-      <main className="min-h-screen" style={{ backgroundColor: BRAND.cream, color: BRAND.ink }}>
+      <main
+        className="min-h-screen"
+        style={{ backgroundColor: BRAND.cream, color: BRAND.ink }}
+      >
         <div className="mx-auto max-w-5xl px-4 py-8">
-          <h1 className="font-[var(--font-heading)] text-3xl mb-6">Inventory</h1>
+          <h1 className="font-[var(--font-heading)] text-3xl mb-6">
+            Inventory
+          </h1>
           <p className="text-slate-600">No products found.</p>
         </div>
       </main>
@@ -157,11 +162,16 @@ export default async function AdminInventoryPage() {
   }
 
   return (
-    <main className="min-h-screen" style={{ backgroundColor: BRAND.cream, color: BRAND.ink }}>
+    <main
+      className="min-h-screen"
+      style={{ backgroundColor: BRAND.cream, color: BRAND.ink }}
+    >
       <div className="mx-auto max-w-6xl px-4 py-8">
         <header className="mb-6 flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="font-[var(--font-heading)] text-3xl md:text-4xl">Inventory</h1>
+            <h1 className="font-[var(--font-heading)] text-3xl md:text-4xl">
+              Inventory
+            </h1>
             <p className="mt-1 text-slate-600 text-sm">
               {totalVariants} variant{totalVariants !== 1 ? "s" : ""} across{" "}
               {productRows.length} product{productRows.length !== 1 ? "s" : ""}.
@@ -170,7 +180,10 @@ export default async function AdminInventoryPage() {
                   {oosCount} out of stock.
                 </span>
               ) : (
-                <span className="ml-2 font-semibold" style={{ color: BRAND.green }}>
+                <span
+                  className="ml-2 font-semibold"
+                  style={{ color: BRAND.green }}
+                >
                   All in stock.
                 </span>
               )}
@@ -202,7 +215,9 @@ export default async function AdminInventoryPage() {
                     Edit variants →
                   </Link>
                 </div>
-                <div className="overflow-x-auto">
+
+                {/* ── Desktop table (md+) ── */}
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-sm min-w-[600px]">
                     <thead style={{ backgroundColor: "#f9f9f9" }}>
                       <tr className="text-left text-xs text-slate-500 uppercase tracking-wide">
@@ -226,7 +241,10 @@ export default async function AdminInventoryPage() {
                             {r.isOOS ? (
                               <span
                                 className="ml-2 text-xs font-bold rounded-full px-2 py-0.5"
-                                style={{ backgroundColor: "#dc262615", color: "#dc2626" }}
+                                style={{
+                                  backgroundColor: "#dc262615",
+                                  color: "#dc2626",
+                                }}
                               >
                                 OOS
                               </span>
@@ -237,7 +255,12 @@ export default async function AdminInventoryPage() {
                           </td>
                           <td className="px-4 py-2 text-center">
                             {r.trackStock ? (
-                              <span className="text-xs font-semibold" style={{ color: BRAND.purple }}>Yes</span>
+                              <span
+                                className="text-xs font-semibold"
+                                style={{ color: BRAND.purple }}
+                              >
+                                Yes
+                              </span>
                             ) : (
                               <span className="text-xs text-slate-400">No</span>
                             )}
@@ -247,9 +270,19 @@ export default async function AdminInventoryPage() {
                           </td>
                           <td className="px-4 py-2 text-center">
                             {r.inStock ? (
-                              <span className="text-xs font-semibold" style={{ color: BRAND.green }}>Yes</span>
+                              <span
+                                className="text-xs font-semibold"
+                                style={{ color: BRAND.green }}
+                              >
+                                Yes
+                              </span>
                             ) : (
-                              <span className="text-xs font-semibold" style={{ color: "#dc2626" }}>No</span>
+                              <span
+                                className="text-xs font-semibold"
+                                style={{ color: "#dc2626" }}
+                              >
+                                No
+                              </span>
                             )}
                           </td>
                           <td className="px-4 py-2 text-center font-mono text-xs text-slate-500">
@@ -260,13 +293,96 @@ export default async function AdminInventoryPage() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* ── Mobile card list (< md) ── */}
+                <div className="md:hidden divide-y divide-black/5">
+                  {pRows.map((r) => (
+                    <div
+                      key={r.variantId}
+                      className="px-4 py-3 space-y-1"
+                      style={r.isOOS ? { backgroundColor: "#fef2f2" } : {}}
+                    >
+                      {/* Variant label + OOS badge */}
+                      <div className="flex items-center gap-2 flex-wrap min-w-0">
+                        <span className="font-medium text-sm break-words min-w-0">
+                          {r.label}
+                        </span>
+                        {r.isOOS ? (
+                          <span
+                            className="shrink-0 text-xs font-bold rounded-full px-2 py-0.5"
+                            style={{
+                              backgroundColor: "#dc262615",
+                              color: "#dc2626",
+                            }}
+                          >
+                            OOS
+                          </span>
+                        ) : null}
+                      </div>
+                      {/* Secondary fields in a 2-col grid */}
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-slate-600">
+                        <span>
+                          <span className="text-slate-400">SKU: </span>
+                          <span className="font-mono break-words">
+                            {r.sku ?? "—"}
+                          </span>
+                        </span>
+                        <span>
+                          <span className="text-slate-400">Track: </span>
+                          {r.trackStock ? (
+                            <span
+                              className="font-semibold"
+                              style={{ color: BRAND.purple }}
+                            >
+                              Yes
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">No</span>
+                          )}
+                        </span>
+                        <span>
+                          <span className="text-slate-400">Stock: </span>
+                          <span className="font-mono">
+                            {r.trackStock ? r.stock : "—"}
+                          </span>
+                        </span>
+                        <span>
+                          <span className="text-slate-400">In stock: </span>
+                          {r.inStock ? (
+                            <span
+                              className="font-semibold"
+                              style={{ color: BRAND.green }}
+                            >
+                              Yes
+                            </span>
+                          ) : (
+                            <span
+                              className="font-semibold"
+                              style={{ color: "#dc2626" }}
+                            >
+                              No
+                            </span>
+                          )}
+                        </span>
+                        <span>
+                          <span className="text-slate-400">Low threshold: </span>
+                          <span className="font-mono">
+                            {r.lowStockThreshold ?? "—"}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </section>
             );
           })}
         </div>
 
         {rows.length === 0 ? (
-          <p className="text-slate-600 mt-6">No variants found. Add variants via the product editor.</p>
+          <p className="text-slate-600 mt-6">
+            No variants found. Add variants via the product editor.
+          </p>
         ) : null}
       </div>
     </main>

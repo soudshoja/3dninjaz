@@ -233,7 +233,8 @@ export default async function AdminPaymentsPage({
             className="rounded-2xl overflow-hidden"
             style={{ backgroundColor: "#ffffff" }}
           >
-            <div className="overflow-x-auto">
+            {/* Desktop table — hidden on mobile */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="min-w-[860px] w-full text-sm">
                 <thead>
                   <tr
@@ -334,6 +335,103 @@ export default async function AdminPaymentsPage({
                   })}
                 </tbody>
               </table>
+            </div>
+
+            {/* Mobile card list — shown below md */}
+            <div className="md:hidden divide-y divide-black/10">
+              {result.rows.map((r) => {
+                const refundedNum = parseFloat(r.refundedAmount);
+                const totalNum = parseFloat(r.amount);
+                const isFullyRefunded =
+                  refundedNum >= totalNum - 0.001 && refundedNum > 0;
+                const isPartiallyRefunded =
+                  refundedNum > 0 && !isFullyRefunded;
+                return (
+                  <Link
+                    key={r.orderId}
+                    href={`/admin/payments/${r.orderId}`}
+                    className="block p-3 space-y-1"
+                    style={{ color: BRAND.ink }}
+                  >
+                    {/* Order # + status */}
+                    <div className="flex items-center justify-between gap-2 min-w-0">
+                      <span className="font-semibold text-sm truncate">
+                        {formatOrderNumber(r.orderId)}
+                      </span>
+                      <span
+                        className="inline-flex items-center rounded-full px-3 py-1 text-xs font-bold text-white shrink-0"
+                        style={{
+                          backgroundColor:
+                            r.status === "cancelled"
+                              ? "#dc2626"
+                              : r.status === "delivered"
+                                ? BRAND.green
+                                : BRAND.blue,
+                        }}
+                      >
+                        {r.status}
+                        {isPartiallyRefunded ? " · partial" : ""}
+                      </span>
+                    </div>
+
+                    {/* Customer */}
+                    <p className="font-semibold text-sm break-words min-w-0">
+                      {r.customerName}
+                    </p>
+                    <p className="text-xs text-slate-600 break-words min-w-0">
+                      {r.customerEmail}
+                    </p>
+
+                    {/* Amounts row */}
+                    <p className="text-xs text-slate-600">
+                      <span className="font-bold" style={{ color: BRAND.ink }}>
+                        {formatMYR(r.amount)}
+                      </span>
+                      {r.paypalFee ? ` · Fee ${formatMYR(r.paypalFee)}` : ""}
+                      {r.paypalNet ? ` · Net ${formatMYR(r.paypalNet)}` : ""}
+                    </p>
+
+                    {/* Refund pill if any */}
+                    {refundedNum > 0 && (
+                      <p className="text-xs">
+                        <span
+                          className="inline-flex items-center rounded-full px-2 py-0.5 font-bold text-white"
+                          style={{
+                            backgroundColor: isFullyRefunded
+                              ? "#dc2626"
+                              : "#f59e0b",
+                          }}
+                        >
+                          Refunded {formatMYR(r.refundedAmount)}
+                        </span>
+                      </p>
+                    )}
+
+                    {/* Date · items */}
+                    <p className="text-xs text-slate-600">
+                      {new Date(r.createdAt).toLocaleDateString("en-MY")}
+                      {" · "}
+                      {r.itemCount} {r.itemCount === 1 ? "item" : "items"}
+                    </p>
+
+                    {/* Capture ID */}
+                    <p className="text-xs text-slate-500">
+                      Capture:{" "}
+                      <code className="break-words">{r.paypalCaptureId}</code>
+                    </p>
+
+                    {/* View button */}
+                    <div className="pt-1">
+                      <span
+                        className="inline-flex items-center justify-center rounded-full px-4 text-sm font-semibold min-h-[44px] w-full"
+                        style={{ backgroundColor: BRAND.ink, color: "#ffffff" }}
+                      >
+                        View payment
+                      </span>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           </div>
         )}
