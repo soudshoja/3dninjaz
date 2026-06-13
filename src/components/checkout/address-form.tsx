@@ -181,7 +181,15 @@ export function AddressForm({
       }
       return;
     }
-    onValidChange(valid ? (values as AddressFormValues) : null);
+    // Validate the actual field VALUES against the schema rather than trusting
+    // react-hook-form's `formState.isValid`. In in-app browsers (Instagram /
+    // TikTok / FB webviews) RHF's isValid sometimes never flips to true even
+    // when every field is filled — its change-tracking depends on input events
+    // those webviews fire differently — which left customers stuck on "Complete
+    // shipping address" with the pay buttons disabled (2026-06-13, Rumaizah).
+    // safeParse is deterministic and webview-agnostic.
+    const parsed = orderAddressSchema.safeParse(values);
+    onValidChange(parsed.success ? parsed.data : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     mode,
