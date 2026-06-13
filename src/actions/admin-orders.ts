@@ -48,6 +48,7 @@ export type AdminOrderListRow = {
   currency: string;
   customerEmail: string;
   shippingName: string;
+  shippingPhone: string;
   createdAt: Date;
   user: { id: string; email: string; name: string } | null;
   itemCount: number;
@@ -89,6 +90,7 @@ export async function listAdminOrders(
       currency: orders.currency,
       customerEmail: orders.customerEmail,
       shippingName: orders.shippingName,
+      shippingPhone: orders.shippingPhone,
       createdAt: orders.createdAt,
       userIdJoin: user.id,
       userEmail: user.email,
@@ -132,6 +134,7 @@ export async function listAdminOrders(
     currency: r.currency,
     customerEmail: r.customerEmail,
     shippingName: r.shippingName,
+    shippingPhone: r.shippingPhone,
     createdAt: r.createdAt,
     user: r.userIdJoin
       ? { id: r.userIdJoin, email: r.userEmail ?? "", name: r.userName ?? "" }
