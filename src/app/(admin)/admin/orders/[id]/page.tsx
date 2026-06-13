@@ -14,7 +14,6 @@ import { AdminOrderTimeline } from "@/components/admin/admin-order-timeline";
 import { AdminOrderStatusForm } from "@/components/admin/admin-order-status-form";
 import { AdminOrderManage } from "@/components/admin/admin-order-manage";
 import { AdminOrderNotesForm } from "@/components/admin/admin-order-notes-form";
-import { OrderShipToEdit } from "@/components/admin/order-shipto-edit";
 // Phase 6 06-06 — admin approval surface for cancel/return requests.
 // 260601-afs — listOrderRequestsForOrder now returns AdminOrderRequestRow[]
 import { listOrderRequestsForOrder } from "@/actions/admin-order-requests";
@@ -41,11 +40,8 @@ import { CopyTrackingButton } from "@/components/orders/copy-tracking-button";
 import { FileDown, User, MapPin, Package, CreditCard, Truck, Activity, Settings, MessageSquare, RotateCcw, ChevronLeft, Send } from "lucide-react";
 import { PaymentProofSection } from "@/components/admin/payment-proof-section";
 import { AdminUploadProofForm } from "@/components/admin/admin-upload-proof-form";
-// Order editing (unpaid full edit + add-to-paid w/ balance due, 2026-06-13).
+// Order editability gates — used to show/hide the "Edit order" button.
 import { isOrderEditable, canAddItems } from "@/lib/order-editable";
-import { OrderCustomerEdit } from "@/components/admin/order-customer-edit";
-import { OrderItemsEdit } from "@/components/admin/order-items-edit";
-import { MarkBalancePaidButton } from "@/components/admin/mark-balance-paid-button";
 
 // WhatsApp SVG logo (official green brand mark, no external dependency)
 export const dynamic = "force-dynamic";
@@ -229,14 +225,13 @@ export default async function AdminOrderDetailPage({
     row.status === "awaiting_payment_review" ||
     (row.status === "pending" && !row.paypalCaptureId);
 
-  // Editing surfaces (server actions independently re-check, so the client
-  // cannot forge these). `editable` = unpaid → full edit (remove/amend);
-  // `canAdd` = broader → ADD items even on paid orders (creates a balance).
+  // Gate for the "Edit order" / "Add items" button in the view.
   const editable = isOrderEditable({
     status: row.status,
     paypalCaptureId: row.paypalCaptureId,
   });
   const canAdd = canAddItems({ status: row.status });
+  // Amount-paid display (read-only informational, view page).
   const amountPaidNum = Number(row.amountPaid ?? "0");
   const balanceDue =
     Math.round((Number(row.totalAmount) - amountPaidNum) * 100) / 100;
@@ -417,7 +412,7 @@ export default async function AdminOrderDetailPage({
             </div>
           </AdminCard>
 
-          {/* Ship-to card */}
+          {/* Ship-to card — read-only on the view page; edit via "Edit order" */}
           <AdminCard>
             <SectionHeader icon={MapPin} label="Ship to" accent={BRAND.purple} />
             <address
@@ -431,42 +426,27 @@ export default async function AdminOrderDetailPage({
               {row.shippingState}, {row.shippingCountry}<br />
               <span className="font-mono text-xs" style={{ color: BRAND.blue }}>{row.shippingPhone}</span>
             </address>
-            {editable ? (
-              // Unpaid → fuller editor (also amends customer email).
-              <OrderCustomerEdit
-                orderId={row.id}
-                initial={{
-                  shippingName: row.shippingName,
-                  customerEmail: row.customerEmail,
-                  shippingPhone: row.shippingPhone ?? "",
-                  shippingLine1: row.shippingLine1,
-                  shippingLine2: row.shippingLine2,
-                  shippingCity: row.shippingCity,
-                  shippingState: row.shippingState,
-                  shippingPostcode: row.shippingPostcode,
-                }}
-              />
-            ) : (
-              // Paid → ship-to address can still be corrected (not email).
-              <OrderShipToEdit
-                orderId={row.id}
-                initial={{
-                  shippingName: row.shippingName,
-                  shippingPhone: row.shippingPhone ?? "",
-                  shippingLine1: row.shippingLine1,
-                  shippingLine2: row.shippingLine2 ?? null,
-                  shippingCity: row.shippingCity,
-                  shippingState: row.shippingState,
-                  shippingPostcode: row.shippingPostcode,
-                }}
-              />
-            )}
           </AdminCard>
         </div>
 
         {/* ══ ZONE 3 — Items + totals ══════════════════════════════════════════ */}
         <AdminCard className="mb-4">
-          <SectionHeader icon={Package} label="Items" accent={BRAND.green} />
+          <div className="flex items-center justify-between gap-3">
+            <SectionHeader icon={Package} label="Items" accent={BRAND.green} />
+            {(editable || canAdd) && (
+              <Link
+                href={`/admin/orders/${row.id}/edit`}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold transition-opacity hover:opacity-80 shrink-0"
+                style={{
+                  backgroundColor: BRAND.ink,
+                  color: "#ffffff",
+                  minHeight: 44,
+                }}
+              >
+                {editable ? "Edit order" : "Add items"}
+              </Link>
+            )}
+          </div>
 
           {/* Custom item details (manual orders) */}
           {row.sourceType === "manual" ? (
@@ -660,40 +640,11 @@ export default async function AdminOrderDetailPage({
                   <span>{balanceDue > 0 ? "Balance due" : "Fully paid"}</span>
                   <span>{balanceDue > 0 ? formatMYR(balanceDue.toFixed(2)) : formatMYR("0.00")}</span>
                 </div>
-                {balanceDue > 0 ? (
-                  <div className="mt-3">
-                    <MarkBalancePaidButton orderId={row.id} />
-                  </div>
-                ) : null}
+                {/* MarkBalancePaidButton moved to the dedicated edit page */}
               </>
             ) : null}
           </div>
 
-          {/* Item editing — add catalog/manual lines; remove only when unpaid. */}
-          {canAdd ? (
-            <OrderItemsEdit
-              orderId={row.id}
-              allowRemove={editable}
-              items={row.items.map((i) => ({
-                id: i.id,
-                productName: i.productName,
-                quantity: i.quantity,
-                unitPrice: i.unitPrice,
-                isManual: isManualLine(i),
-              }))}
-            />
-          ) : (
-            <p
-              className="mt-4 text-xs font-medium rounded-xl px-3 py-2.5"
-              style={{
-                color: "#64748b",
-                backgroundColor: `${BRAND.ink}04`,
-                border: `1px solid ${BRAND.ink}0c`,
-              }}
-            >
-              This order is {row.status} — items are locked.
-            </p>
-          )}
         </AdminCard>
 
         {/* ══ ZONE 4 — Payment: proof + upload + payment link + PayPal ════════ */}
