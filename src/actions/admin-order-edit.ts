@@ -512,6 +512,219 @@ export async function updateOrderCustomer(
   return { ok: true };
 }
 
+// ── addPosLineToOrder ──────────────────────────────────────────────────────────
+/**
+ * Add a line to an existing order using the POS product-modal flow.
+ * Accepts the same shape as PosAddToOrderLine (defined inline to avoid
+ * importing from the client product-detail.tsx file):
+ *   - stocked: variantId is a non-empty string → price resolved server-side
+ *   - configurable: variantId is null → unitPrice trusted from modal computation
+ *     (no DB variant to re-price; mirror createPosOrder configurable branch)
+ *
+ * The configurable variantId sentinel is "manual" (same as createPosOrder).
+ */
+type AddPosLineInput = {
+  productId: string;
+  variantId: string | null;
+  qty: number;
+  unitPrice: number;
+  productName: string;
+  productImageUrl: string | null;
+  variantLabel?: string | null;
+  configurationData?: {
+    values: Record<string, string>;
+    computedPrice: number;
+    computedSummary: string;
+  } | null;
+};
+
+export async function addPosLineToOrder(
+  orderId: string,
+  line: AddPosLineInput,
+): Promise<ActionResult> {
+  await requireAdmin();
+
+  // Re-read order — assert add is allowed (includes paid orders, blocks shipped/cancelled).
+  const [orderRow] = await db
+    .select({ id: orders.id, status: orders.status, paypalCaptureId: orders.paypalCaptureId })
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1);
+
+  if (!orderRow) return { ok: false, error: "Order not found." };
+
+  try {
+    assertCanAddItems(orderRow);
+  } catch (err) {
+    return { ok: false, error: (err as Error).message };
+  }
+
+  // Validate quantity.
+  const qty = Math.floor(Number(line.qty));
+  if (!Number.isFinite(qty) || qty < 1) {
+    return { ok: false, error: "Quantity must be a whole number ≥ 1." };
+  }
+
+  const isStocked = typeof line.variantId === "string" && line.variantId.length > 0;
+
+  try {
+    if (isStocked) {
+      // ── STOCKED branch ──────────────────────────────────────────────────
+      // Re-fetch variant — price is NEVER trusted from the client.
+      const [variantRow] = await db
+        .select({
+          id: productVariants.id,
+          price: productVariants.price,
+          salePrice: productVariants.salePrice,
+          saleFrom: productVariants.saleFrom,
+          saleTo: productVariants.saleTo,
+          costPrice: productVariants.costPrice,
+          labelCache: productVariants.labelCache,
+        })
+        .from(productVariants)
+        .where(
+          and(
+            eq(productVariants.id, line.variantId as string),
+            eq(productVariants.productId, line.productId),
+          ),
+        )
+        .limit(1);
+
+      if (!variantRow) {
+        return { ok: false, error: `Variant not found for product ${line.productId}.` };
+      }
+
+      const [productRow] = await db
+        .select({
+          name: products.name,
+          slug: products.slug,
+          images: products.images,
+          thumbnailIndex: products.thumbnailIndex,
+        })
+        .from(products)
+        .where(eq(products.id, line.productId))
+        .limit(1);
+
+      if (!productRow) {
+        return { ok: false, error: `Product ${line.productId} not found.` };
+      }
+
+      // Effective price — sale window check identical to addCatalogLineItem.
+      const now = new Date();
+      const isOnSale =
+        variantRow.salePrice !== null &&
+        (variantRow.saleFrom === null || variantRow.saleFrom <= now) &&
+        (variantRow.saleTo === null || variantRow.saleTo >= now);
+      const unitPrice = isOnSale
+        ? parseFloat(variantRow.salePrice!)
+        : parseFloat(variantRow.price);
+
+      // Pick thumbnail.
+      let productImage: string | null = null;
+      try {
+        const rawImages =
+          typeof productRow.images === "string"
+            ? JSON.parse(productRow.images as string)
+            : productRow.images;
+        const arr = Array.isArray(rawImages) ? rawImages : [];
+        const idx =
+          typeof productRow.thumbnailIndex === "number" ? productRow.thumbnailIndex : 0;
+        const entry = arr[idx] ?? arr[0];
+        if (typeof entry === "string") productImage = entry;
+        else if (entry && typeof entry === "object" && "url" in entry)
+          productImage = (entry as { url: string }).url;
+      } catch {
+        productImage = null;
+      }
+
+      const lineTotal = (unitPrice * qty).toFixed(2);
+
+      await db.insert(orderItems).values({
+        id: randomUUID(),
+        orderId,
+        productId: line.productId,
+        variantId: line.variantId as string,
+        productName: productRow.name,
+        productSlug: productRow.slug,
+        productImage,
+        variantLabel: variantRow.labelCache ?? null,
+        configurationData: null,
+        unitPrice: unitPrice.toFixed(2),
+        unitCost: variantRow.costPrice ?? null,
+        quantity: qty,
+        lineTotal,
+      });
+    } else {
+      // ── CONFIGURABLE branch ─────────────────────────────────────────────
+      // No DB variant axis — trust the modal-computed unitPrice (≥ 0).
+      // Mirror createPosOrder configurable branch: sentinel variantId = "manual".
+      const unitPrice = Math.max(0, Number(line.unitPrice));
+      if (!Number.isFinite(unitPrice)) {
+        return { ok: false, error: "Invalid unit price for configurable line." };
+      }
+
+      // Fetch the product slug + image to store on the line.
+      const [productRow] = await db
+        .select({
+          slug: products.slug,
+          images: products.images,
+          thumbnailIndex: products.thumbnailIndex,
+        })
+        .from(products)
+        .where(eq(products.id, line.productId))
+        .limit(1);
+
+      let productImage: string | null = line.productImageUrl ?? null;
+      if (productRow) {
+        try {
+          const rawImages =
+            typeof productRow.images === "string"
+              ? JSON.parse(productRow.images as string)
+              : productRow.images;
+          const arr = Array.isArray(rawImages) ? rawImages : [];
+          const idx =
+            typeof productRow.thumbnailIndex === "number" ? productRow.thumbnailIndex : 0;
+          const entry = arr[idx] ?? arr[0];
+          if (typeof entry === "string") productImage = entry;
+          else if (entry && typeof entry === "object" && "url" in entry)
+            productImage = (entry as { url: string }).url;
+        } catch {
+          // keep the fallback from line.productImageUrl
+        }
+      }
+
+      const lineTotal = (unitPrice * qty).toFixed(2);
+
+      await db.insert(orderItems).values({
+        id: randomUUID(),
+        orderId,
+        productId: line.productId,
+        variantId: "manual", // same sentinel as createPosOrder configurable branch
+        productName: line.productName,
+        productSlug: productRow?.slug ?? "",
+        productImage,
+        variantLabel: line.variantLabel ?? null,
+        configurationData: line.configurationData
+          ? JSON.stringify(line.configurationData)
+          : null,
+        unitPrice: unitPrice.toFixed(2),
+        unitCost: null,
+        quantity: qty,
+        lineTotal,
+      });
+    }
+  } catch (err) {
+    console.error("[addPosLineToOrder] insert failed:", err);
+    return { ok: false, error: "Failed to add item. Please try again." };
+  }
+
+  await recomputeOrderTotals(orderId);
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath(`/admin/orders`);
+  revalidatePath(`/orders/${orderId}`);
+  return { ok: true };
+}
+
 // ── markBalancePaid ────────────────────────────────────────────────────────────
 /**
  * Settle the outstanding balance on an order (2026-06-13). Sets amountPaid =
