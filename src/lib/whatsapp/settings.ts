@@ -153,10 +153,15 @@ export async function getWhatsappNotificationsAll(): Promise<
 > {
   let rows = await db.select().from(whatsappNotifications);
 
-  if (rows.length === 0) {
-    const seeds = seedWhatsappNotifications();
+  // Lazy-seed: empty table gets all defaults; a populated table gets any
+  // NEWLY ADDED event keys backfilled (so new notification types ship
+  // without a manual DB insert). Existing rows are never touched.
+  const seeds = seedWhatsappNotifications();
+  const have = new Set(rows.map((r) => r.eventKey));
+  const missing = seeds.filter((s) => !have.has(s.eventKey));
+  if (missing.length > 0) {
     // Ignore duplicate-key errors on concurrent first-request race.
-    await db.insert(whatsappNotifications).values(seeds).catch(() => {});
+    await db.insert(whatsappNotifications).values(missing).catch(() => {});
     rows = await db.select().from(whatsappNotifications);
   }
 
