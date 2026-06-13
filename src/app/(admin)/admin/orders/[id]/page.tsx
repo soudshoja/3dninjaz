@@ -489,15 +489,16 @@ export default async function AdminOrderDetailPage({
               style={{ borderColor: `${BRAND.ink}0c` }}
             >
               {row.items.map((i) => {
-                // D-08 (Phase 20): manual lines have no product image — skip.
-                // Otherwise prefer the snapshotted image, falling back to the
-                // product's primary image (keychain/configurable items don't
-                // snapshot one at add-to-bag).
-                const itemImage = isManualLine(i)
-                  ? null
-                  : i.productImage ||
-                    (i.productId ? productImageFallback.get(i.productId) : null) ||
-                    null;
+                // Prefer the snapshotted image — including on manual lines, so
+                // draft-converted orders (which carry a product_image) show a
+                // thumbnail. Only the product-id fallback is restricted to
+                // non-manual lines (manual ids aren't real products).
+                const itemImage =
+                  i.productImage ||
+                  (!isManualLine(i) && i.productId
+                    ? productImageFallback.get(i.productId)
+                    : null) ||
+                  null;
                 return (
                   <li key={i.id} className="flex gap-4 py-3.5">
                     <div

@@ -156,7 +156,7 @@ function GuestOrderView({
                     className="h-16 w-16 md:h-20 md:w-20 rounded-xl overflow-hidden shrink-0"
                     style={{ backgroundColor: `${BRAND.blue}15` }}
                   >
-                    {!isManualLine(i) && (i.productImage || imgFallback[i.productId]) ? (
+                    {i.productImage || (!isManualLine(i) && imgFallback[i.productId]) ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={i.productImage || imgFallback[i.productId]}
@@ -447,8 +447,10 @@ export default async function OrderDetailPage({
                   className="h-16 w-16 md:h-20 md:w-20 rounded-xl overflow-hidden shrink-0"
                   style={{ backgroundColor: `${BRAND.blue}15` }}
                 >
-                  {/* D-08 (Phase 20): manual lines have no product image — no fetch */}
-                  {!isManualLine(i) && (i.productImage || imgFallback[i.productId]) ? (
+                  {/* Honor a snapshotted product_image even on manual lines
+                      (draft-converted orders carry one); product-id fallback
+                      only applies to non-manual lines. */}
+                  {i.productImage || (!isManualLine(i) && imgFallback[i.productId]) ? (
                     // eslint-disable-next-line @next/next/no-img-element -- product may be deleted
                     <img
                       src={i.productImage || imgFallback[i.productId]}
