@@ -53,6 +53,7 @@ const EVENT_GROUPS: EventGroup[] = [
     accentColor: BRAND.blue,
     keys: [
       "order_pending",
+      "order_bank_transfer_instructions",
       "order_approved",
       "order_confirmation",
       "order_processing",
@@ -102,6 +103,23 @@ interface Props {
 // ============================================================================
 // Component
 // ============================================================================
+
+// Any event key not placed in a group above. Without this, a newly added
+// notification (e.g. order_bank_transfer_instructions, 2026-06-13) renders NO
+// card at all — the admin can't toggle or edit it and it silently keeps
+// sending. This fallback guarantees every seeded event is always reachable.
+const GROUPED_KEYS = new Set(EVENT_GROUPS.flatMap((g) => g.keys));
+const UNGROUPED_GROUP: EventGroup = {
+  label: "Other",
+  description: "Notifications not assigned to a group above.",
+  icon: <ShoppingCart size={18} />,
+  accentColor: BRAND.ink,
+  keys: WHATSAPP_EVENT_KEYS.filter((k) => !GROUPED_KEYS.has(k)),
+};
+const ALL_GROUPS: EventGroup[] =
+  UNGROUPED_GROUP.keys.length > 0
+    ? [...EVENT_GROUPS, UNGROUPED_GROUP]
+    : EVENT_GROUPS;
 
 export function WhatsappNotificationsEditor({ rows }: Props) {
   const rowMap = Object.fromEntries(rows.map((r) => [r.eventKey, r]));
@@ -166,7 +184,7 @@ export function WhatsappNotificationsEditor({ rows }: Props) {
 
   return (
     <div className="space-y-8">
-      {EVENT_GROUPS.map((group) => (
+      {ALL_GROUPS.map((group) => (
         <section key={group.label}>
           {/* ── Group header ── */}
           <div className="flex items-center gap-3 mb-4">
