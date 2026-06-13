@@ -519,7 +519,7 @@ function MobileBottomSheet({
           <ul
             role="listbox"
             aria-label={label ?? "Select an option"}
-            className="flex-1 overflow-y-auto py-2 px-3 flex flex-col gap-1.5"
+            className="flex-1 min-h-0 overflow-y-auto py-2 px-3 flex flex-col gap-1.5"
             style={{ paddingBottom: "env(safe-area-inset-bottom, 20px)" }}
           >
             {options.map((opt, idx) => (

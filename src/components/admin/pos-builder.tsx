@@ -901,7 +901,10 @@ export function PosBuilder() {
             </div>
 
             {/* Body */}
-            <div className="overflow-y-auto flex-1 px-5 py-5">
+            {/* min-h-0 — Safari refuses to shrink a flex-1 scroll child without
+                it, pushing the footer (Confirm & create order) past the
+                modal's overflow-hidden edge. Chrome was unaffected. */}
+            <div className="overflow-y-auto flex-1 min-h-0 px-5 py-5">
               <PosCustomerStep
                 ref={customerStepRef}
                 customerForm={customerForm}
