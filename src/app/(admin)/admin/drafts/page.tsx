@@ -5,6 +5,7 @@ import { listCheckoutDrafts, type AdminDraftRow } from "@/actions/checkout-draft
 import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
 import { DraftDismissButton } from "@/components/admin/draft-dismiss-button";
+import { DraftConvertButton } from "@/components/admin/draft-convert-button";
 
 export const dynamic = "force-dynamic";
 
@@ -163,6 +164,7 @@ function DraftCard({ draft }: { draft: AdminDraftRow }) {
           >
             WhatsApp customer
           </a>
+          <DraftConvertButton draftId={draft.id} />
           <DraftDismissButton draftId={draft.id} />
         </div>
       ) : null}
