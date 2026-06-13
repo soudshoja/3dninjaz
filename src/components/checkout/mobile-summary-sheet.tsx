@@ -81,38 +81,46 @@ export function MobileSummarySheet({
     : subtotalMyr;
   const totalForDock = discountedSubtotal + (shipping?.price ?? 0);
 
-  // Payment is blocked until the address form is valid + a courier picked —
-  // but the form is BEHIND this sheet. Without an actionable way back,
-  // customers get stuck reading "complete your shipping address" with no
-  // address form in sight (incident 2026-06-13, Instagram in-app browser).
-  const payBlocked = address === null || shipping === null;
-  const jumpToAddress = () => {
+  // The "Review & Pay" sheet is only for paying. If the address isn't valid
+  // yet (or no courier), we DON'T open the sheet and show a "complete address"
+  // message inside it — instead the dock button takes the customer straight
+  // back to the form/courier section to finish (2026-06-13: customers found
+  // "Complete shipping address" inside Review & Pay confusing). The sheet only
+  // ever opens once everything is ready, so it's pure review + pay.
+  const ready = address !== null && shipping !== null;
+  const jumpToIncomplete = () => {
     setOpen(false);
-    // Wait for the drawer close animation before scrolling.
+    // Wait for any drawer close animation before scrolling.
     setTimeout(() => {
-      const ids = [
-        "field-recipientName",
-        "field-phone",
-        "field-addressLine1",
-        "field-city",
-        "field-postcode",
-        "field-state",
-      ];
-      const firstEmpty = ids
-        .map((id) => document.getElementById(id))
-        .find(
-          (el) =>
+      if (address === null) {
+        const ids = [
+          "field-recipientName",
+          "field-phone",
+          "field-addressLine1",
+          "field-city",
+          "field-postcode",
+          "field-state",
+        ];
+        const firstEmpty = ids
+          .map((id) => document.getElementById(id))
+          .find((el) =>
             el instanceof HTMLInputElement || el instanceof HTMLSelectElement
               ? !el.value
               : false,
-        );
-      const target = firstEmpty ?? document.getElementById("ship-heading");
-      target?.scrollIntoView({ behavior: "smooth", block: "center" });
-      if (
-        firstEmpty instanceof HTMLInputElement ||
-        firstEmpty instanceof HTMLSelectElement
-      ) {
-        firstEmpty.focus({ preventScroll: true });
+          );
+        const target = firstEmpty ?? document.getElementById("ship-heading");
+        target?.scrollIntoView({ behavior: "smooth", block: "center" });
+        if (
+          firstEmpty instanceof HTMLInputElement ||
+          firstEmpty instanceof HTMLSelectElement
+        ) {
+          firstEmpty.focus({ preventScroll: true });
+        }
+      } else {
+        // Address valid but no courier yet — scroll to the shipping section.
+        document
+          .getElementById("ship-heading")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
       }
     }, 350);
   };
@@ -138,11 +146,15 @@ export function MobileSummarySheet({
           </div>
           <button
             type="button"
-            onClick={() => setOpen(true)}
+            onClick={ready ? () => setOpen(true) : jumpToIncomplete}
             className="min-h-[60px] px-6 rounded-full font-bold text-white shadow-[0_6px_0_rgba(0,0,0,0.35)] active:translate-y-[2px] active:shadow-[0_4px_0_rgba(0,0,0,0.35)] transition"
             style={{ backgroundColor: BRAND.ink }}
           >
-            Review &amp; Pay
+            {ready
+              ? "Review & Pay"
+              : address === null
+                ? "Add your details"
+                : "Choose delivery"}
           </button>
         </div>
       </div>
@@ -184,62 +196,74 @@ export function MobileSummarySheet({
             <p className="text-[11px] uppercase tracking-wider text-zinc-500 font-medium px-1 mb-1">
               Pay
             </p>
-            {payBlocked ? (
-              <button
-                type="button"
-                onClick={jumpToAddress}
-                className="w-full min-h-[48px] mb-2 rounded-full font-bold text-white shadow-[0_4px_0_rgba(0,0,0,0.25)] active:translate-y-[1px] transition"
-                style={{ backgroundColor: BRAND.blue }}
-              >
-                {address === null
-                  ? "Complete shipping address →"
-                  : "Pick a courier →"}
-              </button>
-            ) : null}
-            {inAppBrowser && !payBlocked ? (
-              <p
-                className="rounded-xl px-3 py-2 mb-2 text-xs"
-                style={{ backgroundColor: "#FEF3C7", color: "#92400E" }}
-              >
-                You&apos;re in an in-app browser. If PayPal doesn&apos;t open,
-                use <strong>Pay via WhatsApp</strong> — or open this page in
-                Safari/Chrome.
-              </p>
-            ) : null}
-            {/* PayPal + WhatsApp side-by-side to save vertical space on mobile.
-                Each column takes half the row; min-w-0 lets them shrink. */}
-            <div className="flex items-stretch gap-2 [&>*]:flex-1 [&>*]:min-w-0">
-              <PayPalButton
-                address={address}
-                items={items}
-                appliedCouponCode={appliedCoupon?.code ?? null}
-                shipping={shipping}
-                onPaid={(redirect) => {
-                  setOpen(false);
-                  onPaid(redirect);
-                }}
-                guestEmail={guestEmail}
-                guestEmailValid={guestEmailValid}
-              />
-              <WhatsAppBankTransferButton
-                compact
-                items={items}
-                subtotal={subtotalMyr}
-                shipping={shipping}
-                address={address}
-                customerName={customerName}
-                customerEmail={customerEmail}
-                couponCode={couponCode}
-                discount={appliedCoupon?.discount ?? 0}
-                waNumber={waNumber}
-                bankName={bankName}
-                bankAccountNumber={bankAccountNumber}
-                bankAccountHolder={bankAccountHolder}
-                guestName={isGuest ? guestName : undefined}
-                guestEmail={isGuest ? guestEmail : undefined}
-                disabled={items.length === 0 || (isGuest === true && !(guestName ?? "").trim())}
-              />
-            </div>
+            {/* Shared button instances — order/emphasis differs by environment. */}
+            {(() => {
+              const paypal = (
+                <PayPalButton
+                  address={address}
+                  items={items}
+                  appliedCouponCode={appliedCoupon?.code ?? null}
+                  shipping={shipping}
+                  onPaid={(redirect) => {
+                    setOpen(false);
+                    onPaid(redirect);
+                  }}
+                  guestEmail={guestEmail}
+                  guestEmailValid={guestEmailValid}
+                />
+              );
+              const whatsapp = (
+                <WhatsAppBankTransferButton
+                  compact
+                  items={items}
+                  subtotal={subtotalMyr}
+                  shipping={shipping}
+                  address={address}
+                  customerName={customerName}
+                  customerEmail={customerEmail}
+                  couponCode={couponCode}
+                  discount={appliedCoupon?.discount ?? 0}
+                  waNumber={waNumber}
+                  bankName={bankName}
+                  bankAccountNumber={bankAccountNumber}
+                  bankAccountHolder={bankAccountHolder}
+                  guestName={isGuest ? guestName : undefined}
+                  guestEmail={isGuest ? guestEmail : undefined}
+                  disabled={items.length === 0 || (isGuest === true && !(guestName ?? "").trim())}
+                />
+              );
+
+              // In-app browsers (Instagram/TikTok/FB webviews) reliably block
+              // the PayPal popup. Lead with WhatsApp (works everywhere) and
+              // keep PayPal below as the secondary option.
+              if (inAppBrowser) {
+                return (
+                  <div className="space-y-2">
+                    <p
+                      className="rounded-xl px-3 py-2 text-xs"
+                      style={{ backgroundColor: "#FEF3C7", color: "#92400E" }}
+                    >
+                      Paying from the Instagram app? Tap{" "}
+                      <strong>Pay via WhatsApp</strong> below — it always works
+                      here. (Card / PayPal may not open inside in-app browsers.)
+                    </p>
+                    {whatsapp}
+                    <p className="text-[11px] text-slate-400 text-center pt-1">
+                      or pay by card / PayPal
+                    </p>
+                    {paypal}
+                  </div>
+                );
+              }
+
+              // Normal browsers — PayPal + WhatsApp side-by-side.
+              return (
+                <div className="flex items-stretch gap-2 [&>*]:flex-1 [&>*]:min-w-0">
+                  {paypal}
+                  {whatsapp}
+                </div>
+              );
+            })()}
           </DrawerFooter>
         </DrawerContent>
       </Drawer>
