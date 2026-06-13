@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { X } from "lucide-react";
 import {
   Drawer,
@@ -125,14 +125,6 @@ export function MobileSummarySheet({
     }, 350);
   };
 
-  // In-app browsers (Instagram/Facebook/TikTok webviews) are unreliable for
-  // the PayPal popup. Detect once on the client; SSR renders false.
-  const [inAppBrowser, setInAppBrowser] = useState(false);
-  useEffect(() => {
-    const ua = navigator.userAgent || "";
-    setInAppBrowser(/Instagram|FBAN|FBAV|FB_IAB|TikTok|musical_ly|Line\//i.test(ua));
-  }, []);
-
   return (
     <>
       {/* Sticky bottom dock, mobile-only */}
@@ -196,74 +188,40 @@ export function MobileSummarySheet({
             <p className="text-[11px] uppercase tracking-wider text-zinc-500 font-medium px-1 mb-1">
               Pay
             </p>
-            {/* Shared button instances — order/emphasis differs by environment. */}
-            {(() => {
-              const paypal = (
-                <PayPalButton
-                  address={address}
-                  items={items}
-                  appliedCouponCode={appliedCoupon?.code ?? null}
-                  shipping={shipping}
-                  onPaid={(redirect) => {
-                    setOpen(false);
-                    onPaid(redirect);
-                  }}
-                  guestEmail={guestEmail}
-                  guestEmailValid={guestEmailValid}
-                />
-              );
-              const whatsapp = (
-                <WhatsAppBankTransferButton
-                  compact
-                  items={items}
-                  subtotal={subtotalMyr}
-                  shipping={shipping}
-                  address={address}
-                  customerName={customerName}
-                  customerEmail={customerEmail}
-                  couponCode={couponCode}
-                  discount={appliedCoupon?.discount ?? 0}
-                  waNumber={waNumber}
-                  bankName={bankName}
-                  bankAccountNumber={bankAccountNumber}
-                  bankAccountHolder={bankAccountHolder}
-                  guestName={isGuest ? guestName : undefined}
-                  guestEmail={isGuest ? guestEmail : undefined}
-                  disabled={items.length === 0 || (isGuest === true && !(guestName ?? "").trim())}
-                />
-              );
-
-              // In-app browsers (Instagram/TikTok/FB webviews) reliably block
-              // the PayPal popup. Lead with WhatsApp (works everywhere) and
-              // keep PayPal below as the secondary option.
-              if (inAppBrowser) {
-                return (
-                  <div className="space-y-2">
-                    <p
-                      className="rounded-xl px-3 py-2 text-xs"
-                      style={{ backgroundColor: "#FEF3C7", color: "#92400E" }}
-                    >
-                      Paying from the Instagram app? Tap{" "}
-                      <strong>Pay via WhatsApp</strong> below — it always works
-                      here. (Card / PayPal may not open inside in-app browsers.)
-                    </p>
-                    {whatsapp}
-                    <p className="text-[11px] text-slate-400 text-center pt-1">
-                      or pay by card / PayPal
-                    </p>
-                    {paypal}
-                  </div>
-                );
-              }
-
-              // Normal browsers — PayPal + WhatsApp side-by-side.
-              return (
-                <div className="flex items-stretch gap-2 [&>*]:flex-1 [&>*]:min-w-0">
-                  {paypal}
-                  {whatsapp}
-                </div>
-              );
-            })()}
+            {/* PayPal + WhatsApp side-by-side — both options equally available
+                in every browser (the customer chooses whichever they prefer). */}
+            <div className="flex items-stretch gap-2 [&>*]:flex-1 [&>*]:min-w-0">
+              <PayPalButton
+                address={address}
+                items={items}
+                appliedCouponCode={appliedCoupon?.code ?? null}
+                shipping={shipping}
+                onPaid={(redirect) => {
+                  setOpen(false);
+                  onPaid(redirect);
+                }}
+                guestEmail={guestEmail}
+                guestEmailValid={guestEmailValid}
+              />
+              <WhatsAppBankTransferButton
+                compact
+                items={items}
+                subtotal={subtotalMyr}
+                shipping={shipping}
+                address={address}
+                customerName={customerName}
+                customerEmail={customerEmail}
+                couponCode={couponCode}
+                discount={appliedCoupon?.discount ?? 0}
+                waNumber={waNumber}
+                bankName={bankName}
+                bankAccountNumber={bankAccountNumber}
+                bankAccountHolder={bankAccountHolder}
+                guestName={isGuest ? guestName : undefined}
+                guestEmail={isGuest ? guestEmail : undefined}
+                disabled={items.length === 0 || (isGuest === true && !(guestName ?? "").trim())}
+              />
+            </div>
           </DrawerFooter>
         </DrawerContent>
       </Drawer>
