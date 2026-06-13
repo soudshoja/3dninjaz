@@ -113,8 +113,9 @@ export function PosProductModal({ productId, open, onClose, onAdd }: Props) {
           </button>
         </div>
 
-        {/* Scrollable body */}
-        <div className="overflow-y-auto flex-1">
+        {/* Scrollable body — min-h-0 keeps the footer visible in Safari
+            (flex-1 scroll children don't shrink there without it). */}
+        <div className="overflow-y-auto flex-1 min-h-0">
           {hydration === "loading" ? (
             /* Spinner — reserve space so panel doesn't jump */
             <div className="flex flex-col items-center justify-center gap-3 py-20 px-8 text-slate-500">
