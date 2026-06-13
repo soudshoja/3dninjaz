@@ -262,15 +262,15 @@ export async function addCatalogLineItem(
     productName: productRow.name,
     productSlug: productRow.slug,
     productImage,
-    size: null,
+    // Mirror the POS insert (admin-pos.ts): omit `size` so the column default
+    // applies — the order_items.size column is NOT NULL on some DBs and rejects
+    // an explicit NULL (2026-06-13).
     variantLabel: variantRow.labelCache ?? null,
     configurationData: null,
     unitPrice: unitPrice.toFixed(2),
     unitCost: variantRow.costPrice ?? null,
     quantity: qty,
     lineTotal,
-    productionDone: false,
-    productionSort: null,
   });
 
   await recomputeOrderTotals(orderId);
@@ -329,6 +329,8 @@ export async function addManualLineItem(
 
   const lineTotal = (unitPrice * qty).toFixed(2);
 
+  // Mirror the POS free-text insert (admin-pos.ts): productId/variantId
+  // "manual" sentinels, and OMIT `size` so its column default applies.
   await db.insert(orderItems).values({
     id: randomUUID(),
     orderId,
@@ -337,15 +339,12 @@ export async function addManualLineItem(
     productName: name,
     productSlug: "manual",
     productImage: null,
-    size: null,
     variantLabel: null,
     configurationData: null,
     unitPrice: unitPrice.toFixed(2),
     unitCost: null,
     quantity: qty,
     lineTotal,
-    productionDone: false,
-    productionSort: null,
   });
 
   await recomputeOrderTotals(orderId);
