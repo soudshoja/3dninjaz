@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import {
   Drawer,
@@ -81,6 +81,50 @@ export function MobileSummarySheet({
     : subtotalMyr;
   const totalForDock = discountedSubtotal + (shipping?.price ?? 0);
 
+  // Payment is blocked until the address form is valid + a courier picked —
+  // but the form is BEHIND this sheet. Without an actionable way back,
+  // customers get stuck reading "complete your shipping address" with no
+  // address form in sight (incident 2026-06-13, Instagram in-app browser).
+  const payBlocked = address === null || shipping === null;
+  const jumpToAddress = () => {
+    setOpen(false);
+    // Wait for the drawer close animation before scrolling.
+    setTimeout(() => {
+      const ids = [
+        "field-recipientName",
+        "field-phone",
+        "field-addressLine1",
+        "field-city",
+        "field-postcode",
+        "field-state",
+      ];
+      const firstEmpty = ids
+        .map((id) => document.getElementById(id))
+        .find(
+          (el) =>
+            el instanceof HTMLInputElement || el instanceof HTMLSelectElement
+              ? !el.value
+              : false,
+        );
+      const target = firstEmpty ?? document.getElementById("ship-heading");
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (
+        firstEmpty instanceof HTMLInputElement ||
+        firstEmpty instanceof HTMLSelectElement
+      ) {
+        firstEmpty.focus({ preventScroll: true });
+      }
+    }, 350);
+  };
+
+  // In-app browsers (Instagram/Facebook/TikTok webviews) are unreliable for
+  // the PayPal popup. Detect once on the client; SSR renders false.
+  const [inAppBrowser, setInAppBrowser] = useState(false);
+  useEffect(() => {
+    const ua = navigator.userAgent || "";
+    setInAppBrowser(/Instagram|FBAN|FBAV|FB_IAB|TikTok|musical_ly|Line\//i.test(ua));
+  }, []);
+
   return (
     <>
       {/* Sticky bottom dock, mobile-only */}
@@ -140,6 +184,28 @@ export function MobileSummarySheet({
             <p className="text-[11px] uppercase tracking-wider text-zinc-500 font-medium px-1 mb-1">
               Pay
             </p>
+            {payBlocked ? (
+              <button
+                type="button"
+                onClick={jumpToAddress}
+                className="w-full min-h-[48px] mb-2 rounded-full font-bold text-white shadow-[0_4px_0_rgba(0,0,0,0.25)] active:translate-y-[1px] transition"
+                style={{ backgroundColor: BRAND.blue }}
+              >
+                {address === null
+                  ? "Complete shipping address →"
+                  : "Pick a courier →"}
+              </button>
+            ) : null}
+            {inAppBrowser && !payBlocked ? (
+              <p
+                className="rounded-xl px-3 py-2 mb-2 text-xs"
+                style={{ backgroundColor: "#FEF3C7", color: "#92400E" }}
+              >
+                You&apos;re in an in-app browser. If PayPal doesn&apos;t open,
+                use <strong>Pay via WhatsApp</strong> — or open this page in
+                Safari/Chrome.
+              </p>
+            ) : null}
             {/* PayPal + WhatsApp side-by-side to save vertical space on mobile.
                 Each column takes half the row; min-w-0 lets them shrink. */}
             <div className="flex items-stretch gap-2 [&>*]:flex-1 [&>*]:min-w-0">
