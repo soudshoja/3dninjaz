@@ -5,7 +5,7 @@ import { formatOrderNumber, type OrderStatus } from "@/lib/orders";
 import { formatMYR } from "@/lib/format";
 import { AdminOrderStatusBadge } from "./admin-order-status-badge";
 
-type AdminOrderRowData = {
+export type AdminOrderRowData = {
   id: string;
   status: OrderStatus;
   totalAmount: string;
@@ -28,9 +28,31 @@ type AdminOrderRowData = {
  * Phase 20 (20-10): When slipThumbnailUrl is provided, renders a 24×24 slip
  * thumbnail at the left edge of the Order # cell (UI-SPEC §Surface 4 row enhancement).
  */
-export function AdminOrderRow({ order }: { order: AdminOrderRowData }) {
+export function AdminOrderRow({
+  order,
+  selected,
+  onToggleSelect,
+}: {
+  order: AdminOrderRowData;
+  /** Multi-select (2026-06-13) — checkbox renders only when provided. */
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
+}) {
   return (
-    <tr className="border-t border-black/10">
+    <tr
+      className="border-t border-black/10"
+      style={selected ? { backgroundColor: "#FEF9E7" } : undefined}
+    >
+      {onToggleSelect ? (
+        <td className="p-3 w-10">
+          <input
+            type="checkbox"
+            checked={!!selected}
+            onChange={() => onToggleSelect(order.id)}
+            aria-label={`Select order ${formatOrderNumber(order.id)}`}
+          />
+        </td>
+      ) : null}
       <td className="p-3 font-mono text-xs">
         <div className="flex items-center gap-2">
           {order.slipThumbnailUrl && (
@@ -85,16 +107,41 @@ export function AdminOrderRow({ order }: { order: AdminOrderRowData }) {
  * Mobile card (≤md) for /admin/orders — same props as AdminOrderRow.
  * Renders every field and the View action at a 44px tap target.
  */
-export function AdminOrderCard({ order }: { order: AdminOrderRowData }) {
+export function AdminOrderCard({
+  order,
+  selected,
+  onToggleSelect,
+}: {
+  order: AdminOrderRowData;
+  /** Multi-select (2026-06-13) — checkbox renders only when provided. */
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
+}) {
   return (
     <Link
       href={`/admin/orders/${order.id}`}
       className="block p-3 space-y-1"
-      style={{ color: BRAND.ink }}
+      style={{ color: BRAND.ink, ...(selected ? { backgroundColor: "#FEF9E7" } : {}) }}
     >
       {/* Order # + status on one row */}
       <div className="flex items-center justify-between gap-2 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
+          {onToggleSelect ? (
+            // Inside the card <Link> — preventDefault stops navigation, the
+            // controlled `checked` prop reflects toggle state.
+            <input
+              type="checkbox"
+              checked={!!selected}
+              readOnly
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onToggleSelect(order.id);
+              }}
+              className="h-5 w-5 shrink-0"
+              aria-label={`Select order ${formatOrderNumber(order.id)}`}
+            />
+          ) : null}
           {order.slipThumbnailUrl && (
             <Image
               src={order.slipThumbnailUrl}

@@ -1,7 +1,17 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { orders, orderItems, orderShipments, user } from "@/lib/db/schema";
+import {
+  orders,
+  orderItems,
+  orderShipments,
+  paymentProofs,
+  paymentLinks,
+  orderRequests,
+  couponRedemptions,
+  disputeCache,
+  user,
+} from "@/lib/db/schema";
 import { and, eq, desc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-helpers";
@@ -453,6 +463,45 @@ export async function approveWhatsAppOrder(
   revalidatePath(`/orders`);
 
   return { ok: true };
+}
+
+/**
+ * Bulk-delete orders (multi-select on /admin/orders, 2026-06-13). PERMANENT —
+ * the UI must warn before calling. Deletes child rows first (order_items,
+ * shipments mirror, payment proofs/links, return requests, coupon
+ * redemptions) and detaches dispute-cache rows; the schema declares FKs but
+ * the live MariaDB tables were created via raw DDL, so we never rely on
+ * cascades. Does NOT touch Delyva or PayPal — cancel consignments/refunds
+ * separately before deleting if needed.
+ */
+export async function bulkDeleteOrders(
+  orderIds: string[],
+): Promise<{ ok: true; deleted: number } | { ok: false; error: string }> {
+  await requireAdmin();
+
+  const ids = Array.isArray(orderIds)
+    ? [...new Set(orderIds.filter((id) => typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id)))]
+    : [];
+  if (ids.length === 0) return { ok: false, error: "No orders selected." };
+  if (ids.length > 100) return { ok: false, error: "Too many orders selected (max 100)." };
+
+  try {
+    await db.update(disputeCache).set({ orderId: null }).where(inArray(disputeCache.orderId, ids));
+    await db.delete(orderItems).where(inArray(orderItems.orderId, ids));
+    await db.delete(orderShipments).where(inArray(orderShipments.orderId, ids));
+    await db.delete(paymentProofs).where(inArray(paymentProofs.orderId, ids));
+    await db.delete(paymentLinks).where(inArray(paymentLinks.orderId, ids));
+    await db.delete(orderRequests).where(inArray(orderRequests.orderId, ids));
+    await db.delete(couponRedemptions).where(inArray(couponRedemptions.orderId, ids));
+    await db.delete(orders).where(inArray(orders.id, ids));
+  } catch (err) {
+    console.error("[admin-orders] bulkDeleteOrders failed:", err);
+    return { ok: false, error: "Delete failed — check server logs." };
+  }
+
+  revalidatePath("/admin/orders");
+  revalidatePath("/orders");
+  return { ok: true, deleted: ids.length };
 }
 
 type UpdateNotesResult = { ok: true } | { ok: false; error: string };

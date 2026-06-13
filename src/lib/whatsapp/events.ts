@@ -15,6 +15,7 @@ import type { WhatsappNotificationSeed } from "@/lib/db/schema";
 
 export const WHATSAPP_EVENT_KEYS = [
   "order_pending",
+  "order_bank_transfer_instructions",
   "order_approved",
   "order_confirmation",
   "order_processing",
@@ -33,6 +34,8 @@ export type WhatsappEventKey = (typeof WHATSAPP_EVENT_KEYS)[number];
 
 export const WHATSAPP_EVENT_LABELS: Record<WhatsappEventKey, string> = {
   order_pending: "Order pending — payment link",
+  order_bank_transfer_instructions:
+    "Bank transfer — payment instructions (auto-sent on WhatsApp order)",
   order_approved: "Order approved / payment confirmed",
   order_confirmation: "Order confirmed / paid (PayPal)",
   order_processing: "Order processing",
@@ -50,6 +53,10 @@ export const WHATSAPP_EVENT_LABELS: Record<WhatsappEventKey, string> = {
 // Variables each event template may use (surfaced in the editor sidebar).
 export const WHATSAPP_EVENT_VARIABLES: Record<WhatsappEventKey, string[]> = {
   order_pending:      ["customerName", "orderNumber", "orderTotal", "paymentLink"],
+  order_bank_transfer_instructions: [
+    "customerName", "orderNumber", "orderTotal",
+    "bankName", "bankAccountNumber", "bankAccountHolder",
+  ],
   order_approved:     ["customerName", "orderNumber", "orderUrl"],
   order_confirmation: ["customerName", "orderNumber", "orderTotal", "orderUrl"],
   order_processing:   ["customerName", "orderNumber", "orderUrl"],
@@ -67,6 +74,10 @@ export const WHATSAPP_EVENT_VARIABLES: Record<WhatsappEventKey, string[]> = {
 const DEFAULT_TEMPLATES: Record<WhatsappEventKey, string> = {
   order_pending:
     "Hi {{customerName}}, your 3D Ninjaz order {{orderNumber}} (RM {{orderTotal}}) is reserved! Complete payment here: {{paymentLink}} — link valid for 30 days.",
+  // Auto-sent the moment a WhatsApp bank-transfer order is created — the
+  // amount always matches that order's total (admin request 2026-06-13).
+  order_bank_transfer_instructions:
+    "Hi, from 3D Ninjaz\n\nTo proceed with your order, please make payment via bank transfer using the details below:\n\n{{bankAccountHolder}}\n{{bankName}}\n{{bankAccountNumber}}\n\nTotal to be paid {{orderTotal}}\n\nOnce payment has been paid please provide us with the bank in statement to confirm your order.\n\nThank you for supporting 3D Ninjaz! 😊\n\nKind regards,\n3D Ninjaz\n🌐 www.3dninjaz.com\nInstagram: @3dninjaz",
   order_approved:
     "Hi {{customerName}}, great news! Your payment for order {{orderNumber}} has been confirmed. We'll start preparing it soon. Track it: {{orderUrl}}",
   order_confirmation:

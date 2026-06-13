@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { paymentProofs } from "@/lib/db/schema";
 import { eq, inArray, desc } from "drizzle-orm";
 import { BRAND } from "@/lib/brand";
-import { AdminOrderRow, AdminOrderCard } from "@/components/admin/admin-order-row";
+import { AdminOrdersList } from "@/components/admin/admin-orders-list";
 import { AdminOrderFilter } from "@/components/admin/admin-order-filter";
 import type { OrderStatus } from "@/lib/orders";
 
@@ -111,59 +111,15 @@ export default async function AdminOrdersPage({
             </p>
           </div>
         ) : (
-          <div
-            className="rounded-2xl overflow-hidden"
-            style={{ backgroundColor: "#ffffff" }}
-          >
-            {/*
-              Horizontal scroll lives INSIDE the card (D3-20). The page itself
-              must never scroll sideways at 320 / 375 / 390 / 768 / 1024 / 1440.
-            */}
-
-            {/* Desktop table — hidden on mobile */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="min-w-[760px] w-full text-sm">
-                <thead>
-                  <tr
-                    className="text-left"
-                    style={{ backgroundColor: `${BRAND.ink}0d` }}
-                  >
-                    <th className="p-3">Order #</th>
-                    <th className="p-3">Customer</th>
-                    <th className="p-3">Date</th>
-                    <th className="p-3">Items</th>
-                    <th className="p-3">Total</th>
-                    <th className="p-3">Status</th>
-                    <th className="p-3"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((o) => (
-                    <AdminOrderRow
-                      key={o.id}
-                      order={{
-                        ...o,
-                        slipThumbnailUrl: slipThumbnailByOrder.get(o.id) ?? null,
-                      }}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Mobile card list — shown below md */}
-            <div className="md:hidden divide-y divide-black/10">
-              {rows.map((o) => (
-                <AdminOrderCard
-                  key={o.id}
-                  order={{
-                    ...o,
-                    slipThumbnailUrl: slipThumbnailByOrder.get(o.id) ?? null,
-                  }}
-                />
-              ))}
-            </div>
-          </div>
+          // Client island — multi-select + bulk delete (2026-06-13). Renders
+          // the same desktop table + mobile cards as before; D3-20 horizontal
+          // scroll stays inside the card.
+          <AdminOrdersList
+            rows={rows.map((o) => ({
+              ...o,
+              slipThumbnailUrl: slipThumbnailByOrder.get(o.id) ?? null,
+            }))}
+          />
         )}
       </div>
     </main>
