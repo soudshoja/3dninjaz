@@ -517,6 +517,15 @@ export function NinjazInvoiceDocument({
   const rawDiscount = parseFloat(order.discountAmount ?? "");
   const hasDiscount = Number.isFinite(rawDiscount) && rawDiscount > 0;
 
+  // Amount paid + balance due — shown when a partial payment exists (admin
+  // added items to an already-paid order, so a balance is outstanding).
+  const rawPaid = parseFloat(order.amountPaid ?? "");
+  const rawBalance =
+    Number.isFinite(rawTotal) && Number.isFinite(rawPaid)
+      ? Math.round((rawTotal - rawPaid) * 100) / 100
+      : 0;
+  const hasBalance = Number.isFinite(rawPaid) && rawPaid > 0 && rawBalance > 0.005;
+
   // ── Paid / status date ─────────────────────────────────────────────────────
   // For a paid order show a "Paid Date". Prefer the real PayPal settlement when
   // present; otherwise fall back to the last status-transition time (updatedAt
@@ -707,9 +716,21 @@ export function NinjazInvoiceDocument({
         {hasBreakdown ? <View style={styles.breakdownDivider} /> : null}
 
         <Text style={styles.totalLabel}>
-          {isPaid ? "Total Paid" : "Total Amount Due"}
+          {hasBalance ? "Order Total" : isPaid ? "Total Paid" : "Total Amount Due"}
         </Text>
         <Text style={styles.totalAmount}>{totalFormatted}</Text>
+
+        {hasBalance ? (
+          <>
+            <View style={styles.breakdownRow}>
+              <Text style={styles.breakdownLabel}>Amount paid</Text>
+              <Text style={styles.breakdownValue}>{"-" + formatMYR(rawPaid)}</Text>
+            </View>
+            <View style={styles.breakdownDivider} />
+            <Text style={styles.totalLabel}>Balance Due</Text>
+            <Text style={styles.totalAmount}>{formatMYR(rawBalance)}</Text>
+          </>
+        ) : null}
       </View>
     </View>
   );

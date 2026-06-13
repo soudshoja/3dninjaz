@@ -41,6 +41,11 @@ import { CopyTrackingButton } from "@/components/orders/copy-tracking-button";
 import { FileDown, User, MapPin, Package, CreditCard, Truck, Activity, Settings, MessageSquare, RotateCcw, ChevronLeft, Send } from "lucide-react";
 import { PaymentProofSection } from "@/components/admin/payment-proof-section";
 import { AdminUploadProofForm } from "@/components/admin/admin-upload-proof-form";
+// Order editing (unpaid full edit + add-to-paid w/ balance due, 2026-06-13).
+import { isOrderEditable, canAddItems } from "@/lib/order-editable";
+import { OrderCustomerEdit } from "@/components/admin/order-customer-edit";
+import { OrderItemsEdit } from "@/components/admin/order-items-edit";
+import { MarkBalancePaidButton } from "@/components/admin/mark-balance-paid-button";
 
 // WhatsApp SVG logo (official green brand mark, no external dependency)
 export const dynamic = "force-dynamic";
@@ -223,6 +228,18 @@ export default async function AdminOrderDetailPage({
     row.status === "awaiting_customer" ||
     row.status === "awaiting_payment_review" ||
     (row.status === "pending" && !row.paypalCaptureId);
+
+  // Editing surfaces (server actions independently re-check, so the client
+  // cannot forge these). `editable` = unpaid → full edit (remove/amend);
+  // `canAdd` = broader → ADD items even on paid orders (creates a balance).
+  const editable = isOrderEditable({
+    status: row.status,
+    paypalCaptureId: row.paypalCaptureId,
+  });
+  const canAdd = canAddItems({ status: row.status });
+  const amountPaidNum = Number(row.amountPaid ?? "0");
+  const balanceDue =
+    Math.round((Number(row.totalAmount) - amountPaidNum) * 100) / 100;
 
   return (
     <main
@@ -414,18 +431,36 @@ export default async function AdminOrderDetailPage({
               {row.shippingState}, {row.shippingCountry}<br />
               <span className="font-mono text-xs" style={{ color: BRAND.blue }}>{row.shippingPhone}</span>
             </address>
-            <OrderShipToEdit
-              orderId={row.id}
-              initial={{
-                shippingName: row.shippingName,
-                shippingPhone: row.shippingPhone ?? "",
-                shippingLine1: row.shippingLine1,
-                shippingLine2: row.shippingLine2 ?? null,
-                shippingCity: row.shippingCity,
-                shippingState: row.shippingState,
-                shippingPostcode: row.shippingPostcode,
-              }}
-            />
+            {editable ? (
+              // Unpaid → fuller editor (also amends customer email).
+              <OrderCustomerEdit
+                orderId={row.id}
+                initial={{
+                  shippingName: row.shippingName,
+                  customerEmail: row.customerEmail,
+                  shippingPhone: row.shippingPhone ?? "",
+                  shippingLine1: row.shippingLine1,
+                  shippingLine2: row.shippingLine2,
+                  shippingCity: row.shippingCity,
+                  shippingState: row.shippingState,
+                  shippingPostcode: row.shippingPostcode,
+                }}
+              />
+            ) : (
+              // Paid → ship-to address can still be corrected (not email).
+              <OrderShipToEdit
+                orderId={row.id}
+                initial={{
+                  shippingName: row.shippingName,
+                  shippingPhone: row.shippingPhone ?? "",
+                  shippingLine1: row.shippingLine1,
+                  shippingLine2: row.shippingLine2 ?? null,
+                  shippingCity: row.shippingCity,
+                  shippingState: row.shippingState,
+                  shippingPostcode: row.shippingPostcode,
+                }}
+              />
+            )}
           </AdminCard>
         </div>
 
@@ -606,7 +641,59 @@ export default async function AdminOrderDetailPage({
               <span>Total</span>
               <span>{formatMYR(row.totalAmount)} {row.currency}</span>
             </div>
+
+            {/* Amount paid + balance due — shown once any payment is recorded
+                (so admins see what's still owed after adding items). */}
+            {amountPaidNum > 0 ? (
+              <>
+                <div className="flex justify-between text-sm mt-1" style={{ color: "#64748b" }}>
+                  <span>Amount paid</span>
+                  <span>− {formatMYR(row.amountPaid)}</span>
+                </div>
+                <div
+                  className="flex justify-between font-bold text-base mt-1 pt-2"
+                  style={{
+                    borderTop: `1.5px solid ${BRAND.ink}12`,
+                    color: balanceDue > 0 ? "#b91c1c" : BRAND.greenDark,
+                  }}
+                >
+                  <span>{balanceDue > 0 ? "Balance due" : "Fully paid"}</span>
+                  <span>{balanceDue > 0 ? formatMYR(balanceDue.toFixed(2)) : formatMYR("0.00")}</span>
+                </div>
+                {balanceDue > 0 ? (
+                  <div className="mt-3">
+                    <MarkBalancePaidButton orderId={row.id} />
+                  </div>
+                ) : null}
+              </>
+            ) : null}
           </div>
+
+          {/* Item editing — add catalog/manual lines; remove only when unpaid. */}
+          {canAdd ? (
+            <OrderItemsEdit
+              orderId={row.id}
+              allowRemove={editable}
+              items={row.items.map((i) => ({
+                id: i.id,
+                productName: i.productName,
+                quantity: i.quantity,
+                unitPrice: i.unitPrice,
+                isManual: isManualLine(i),
+              }))}
+            />
+          ) : (
+            <p
+              className="mt-4 text-xs font-medium rounded-xl px-3 py-2.5"
+              style={{
+                color: "#64748b",
+                backgroundColor: `${BRAND.ink}04`,
+                border: `1px solid ${BRAND.ink}0c`,
+              }}
+            >
+              This order is {row.status} — items are locked.
+            </p>
+          )}
         </AdminCard>
 
         {/* ══ ZONE 4 — Payment: proof + upload + payment link + PayPal ════════ */}

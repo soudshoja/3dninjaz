@@ -815,10 +815,11 @@ export async function capturePayPalOrder({
     return { ok: false, error: "We could not capture your PayPal payment." };
   }
 
-  // Update our row to paid + record capture ID.
+  // Update our row to paid + record capture ID. amountPaid = the total at
+  // capture time, so a later admin item-add shows a balance due.
   await db
     .update(orders)
-    .set({ status: "paid", paypalCaptureId: captureId })
+    .set({ status: "paid", paypalCaptureId: captureId, amountPaid: existing.totalAmount })
     .where(eq(orders.id, existing.id));
 
   // For guest orders with a placeholder/blank email: back-fill customerEmail
