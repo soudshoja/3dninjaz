@@ -121,6 +121,8 @@ export type InvoiceOrder = {
   subtotal: string;
   shippingCost: string;
   totalAmount: string;
+  /** Amount paid so far — drives the "Balance Due" line when < totalAmount. */
+  amountPaid?: string | null;
   /** Optional coupon discount applied to the order (so the invoice total reconciles). */
   discountAmount?: string | null;
   discountCode?: string | null;

@@ -139,6 +139,7 @@ export async function renderInvoicePdfBuffer(
       subtotal: order.subtotal,
       shippingCost: order.shippingCost,
       totalAmount: order.totalAmount,
+      amountPaid: order.amountPaid ?? "0.00",
       discountAmount: order.discountAmount ?? null,
       discountCode: order.discountCode ?? null,
       items: order.items.map((i) => ({
