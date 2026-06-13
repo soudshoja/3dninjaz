@@ -17,6 +17,9 @@ import { productConfigFields } from "@/lib/db/schema";
 import { sanitizeCustomText, customKey, buildConfigSummaryServer } from "@/lib/custom-text";
 import { dedupeUnpaidOrders, itemSignature } from "@/lib/order-dedupe";
 import { markDraftsConverted } from "@/lib/checkout-drafts";
+import { sendWhatsAppNotification } from "@/lib/whatsapp/sender";
+import { getStoreSettingsCached } from "@/lib/store-settings";
+import { formatOrderNumber } from "@/lib/orders";
 
 type BagLineInput = {
   variantId: string;
@@ -528,6 +531,29 @@ export async function createWhatsAppOrder(
 
     // A real order now exists — close out this customer's checkout drafts.
     void markDraftsConverted({ phone: addr.data.phone, userId: user?.id ?? null });
+
+    // Auto-send bank-transfer payment instructions to the customer's WhatsApp
+    // with THIS order's exact total (template editable at /admin/notifications).
+    // Best-effort — never blocks order creation.
+    void (async () => {
+      try {
+        const s = await getStoreSettingsCached();
+        await sendWhatsAppNotification(
+          "order_bank_transfer_instructions",
+          addr.data.phone,
+          {
+            customerName: addr.data.recipientName,
+            orderNumber: formatOrderNumber(internalOrderId),
+            orderTotal: `RM ${totalStr}`,
+            bankName: s.bankName ?? "",
+            bankAccountNumber: s.bankAccountNumber ?? "",
+            bankAccountHolder: s.bankAccountHolder ?? "",
+          },
+        );
+      } catch (err) {
+        console.error("[whatsapp-order] payment-instructions send failed:", err);
+      }
+    })();
 
     return { ok: true, orderId: internalOrderId };
   } catch (err) {
