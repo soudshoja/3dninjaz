@@ -25,6 +25,13 @@ type DraftItemInput = {
   quantity?: unknown;
   unitPrice?: unknown;
   lineTotal?: unknown;
+  // Catalog linkage + thumbnail so a converted order shows the product image
+  // and (where available) links to the real product (2026-06-13).
+  image?: unknown;
+  productId?: unknown;
+  variantId?: unknown;
+  productSlug?: unknown;
+  configJson?: unknown;
 };
 
 type SaveDraftInput = {
@@ -79,6 +86,15 @@ export async function saveCheckoutDraft(
           quantity: Math.max(1, Math.min(999, Math.floor(Number(it?.quantity) || 1))),
           unitPrice: String(Number(it?.unitPrice) || 0),
           lineTotal: String(Number(it?.lineTotal) || 0),
+          image: clamp(it?.image, 500) || null,
+          productId: clamp(it?.productId, 36) || null,
+          variantId: clamp(it?.variantId, 36) || null,
+          productSlug: clamp(it?.productSlug, 200) || null,
+          // Stored as a JSON string already; cap length defensively.
+          configJson:
+            typeof it?.configJson === "string"
+              ? it.configJson.slice(0, 8000)
+              : null,
         }))
       : [];
     const itemsJson = JSON.stringify(items);
@@ -132,7 +148,17 @@ export type AdminDraftRow = {
     state?: string;
     postcode?: string;
   } | null;
-  items: { name: string; quantity: number; unitPrice: string; lineTotal: string }[];
+  items: {
+    name: string;
+    quantity: number;
+    unitPrice: string;
+    lineTotal: string;
+    image?: string | null;
+    productId?: string | null;
+    variantId?: string | null;
+    productSlug?: string | null;
+    configJson?: string | null;
+  }[];
   subtotal: string;
   status: "open" | "converted" | "dismissed";
   createdAt: Date;
@@ -214,7 +240,17 @@ export async function convertDraftToOrder(
     postcode?: string;
   } | null>(draft.addressJson, null);
   const items = parse<
-    { name: string; quantity: number; unitPrice: string; lineTotal: string }[]
+    {
+      name: string;
+      quantity: number;
+      unitPrice: string;
+      lineTotal: string;
+      image?: string | null;
+      productId?: string | null;
+      variantId?: string | null;
+      productSlug?: string | null;
+      configJson?: string | null;
+    }[]
   >(draft.itemsJson, []);
 
   if (items.length === 0) {
@@ -285,16 +321,19 @@ export async function convertDraftToOrder(
       items.map((it) => ({
         id: randomUUID(),
         orderId,
-        productId: "manual",
-        variantId: "manual",
+        // Use the real catalog linkage captured at checkout when present so the
+        // order shows the product image + links to the product; fall back to
+        // the "manual" sentinel for older drafts that lack it.
+        productId: it.productId?.trim() || "manual",
+        variantId: it.variantId?.trim() || "manual",
         productName: it.name || "Item",
-        productSlug: "",
-        productImage: null,
+        productSlug: it.productSlug?.trim() || "",
+        productImage: it.image?.trim() || null,
         variantLabel: null,
         unitPrice: (Number(it.unitPrice) || 0).toFixed(2),
         quantity: Math.max(1, Math.floor(Number(it.quantity) || 1)),
         lineTotal: (Number(it.lineTotal) || 0).toFixed(2),
-        configurationData: null,
+        configurationData: it.configJson?.trim() || null,
       })),
     );
 
