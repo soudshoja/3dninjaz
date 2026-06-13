@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   PayPalScriptProvider,
@@ -18,8 +18,9 @@ import {
 } from "./shipping-rate-picker";
 import type { SavedAddress } from "@/actions/addresses";
 import type { AppliedCoupon } from "@/components/store/coupon-apply";
-import { clearDraft } from "@/stores/checkout-draft-store";
+import { clearDraft, type AddressDraft } from "@/stores/checkout-draft-store";
 import { WhatsAppBankTransferButton } from "./whatsapp-bank-transfer-button";
+import { saveCheckoutDraft } from "@/actions/checkout-drafts";
 
 /**
  * Client-side checkout island (D3-04). Wraps everything in PayPalScriptProvider
@@ -125,6 +126,62 @@ export function CheckoutIsland({
   // returns options + user picks one. PayPal button stays disabled while null.
   const [shipping, setShipping] = useState<SelectedShipping | null>(null);
 
+  // ---- Server-side checkout draft (2026-06-13) ----
+  // As soon as the customer has typed name + phone, upsert a draft row so the
+  // admin can see "had a booking but didn't pay" even if no pay button is
+  // ever pressed. Keyed per browser via localStorage.
+  const latestRef = useRef({ items, subtotal, guestEmail });
+  latestRef.current = { items, subtotal, guestEmail };
+  const handlePartialAddress = useMemo(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const keyFor = () => {
+      try {
+        let k = localStorage.getItem("checkout-draft-key");
+        if (!k) {
+          k = crypto.randomUUID();
+          localStorage.setItem("checkout-draft-key", k);
+        }
+        return k;
+      } catch {
+        return null;
+      }
+    };
+    return (partial: AddressDraft) => {
+      const phoneDigits = (partial.phone ?? "").replace(/\D+/g, "");
+      if (!(partial.recipientName ?? "").trim() || phoneDigits.length < 9) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        const key = keyFor();
+        if (!key) return;
+        const { items: curItems, subtotal: curSubtotal, guestEmail: curEmail } =
+          latestRef.current;
+        void saveCheckoutDraft({
+          draftKey: key,
+          recipientName: partial.recipientName ?? "",
+          phone: partial.phone ?? "",
+          email: curEmail?.trim() || null,
+          address: {
+            line1: partial.addressLine1,
+            line2: partial.addressLine2,
+            city: partial.city,
+            state: partial.state,
+            postcode: partial.postcode,
+          },
+          items: curItems.map((i) => ({
+            name: i.variantLabel
+              ? `${i.productName} — ${i.variantLabel}`
+              : i.productName,
+            quantity: i.quantity,
+            unitPrice: i.unitPrice,
+            lineTotal: (parseFloat(i.unitPrice) * i.quantity).toFixed(2),
+          })),
+          subtotal: curSubtotal,
+        }).catch(() => {});
+      }, 1500);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Resolved display name / email for submission and WhatsApp message.
   // For guests the name comes from the (mandatory) shipping address recipient.
   const resolvedName = isGuest ? (address?.recipientName ?? "") : defaultName;
@@ -156,8 +213,8 @@ export function CheckoutIsland({
     // with an empty bag drawer.
     useCartStore.getState().clear();
     // Clear the address draft — order is complete, no need to restore.
-    // userId is null for guests; clearDraft handles null gracefully (no-op).
-    if (userId) clearDraft(userId);
+    // Guests use the shared "guest" key (see address-form.tsx).
+    clearDraft(userId || "guest");
     router.push(redirectTo);
   };
 
@@ -218,6 +275,7 @@ export function CheckoutIsland({
           <AddressForm
             defaultName={defaultName}
             onValidChange={setAddress}
+            onPartialChange={handlePartialAddress}
             savedAddresses={savedAddresses}
             userId={userId ?? ""}
           />

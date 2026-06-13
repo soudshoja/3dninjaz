@@ -42,6 +42,7 @@ const MOBILE_CHIPS = [
   { href: "/admin/inventory", label: "Inventory" },
   { href: "/admin/products/import", label: "Bulk import" },
   { href: "/admin/orders", label: "Orders" },
+  { href: "/admin/drafts", label: "Drafts" },
   { href: "/admin/payments", label: "Payments" },
   { href: "/admin/disputes", label: "Disputes" },
   { href: "/admin/recon", label: "Reconciliation" },
