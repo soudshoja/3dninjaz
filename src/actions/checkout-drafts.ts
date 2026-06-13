@@ -1,11 +1,13 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { checkoutDrafts } from "@/lib/db/schema";
+import { checkoutDrafts, orders, orderItems } from "@/lib/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getSessionUser, requireAdmin } from "@/lib/auth-helpers";
 import { normalizeMsisdn } from "@/lib/order-dedupe";
+import { getShippingRate } from "@/actions/admin-shipping";
+import { MALAYSIAN_STATES } from "@/lib/validators";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -166,6 +168,148 @@ export async function listCheckoutDrafts(): Promise<AdminDraftRow[]> {
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
   }));
+}
+
+/**
+ * Admin: convert an open checkout draft into a real (unpaid) order so it can
+ * be followed up in the normal order flow (2026-06-13 request). The order is
+ * created as `pending` / sourceType "manual" (admin-created, awaiting payment)
+ * with the draft's customer details and items.
+ *
+ * Draft items are display snapshots (name + price + qty) without catalog
+ * linkage, so each becomes a "manual" line item (productId/variantId =
+ * "manual"), exactly like a POS free-text line — the descriptive name (which
+ * includes any keyboard-clicker / config text) and price are preserved.
+ * Shipping is estimated from the destination state (flat rate); the admin can
+ * adjust ship-to + book a courier on the order page afterwards.
+ */
+export async function convertDraftToOrder(
+  draftId: string,
+): Promise<{ ok: true; orderId: string } | { ok: false; error: string }> {
+  await requireAdmin();
+
+  const [draft] = await db
+    .select()
+    .from(checkoutDrafts)
+    .where(eq(checkoutDrafts.id, draftId))
+    .limit(1);
+  if (!draft) return { ok: false, error: "Draft not found." };
+  if (draft.status === "converted") {
+    return { ok: false, error: "This draft was already converted." };
+  }
+
+  const parse = <T,>(raw: string | null, fallback: T): T => {
+    if (!raw) return fallback;
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      return fallback;
+    }
+  };
+  const addr = parse<{
+    line1?: string;
+    line2?: string;
+    city?: string;
+    state?: string;
+    postcode?: string;
+  } | null>(draft.addressJson, null);
+  const items = parse<
+    { name: string; quantity: number; unitPrice: string; lineTotal: string }[]
+  >(draft.itemsJson, []);
+
+  if (items.length === 0) {
+    return { ok: false, error: "Draft has no items to convert." };
+  }
+  // Order rows require a complete shipping address (NOT NULL columns).
+  if (
+    !addr?.line1?.trim() ||
+    !addr?.city?.trim() ||
+    !addr?.postcode?.match(/^\d{5}$/) ||
+    !addr?.state ||
+    !(MALAYSIAN_STATES as readonly string[]).includes(addr.state)
+  ) {
+    return {
+      ok: false,
+      error:
+        "Draft address is incomplete (needs street, city, valid state and 5-digit postcode). Ask the customer to finish checkout, or add it manually.",
+    };
+  }
+
+  const subtotal = items.reduce(
+    (sum, it) => sum + (Number(it.lineTotal) || 0),
+    0,
+  );
+
+  // Flat shipping estimate from the destination state — best-effort.
+  let shippingCost = 0;
+  try {
+    const rate = await getShippingRate(addr.state, subtotal);
+    shippingCost = Number(rate.cost) || 0;
+  } catch {
+    shippingCost = 0;
+  }
+
+  const total = subtotal + shippingCost;
+  const orderId = randomUUID();
+  const guestAccessToken = randomUUID();
+  const customerEmail =
+    draft.email && draft.email.trim().length > 0
+      ? draft.email.trim()
+      : `draft+${orderId}@3dninjaz.local`;
+
+  try {
+    await db.insert(orders).values({
+      id: orderId,
+      userId: null,
+      guestAccessToken,
+      status: "pending",
+      paymentMethod: null,
+      sourceType: "manual",
+      subtotal: subtotal.toFixed(2),
+      shippingCost: shippingCost.toFixed(2),
+      totalAmount: total.toFixed(2),
+      currency: "MYR",
+      customerEmail,
+      shippingName: draft.recipientName,
+      shippingPhone: draft.phone,
+      shippingLine1: addr.line1!,
+      shippingLine2: addr.line2?.trim() || null,
+      shippingCity: addr.city!,
+      shippingState: addr.state,
+      shippingPostcode: addr.postcode!,
+      shippingCountry: "Malaysia",
+      notes: "Created from an abandoned checkout draft.",
+    });
+
+    await db.insert(orderItems).values(
+      items.map((it) => ({
+        id: randomUUID(),
+        orderId,
+        productId: "manual",
+        variantId: "manual",
+        productName: it.name || "Item",
+        productSlug: "",
+        productImage: null,
+        variantLabel: null,
+        unitPrice: (Number(it.unitPrice) || 0).toFixed(2),
+        quantity: Math.max(1, Math.floor(Number(it.quantity) || 1)),
+        lineTotal: (Number(it.lineTotal) || 0).toFixed(2),
+        configurationData: null,
+      })),
+    );
+
+    await db
+      .update(checkoutDrafts)
+      .set({ status: "converted" })
+      .where(eq(checkoutDrafts.id, draftId));
+  } catch (err) {
+    console.error("[checkout-drafts] convertDraftToOrder failed:", err);
+    return { ok: false, error: "Could not create the order — check server logs." };
+  }
+
+  revalidatePath("/admin/drafts");
+  revalidatePath("/admin/orders");
+  return { ok: true, orderId };
 }
 
 /** Admin: hide a draft that was followed up or is junk. */
