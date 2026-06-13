@@ -22,6 +22,7 @@ import { ensureConfigJson } from "@/lib/config-fields";
 import { productConfigFields } from "@/lib/db/schema";
 import { sanitizeCustomText, customKey, buildConfigSummaryServer } from "@/lib/custom-text";
 import { dedupeUnpaidOrders } from "@/lib/order-dedupe";
+import { markDraftsConverted } from "@/lib/checkout-drafts";
 
 type BagLineInput = {
   variantId: string;
@@ -685,6 +686,9 @@ export async function createPayPalOrder(
           : null,
       })),
     );
+
+    // A real order now exists — close out this customer's checkout drafts.
+    void markDraftsConverted({ phone: addr.data.phone, userId: user?.id ?? null });
 
     return {
       ok: true,
