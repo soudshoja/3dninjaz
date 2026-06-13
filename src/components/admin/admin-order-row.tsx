@@ -12,6 +12,8 @@ type AdminOrderRowData = {
   createdAt: Date;
   customerEmail: string;
   shippingName: string;
+  /** Shown under the customer name (replaces email — admin request 2026-06-13). */
+  shippingPhone: string;
   user: { email: string; name: string } | null;
   itemCount: number;
   /** Phase 20 (20-10) — 24×24 slip thumbnail shown when row is in awaiting_payment_review filter. */
@@ -55,7 +57,7 @@ export function AdminOrderRow({ order }: { order: AdminOrderRowData }) {
       <td className="p-3">
         <p className="font-semibold truncate max-w-[200px]">{order.shippingName}</p>
         <p className="text-xs text-slate-600 truncate max-w-[200px]">
-          {order.user?.email ?? order.customerEmail}
+          {order.shippingPhone}
         </p>
       </td>
       <td className="p-3 text-sm whitespace-nowrap">
@@ -84,7 +86,6 @@ export function AdminOrderRow({ order }: { order: AdminOrderRowData }) {
  * Renders every field and the View action at a 44px tap target.
  */
 export function AdminOrderCard({ order }: { order: AdminOrderRowData }) {
-  const email = order.user?.email ?? order.customerEmail;
   return (
     <Link
       href={`/admin/orders/${order.id}`}
@@ -111,9 +112,9 @@ export function AdminOrderCard({ order }: { order: AdminOrderRowData }) {
         <AdminOrderStatusBadge status={order.status} />
       </div>
 
-      {/* Customer name + email */}
+      {/* Customer name + phone */}
       <p className="font-semibold text-sm break-words min-w-0">{order.shippingName}</p>
-      <p className="text-xs text-slate-600 break-words min-w-0">{email}</p>
+      <p className="text-xs text-slate-600 break-words min-w-0">{order.shippingPhone}</p>
 
       {/* Date · items · total */}
       <p className="text-xs text-slate-600">
