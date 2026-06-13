@@ -16,6 +16,7 @@ import { ensureConfigJson } from "@/lib/config-fields";
 import { productConfigFields } from "@/lib/db/schema";
 import { sanitizeCustomText, customKey, buildConfigSummaryServer } from "@/lib/custom-text";
 import { dedupeUnpaidOrders, itemSignature } from "@/lib/order-dedupe";
+import { markDraftsConverted } from "@/lib/checkout-drafts";
 
 type BagLineInput = {
   variantId: string;
@@ -441,6 +442,7 @@ export async function createWhatsAppOrder(
     }
     if (dedupe.reuseOrderId) {
       revalidatePath("/admin/orders");
+      void markDraftsConverted({ phone: addr.data.phone, userId: user?.id ?? null });
       return { ok: true, orderId: dedupe.reuseOrderId };
     }
   } catch (err) {
@@ -523,6 +525,9 @@ export async function createWhatsAppOrder(
 
     revalidatePath("/admin/orders");
     revalidatePath("/orders");
+
+    // A real order now exists — close out this customer's checkout drafts.
+    void markDraftsConverted({ phone: addr.data.phone, userId: user?.id ?? null });
 
     return { ok: true, orderId: internalOrderId };
   } catch (err) {

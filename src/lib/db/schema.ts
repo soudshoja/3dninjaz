@@ -1344,6 +1344,44 @@ export const shippingConfig = mysqlTable("shipping_config", {
   updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
 });
 
+/**
+ * Checkout drafts — a record the moment a customer types name + phone at
+ * checkout, BEFORE any pay button is pressed. Gives the admin visibility of
+ * "had a booking but didn't pay" (2026-06-13 request; previously these
+ * customers left zero trace). Upserted client-side (debounced) keyed on a
+ * per-browser draftKey; flipped to "converted" when a real order with the
+ * same normalized phone (or userId) is created.
+ */
+export const checkoutDrafts = mysqlTable(
+  "checkout_drafts",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    // Per-browser key (crypto.randomUUID in localStorage) — upsert target.
+    draftKey: varchar("draft_key", { length: 64 }).notNull(),
+    userId: varchar("user_id", { length: 36 }),
+    recipientName: varchar("recipient_name", { length: 200 }).notNull(),
+    phone: varchar("phone", { length: 32 }).notNull(),
+    // Digits-only national number (normalizeMsisdn) — conversion matching.
+    phoneNorm: varchar("phone_norm", { length: 20 }).notNull(),
+    email: varchar("email", { length: 255 }),
+    // Partial address as typed — JSON {line1,line2,city,state,postcode}.
+    addressJson: longtext("address_json"),
+    // Compact bag snapshot — JSON [{name,quantity,unitPrice,lineTotal}].
+    itemsJson: longtext("items_json"),
+    subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull().default("0.00"),
+    status: mysqlEnum("status", ["open", "converted", "dismissed"])
+      .notNull()
+      .default("open"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({
+    draftKeyUnique: unique("uq_checkout_drafts_draft_key").on(t.draftKey),
+    statusIdx: index("idx_checkout_drafts_status").on(t.status),
+    phoneNormIdx: index("idx_checkout_drafts_phone_norm").on(t.phoneNorm),
+  }),
+);
+
 export const orderShipments = mysqlTable(
   "order_shipments",
   {
