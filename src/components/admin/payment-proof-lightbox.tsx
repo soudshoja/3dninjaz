@@ -380,7 +380,7 @@ export function PaymentProofLightbox({
                 <div className="mx-auto mt-3 h-1.5 w-16 rounded-full bg-black/20 flex-shrink-0" />
 
                 {/* Scrollable metadata */}
-                <div className="overflow-y-auto flex-1 p-5">
+                <div className="overflow-y-auto flex-1 min-h-0 p-5">
                   <MetadataContent proof={proof} orderTotal={orderTotal} />
                 </div>
               </DrawerPrimitive.Content>

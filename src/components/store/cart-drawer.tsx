@@ -105,7 +105,7 @@ export function CartDrawer() {
         </DrawerHeader>
 
         {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-5 divide-y divide-black/10">
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 divide-y divide-black/10">
           {storeItems.length === 0 ? (
             <div className="py-16 text-center">
               <Image
