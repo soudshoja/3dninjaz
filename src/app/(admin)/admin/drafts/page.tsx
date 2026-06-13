@@ -128,10 +128,22 @@ function DraftCard({ draft }: { draft: AdminDraftRow }) {
       </div>
 
       {draft.items.length > 0 ? (
-        <ul className="text-sm text-slate-700">
+        <ul className="text-sm text-slate-700 space-y-1">
           {draft.items.map((it, i) => (
-            <li key={i} className="break-words">
-              {it.name} × {it.quantity} — {formatMYR(it.lineTotal)}
+            <li key={i} className="flex items-center gap-2 min-w-0">
+              {it.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={it.image}
+                  alt=""
+                  width={32}
+                  height={32}
+                  className="h-8 w-8 rounded object-cover shrink-0"
+                />
+              ) : null}
+              <span className="break-words min-w-0">
+                {it.name} × {it.quantity} — {formatMYR(it.lineTotal)}
+              </span>
             </li>
           ))}
         </ul>

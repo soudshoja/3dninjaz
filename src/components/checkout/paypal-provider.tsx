@@ -174,6 +174,15 @@ export function CheckoutIsland({
             quantity: i.quantity,
             unitPrice: i.unitPrice,
             lineTotal: (parseFloat(i.unitPrice) * i.quantity).toFixed(2),
+            // Catalog linkage + thumbnail so an admin-converted order shows the
+            // product image and links to the product.
+            image: i.productImage ?? null,
+            productId: i.productId ?? null,
+            variantId: i.variantId ?? null,
+            productSlug: i.productSlug ?? null,
+            configJson: i.configurationData
+              ? JSON.stringify(i.configurationData)
+              : null,
           })),
           subtotal: curSubtotal,
         }).catch(() => {});
