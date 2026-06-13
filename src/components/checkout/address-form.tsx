@@ -75,15 +75,22 @@ const REQUIRED_FIELDS = [
 export function AddressForm({
   defaultName,
   onValidChange,
+  onPartialChange,
   savedAddresses,
   userId,
 }: {
   defaultName: string;
   onValidChange: (v: AddressFormValues | null) => void;
+  /** Debounced raw form values, valid or not — feeds the server-side
+   *  checkout-draft record so the admin sees abandoned checkouts. */
+  onPartialChange?: (partial: import("@/stores/checkout-draft-store").AddressDraft) => void;
   savedAddresses?: SavedAddress[];
-  /** Logged-in user id — used to key the localStorage draft. Required for draft persistence. */
+  /** Logged-in user id — keys the localStorage draft. Guests share "guest". */
   userId?: string;
 }) {
+  // Guests get a shared per-device key — losing the typed address on a
+  // webview reload (Instagram in-app browser) stranded real customers.
+  const draftStorageKey = userId || "guest";
   const hasSaved = !!savedAddresses && savedAddresses.length > 0;
   const [mode, setMode] = useState<"saved" | "new">(hasSaved ? "saved" : "new");
   const [pickedAddress, setPickedAddress] = useState<AddressFormValues | null>(
@@ -120,8 +127,8 @@ export function AddressForm({
   // On mount (new-address mode only): restore any saved draft so the user
   // doesn't have to retype after navigating away. Runs once after hydration.
   useEffect(() => {
-    if (!userId || hasSaved) return;
-    const draft = readDraft(userId);
+    if (hasSaved) return;
+    const draft = readDraft(draftStorageKey);
     if (!draft) return;
     // Only apply if the draft has at least one non-empty field beyond recipientName
     const hasContent =
@@ -142,7 +149,7 @@ export function AddressForm({
       country: "Malaysia",
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
+  }, [draftStorageKey]);
 
   const values = watch();
   const valid = formState.isValid;
@@ -161,6 +168,17 @@ export function AddressForm({
   useEffect(() => {
     if (mode === "saved") {
       onValidChange(pickedAddress);
+      if (pickedAddress) {
+        onPartialChange?.({
+          recipientName: pickedAddress.recipientName,
+          phone: pickedAddress.phone,
+          addressLine1: pickedAddress.addressLine1,
+          addressLine2: pickedAddress.addressLine2 ?? "",
+          city: pickedAddress.city,
+          state: pickedAddress.state,
+          postcode: pickedAddress.postcode,
+        });
+      }
       return;
     }
     onValidChange(valid ? (values as AddressFormValues) : null);
@@ -183,10 +201,10 @@ export function AddressForm({
   // to the checkout without losing their address. Runs only in "new" mode
   // (saved-address mode already has persistence via the address book).
   useEffect(() => {
-    if (!userId || mode === "saved") return;
+    if (mode === "saved") return;
     if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
     draftSaveTimer.current = setTimeout(() => {
-      saveDraft(userId, {
+      const draft = {
         recipientName: values.recipientName ?? "",
         phone: values.phone ?? "",
         addressLine1: values.addressLine1 ?? "",
@@ -194,14 +212,16 @@ export function AddressForm({
         city: values.city ?? "",
         state: values.state ?? "",
         postcode: values.postcode ?? "",
-      });
+      };
+      saveDraft(draftStorageKey, draft);
+      onPartialChange?.(draft);
     }, 800);
     return () => {
       if (draftSaveTimer.current) clearTimeout(draftSaveTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    userId,
+    draftStorageKey,
     mode,
     values.recipientName,
     values.phone,
