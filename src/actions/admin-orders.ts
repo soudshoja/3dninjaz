@@ -12,7 +12,7 @@ import {
   disputeCache,
   user,
 } from "@/lib/db/schema";
-import { and, eq, desc, inArray } from "drizzle-orm";
+import { and, eq, desc, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { MALAYSIAN_STATES } from "@/lib/validators";
@@ -182,6 +182,8 @@ export type AdminOrderDetail = {
   customImages: string[];
   // Phase 7 (07-04) — PayPal financials cache
   refundedAmount: string;
+  /** Amount the customer has paid; balance due = totalAmount − amountPaid. */
+  amountPaid: string;
   paypalFee: string | null;
   paypalNet: string | null;
   sellerProtection: string | null;
@@ -286,6 +288,7 @@ export async function getAdminOrder(orderId: string): Promise<AdminOrderDetail |
     customItemDescription: head.o.customItemDescription ?? null,
     customImages: ensureImagesArrayLocal(head.o.customImages),
     refundedAmount: head.o.refundedAmount ?? "0.00",
+    amountPaid: head.o.amountPaid ?? "0.00",
     paypalFee: head.o.paypalFee ?? null,
     paypalNet: head.o.paypalNet ?? null,
     sellerProtection: head.o.sellerProtection ?? null,
@@ -359,7 +362,16 @@ export async function updateOrderStatus(
     return { ok: false, error: msg };
   }
 
-  await db.update(orders).set({ status: newStatus }).where(eq(orders.id, orderId));
+  // On transition to "paid", also record amountPaid = the current total so a
+  // later item-add surfaces a balance due. sql sets it atomically from the row.
+  await db
+    .update(orders)
+    .set(
+      newStatus === "paid"
+        ? { status: newStatus, amountPaid: sql`${orders.totalAmount}` }
+        : { status: newStatus },
+    )
+    .where(eq(orders.id, orderId));
 
   // Fire transactional email before revalidatePath so it's enqueued
   // before the response returns.
@@ -438,7 +450,10 @@ export async function approveWhatsAppOrder(
     return { ok: false, error: `Cannot approve from status: ${row.status}.` };
   }
 
-  await db.update(orders).set({ status: "paid" }).where(eq(orders.id, orderId));
+  await db
+    .update(orders)
+    .set({ status: "paid", amountPaid: sql`${orders.totalAmount}` })
+    .where(eq(orders.id, orderId));
 
   // Skip email for guest orders with placeholder address (no real email to send to).
   const isGuestPlaceholder = row.customerEmail?.endsWith("@3dninjaz.local");

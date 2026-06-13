@@ -557,6 +557,12 @@ export const orders = mysqlTable("orders", {
   refundedAmount: decimal("refunded_amount", { precision: 10, scale: 2 })
     .notNull()
     .default("0.00"),
+  // Amount the customer has actually paid. Set = totalAmount on payment
+  // confirmation. When an admin adds items afterwards, totalAmount grows while
+  // amountPaid stays put, so balance due = totalAmount − amountPaid (2026-06-13).
+  amountPaid: decimal("amount_paid", { precision: 10, scale: 2 })
+    .notNull()
+    .default("0.00"),
   paypalFee: decimal("paypal_fee", { precision: 10, scale: 2 }),
   paypalNet: decimal("paypal_net", { precision: 10, scale: 2 }),
   sellerProtection: varchar("seller_protection", { length: 32 }),
