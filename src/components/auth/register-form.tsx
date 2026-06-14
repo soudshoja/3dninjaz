@@ -7,9 +7,7 @@ import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
-// Simple MY phone regex — permissive, same as validators.ts MY_PHONE.
-const MY_PHONE_RE = /^[+\d\s\-()]{7,20}$/;
+import { PhoneInput } from "@/components/ui/phone-input";
 
 export function RegisterForm() {
   const router = useRouter();
@@ -35,10 +33,9 @@ export function RegisterForm() {
       setError("Passwords do not match.");
       return;
     }
-    if (phone && !MY_PHONE_RE.test(phone.trim())) {
-      setError("Enter a valid Malaysian phone number.");
-      return;
-    }
+    // Phone validation: if a phone MSISDN was entered (via PhoneInput, which
+    // emits "" on invalid), we accept "" (optional) or a digit-only MSISDN.
+    // No additional regex check needed — PhoneInput only emits valid MSISDNs.
     if (!pdpaChecked) {
       setError("You must agree to the PDPA Privacy Policy to register.");
       return;
@@ -120,18 +117,18 @@ export function RegisterForm() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="phone">
-            Phone number{" "}
-            <span className="text-xs font-normal text-[var(--color-brand-text-muted)]">(optional — links your guest orders on registration)</span>
-          </Label>
-          <Input
+          <PhoneInput
             id="phone"
-            type="tel"
+            label={
+              <>
+                Phone number{" "}
+                <span className="text-xs font-normal text-[var(--color-brand-text-muted)]">
+                  (optional — links your guest orders on registration)
+                </span>
+              </>
+            }
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="+60 11 2543 4730"
-            autoComplete="tel"
-            className="h-12"
+            onChange={setPhone}
           />
         </div>
 

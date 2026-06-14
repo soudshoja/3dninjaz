@@ -6,6 +6,7 @@ import { ImageUploader } from "@/components/admin/image-uploader";
 import { Button } from "@/components/ui/button";
 import { MALAYSIAN_STATES } from "@/lib/validators";
 import { createManualOrder } from "@/actions/admin-manual-orders";
+import { PhoneInput } from "@/components/ui/phone-input";
 
 /**
  * Phase 7 (07-03) — Manual order form.
@@ -106,15 +107,11 @@ export function ManualOrderForm() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Phone (MY) *
-            </label>
-            <input
-              className={inputClass}
+            <PhoneInput
+              label="Phone *"
               required
               value={form.customerPhone}
-              onChange={(e) => set("customerPhone", e.target.value)}
-              placeholder="60123456789"
+              onChange={(msisdn) => set("customerPhone", msisdn)}
             />
           </div>
           <div className="md:col-span-2">
@@ -213,14 +210,10 @@ export function ManualOrderForm() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Recipient phone
-            </label>
-            <input
-              className={inputClass}
+            <PhoneInput
+              label="Recipient phone"
               value={form.phone}
-              onChange={(e) => set("phone", e.target.value)}
-              placeholder="Defaults to customer phone"
+              onChange={(msisdn) => set("phone", msisdn)}
             />
           </div>
           <div className="md:col-span-2">
