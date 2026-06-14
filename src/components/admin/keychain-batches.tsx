@@ -124,33 +124,47 @@ function BaseBatchCard({
         </span>
       </div>
 
-      {/* Customer list */}
-      <ul className="space-y-1 mb-3">
+      {/* Customer list — each row ticks that single item independently */}
+      <ul className="space-y-0.5 mb-3">
         {batch.items.map((u) => (
-          <li
-            key={u.itemId}
-            className="flex items-center gap-2 text-xs text-foreground/70"
-          >
-            {u.baseDone ? (
-              <Check className="h-3 w-3 shrink-0" style={{ color: GREEN }} strokeWidth={3} />
-            ) : (
-              <span className="h-3 w-3 shrink-0" />
-            )}
-            <span className="font-semibold">{u.name || u.clientName}</span>
-            <span
-              className="font-mono"
-              style={{ color: "#94a3b8" }}
+          <li key={u.itemId}>
+            <button
+              type="button"
+              onClick={() => onToggle([u.itemId], !u.baseDone)}
+              aria-pressed={u.baseDone}
+              className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1 text-left text-xs transition-colors hover:bg-black/[0.04]"
             >
-              #{u.invoiceNumber}
-            </span>
-            {u.quantity > 1 && (
-              <span style={{ color: BRAND.blue }}>×{u.quantity}</span>
-            )}
+              <span
+                className="grid h-4 w-4 shrink-0 place-items-center rounded border-2 transition-colors"
+                style={
+                  u.baseDone
+                    ? { background: GREEN, borderColor: GREEN, color: "#fff" }
+                    : { background: "#fff", borderColor: "rgba(11,16,32,0.25)", color: "transparent" }
+                }
+              >
+                <Check className="h-2.5 w-2.5" strokeWidth={3} />
+              </span>
+              <span
+                className="font-semibold"
+                style={{
+                  color: u.baseDone ? "rgba(11,16,32,0.45)" : INK,
+                  textDecoration: u.baseDone ? "line-through" : "none",
+                }}
+              >
+                {u.name || u.clientName}
+              </span>
+              <span className="font-mono" style={{ color: "#94a3b8" }}>
+                #{u.invoiceNumber}
+              </span>
+              {u.quantity > 1 && (
+                <span style={{ color: BRAND.blue }}>×{u.quantity}</span>
+              )}
+            </button>
           </li>
         ))}
       </ul>
 
-      {/* Action button */}
+      {/* Whole-batch shortcut — ticks/unticks every item at once */}
       <button
         type="button"
         onClick={() => onToggle(ids, !isDone)}
@@ -162,11 +176,11 @@ function BaseBatchCard({
         }
       >
         {isDone ? (
-          <>Undo base batch</>
+          <>Undo whole base batch</>
         ) : (
           <>
             <CircleCheckBig className="h-4 w-4" />
-            Mark base batch printed
+            Mark all {batch.items.length} printed
           </>
         )}
       </button>
@@ -217,17 +231,37 @@ function ClickerLetterBatchCard({
         </span>
       </div>
 
-      <ul className="space-y-1 mb-3">
+      <ul className="space-y-0.5 mb-3">
         {batch.items.map((u) => (
-          <li key={u.itemId} className="flex items-center gap-2 text-xs text-foreground/70">
-            {u.clickerLetterDone ? (
-              <Check className="h-3 w-3 shrink-0" style={{ color: GREEN }} strokeWidth={3} />
-            ) : (
-              <span className="h-3 w-3 shrink-0" />
-            )}
-            <span className="font-semibold">{u.name || u.clientName}</span>
-            <span className="font-mono" style={{ color: "#94a3b8" }}>#{u.invoiceNumber}</span>
-            {u.quantity > 1 && <span style={{ color: BRAND.purple }}>×{u.quantity}</span>}
+          <li key={u.itemId}>
+            <button
+              type="button"
+              onClick={() => onToggle([u.itemId], !u.clickerLetterDone)}
+              aria-pressed={u.clickerLetterDone}
+              className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1 text-left text-xs transition-colors hover:bg-black/[0.04]"
+            >
+              <span
+                className="grid h-4 w-4 shrink-0 place-items-center rounded border-2 transition-colors"
+                style={
+                  u.clickerLetterDone
+                    ? { background: GREEN, borderColor: GREEN, color: "#fff" }
+                    : { background: "#fff", borderColor: "rgba(11,16,32,0.25)", color: "transparent" }
+                }
+              >
+                <Check className="h-2.5 w-2.5" strokeWidth={3} />
+              </span>
+              <span
+                className="font-semibold"
+                style={{
+                  color: u.clickerLetterDone ? "rgba(11,16,32,0.45)" : INK,
+                  textDecoration: u.clickerLetterDone ? "line-through" : "none",
+                }}
+              >
+                {u.name || u.clientName}
+              </span>
+              <span className="font-mono" style={{ color: "#94a3b8" }}>#{u.invoiceNumber}</span>
+              {u.quantity > 1 && <span style={{ color: BRAND.purple }}>×{u.quantity}</span>}
+            </button>
           </li>
         ))}
       </ul>
@@ -243,11 +277,11 @@ function ClickerLetterBatchCard({
         }
       >
         {isDone ? (
-          <>Undo clicker+letter batch</>
+          <>Undo whole batch</>
         ) : (
           <>
             <CircleCheckBig className="h-4 w-4" />
-            Mark printed
+            Mark all {batch.items.length} printed
           </>
         )}
       </button>
