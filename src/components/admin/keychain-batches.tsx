@@ -94,6 +94,8 @@ function BaseBatchCard({
 }) {
   const ids = batch.items.map((u) => u.itemId);
   const isDone = batch.allDone;
+  // Total keycap boxes to print for this base = sum of each name's letters × qty.
+  const totalBoxes = batch.items.reduce((s, u) => s + u.letters * u.quantity, 0);
 
   return (
     <div
@@ -113,14 +115,15 @@ function BaseBatchCard({
             {batch.base} base
           </p>
           <p className="text-xs text-foreground/50 mt-0.5">
-            {batch.doneCount}/{batch.items.length} printed
+            {batch.doneCount}/{batch.items.length} printed · {totalBoxes} box
+            {totalBoxes === 1 ? "" : "es"} total
           </p>
         </div>
         <span
           className="rounded-full px-3 py-1 text-sm font-bold tabular-nums shrink-0"
           style={{ background: `${BRAND.blue}14`, color: "#0A4FB3" }}
         >
-          ×{batch.totalQty}
+          {totalBoxes} boxes
         </span>
       </div>
 
@@ -159,6 +162,13 @@ function BaseBatchCard({
               {u.quantity > 1 && (
                 <span style={{ color: BRAND.blue }}>×{u.quantity}</span>
               )}
+              {/* Boxes to print = letters in the name (one keycap per letter) */}
+              <span
+                className="ml-auto shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums"
+                style={{ background: `${BRAND.blue}14`, color: "#0A4FB3" }}
+              >
+                {u.letters} box{u.letters === 1 ? "" : "es"}
+              </span>
             </button>
           </li>
         ))}
@@ -199,6 +209,8 @@ function ClickerLetterBatchCard({
 }) {
   const ids = batch.items.map((u) => u.itemId);
   const isDone = batch.allDone;
+  // Total clicker+letter keycap boxes = sum of each name's letters × qty.
+  const totalBoxes = batch.items.reduce((s, u) => s + u.letters * u.quantity, 0);
 
   return (
     <div
@@ -220,14 +232,15 @@ function ClickerLetterBatchCard({
             + {batch.letter} letter
           </p>
           <p className="text-xs text-foreground/50 mt-0.5">
-            {batch.doneCount}/{batch.items.length} printed
+            {batch.doneCount}/{batch.items.length} printed · {totalBoxes} box
+            {totalBoxes === 1 ? "" : "es"} total
           </p>
         </div>
         <span
           className="rounded-full px-3 py-1 text-sm font-bold tabular-nums shrink-0"
           style={{ background: `${BRAND.purple}14`, color: BRAND.purple }}
         >
-          ×{batch.totalQty}
+          {totalBoxes} boxes
         </span>
       </div>
 
@@ -261,6 +274,13 @@ function ClickerLetterBatchCard({
               </span>
               <span className="font-mono" style={{ color: "#94a3b8" }}>#{u.invoiceNumber}</span>
               {u.quantity > 1 && <span style={{ color: BRAND.purple }}>×{u.quantity}</span>}
+              {/* Boxes to print = letters in the name (one keycap per letter) */}
+              <span
+                className="ml-auto shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums"
+                style={{ background: `${BRAND.purple}14`, color: BRAND.purple }}
+              >
+                {u.letters} box{u.letters === 1 ? "" : "es"}
+              </span>
             </button>
           </li>
         ))}
