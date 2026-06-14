@@ -27,9 +27,10 @@
  */
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { Search, Loader2, User, Phone, Mail, MapPin, Truck, CheckCircle2 } from "lucide-react";
+import { Search, Loader2, User, Mail, MapPin, Truck, CheckCircle2 } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import { MALAYSIAN_STATES } from "@/lib/validators";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { getPosCustomerSearch, type PosCustomerResult } from "@/actions/admin-pos";
 import { quoteForCart, type QuoteOption, type CartItemForQuote } from "@/actions/shipping-quote";
 import { getShippingRate } from "@/actions/admin-shipping";
@@ -391,24 +392,12 @@ export const PosCustomerStep = forwardRef<PosCustomerStepHandle, Props>(function
 
           {/* Phone */}
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Phone <span className="text-red-600">*</span>
-            </label>
-            <div className="relative">
-              <Phone
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                aria-hidden
-              />
-              <input
-                className={inputClass + " pl-9"}
-                required
-                value={customerForm.phone}
-                onChange={(e) => setField("phone", e.target.value)}
-                placeholder="601XXXXXXXX"
-                aria-label="Customer phone number"
-              />
-            </div>
+            <PhoneInput
+              label="Phone"
+              required
+              value={customerForm.phone}
+              onChange={(msisdn) => setField("phone", msisdn)}
+            />
           </div>
 
           {/* Email */}

@@ -9,6 +9,7 @@ import { BRAND } from "@/lib/brand";
 import { AddressPicker } from "@/components/checkout/address-picker";
 import type { SavedAddress } from "@/actions/addresses";
 import { readDraft, saveDraft } from "@/stores/checkout-draft-store";
+import { PhoneInput } from "@/components/ui/phone-input";
 
 // Output type (what Zod produces after parsing — country is "Malaysia", not
 // optional) is the contract the rest of the app consumes.
@@ -105,7 +106,7 @@ export function AddressForm({
   // Debounce ref for draft autosave
   const draftSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { register, formState, watch, trigger, reset } = useForm<
+  const { register, formState, watch, trigger, reset, setValue } = useForm<
     AddressFormInput,
     unknown,
     AddressFormValues
@@ -361,25 +362,20 @@ export function AddressForm({
         </div>
 
         <div>
-          <label htmlFor="field-phone" className="block text-sm font-semibold mb-1">
-            Phone (Malaysia)<Req />
-          </label>
-          <input
+          <PhoneInput
             id="field-phone"
-            inputMode="tel"
-            autoComplete="tel"
-            aria-invalid={!!errors.phone}
-            aria-describedby={errors.phone && (formAttempted || touchedFields.phone) ? "err-phone" : undefined}
-            className={fieldClasses("phone")}
-            style={fieldStyle("phone")}
-            placeholder="+60 12 345 6789"
-            {...register("phone")}
+            label="Phone"
+            required
+            value={values.phone ?? ""}
+            onChange={(msisdn) => {
+              setValue("phone", msisdn, { shouldValidate: true, shouldTouch: true });
+            }}
+            error={
+              errors.phone && (formAttempted || touchedFields.phone)
+                ? errors.phone.message
+                : null
+            }
           />
-          {errors.phone && (formAttempted || touchedFields.phone) ? (
-            <p id="err-phone" className="text-xs text-red-600 mt-1" role="alert">
-              {errors.phone.message}
-            </p>
-          ) : null}
         </div>
 
         <div>

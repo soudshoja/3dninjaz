@@ -500,6 +500,24 @@ export async function bulkDeleteOrders(
   if (ids.length === 0) return { ok: false, error: "No orders selected." };
   if (ids.length > 100) return { ok: false, error: "Too many orders selected (max 100)." };
 
+  // Only PENDING orders may be deleted (2026-06-14). Anything further along
+  // (awaiting payment, paid, processing, shipped, delivered, cancelled) must be
+  // CANCELLED instead, never hard-deleted — preserves the financial/audit trail.
+  const statusRows = await db
+    .select({ id: orders.id, status: orders.status })
+    .from(orders)
+    .where(inArray(orders.id, ids));
+  if (statusRows.length === 0) return { ok: false, error: "Orders not found." };
+  const notPending = statusRows.filter((r) => r.status !== "pending");
+  if (notPending.length > 0) {
+    return {
+      ok: false,
+      error:
+        `Only pending orders can be deleted. ${notPending.length} of the selected ` +
+        `order(s) are not pending — cancel them instead.`,
+    };
+  }
+
   try {
     await db.update(disputeCache).set({ orderId: null }).where(inArray(disputeCache.orderId, ids));
     await db.delete(orderItems).where(inArray(orderItems.orderId, ids));
@@ -881,11 +899,20 @@ export async function deleteOrder(orderId: string): Promise<DeleteOrderResult> {
   await requireAdmin();
 
   const [row] = await db
-    .select({ id: orders.id })
+    .select({ id: orders.id, status: orders.status })
     .from(orders)
     .where(eq(orders.id, orderId))
     .limit(1);
   if (!row) return { ok: false, error: "Order not found." };
+
+  // Only PENDING orders may be deleted (2026-06-14). Anything further along must
+  // be CANCELLED instead — preserves the financial/audit trail.
+  if (row.status !== "pending") {
+    return {
+      ok: false,
+      error: "Only pending orders can be deleted — cancel this order instead.",
+    };
+  }
 
   // order_shipments has no ON DELETE cascade — remove its rows first.
   await db.delete(orderShipments).where(eq(orderShipments.orderId, orderId));

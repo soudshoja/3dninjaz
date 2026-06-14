@@ -15,6 +15,7 @@ import { Save, Loader2 } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import { updateOrderCustomer } from "@/actions/admin-order-edit";
 import { MALAYSIAN_STATES } from "@/lib/validators";
+import { PhoneInput } from "@/components/ui/phone-input";
 
 type InitialValues = {
   shippingName: string;
@@ -136,20 +137,17 @@ export function OrderCustomerEdit({ orderId, initial }: Props) {
 
         {/* Phone */}
         <div>
-          <label htmlFor="oc-shippingPhone" style={labelStyle}>
-            Phone
-          </label>
-          <input
+          <span style={labelStyle}>Phone</span>
+          <PhoneInput
             id="oc-shippingPhone"
-            name="shippingPhone"
-            type="text"
-            value={values.shippingPhone}
-            onChange={handleChange}
-            className={inputCls}
-            style={inputStyle}
+            label=""
             required
-            maxLength={30}
-            autoComplete="off"
+            value={values.shippingPhone}
+            onChange={(msisdn) => {
+              setValues((prev) => ({ ...prev, shippingPhone: msisdn }));
+              setSuccessMsg(null);
+              setErrorMsg(null);
+            }}
           />
         </div>
 

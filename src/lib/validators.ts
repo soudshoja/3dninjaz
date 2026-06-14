@@ -239,19 +239,19 @@ export const orderStatusEnum = z.enum([
 export type OrderStatus = z.infer<typeof orderStatusEnum>;
 
 /**
- * Malaysian phone regex — permissive allowlist rather than structural parser.
- * Accepts any combination of digits, +, spaces, hyphens, and parentheses
- * between 7 and 20 characters long. This covers all common MY formats:
- *   012-3456789  |  +60 12-3456789  |  +6012-3456789  |  03-12345678
- *   +60-3-1234-5678  |  (03) 1234 5678  |  011-12345678
- *
+ * Phone regex — permissive allowlist.
+ * Accepts:
+ *   - Clean MSISDN output from PhoneInput: digits only, 8–15 chars
+ *     e.g. "60123456789"
+ *   - Legacy formats with +, spaces, hyphens, parens (7–20 chars)
+ *     e.g. "+60 12-345 6789", "(03) 1234 5678"
  * Caller should strip non-digits before storing so search/compare is stable.
  */
-const MY_PHONE = /^[+\d\s\-()]{7,20}$/;
+const MY_PHONE = /^(\d{8,15}|[+\d\s\-()]{7,20})$/;
 
 export const orderAddressSchema = z.object({
   recipientName: z.string().min(2, "Name is required").max(200),
-  phone: z.string().regex(MY_PHONE, "Enter a Malaysian phone number"),
+  phone: z.string().regex(MY_PHONE, "Enter a valid phone number"),
   addressLine1: z.string().min(3, "Street address is required").max(200),
   addressLine2: z.string().max(200).optional().default(""),
   city: z.string().min(2, "City is required").max(100),
@@ -313,7 +313,7 @@ export type ManualOrderOutput = z.output<typeof manualOrderSchema>;
  */
 export const addressBookSchema = z.object({
   fullName: z.string().min(2, "Full name is required").max(200),
-  phone: z.string().regex(MY_PHONE, "Enter a Malaysian phone number"),
+  phone: z.string().regex(MY_PHONE, "Enter a valid phone number"),
   line1: z.string().min(3, "Street address is required").max(200),
   line2: z.string().max(200).optional().nullable(),
   city: z.string().min(2, "City is required").max(100),
