@@ -354,6 +354,8 @@ export type KeychainUnit = {
   clientName: string;
   /** Customer's chosen name text (e.g. "ATHIYYA"). */
   name: string;
+  /** Number of keycap boxes to print = letters in the name. */
+  letters: number;
   base: string;
   clicker: string;
   letter: string;
@@ -439,6 +441,7 @@ export async function getKeychainBatches(): Promise<KeychainBatches> {
       invoiceNumber: formatOrderNumber(it.orderId),
       clientName: clientNameById.get(it.orderId) ?? "",
       name: parts.name,
+      letters: parts.letters,
       base: parts.base,
       clicker: parts.clicker,
       letter: parts.letter,

@@ -26,6 +26,7 @@ describe("parseKeychainParts", () => {
     );
     expect(result).not.toBeNull();
     expect(result?.name).toBe("ATHIYYA");
+    expect(result?.letters).toBe(7);
     expect(result?.base).toBe("Magenta");
     expect(result?.clicker).toBe("Matte Pastel Periwinkle");
     expect(result?.letter).toBe("Matte Pastel Candy");
@@ -54,6 +55,7 @@ describe("parseKeychainParts", () => {
       ),
     );
     expect(result?.name).toBe("SOUD SHOJA");
+    expect(result?.letters).toBe(10);
     expect(result?.base).toBe("Blue");
     expect(result?.clicker).toBe("Glossy Silver");
     expect(result?.letter).toBe("Matte Black");
