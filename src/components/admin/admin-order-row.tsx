@@ -4,6 +4,7 @@ import { BRAND } from "@/lib/brand";
 import { formatOrderNumber, type OrderStatus } from "@/lib/orders";
 import { formatMYR } from "@/lib/format";
 import { AdminOrderStatusBadge } from "./admin-order-status-badge";
+import { OrderProductionToggle } from "./order-production-toggle";
 
 export type AdminOrderRowData = {
   id: string;
@@ -103,13 +104,27 @@ export function AdminOrderRow({
         </div>
       </td>
       <td className="p-3">
-        <Link
-          href={`/admin/orders/${order.id}`}
-          className="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold min-h-[40px] whitespace-nowrap"
-          style={{ backgroundColor: BRAND.ink, color: "#ffffff" }}
-        >
-          View
-        </Link>
+        <div className="flex items-center gap-2 whitespace-nowrap">
+          <Link
+            href={`/admin/orders/${order.id}`}
+            className="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold min-h-[40px]"
+            style={{ backgroundColor: BRAND.ink, color: "#ffffff" }}
+          >
+            View
+          </Link>
+          <Link
+            href={`/admin/orders/${order.id}/edit`}
+            className="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold min-h-[40px]"
+            style={{ border: `2px solid ${BRAND.ink}25`, color: BRAND.ink }}
+          >
+            Edit
+          </Link>
+          <OrderProductionToggle
+            orderId={order.id}
+            inProduction={!!order.inProduction}
+            compact
+          />
+        </div>
       </td>
     </tr>
   );
@@ -130,8 +145,7 @@ export function AdminOrderCard({
   onToggleSelect?: (id: string) => void;
 }) {
   return (
-    <Link
-      href={`/admin/orders/${order.id}`}
+    <div
       className="block p-3 space-y-1"
       style={{ color: BRAND.ink, ...(selected ? { backgroundColor: "#FEF9E7" } : {}) }}
     >
@@ -139,8 +153,6 @@ export function AdminOrderCard({
       <div className="flex items-center justify-between gap-2 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
           {onToggleSelect ? (
-            // Inside the card <Link> — preventDefault stops navigation, the
-            // controlled `checked` prop reflects toggle state.
             <input
               type="checkbox"
               checked={!!selected}
@@ -180,30 +192,46 @@ export function AdminOrderCard({
         </span>
       ) : null}
 
-      {/* Customer name + phone */}
-      <p className="font-semibold text-sm break-words min-w-0">{order.shippingName}</p>
-      <p className="text-xs text-slate-600 break-words min-w-0">{order.shippingPhone}</p>
+      {/* Tapping the info area opens the order */}
+      <Link href={`/admin/orders/${order.id}`} className="block space-y-1" style={{ color: BRAND.ink }}>
+        {/* Customer name + phone */}
+        <p className="font-semibold text-sm break-words min-w-0">{order.shippingName}</p>
+        <p className="text-xs text-slate-600 break-words min-w-0">{order.shippingPhone}</p>
 
-      {/* Date · items · total */}
-      <p className="text-xs text-slate-600">
-        {new Date(order.createdAt).toLocaleDateString("en-MY")}
-        {" · "}
-        {order.itemCount} {order.itemCount === 1 ? "item" : "items"}
-        {" · "}
-        <span className="font-bold" style={{ color: BRAND.ink }}>
-          {formatMYR(order.totalAmount)}
-        </span>
-      </p>
+        {/* Date · items · total */}
+        <p className="text-xs text-slate-600">
+          {new Date(order.createdAt).toLocaleDateString("en-MY")}
+          {" · "}
+          {order.itemCount} {order.itemCount === 1 ? "item" : "items"}
+          {" · "}
+          <span className="font-bold" style={{ color: BRAND.ink }}>
+            {formatMYR(order.totalAmount)}
+          </span>
+        </p>
+      </Link>
 
-      {/* View button */}
-      <div className="pt-1">
-        <span
-          className="inline-flex items-center justify-center rounded-full px-4 text-sm font-semibold min-h-[44px] w-full"
+      {/* Actions — View · Edit · production toggle */}
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        <Link
+          href={`/admin/orders/${order.id}`}
+          className="inline-flex flex-1 items-center justify-center rounded-full px-4 text-sm font-semibold min-h-[44px]"
           style={{ backgroundColor: BRAND.ink, color: "#ffffff" }}
         >
-          View order
-        </span>
+          View
+        </Link>
+        <Link
+          href={`/admin/orders/${order.id}/edit`}
+          className="inline-flex flex-1 items-center justify-center rounded-full px-4 text-sm font-semibold min-h-[44px]"
+          style={{ border: `2px solid ${BRAND.ink}25`, color: BRAND.ink }}
+        >
+          Edit
+        </Link>
+        <OrderProductionToggle
+          orderId={order.id}
+          inProduction={!!order.inProduction}
+          compact
+        />
       </div>
-    </Link>
+    </div>
   );
 }
