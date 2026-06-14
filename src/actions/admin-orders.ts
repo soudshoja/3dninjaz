@@ -62,6 +62,8 @@ export type AdminOrderListRow = {
   createdAt: Date;
   user: { id: string; email: string; name: string } | null;
   itemCount: number;
+  /** True when the order has been flagged for the keychain production floor. */
+  inProduction: boolean;
 };
 
 type StatusFilter = OrderStatus | "all";
@@ -102,6 +104,7 @@ export async function listAdminOrders(
       shippingName: orders.shippingName,
       shippingPhone: orders.shippingPhone,
       createdAt: orders.createdAt,
+      productionAddedAt: orders.productionAddedAt,
       userIdJoin: user.id,
       userEmail: user.email,
       userName: user.name,
@@ -150,6 +153,7 @@ export async function listAdminOrders(
       ? { id: r.userIdJoin, email: r.userEmail ?? "", name: r.userName ?? "" }
       : null,
     itemCount: countByOrder.get(r.id) ?? 0,
+    inProduction: r.productionAddedAt != null,
   }));
 }
 
@@ -200,6 +204,8 @@ export type AdminOrderDetail = {
   // Order-level discount (checkout coupon or admin-applied).
   discountAmount: string;
   discountCode: string | null;
+  // Keychain production floor flag — set when admin adds order to production.
+  productionAddedAt: Date | null;
   user: { id: string; email: string; name: string } | null;
   items: Array<{
     id: string;
@@ -301,6 +307,7 @@ export async function getAdminOrder(orderId: string): Promise<AdminOrderDetail |
     extraCostNote: head.o.extraCostNote ?? null,
     discountAmount: head.o.discountAmount ?? "0.00",
     discountCode: head.o.discountCode ?? null,
+    productionAddedAt: head.o.productionAddedAt ?? null,
     user: head.uId
       ? { id: head.uId, email: head.uEmail ?? "", name: head.uName ?? "" }
       : null,
