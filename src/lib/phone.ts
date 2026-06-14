@@ -1,17 +1,125 @@
 /**
- * Malaysian phone number normalizer for guest-order linking.
+ * Pure phone-number helpers — no I/O, no side effects.
  *
- * Strips all non-digit characters, then canonicalises the country prefix so
- * that "+60 11-2543 4730", "011-2543 4730", "60112543 4730", etc. all resolve
- * to the same digits-only string "60112543 4730" → "601125434730".
+ * Storage format: MSISDN = country code + national digits, digits only, NO "+".
+ * e.g. "60123456789"  (Malaysia, matches normalizeMsisdn in whatsapp/events.ts)
+ *      "447911123456" (UK)
+ *      "14155552671"  (US)
  *
- * Rules applied in order:
- *  1. Strip all non-digit characters.
- *  2. If the result starts with "60", keep as-is (already has country code).
- *  3. If the result starts with "0", replace the leading "0" with "60"
- *     (local format: "011..." → "6011...").
- *  4. Otherwise return the digits as-is (unknown format — still storable).
- *  5. If no digits are found, return "".
+ * Also re-exports the original MY-only helper for backwards compatibility.
+ */
+
+import { DEFAULT_DIAL } from "@/lib/country-codes";
+
+export interface SanitizeResult {
+  ok: boolean;
+  msisdn: string;
+  national: string;
+  error?: string;
+}
+
+/**
+ * Convert a raw user-typed phone string + a selected dial code into a stored
+ * MSISDN (digits only, country-code prefix, no +).
+ *
+ * Rules (match normalizeMsisdn behaviour from whatsapp/events.ts for dial="60"):
+ *  1. Strip all non-digits.
+ *  2. If empty → error.
+ *  3. If starts with "00" → strip the 00 (international dialling prefix).
+ *  4. If starts with "0" → replace leading 0 with the dial code (trunk prefix).
+ *  5. If does NOT already start with the dial code → prepend it.
+ *  6. Else (already has the dial code) → leave as-is.
+ *  7. national = msisdn.slice(dial.length)
+ *  8. Validate national length: 6–14 digits.
+ */
+export function sanitizeToMsisdn(
+  raw: string,
+  dial: string,
+): SanitizeResult {
+  let digits = raw.replace(/\D/g, "");
+
+  if (!digits) {
+    return { ok: false, msisdn: "", national: "", error: "Enter a phone number." };
+  }
+
+  // International dialling prefix 00 → strip and treat remainder as full MSISDN
+  if (digits.startsWith("00")) {
+    digits = digits.slice(2);
+  }
+  // Trunk zero → replace with country code
+  else if (digits.startsWith("0")) {
+    digits = dial + digits.slice(1);
+  }
+  // Bare national (doesn't start with the country code) → prepend
+  else if (!digits.startsWith(dial)) {
+    digits = dial + digits;
+  }
+  // else: already has the country code — leave as-is
+
+  const national = digits.slice(dial.length);
+
+  if (national.length < 6 || national.length > 14) {
+    return {
+      ok: false,
+      msisdn: digits,
+      national,
+      error: "That number looks too short or too long — please check it.",
+    };
+  }
+
+  return { ok: true, msisdn: digits, national };
+}
+
+/**
+ * Split a stored MSISDN back into { dial, national } by trying the longest
+ * matching dial from knownDials first (greedy, to avoid "1" eating "1242").
+ * Falls back to DEFAULT_DIAL ("60") if nothing matches.
+ */
+export function splitMsisdn(
+  msisdn: string,
+  knownDials: string[],
+): { dial: string; national: string } {
+  if (!msisdn) return { dial: DEFAULT_DIAL, national: "" };
+
+  // Sort by length descending so longer prefixes (e.g. "1242") win over "1"
+  const sorted = [...knownDials].sort((a, b) => b.length - a.length);
+
+  for (const d of sorted) {
+    if (msisdn.startsWith(d)) {
+      return { dial: d, national: msisdn.slice(d.length) };
+    }
+  }
+
+  // No match — fall back to Malaysia
+  return { dial: DEFAULT_DIAL, national: msisdn };
+}
+
+/**
+ * Format a national number for display readability.
+ * e.g. MY "123456789" → "12-345 6789"
+ */
+export function formatNational(national: string, dial: string): string {
+  const digits = national.replace(/\D/g, "");
+
+  // MY mobile: 9–10 national digits
+  if (dial === "60") {
+    if (digits.length >= 9) {
+      const prefix = digits.slice(0, 2);
+      const mid = digits.slice(2, 5);
+      const end = digits.slice(5);
+      return `${prefix}-${mid} ${end}`.trim();
+    }
+  }
+
+  // Generic grouping
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)} ${digits.slice(6)}`;
+}
+
+/**
+ * Backwards-compat: MY-only normalizer used by guest-order linking.
+ * Prefer sanitizeToMsisdn for new code.
  */
 export function normalizePhoneMy(raw: string): string {
   if (!raw || typeof raw !== "string") return "";

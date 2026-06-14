@@ -16,6 +16,7 @@ import { Pencil, Save, Loader2, X } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import { updateOrderShipTo } from "@/actions/admin-orders";
 import { MALAYSIAN_STATES } from "@/lib/validators";
+import { PhoneInput } from "@/components/ui/phone-input";
 
 type Initial = {
   shippingName: string;
@@ -150,9 +151,18 @@ export function OrderShipToEdit({
             onChange={onChange} className={inputCls} style={inputStyle} required maxLength={200} autoComplete="off" />
         </div>
         <div>
-          <label htmlFor="st-phone" style={labelStyle}>Phone</label>
-          <input id="st-phone" name="shippingPhone" type="text" value={values.shippingPhone}
-            onChange={onChange} className={inputCls} style={inputStyle} required maxLength={30} autoComplete="off" />
+          <span style={labelStyle}>Phone</span>
+          <PhoneInput
+            id="st-phone"
+            label=""
+            required
+            value={values.shippingPhone}
+            onChange={(msisdn) => {
+              setValues((p) => ({ ...p, shippingPhone: msisdn }));
+              setErrorMsg(null);
+              setSuccessMsg(null);
+            }}
+          />
         </div>
         <div className="sm:col-span-2">
           <label htmlFor="st-l1" style={labelStyle}>Address line 1</label>

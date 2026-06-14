@@ -8,6 +8,7 @@ import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PhoneInput } from "@/components/ui/phone-input";
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -259,9 +260,6 @@ function LoginForm({
 
 // ─── register sub-form ────────────────────────────────────────────────────────
 
-// Simple MY phone regex — permissive, same as validators.ts MY_PHONE.
-const MY_PHONE_RE_UNIFIED = /^[+\d\s\-()]{7,20}$/;
-
 function RegisterForm() {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -282,10 +280,6 @@ function RegisterForm() {
     }
     if (password !== confirmPassword) {
       setError("Passwords do not match.");
-      return;
-    }
-    if (phone && !MY_PHONE_RE_UNIFIED.test(phone.trim())) {
-      setError("Enter a valid Malaysian phone number.");
       return;
     }
     if (!pdpaChecked) {
@@ -351,18 +345,16 @@ function RegisterForm() {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="reg-phone">
-          Phone number{" "}
-          <span className="text-xs font-normal text-[var(--color-brand-text-muted)]">(optional)</span>
-        </Label>
-        <Input
+        <PhoneInput
           id="reg-phone"
-          type="tel"
+          label={
+            <>
+              Phone number{" "}
+              <span className="text-xs font-normal text-[var(--color-brand-text-muted)]">(optional)</span>
+            </>
+          }
           value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="+60 11 2543 4730"
-          autoComplete="tel"
-          className="h-12"
+          onChange={(msisdn) => setPhone(msisdn)}
         />
       </div>
 

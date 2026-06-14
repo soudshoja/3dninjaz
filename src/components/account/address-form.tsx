@@ -12,6 +12,7 @@ import {
 } from "@/lib/validators";
 import { createAddress, updateAddress } from "@/actions/addresses";
 import { BRAND } from "@/lib/brand";
+import { PhoneInput } from "@/components/ui/phone-input";
 
 type Mode = "create" | "edit";
 
@@ -42,6 +43,8 @@ export function AddressForm({
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<AddressBookFormInput, unknown, AddressBookFormOutput>({
     resolver: zodResolver(addressBookSchema),
@@ -101,23 +104,16 @@ export function AddressForm({
       </div>
 
       <div>
-        <label className="block text-sm font-semibold mb-1" htmlFor="addr-phone">
-          Phone (Malaysia)
-        </label>
-        <input
+        <PhoneInput
           id="addr-phone"
-          type="tel"
-          inputMode="tel"
-          autoComplete="tel"
-          placeholder="+60 12 345 6789"
-          aria-invalid={!!errors.phone}
-          className={inputBase}
-          style={borderStyle}
-          {...register("phone")}
+          label="Phone"
+          required
+          value={watch("phone") ?? ""}
+          onChange={(msisdn) =>
+            setValue("phone", msisdn, { shouldValidate: true, shouldTouch: true })
+          }
+          error={errors.phone?.message ?? null}
         />
-        {errors.phone ? (
-          <p className="text-xs text-red-600 mt-1">{errors.phone.message}</p>
-        ) : null}
       </div>
 
       <div>
