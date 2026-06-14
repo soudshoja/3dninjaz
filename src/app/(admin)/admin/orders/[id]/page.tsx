@@ -42,6 +42,8 @@ import { PaymentProofSection } from "@/components/admin/payment-proof-section";
 import { AdminUploadProofForm } from "@/components/admin/admin-upload-proof-form";
 // Order editability gates — used to show/hide the "Edit order" button.
 import { isOrderEditable, canAddItems } from "@/lib/order-editable";
+// Keychain production — production floor toggle + badge.
+import { OrderProductionToggle } from "@/components/admin/order-production-toggle";
 
 // WhatsApp SVG logo (official green brand mark, no external dependency)
 export const dynamic = "force-dynamic";
@@ -320,6 +322,18 @@ export default async function AdminOrderDetailPage({
               orderId={row.id}
               hasPhone={Boolean(row.shippingPhone)}
             />
+            {row.productionAddedAt ? (
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold"
+                style={{
+                  background: "rgba(163,85,247,0.20)",
+                  border: "1.5px solid rgba(163,85,247,0.40)",
+                  color: "#a855f7",
+                }}
+              >
+                In production
+              </span>
+            ) : null}
             <AdminOrderStatusBadge status={row.status} />
           </div>
         </div>
@@ -433,19 +447,25 @@ export default async function AdminOrderDetailPage({
         <AdminCard className="mb-4">
           <div className="flex items-center justify-between gap-3">
             <SectionHeader icon={Package} label="Items" accent={BRAND.green} />
-            {(editable || canAdd) && (
-              <Link
-                href={`/admin/orders/${row.id}/edit`}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold transition-opacity hover:opacity-80 shrink-0"
-                style={{
-                  backgroundColor: BRAND.ink,
-                  color: "#ffffff",
-                  minHeight: 44,
-                }}
-              >
-                {editable ? "Edit order" : "Add items"}
-              </Link>
-            )}
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <OrderProductionToggle
+                orderId={row.id}
+                inProduction={!!row.productionAddedAt}
+              />
+              {(editable || canAdd) && (
+                <Link
+                  href={`/admin/orders/${row.id}/edit`}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold transition-opacity hover:opacity-80"
+                  style={{
+                    backgroundColor: BRAND.ink,
+                    color: "#ffffff",
+                    minHeight: 44,
+                  }}
+                >
+                  {editable ? "Edit order" : "Add items"}
+                </Link>
+              )}
+            </div>
           </div>
 
           {/* Custom item details (manual orders) */}

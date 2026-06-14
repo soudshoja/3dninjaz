@@ -18,6 +18,8 @@ export type AdminOrderRowData = {
   itemCount: number;
   /** Phase 20 (20-10) — 24×24 slip thumbnail shown when row is in awaiting_payment_review filter. */
   slipThumbnailUrl?: string | null;
+  /** True when the order has been flagged for the keychain production floor. */
+  inProduction?: boolean;
 };
 
 /**
@@ -88,7 +90,17 @@ export function AdminOrderRow({
       <td className="p-3 text-sm whitespace-nowrap">{order.itemCount}</td>
       <td className="p-3 whitespace-nowrap font-bold">{formatMYR(order.totalAmount)}</td>
       <td className="p-3">
-        <AdminOrderStatusBadge status={order.status} />
+        <div className="flex flex-col gap-1.5">
+          <AdminOrderStatusBadge status={order.status} />
+          {order.inProduction ? (
+            <span
+              className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold"
+              style={{ background: "rgba(163,85,247,0.15)", color: "#7c3aed" }}
+            >
+              In production
+            </span>
+          ) : null}
+        </div>
       </td>
       <td className="p-3">
         <Link
@@ -158,6 +170,15 @@ export function AdminOrderCard({
         </div>
         <AdminOrderStatusBadge status={order.status} />
       </div>
+
+      {order.inProduction ? (
+        <span
+          className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold"
+          style={{ background: "rgba(163,85,247,0.15)", color: "#7c3aed" }}
+        >
+          In production
+        </span>
+      ) : null}
 
       {/* Customer name + phone */}
       <p className="font-semibold text-sm break-words min-w-0">{order.shippingName}</p>

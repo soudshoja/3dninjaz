@@ -593,6 +593,10 @@ export const orders = mysqlTable("orders", {
     .notNull()
     .default("0.00"),
   discountCode: varchar("discount_code", { length: 64 }),
+  // 2026-06-14 — admin manually flags an order onto the production floor,
+  // independent of payment status. NULL = not in production; a timestamp = the
+  // moment the admin added it. Drives the Keychain batches view.
+  productionAddedAt: timestamp("production_added_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
 });
@@ -633,6 +637,12 @@ export const orderItems = mysqlTable("order_items", {
   // line-wise production queue (NULL = unsorted, falls back to created order).
   productionDone: boolean("production_done").notNull().default(false),
   productionSort: int("production_sort"),
+  // 2026-06-14 — keychain two-part batch tracking. A keychain prints as two
+  // pieces: the Base (alone) and the Clicker+Letter (together as one). Each part
+  // is ticked when its colour-batch is printed; productionDone is the final
+  // assembly/packed tick once both parts are done.
+  baseDone: boolean("base_done").notNull().default(false),
+  clickerLetterDone: boolean("clicker_letter_done").notNull().default(false),
 });
 
 export const ordersRelations = relations(orders, ({ one, many }) => ({
