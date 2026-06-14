@@ -2,11 +2,12 @@
 
 import { db } from "@/lib/db";
 import { orders, orderItems } from "@/lib/db/schema";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { formatOrderNumber, isManualLine } from "@/lib/orders";
 import { ensureOrderItemConfigData } from "@/lib/config-fields";
+import { parseKeychainParts } from "@/lib/keychain-parts";
 
 // ============================================================================
 // Production board — admin fulfilment queue.
@@ -302,5 +303,287 @@ export async function reorderProductionLineItems(
   } catch (err) {
     console.error("[production] reorder failed", err);
     return { ok: false, error: "Could not save the new order." };
+  }
+}
+
+// ============================================================================
+// Keychain batch production — Task 2.
+//
+// Three new exports:
+//   setOrderInProduction  — flag/unflag an order for the production floor
+//   getKeychainBatches    — aggregate all in-production keychain units by part
+//   markKeychainPartPrinted — tick base or clicker+letter batch done
+//   setKeychainAssembled    — final assembly tick (requires both parts done)
+// ============================================================================
+
+/**
+ * Flag or unflag an order for the keychain production floor.
+ * Sets orders.productionAddedAt = now (on=true) or null (on=false).
+ * Any order status is accepted — the flag is independent of fulfilment status.
+ */
+export async function setOrderInProduction(
+  orderId: string,
+  on: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+  if (typeof orderId !== "string" || orderId.length === 0) {
+    return { ok: false, error: "Invalid order." };
+  }
+  try {
+    await db
+      .update(orders)
+      .set({ productionAddedAt: on ? new Date() : null })
+      .where(eq(orders.id, orderId));
+    revalidatePath("/admin/production");
+    revalidatePath("/admin/orders");
+    revalidatePath(`/admin/orders/${orderId}`);
+    return { ok: true };
+  } catch (err) {
+    console.error("[production] setOrderInProduction failed", orderId, err);
+    return { ok: false, error: "Could not update the order." };
+  }
+}
+
+// ── Keychain batch types ──────────────────────────────────────────────────────
+
+/** A single customer keychain unit inside a batch. */
+export type KeychainUnit = {
+  itemId: string;
+  orderId: string;
+  invoiceNumber: string;
+  clientName: string;
+  /** Customer's chosen name text (e.g. "ATHIYYA"). */
+  name: string;
+  base: string;
+  clicker: string;
+  letter: string;
+  quantity: number;
+  baseDone: boolean;
+  clickerLetterDone: boolean;
+  productionDone: boolean;
+};
+
+/** Aggregated base-colour printing batch. */
+export type KeychainBaseBatch = {
+  base: string;
+  totalQty: number;
+  items: KeychainUnit[];
+  doneCount: number;
+  allDone: boolean;
+};
+
+/** Aggregated clicker+letter printing batch (printed together as one piece). */
+export type KeychainClickerLetterBatch = {
+  clicker: string;
+  letter: string;
+  totalQty: number;
+  items: KeychainUnit[];
+  doneCount: number;
+  allDone: boolean;
+};
+
+/** Assembly view of a single keychain unit. */
+export type KeychainAssemblyUnit = KeychainUnit & {
+  /** True when both baseDone AND clickerLetterDone — ready to assemble. */
+  bothPartsDone: boolean;
+};
+
+export type KeychainBatches = {
+  bases: KeychainBaseBatch[];
+  clickerLetters: KeychainClickerLetterBatch[];
+  assembly: KeychainAssemblyUnit[];
+};
+
+/**
+ * Load all in-production orders (productionAddedAt IS NOT NULL), parse their
+ * keychain items, and group them into base / clicker+letter / assembly batches.
+ *
+ * MariaDB 10.11 safe: two sequential SELECTs + in-memory join.
+ */
+export async function getKeychainBatches(): Promise<KeychainBatches> {
+  await requireAdmin();
+
+  // 1) Orders that have been flagged for the production floor.
+  const orderRows = await db
+    .select({
+      id: orders.id,
+      shippingName: orders.shippingName,
+      status: orders.status,
+      productionAddedAt: orders.productionAddedAt,
+    })
+    .from(orders)
+    .where(isNotNull(orders.productionAddedAt))
+    .orderBy(asc(orders.productionAddedAt));
+
+  if (orderRows.length === 0) {
+    return { bases: [], clickerLetters: [], assembly: [] };
+  }
+
+  const ids = orderRows.map((o) => o.id);
+  const clientNameById = new Map(orderRows.map((o) => [o.id, o.shippingName]));
+
+  // 2) All items for those orders.
+  const itemRows = await db
+    .select()
+    .from(orderItems)
+    .where(inArray(orderItems.orderId, ids));
+
+  // 3) Parse keychain parts — skip non-keychain lines.
+  const units: KeychainUnit[] = [];
+  for (const it of itemRows) {
+    const parts = parseKeychainParts(it.configurationData);
+    if (!parts) continue; // not a keychain line — skip
+    units.push({
+      itemId: it.id,
+      orderId: it.orderId,
+      invoiceNumber: formatOrderNumber(it.orderId),
+      clientName: clientNameById.get(it.orderId) ?? "",
+      name: parts.name,
+      base: parts.base,
+      clicker: parts.clicker,
+      letter: parts.letter,
+      quantity: it.quantity,
+      baseDone: it.baseDone,
+      clickerLetterDone: it.clickerLetterDone,
+      productionDone: it.productionDone,
+    });
+  }
+
+  // 4) Group BASES — by base colour string.
+  const baseMap = new Map<string, KeychainUnit[]>();
+  for (const u of units) {
+    const list = baseMap.get(u.base) ?? [];
+    list.push(u);
+    baseMap.set(u.base, list);
+  }
+  const bases: KeychainBaseBatch[] = Array.from(baseMap.entries())
+    .map(([base, items]) => {
+      const totalQty = items.reduce((s, u) => s + u.quantity, 0);
+      const doneCount = items.filter((u) => u.baseDone).length;
+      return { base, totalQty, items, doneCount, allDone: doneCount === items.length };
+    })
+    .sort((a, b) => b.totalQty - a.totalQty);
+
+  // 5) Group CLICKER+LETTER — by combined key.
+  const clMap = new Map<string, KeychainUnit[]>();
+  for (const u of units) {
+    const key = `${u.clicker}|||${u.letter}`;
+    const list = clMap.get(key) ?? [];
+    list.push(u);
+    clMap.set(key, list);
+  }
+  const clickerLetters: KeychainClickerLetterBatch[] = Array.from(clMap.entries())
+    .map(([key, items]) => {
+      const [clicker, letter] = key.split("|||");
+      const totalQty = items.reduce((s, u) => s + u.quantity, 0);
+      const doneCount = items.filter((u) => u.clickerLetterDone).length;
+      return {
+        clicker,
+        letter,
+        totalQty,
+        items,
+        doneCount,
+        allDone: doneCount === items.length,
+      };
+    })
+    .sort((a, b) => b.totalQty - a.totalQty);
+
+  // 6) Assembly — flat list sorted by clientName then name.
+  const assembly: KeychainAssemblyUnit[] = units
+    .map((u) => ({ ...u, bothPartsDone: u.baseDone && u.clickerLetterDone }))
+    .sort((a, b) => {
+      const nc = a.clientName.localeCompare(b.clientName);
+      if (nc !== 0) return nc;
+      return a.name.localeCompare(b.name);
+    });
+
+  return { bases, clickerLetters, assembly };
+}
+
+/** UUID-ish pattern used to validate itemIds from the client. */
+const UUID_RE = /^[0-9a-f-]{36}$/i;
+
+/**
+ * Mark a batch of keychain item IDs as having their base OR clicker+letter
+ * part printed (or unprinted when done=false).
+ *
+ * Validates, dedupes, and caps the list at 500 items. Admin-only.
+ */
+export async function markKeychainPartPrinted(
+  itemIds: string[],
+  part: "base" | "clickerLetter",
+  done: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+
+  if (!Array.isArray(itemIds)) {
+    return { ok: false, error: "itemIds must be an array." };
+  }
+  const safe = [...new Set(itemIds.filter((id) => UUID_RE.test(id)))].slice(0, 500);
+  if (safe.length === 0) {
+    return { ok: false, error: "No valid item IDs provided." };
+  }
+
+  try {
+    if (part === "base") {
+      await db
+        .update(orderItems)
+        .set({ baseDone: done })
+        .where(inArray(orderItems.id, safe));
+    } else {
+      await db
+        .update(orderItems)
+        .set({ clickerLetterDone: done })
+        .where(inArray(orderItems.id, safe));
+    }
+    revalidatePath("/admin/production");
+    return { ok: true };
+  } catch (err) {
+    console.error("[production] markKeychainPartPrinted failed", err);
+    return { ok: false, error: "Could not update the items." };
+  }
+}
+
+/**
+ * Mark a single keychain item as assembled (productionDone = done).
+ *
+ * When done=true, the item must have both baseDone AND clickerLetterDone set —
+ * otherwise the admin is trying to assemble before both parts are printed.
+ * When done=false (undo), no guard is applied.
+ */
+export async function setKeychainAssembled(
+  itemId: string,
+  done: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireAdmin();
+
+  if (typeof itemId !== "string" || !UUID_RE.test(itemId)) {
+    return { ok: false, error: "Invalid item ID." };
+  }
+
+  if (done) {
+    // Read current state — guard: both parts must be printed.
+    const [row] = await db
+      .select({ baseDone: orderItems.baseDone, clickerLetterDone: orderItems.clickerLetterDone })
+      .from(orderItems)
+      .where(eq(orderItems.id, itemId))
+      .limit(1);
+
+    if (!row) return { ok: false, error: "Item not found." };
+    if (!row.baseDone || !row.clickerLetterDone) {
+      return { ok: false, error: "Print both parts first." };
+    }
+  }
+
+  try {
+    await db
+      .update(orderItems)
+      .set({ productionDone: done })
+      .where(eq(orderItems.id, itemId));
+    revalidatePath("/admin/production");
+    return { ok: true };
+  } catch (err) {
+    console.error("[production] setKeychainAssembled failed", itemId, err);
+    return { ok: false, error: "Could not update the item." };
   }
 }
