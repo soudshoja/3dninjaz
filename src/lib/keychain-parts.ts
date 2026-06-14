@@ -15,6 +15,12 @@ import { ensureOrderItemConfigData } from "@/lib/config-fields";
 export type KeychainParts = {
   /** Quoted customer name — first token in double-quotes, e.g. "ATHIYYA". */
   name: string;
+  /**
+   * Number of keycap boxes to print = number of letters in the name. Each
+   * letter is its own keycap, so a 9-letter name = 9 boxes. Read from the
+   * "(N your name)" token in the summary; falls back to name.length.
+   */
+  letters: number;
   /** Base colour, e.g. "Magenta". */
   base: string;
   /** Clicker colour, e.g. "Matte Pastel Periwinkle". */
@@ -26,6 +32,7 @@ export type KeychainParts = {
 const PARTS_RE =
   /·\s*(.+?)\s+base\s*·\s*(.+?)\s+clicker\s*·\s*(.+?)\s+letter/i;
 const NAME_RE = /"([^"]*)"/;
+const LETTER_COUNT_RE = /\((\d+)\s+your name\)/i;
 
 /**
  * Parse keychain part details from an order item's configurationData blob.
@@ -48,10 +55,18 @@ export function parseKeychainParts(
   const [, base, clicker, letter] = partsMatch;
 
   const nameMatch = NAME_RE.exec(summary);
-  const name = nameMatch ? nameMatch[1] : "";
+  const name = (nameMatch ? nameMatch[1] : "").trim();
+
+  // Box count = letters in the name. Prefer the "(N your name)" token; fall
+  // back to the trimmed name length (no spaces — names are A-Z only).
+  const countMatch = LETTER_COUNT_RE.exec(summary);
+  const letters = countMatch
+    ? parseInt(countMatch[1], 10)
+    : name.replace(/\s/g, "").length;
 
   return {
-    name: name.trim(),
+    name,
+    letters,
     base: base.trim(),
     clicker: clicker.trim(),
     letter: letter.trim(),
