@@ -51,6 +51,11 @@ import type { FieldWeightEntry } from "@/lib/option-weight";
 // src/lib/delyva-events.ts.
 // ============================================================================
 
+// Minimum dispatched parcel weight (kg). Couriers such as SPX East-Malaysia
+// reject parcels below this with a misleading "exceed max value" error; the
+// flat minimum rate covers up to ~1 kg, so flooring light parcels here is free.
+const MIN_DISPATCH_WEIGHT_KG = 0.1;
+
 // --------------------------- Types (re-exported for callers) ---------------------------
 export type ShippingConfigRow = ShippingConfigRowType;
 
@@ -778,6 +783,24 @@ async function _bookShipmentInternal(
       quantity: i.quantity,
     };
   });
+
+  // Floor the TOTAL parcel weight (Σ weight×qty), NOT each line. SPX
+  // East-Malaysia rejects a parcel under 0.1 kg with a misleading
+  // "Weight / Volumetric Weight exceed max value (13101)" error — a 1–2
+  // keychain order (0.04–0.08 kg) trips it, while West Malaysia accepts tiny
+  // weights. Couriers bill one flat rate up to ~1 kg, so bumping a sub-0.1 kg
+  // parcel is free. Add the deficit to the first line (÷ its qty so the summed
+  // total lands exactly on the minimum). FLOOR only, never cap — a 5-keychain
+  // order (0.20 kg) is already above the floor and keeps its true weight.
+  const totalKg = inventory.reduce((s, it) => s + it.weight.value * it.quantity, 0);
+  if (inventory.length > 0 && totalKg > 0 && totalKg < MIN_DISPATCH_WEIGHT_KG) {
+    const first = inventory[0];
+    const q = first.quantity > 0 ? first.quantity : 1;
+    first.weight = {
+      ...first.weight,
+      value: first.weight.value + (MIN_DISPATCH_WEIGHT_KG - totalKg) / q,
+    };
+  }
 
   const pickupAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
   const deliveryAt = new Date(Date.now() + 48 * 3600 * 1000).toISOString();
