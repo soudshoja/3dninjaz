@@ -507,21 +507,24 @@ export async function bulkDeleteOrders(
   if (ids.length === 0) return { ok: false, error: "No orders selected." };
   if (ids.length > 100) return { ok: false, error: "Too many orders selected (max 100)." };
 
-  // Only PENDING orders may be deleted (2026-06-14). Anything further along
-  // (awaiting payment, paid, processing, shipped, delivered, cancelled) must be
-  // CANCELLED instead, never hard-deleted — preserves the financial/audit trail.
+  // Only PENDING or CANCELLED orders may be deleted (2026-06-17). Anything in
+  // between (awaiting payment, paid, processing, shipped, delivered) must be
+  // CANCELLED first, never hard-deleted while live — preserves the
+  // financial/audit trail until the order is explicitly cancelled.
   const statusRows = await db
     .select({ id: orders.id, status: orders.status })
     .from(orders)
     .where(inArray(orders.id, ids));
   if (statusRows.length === 0) return { ok: false, error: "Orders not found." };
-  const notPending = statusRows.filter((r) => r.status !== "pending");
-  if (notPending.length > 0) {
+  const notDeletable = statusRows.filter(
+    (r) => r.status !== "pending" && r.status !== "cancelled",
+  );
+  if (notDeletable.length > 0) {
     return {
       ok: false,
       error:
-        `Only pending orders can be deleted. ${notPending.length} of the selected ` +
-        `order(s) are not pending — cancel them instead.`,
+        `Only pending or cancelled orders can be deleted. ${notDeletable.length} of the ` +
+        `selected order(s) are still active — cancel them first.`,
     };
   }
 
@@ -912,12 +915,13 @@ export async function deleteOrder(orderId: string): Promise<DeleteOrderResult> {
     .limit(1);
   if (!row) return { ok: false, error: "Order not found." };
 
-  // Only PENDING orders may be deleted (2026-06-14). Anything further along must
-  // be CANCELLED instead — preserves the financial/audit trail.
-  if (row.status !== "pending") {
+  // Only PENDING or CANCELLED orders may be deleted (2026-06-17). Anything still
+  // active in between must be CANCELLED first — preserves the financial/audit
+  // trail until the order is explicitly cancelled.
+  if (row.status !== "pending" && row.status !== "cancelled") {
     return {
       ok: false,
-      error: "Only pending orders can be deleted — cancel this order instead.",
+      error: "Only pending or cancelled orders can be deleted — cancel this order first.",
     };
   }
 
