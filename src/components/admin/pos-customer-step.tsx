@@ -227,7 +227,11 @@ export const PosCustomerStep = forwardRef<PosCustomerStepHandle, Props>(function
   }
 
   const inputClass =
-    "w-full min-h-[48px] rounded-[4px] border-2 border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:border-[#0080ff] transition-colors";
+    "w-full min-h-[48px] rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:border-[#0080ff] focus:ring-2 focus:ring-[#0080ff26] transition-colors";
+
+  // Section heading inside the new-customer card
+  const sectionLabel =
+    "flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-500";
 
   return (
     <div className="space-y-5">
@@ -365,153 +369,176 @@ export const PosCustomerStep = forwardRef<PosCustomerStepHandle, Props>(function
         </div>
       ) : null}
 
-      {/* ── Address form (new customer, or autofilled from returning) ── */}
+      {/* ── New-customer details (or autofilled from returning) ── */}
       {tab === "new" ? (
-        <div className="grid gap-4 md:grid-cols-2">
-          {/* Full name */}
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Full name <span className="text-red-600">*</span>
-            </label>
-            <div className="relative">
-              <User
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                aria-hidden
-              />
-              <input
-                className={inputClass + " pl-9"}
-                required
-                value={customerForm.name}
-                onChange={(e) => setField("name", e.target.value)}
-                placeholder="Ali Hassan"
-                aria-label="Customer full name"
-              />
-            </div>
-          </div>
-
-          {/* Phone */}
-          <div>
-            <PhoneInput
-              label="Phone"
-              required
-              value={customerForm.phone}
-              onChange={(msisdn) => setField("phone", msisdn)}
-            />
-          </div>
-
-          {/* Email */}
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-1">
-              Email
-            </label>
-            <div className="relative">
-              <Mail
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                aria-hidden
-              />
-              <input
-                ref={emailInputRef}
-                type="email"
-                className={inputClass + " pl-9"}
-                value={customerForm.email}
-                onChange={(e) => setField("email", e.target.value)}
-                placeholder="customer@example.com"
-                aria-label="Customer email"
-              />
-            </div>
-            <p className="mt-1 text-xs text-slate-500">
-              Recommended — customer won&apos;t get order updates without it.
+        <div className="space-y-4">
+          {/* ── Contact card ── */}
+          <section
+            className="rounded-xl border-2 border-slate-200 bg-white p-4 space-y-4"
+            aria-label="Customer contact"
+          >
+            <p className={sectionLabel}>
+              <User size={14} style={{ color: "#0080ff" }} aria-hidden />
+              Contact
             </p>
-          </div>
 
-          {/* Address line 1 */}
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-1">
-              Address line 1 <span className="text-red-600">*</span>
-            </label>
-            <div className="relative">
-              <MapPin
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                aria-hidden
-              />
-              <input
-                className={inputClass + " pl-9"}
-                required
-                value={customerForm.addressLine1}
-                onChange={(e) => setField("addressLine1", e.target.value)}
-                aria-label="Address line 1"
-              />
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Full name */}
+              <div>
+                <label className="block text-sm font-semibold mb-1" style={{ color: BRAND.ink }}>
+                  Full name <span className="text-red-600">*</span>
+                </label>
+                <div className="relative">
+                  <User
+                    size={16}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                    aria-hidden
+                  />
+                  <input
+                    className={inputClass + " pl-9"}
+                    required
+                    value={customerForm.name}
+                    onChange={(e) => setField("name", e.target.value)}
+                    placeholder="Ali Hassan"
+                    aria-label="Customer full name"
+                  />
+                </div>
+              </div>
+
+              {/* Phone */}
+              <div>
+                <PhoneInput
+                  label="Phone"
+                  required
+                  value={customerForm.phone}
+                  onChange={(msisdn) => setField("phone", msisdn)}
+                />
+              </div>
+
+              {/* Email */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-semibold mb-1" style={{ color: BRAND.ink }}>
+                  Email
+                </label>
+                <div className="relative">
+                  <Mail
+                    size={16}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                    aria-hidden
+                  />
+                  <input
+                    ref={emailInputRef}
+                    type="email"
+                    className={inputClass + " pl-9"}
+                    value={customerForm.email}
+                    onChange={(e) => setField("email", e.target.value)}
+                    placeholder="customer@example.com"
+                    aria-label="Customer email"
+                  />
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  Recommended — customer won&apos;t get order updates without it.
+                </p>
+              </div>
             </div>
-          </div>
+          </section>
 
-          {/* Address line 2 */}
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium mb-1">
-              Address line 2
-            </label>
-            <input
-              className={inputClass}
-              value={customerForm.addressLine2}
-              onChange={(e) => setField("addressLine2", e.target.value)}
-              aria-label="Address line 2"
-            />
-          </div>
+          {/* ── Delivery address card ── */}
+          <section
+            className="rounded-xl border-2 border-slate-200 bg-white p-4 space-y-4"
+            aria-label="Delivery address"
+          >
+            <p className={sectionLabel}>
+              <MapPin size={14} style={{ color: "#0080ff" }} aria-hidden />
+              Delivery address
+            </p>
 
-          {/* City */}
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              City <span className="text-red-600">*</span>
-            </label>
-            <input
-              className={inputClass}
-              required
-              value={customerForm.city}
-              onChange={(e) => setField("city", e.target.value)}
-              aria-label="City"
-            />
-          </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Address line 1 */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-semibold mb-1" style={{ color: BRAND.ink }}>
+                  Address line 1 <span className="text-red-600">*</span>
+                </label>
+                <input
+                  className={inputClass}
+                  required
+                  value={customerForm.addressLine1}
+                  onChange={(e) => setField("addressLine1", e.target.value)}
+                  placeholder="No. 12, Jalan Bunga"
+                  aria-label="Address line 1"
+                />
+              </div>
 
-          {/* State */}
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              State <span className="text-red-600">*</span>
-            </label>
-            <select
-              className={inputClass}
-              required
-              value={customerForm.state}
-              onChange={(e) =>
-                setField("state", e.target.value as (typeof MALAYSIAN_STATES)[number])
-              }
-              aria-label="State"
-            >
-              {MALAYSIAN_STATES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </div>
+              {/* Address line 2 */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-semibold mb-1" style={{ color: BRAND.ink }}>
+                  Address line 2
+                </label>
+                <input
+                  className={inputClass}
+                  value={customerForm.addressLine2}
+                  onChange={(e) => setField("addressLine2", e.target.value)}
+                  placeholder="Unit, floor, landmark (optional)"
+                  aria-label="Address line 2"
+                />
+              </div>
 
-          {/* Postcode */}
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Postcode <span className="text-red-600">*</span>
-            </label>
-            <input
-              className={inputClass + " font-mono"}
-              required
-              maxLength={5}
-              pattern="\d{5}"
-              value={customerForm.postcode}
-              onChange={(e) => setField("postcode", e.target.value)}
-              placeholder="50000"
-              aria-label="Postcode"
-            />
-          </div>
+              {/* City */}
+              <div>
+                <label className="block text-sm font-semibold mb-1" style={{ color: BRAND.ink }}>
+                  City <span className="text-red-600">*</span>
+                </label>
+                <input
+                  className={inputClass}
+                  required
+                  value={customerForm.city}
+                  onChange={(e) => setField("city", e.target.value)}
+                  placeholder="Kuala Lumpur"
+                  aria-label="City"
+                />
+              </div>
+
+              {/* Postcode */}
+              <div>
+                <label className="block text-sm font-semibold mb-1" style={{ color: BRAND.ink }}>
+                  Postcode <span className="text-red-600">*</span>
+                </label>
+                <input
+                  className={inputClass + " font-mono"}
+                  required
+                  maxLength={5}
+                  pattern="\d{5}"
+                  inputMode="numeric"
+                  value={customerForm.postcode}
+                  onChange={(e) => setField("postcode", e.target.value)}
+                  placeholder="50000"
+                  aria-label="Postcode"
+                />
+              </div>
+
+              {/* State */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-semibold mb-1" style={{ color: BRAND.ink }}>
+                  State <span className="text-red-600">*</span>
+                </label>
+                <select
+                  className={inputClass}
+                  required
+                  value={customerForm.state}
+                  onChange={(e) =>
+                    setField("state", e.target.value as (typeof MALAYSIAN_STATES)[number])
+                  }
+                  aria-label="State"
+                >
+                  {MALAYSIAN_STATES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </section>
         </div>
       ) : null}
 

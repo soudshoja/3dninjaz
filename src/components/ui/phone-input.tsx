@@ -30,6 +30,7 @@
 import { type ReactNode, useEffect, useId, useState } from "react";
 import { COUNTRY_CODES, DEFAULT_DIAL } from "@/lib/country-codes";
 import { sanitizeToMsisdn, splitMsisdn, formatNational } from "@/lib/phone";
+import { DialCodePicker } from "@/components/ui/dial-code-picker";
 import { BRAND } from "@/lib/brand";
 
 // All dial codes (deduplicated by dial string for the splitMsisdn lookup)
@@ -76,8 +77,7 @@ export function PhoneInput({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
-  function handleDialChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const newDial = e.target.value;
+  function handleDialChange(newDial: string) {
     setSelectedDial(newDial);
     // Re-sanitize with the new dial code
     const result = sanitizeToMsisdn(nationalRaw, newDial);
@@ -152,11 +152,6 @@ export function PhoneInput({
   const ringNormal = "focus:ring-[#1E8BFF40]";
   const ringError = "border-red-500 focus:ring-red-300 bg-red-50";
 
-  const selectCls = [
-    "shrink-0 rounded-xl border-2 px-2 py-3 min-h-[48px] focus:outline-none focus:ring-2 bg-white transition-colors text-sm cursor-pointer pr-6",
-    showError ? ringError : ringNormal,
-  ].join(" ");
-
   const inputCls = [inputBase, showError ? ringError : ringNormal].join(" ");
 
   return (
@@ -175,20 +170,12 @@ export function PhoneInput({
       ) : null}
 
       <div className="flex gap-2 items-stretch">
-        {/* Country-code selector */}
-        <select
-          aria-label="Country code"
+        {/* Compact searchable country-code selector */}
+        <DialCodePicker
           value={selectedDial}
           onChange={handleDialChange}
-          className={selectCls}
-          style={showError ? borderError : borderNormal}
-        >
-          {COUNTRY_CODES.map((c) => (
-            <option key={`${c.iso2}-${c.dial}`} value={c.dial}>
-              {c.name} +{c.dial}
-            </option>
-          ))}
-        </select>
+          error={!!showError}
+        />
 
         {/* National number input */}
         <input
