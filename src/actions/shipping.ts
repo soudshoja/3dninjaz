@@ -907,6 +907,13 @@ async function _bookShipmentInternal(
       consignmentNo: details?.consignmentNo ?? null,
     };
   } catch (e) {
+    // Log the real Delyva failure — the catch only RETURNS the message to the
+    // UI, so without this the booking error never reaches app.log and is
+    // impossible to diagnose server-side.
+    console.error(
+      `[bookShipment] booking failed order=${orderId} service=${serviceCode}:`,
+      e instanceof DelyvaError ? `${e.code}: ${e.message}` : (e as Error).message,
+    );
     if (e instanceof DelyvaError)
       return { ok: false, error: `${e.code}: ${e.message}` };
     return { ok: false, error: (e as Error).message };
@@ -1032,13 +1039,20 @@ export async function cancelShipment(
  */
 export async function rebookShipment(
   orderId: string,
+  override?: {
+    serviceCode?: string | null;
+    serviceName?: string | null;
+    quotedPrice?: string | null;
+  },
 ): Promise<
   | { ok: true; consignmentNo: string | null }
   | { ok: false; error: string }
 > {
   await requireAdmin();
 
-  // Need the order's courier service to re-book the same way.
+  // Need the order's courier service to re-book. When the admin picked a
+  // DIFFERENT courier in the panel, `override.serviceCode` wins and is
+  // persisted onto the order so the order + future labels reflect the switch.
   const orderRows = await db
     .select()
     .from(orders)
@@ -1046,7 +1060,8 @@ export async function rebookShipment(
     .limit(1);
   if (orderRows.length === 0) return { ok: false, error: "Order not found" };
   const order = orderRows[0];
-  if (!order.shippingServiceCode) {
+  const serviceCode = override?.serviceCode || order.shippingServiceCode;
+  if (!serviceCode) {
     return {
       ok: false,
       error:
@@ -1074,9 +1089,24 @@ export async function rebookShipment(
     await db.delete(orderShipments).where(eq(orderShipments.orderId, orderId));
   }
 
-  // Re-book the same service silently (no customer notification).
-  const res = await _bookShipmentInternal(orderId, order.shippingServiceCode, {
-    quotedPrice: order.shippingQuotedPrice ?? null,
+  // If the admin switched couriers, persist the new service onto the order
+  // BEFORE re-booking, so the order record + _bookShipmentInternal's notify
+  // copy reflect the chosen courier.
+  const switching = !!override?.serviceCode && override.serviceCode !== order.shippingServiceCode;
+  if (switching) {
+    await db
+      .update(orders)
+      .set({
+        shippingServiceCode: override!.serviceCode!,
+        shippingServiceName: override?.serviceName ?? order.shippingServiceName,
+        shippingQuotedPrice: override?.quotedPrice ?? order.shippingQuotedPrice,
+      })
+      .where(eq(orders.id, orderId));
+  }
+
+  // Re-book silently (no customer notification) on the chosen service.
+  const res = await _bookShipmentInternal(orderId, serviceCode, {
+    quotedPrice: override?.quotedPrice ?? order.shippingQuotedPrice ?? null,
     notify: false,
   });
   if (!res.ok) return res;
