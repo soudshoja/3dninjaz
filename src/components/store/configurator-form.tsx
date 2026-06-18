@@ -121,7 +121,7 @@ function TextField({
           value={value}
           onChange={handleChange}
           maxLength={maxLen}
-          placeholder="Enter your text…"
+          placeholder={cfg.placeholder?.trim() || "Enter your text…"}
           className="w-full px-5 py-4 rounded-2xl text-lg font-bold tracking-widest uppercase outline-none transition-all duration-200"
           style={{
             minHeight: 56,
@@ -424,7 +424,7 @@ function SelectField({
               value={customValue}
               onChange={handleCustomTextChange}
               maxLength={maxLen}
-              placeholder="Type your text here…"
+              placeholder={selectedOpt?.customPlaceholder?.trim() || "Type your text here…"}
               aria-required
               aria-label={`${field.label} — your text`}
               aria-invalid={customTextError ? "true" : undefined}
