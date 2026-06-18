@@ -30,6 +30,11 @@ export type TextFieldConfig = {
   allowedChars: string;
   uppercase: boolean;
   profanityCheck: boolean;
+  /**
+   * Admin-editable placeholder shown inside the customer's empty input
+   * (e.g. "Put your link here"). Falls back to a generic prompt when unset.
+   */
+  placeholder?: string;
 };
 
 /** D-03 — number field config */
@@ -74,6 +79,12 @@ export type SelectFieldConfig = {
      * input. Defaults to 30 when absent. Schema enforces 1–200.
      */
     customMaxLength?: number;
+    /**
+     * Admin-editable placeholder for the custom-text input revealed when this
+     * option is selected (e.g. "Put your link here"). Falls back to a generic
+     * prompt when unset.
+     */
+    customPlaceholder?: string;
   }>;
 };
 
@@ -127,6 +138,7 @@ export const TextFieldConfigSchema: z.ZodType<TextFieldConfig> = z.object({
   allowedChars: z.string().min(1),
   uppercase: z.boolean(),
   profanityCheck: z.boolean(),
+  placeholder: z.string().max(80).optional(),
 });
 
 export const NumberFieldConfigSchema: z.ZodType<NumberFieldConfig> = z.object({
@@ -156,6 +168,8 @@ export const SelectFieldConfigSchema: z.ZodType<SelectFieldConfig> = z.object({
         customInput: z.boolean().optional(),
         /** quick task 260610-kh3 — character cap for custom-text input (1–200) */
         customMaxLength: z.number().int().min(1).max(200).optional(),
+        /** admin-editable placeholder for the custom-text input */
+        customPlaceholder: z.string().max(80).optional(),
       }),
     )
     .min(1),
