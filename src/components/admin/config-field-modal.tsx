@@ -96,6 +96,20 @@ export function TextConfigForm({
   return (
     <div className="space-y-3">
       <div className="space-y-1">
+        <Label htmlFor="textPlaceholder">Placeholder (shown inside the empty box)</Label>
+        <Input
+          id="textPlaceholder"
+          value={value.placeholder ?? ""}
+          onChange={(e) => onChange({ ...value, placeholder: e.target.value || undefined })}
+          placeholder="e.g. Put your link here"
+          className="h-9"
+          maxLength={80}
+        />
+        <p className="text-xs text-muted-foreground">
+          The grey prompt the customer sees before typing. Leave blank for the default.
+        </p>
+      </div>
+      <div className="space-y-1">
         <Label htmlFor="maxLength">Max length</Label>
         <Input
           id="maxLength"
@@ -306,6 +320,8 @@ type SelectOption = {
   customInput?: boolean;
   /** quick task 260610-kh3 — character cap for the custom-text input (1–200) */
   customMaxLength?: number;
+  /** admin-editable placeholder for the custom-text input */
+  customPlaceholder?: string;
 };
 
 // Internal per-option image button — 40×40 square.
@@ -692,40 +708,57 @@ export function SelectConfigForm({
           </div>
 
           {/* quick task 260610-kh3 — per-option "Customer types text" sub-row */}
-          <div className="flex items-center gap-3 mt-1.5 pl-1">
-            <Switch
-              id={`customInput-${i}`}
-              checked={opt.customInput ?? false}
-              onCheckedChange={(v) =>
-                updateOption(i, v
-                  ? { customInput: true, customMaxLength: opt.customMaxLength ?? 30 }
-                  : { customInput: false, customMaxLength: undefined })
-              }
-            />
-            <Label
-              htmlFor={`customInput-${i}`}
-              className="text-xs cursor-pointer text-zinc-500 select-none"
-            >
-              Customer types text
-            </Label>
+          <div className="mt-1.5 pl-1 space-y-2">
+            <div className="flex items-center gap-3">
+              <Switch
+                id={`customInput-${i}`}
+                checked={opt.customInput ?? false}
+                onCheckedChange={(v) =>
+                  updateOption(i, v
+                    ? { customInput: true, customMaxLength: opt.customMaxLength ?? 30 }
+                    : { customInput: false, customMaxLength: undefined, customPlaceholder: undefined })
+                }
+              />
+              <Label
+                htmlFor={`customInput-${i}`}
+                className="text-xs cursor-pointer text-zinc-500 select-none"
+              >
+                Customer types text
+              </Label>
+              {opt.customInput && (
+                <div className="flex items-center gap-1.5 ml-2">
+                  <Label className="text-xs text-zinc-400 whitespace-nowrap">Max length</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={200}
+                    value={opt.customMaxLength ?? 30}
+                    onChange={(e) =>
+                      updateOption(i, {
+                        customMaxLength:
+                          e.target.value === ""
+                            ? 30
+                            : Math.min(200, Math.max(1, Math.round(Number(e.target.value)))),
+                      })
+                    }
+                    className="h-7 w-16 text-xs"
+                    aria-label={`Option ${i + 1} custom text max length`}
+                  />
+                </div>
+              )}
+            </div>
             {opt.customInput && (
-              <div className="flex items-center gap-1.5 ml-2">
-                <Label className="text-xs text-zinc-400 whitespace-nowrap">Max length</Label>
+              <div className="flex items-center gap-1.5">
+                <Label className="text-xs text-zinc-400 whitespace-nowrap">Placeholder</Label>
                 <Input
-                  type="number"
-                  min={1}
-                  max={200}
-                  value={opt.customMaxLength ?? 30}
+                  value={opt.customPlaceholder ?? ""}
                   onChange={(e) =>
-                    updateOption(i, {
-                      customMaxLength:
-                        e.target.value === ""
-                          ? 30
-                          : Math.min(200, Math.max(1, Math.round(Number(e.target.value)))),
-                    })
+                    updateOption(i, { customPlaceholder: e.target.value || undefined })
                   }
-                  className="h-7 w-16 text-xs"
-                  aria-label={`Option ${i + 1} custom text max length`}
+                  placeholder="e.g. Put your link here"
+                  className="h-7 text-xs flex-1"
+                  maxLength={80}
+                  aria-label={`Option ${i + 1} custom text placeholder`}
                 />
               </div>
             )}
