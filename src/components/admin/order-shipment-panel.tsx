@@ -61,6 +61,9 @@ export function OrderShipmentPanel({ orderId, shipment, tracking }: Props) {
   const [quoteErr, setQuoteErr] = useState<string | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [selectedCode, setSelectedCode] = useState<string>("");
+  // When true, the existing-shipment view shows the courier picker so the
+  // admin can rebook on a DIFFERENT service (e.g. the booked one keeps failing).
+  const [changingCourier, setChangingCourier] = useState(false);
 
   const loadQuotes = () => {
     setQuoteErr(null);
@@ -144,6 +147,40 @@ export function OrderShipmentPanel({ orderId, shipment, tracking }: Props) {
       // On success a fresh consignment is booked silently → refresh so the
       // panel shows the new consignment + Print label serves the new label.
       else router.refresh();
+    });
+  };
+
+  // Open the courier picker on the existing-shipment view and load live rates.
+  const startChangeCourier = () => {
+    setChangingCourier(true);
+    setError(null);
+    if (services === null) loadQuotes();
+  };
+
+  // Cancel current consignment + rebook on the picked (possibly different)
+  // courier. Silent — customer is not notified.
+  const rebookWithSelected = () => {
+    if (!selectedCode) return;
+    const quoted = services?.find((s) => s.serviceCode === selectedCode);
+    if (
+      !confirm(
+        `Cancel the current consignment and rebook on ${quoted?.serviceName ?? selectedCode}?\n\nThe customer is NOT notified and the order status is unchanged.`,
+      )
+    )
+      return;
+    setError(null);
+    startTransition(async () => {
+      const res = await rebookShipment(orderId, {
+        serviceCode: selectedCode,
+        serviceName: quoted?.serviceName ?? null,
+        quotedPrice: quoted ? quoted.price.toFixed(2) : null,
+      });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setChangingCourier(false);
+      router.refresh();
     });
   };
 
@@ -318,7 +355,104 @@ export function OrderShipmentPanel({ orderId, shipment, tracking }: Props) {
         >
           {pending ? "Rebooking…" : "Rebook (silent reprint)"}
         </button>
+        <button
+          type="button"
+          onClick={startChangeCourier}
+          disabled={pending}
+          className="rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-50"
+          style={{
+            backgroundColor: "transparent",
+            color: BRAND.purple,
+            border: `2px solid ${BRAND.purple}55`,
+          }}
+        >
+          Change courier & rebook
+        </button>
       </div>
+
+      {/* Courier picker — only when "Change courier & rebook" is active. Lets
+          the admin rebook on a DIFFERENT service when the current one keeps
+          failing (e.g. a courier that rejects this parcel). */}
+      {changingCourier ? (
+        <div
+          className="rounded-xl border-2 p-4 space-y-3"
+          style={{ borderColor: `${BRAND.purple}55` }}
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold" style={{ color: BRAND.ink }}>
+              Pick a different courier
+            </p>
+            <button
+              type="button"
+              onClick={() => setChangingCourier(false)}
+              className="text-xs text-slate-500 hover:text-slate-700"
+            >
+              Cancel
+            </button>
+          </div>
+
+          {quoteLoading ? (
+            <p className="text-sm text-slate-600">Fetching live rates…</p>
+          ) : quoteErr ? (
+            <div>
+              <p className="text-sm text-red-700">{quoteErr}</p>
+              <button
+                type="button"
+                onClick={loadQuotes}
+                disabled={pending}
+                className="mt-2 rounded-full px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                style={{ backgroundColor: BRAND.ink }}
+              >
+                Retry
+              </button>
+            </div>
+          ) : services && services.length === 0 ? (
+            <p className="text-sm text-slate-600">
+              Delyva returned no services for this destination.
+            </p>
+          ) : services ? (
+            <>
+              <ul className="grid gap-2 sm:grid-cols-2">
+                {services.map((s) => (
+                  <li key={s.serviceCode}>
+                    <label
+                      className="flex cursor-pointer items-center gap-3 rounded-xl border-2 p-3"
+                      style={{
+                        borderColor:
+                          selectedCode === s.serviceCode ? BRAND.blue : `${BRAND.ink}22`,
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="rebookServiceCode"
+                        value={s.serviceCode}
+                        checked={selectedCode === s.serviceCode}
+                        onChange={() => setSelectedCode(s.serviceCode)}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold truncate">{s.serviceName}</p>
+                        <p className="text-xs font-mono text-slate-500">{s.serviceCode}</p>
+                      </div>
+                      <p className="text-sm font-bold">
+                        {s.currency} {s.price.toFixed(2)}
+                      </p>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                onClick={rebookWithSelected}
+                disabled={pending || !selectedCode}
+                className="rounded-full px-6 py-3 font-bold text-white min-h-[44px] disabled:opacity-50"
+                style={{ backgroundColor: BRAND.purple }}
+              >
+                {pending ? "Rebooking…" : "Cancel current & rebook on selected"}
+              </button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
 
       {tracking ? (
         <div
