@@ -58,6 +58,23 @@ export function sanitizeToMsisdn(
 
   const national = digits.slice(dial.length);
 
+  // Malaysian mobile numbers MUST be 01X-XXXXXXX(X) — i.e. national part starts
+  // with "1" and is 9–10 digits (MSISDN 60 + 9/10 = 11/12 digits). This catches
+  // mistyped short numbers like "607024276" (national "7024276") that the old
+  // generic 6–14 rule let through, which then silently fail WhatsApp delivery
+  // (normalizeMsisdn rejects them). Other countries keep the generic rule.
+  if (dial === "60") {
+    if (!/^1\d{8,9}$/.test(national)) {
+      return {
+        ok: false,
+        msisdn: digits,
+        national,
+        error: "Enter a valid Malaysian mobile number, e.g. 012-345 6789.",
+      };
+    }
+    return { ok: true, msisdn: digits, national };
+  }
+
   if (national.length < 6 || national.length > 14) {
     return {
       ok: false,
