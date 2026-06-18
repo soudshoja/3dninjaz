@@ -249,9 +249,26 @@ export type OrderStatus = z.infer<typeof orderStatusEnum>;
  */
 const MY_PHONE = /^(\d{8,15}|[+\d\s\-()]{7,20})$/;
 
+/**
+ * Server-side guard that a stored phone is actually deliverable. Mirrors the
+ * client `sanitizeToMsisdn` MY rule so a too-short MY mobile (e.g. "607024276",
+ * which WhatsApp delivery silently drops) can't be persisted even if the client
+ * is bypassed. Malaysian MSISDNs must be 60 + 1XXXXXXXX(X); local 01X entries
+ * are also accepted; non-MY numbers keep a lenient 8–15 digit length check.
+ */
+export function isDeliverablePhone(raw: string): boolean {
+  const d = raw.replace(/\D/g, "");
+  if (d.startsWith("60")) return /^601\d{8,9}$/.test(d);
+  if (d.startsWith("0")) return /^01\d{8,9}$/.test(d);
+  return d.length >= 8 && d.length <= 15;
+}
+
 export const orderAddressSchema = z.object({
   recipientName: z.string().min(2, "Name is required").max(200),
-  phone: z.string().regex(MY_PHONE, "Enter a valid phone number"),
+  phone: z
+    .string()
+    .regex(MY_PHONE, "Enter a valid phone number")
+    .refine(isDeliverablePhone, "Enter a valid Malaysian mobile number, e.g. 012-345 6789"),
   addressLine1: z.string().min(3, "Street address is required").max(200),
   addressLine2: z.string().max(200).optional().default(""),
   city: z.string().min(2, "City is required").max(100),
@@ -313,7 +330,10 @@ export type ManualOrderOutput = z.output<typeof manualOrderSchema>;
  */
 export const addressBookSchema = z.object({
   fullName: z.string().min(2, "Full name is required").max(200),
-  phone: z.string().regex(MY_PHONE, "Enter a valid phone number"),
+  phone: z
+    .string()
+    .regex(MY_PHONE, "Enter a valid phone number")
+    .refine(isDeliverablePhone, "Enter a valid Malaysian mobile number, e.g. 012-345 6789"),
   line1: z.string().min(3, "Street address is required").max(200),
   line2: z.string().max(200).optional().nullable(),
   city: z.string().min(2, "City is required").max(100),
