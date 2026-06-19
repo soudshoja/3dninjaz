@@ -44,6 +44,32 @@ function slugify(name: string): string {
     .replace(/^-|-$/g, "");
 }
 
+// Generate a clean, title-derived slug that follows the product name.
+// products.slug is UNIQUE (schema length 220) — so when the bare title slug is
+// already taken we append -2, -3, … until free. On rename (updateProduct) the
+// product's own row is excluded so a no-op resave keeps the same slug.
+async function uniqueProductSlug(
+  name: string,
+  excludeId?: string,
+): Promise<string> {
+  // Reserve room for a "-NN" collision suffix within the 220-char column.
+  const base = (slugify(name) || "product").slice(0, 200).replace(/-$/, "");
+  let candidate = base;
+  let n = 1;
+  // Bounded loop: each iteration probes one candidate; suffix grows until free.
+  for (;;) {
+    const rows = await db
+      .select({ id: products.id })
+      .from(products)
+      .where(eq(products.slug, candidate))
+      .limit(1);
+    const clash = rows.find((r) => r.id !== excludeId);
+    if (!clash) return candidate;
+    n += 1;
+    candidate = `${base}-${n}`;
+  }
+}
+
 function toDecimalOrNull(v: string | undefined | null): string | null {
   if (!v) return null;
   const trimmed = v.toString().trim();
@@ -232,8 +258,8 @@ export async function createProduct(
     ? rawId.replace(/[^a-zA-Z0-9-]/g, "")
     : randomUUID();
 
-  const baseSlug = slugify(productData.name);
-  const slug = `${baseSlug || "product"}-${Date.now().toString(36)}`;
+  // Slug follows the product title; collision suffix only when the title clashes.
+  const slug = await uniqueProductSlug(productData.name);
 
   // When a pre-generated ID was supplied the images were already uploaded
   // directly to /uploads/products/<id>/<imageUuid>/ — no migration needed.
@@ -500,10 +526,15 @@ export async function updateProduct(
     ? productData.imagesV2
     : productData.images;
 
+  // Regenerate slug from the (possibly renamed) title; exclude this row so a
+  // resave without a title change keeps the existing slug.
+  const slug = await uniqueProductSlug(productData.name, id);
+
   await db
     .update(products)
     .set({
       name: productData.name,
+      slug,
       description: productData.description,
       images: imagesToPersist,
       thumbnailIndex: safeThumb,
