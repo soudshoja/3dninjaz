@@ -533,6 +533,57 @@ export const couponSchema = z
   });
 export type CouponInput = z.infer<typeof couponSchema>;
 
+// ============================================================================
+// Accounting — expense / asset / payout entry schemas.
+//
+// Amounts: decimal string, up to 2 places (matches DECIMAL(10,2) columns).
+// Dates: "YYYY-MM-DD" from <input type="date"> → stored as VARCHAR(10).
+// Optional text fields accept null (actions coerce form "" → null).
+// ============================================================================
+
+const accountingMoneyRe = /^\d+(\.\d{1,2})?$/;
+const accountingDateRe = /^\d{4}-\d{2}-\d{2}$/;
+
+export const expenseSchema = z.object({
+  expenseDate: z.string().regex(accountingDateRe, "Date must be YYYY-MM-DD"),
+  category: z.enum([
+    "materials",
+    "utilities",
+    "marketing",
+    "shipping",
+    "equipment",
+    "other",
+  ]),
+  note: z.string().max(500).optional().nullable(),
+  amount: z
+    .string()
+    .regex(accountingMoneyRe, "Amount: decimal with up to 2 places"),
+  paidFrom: z.enum(["paypal", "bank", "cash"]).default("bank"),
+  supplierName: z.string().max(200).optional().nullable(),
+  sourceDocUrl: z.string().max(500).optional().nullable(),
+});
+export type ExpenseInput = z.infer<typeof expenseSchema>;
+
+export const assetSchema = z.object({
+  assetDate: z.string().regex(accountingDateRe, "Date must be YYYY-MM-DD"),
+  name: z.string().min(1, "Name is required").max(200),
+  amount: z
+    .string()
+    .regex(accountingMoneyRe, "Amount: decimal with up to 2 places"),
+  note: z.string().max(500).optional().nullable(),
+});
+export type AssetInput = z.infer<typeof assetSchema>;
+
+export const payoutSchema = z.object({
+  payoutDate: z.string().regex(accountingDateRe, "Date must be YYYY-MM-DD"),
+  amount: z
+    .string()
+    .regex(accountingMoneyRe, "Amount: decimal with up to 2 places"),
+  paidInto: z.enum(["bank", "cash"]).default("bank"),
+  note: z.string().max(500).optional().nullable(),
+});
+export type PayoutInput = z.infer<typeof payoutSchema>;
+
 /**
  * Customer-side coupon redemption — only the code is supplied; the server
  * re-fetches the coupon row and re-derives the discount (T-05-03-tampering).

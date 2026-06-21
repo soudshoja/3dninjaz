@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db";
 import { paymentProofs, orders, paymentLinks } from "@/lib/db/schema";
-import { eq, isNull, count } from "drizzle-orm";
+import { eq, isNull, count, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { assertValidTransition, formatOrderNumber } from "@/lib/orders";
@@ -110,12 +110,16 @@ export async function confirmPaymentProof(
         })
         .where(eq(paymentProofs.id, proofId));
 
-      // 2. Transition order to paid, set payment method
+      // 2. Transition order to paid, set payment method + record amountPaid so
+      //    the order is counted in accounting (every other mark-paid path sets
+      //    amountPaid; without it a bank-transfer order would stay amount_paid=0
+      //    and be invisible to Sales/COGS/profit).
       await tx
         .update(orders)
         .set({
           status: "paid",
           paymentMethod: "bank_transfer",
+          amountPaid: sql`${orders.totalAmount}`,
         })
         .where(eq(orders.id, order.id));
 
