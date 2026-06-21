@@ -171,6 +171,11 @@ type OrderRow = {
   amountPaid: string | null;
   refundedAmount: string | null;
   paypalFee: string | null;
+  // The reliable "this order went through PayPal" signal. paymentMethod is
+  // unreliable (NULL on real PayPal orders whose back-fill never ran), so we
+  // key PayPal-fee expectations off the capture id. Manual/WhatsApp/bank-
+  // transfer orders have no capture and legitimately carry no PayPal fee.
+  paypalCaptureId: string | null;
   extraCost: string | null;
   shippingCost: string | null;
   createdAt: Date;
@@ -184,6 +189,7 @@ async function fetchOrderFinancials(range: DateRange) {
       amountPaid: orders.amountPaid,
       refundedAmount: orders.refundedAmount,
       paypalFee: orders.paypalFee,
+      paypalCaptureId: orders.paypalCaptureId,
       extraCost: orders.extraCost,
       shippingCost: orders.shippingCost,
       createdAt: orders.createdAt,
@@ -244,7 +250,9 @@ export async function getAccountingSummary(range: DateRange): Promise<Accounting
   for (const o of orderRows) {
     sales += toNum(o.amountPaid) - toNum(o.refundedAmount);
     cogs += (cogsByOrder.get(o.id) ?? 0) + toNum(o.extraCost);
-    if (o.paypalFee == null) missingPaypalFeeCount++;
+    // Only PayPal-captured orders are expected to have a fee. Manual/WhatsApp/
+    // bank-transfer orders have no PayPal charge — never flag them.
+    if (o.paypalCaptureId != null && o.paypalFee == null) missingPaypalFeeCount++;
     paypalFees += toNum(o.paypalFee);
     const { cost, estimated } = resolveShippingCost(
       toNum(o.shippingCost),
@@ -338,7 +346,7 @@ export async function getAccountBalances(): Promise<AccountBalances> {
     .select({
       paypalNet: sql<string>`COALESCE(SUM(${orders.paypalNet}), 0)`,
       refunds: sql<string>`COALESCE(SUM(${orders.refundedAmount}), 0)`,
-      netMissing: sql<number>`SUM(CASE WHEN ${orders.paypalNet} IS NULL THEN 1 ELSE 0 END)`,
+      netMissing: sql<number>`SUM(CASE WHEN ${orders.paypalCaptureId} IS NOT NULL AND ${orders.paypalNet} IS NULL THEN 1 ELSE 0 END)`,
     })
     .from(orders)
     .where(sql`CAST(${orders.amountPaid} AS DECIMAL(10,2)) > 0`);
