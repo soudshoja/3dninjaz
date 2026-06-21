@@ -65,6 +65,7 @@ const GROUPS: NavGroup[] = [
         ninjaIcon: "secure",
         badge: "reconDriftCount",
       },
+      { href: "/admin/accounting", label: "Accounting", ninjaIcon: "secure" },
     ],
   },
   {

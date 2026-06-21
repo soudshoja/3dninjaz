@@ -759,6 +759,10 @@ export async function capturePayPalOrder({
   // repeat calls return ORDER_ALREADY_CAPTURED which we map to success below.
   let captureId: string | null = null;
   let captureStatus = "";
+  // Capture the PayPal fee/net at capture time so accounting reports are correct
+  // immediately (otherwise they stay NULL until an admin opens the payment page).
+  let paypalFeeValue: string | null = null;
+  let paypalNetValue: string | null = null;
   // Plan 05-03: pull the customId we set in createPayPalOrder so we know
   // which coupon (if any) to redeem after capture succeeds.
   let appliedCouponCode: string | null = null;
@@ -774,6 +778,16 @@ export async function capturePayPalOrder({
     const capture = order?.purchaseUnits?.[0]?.payments?.captures?.[0];
     captureId = capture?.id ?? null;
     captureStatus = capture?.status ?? "";
+    // seller_receivable_breakdown is present on the capture when we request
+    // prefer=return=representation — no extra API call needed.
+    const recv = (capture as {
+      sellerReceivableBreakdown?: {
+        paypalFee?: { value?: string };
+        netAmount?: { value?: string };
+      };
+    })?.sellerReceivableBreakdown;
+    paypalFeeValue = recv?.paypalFee?.value ?? null;
+    paypalNetValue = recv?.netAmount?.value ?? null;
     const customId = order?.purchaseUnits?.[0]?.customId ?? null;
     if (customId && customId.startsWith("COUPON:")) {
       appliedCouponCode = customId.slice("COUPON:".length);
@@ -819,7 +833,15 @@ export async function capturePayPalOrder({
   // capture time, so a later admin item-add shows a balance due.
   await db
     .update(orders)
-    .set({ status: "paid", paypalCaptureId: captureId, amountPaid: existing.totalAmount })
+    .set({
+      status: "paid",
+      paypalCaptureId: captureId,
+      amountPaid: existing.totalAmount,
+      // May be null if PayPal omitted the breakdown; the payment page lazily
+      // back-fills later in that case.
+      paypalFee: paypalFeeValue,
+      paypalNet: paypalNetValue,
+    })
     .where(eq(orders.id, existing.id));
 
   // For guest orders with a placeholder/blank email: back-fill customerEmail
