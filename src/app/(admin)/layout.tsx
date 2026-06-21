@@ -46,6 +46,7 @@ const MOBILE_CHIPS = [
   { href: "/admin/payments", label: "Payments" },
   { href: "/admin/disputes", label: "Disputes" },
   { href: "/admin/recon", label: "Reconciliation" },
+  { href: "/admin/accounting", label: "Accounting" },
   { href: "/admin/users", label: "Customers" },
   { href: "/admin/coupons", label: "Coupons" },
   { href: "/admin/fonts", label: "Fonts" },

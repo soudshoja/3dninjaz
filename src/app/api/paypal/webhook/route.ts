@@ -161,6 +161,10 @@ export async function POST(req: NextRequest) {
       seller_payable_breakdown?: {
         total_refunded_amount?: { value?: string; currency_code?: string };
       };
+      seller_receivable_breakdown?: {
+        paypal_fee?: { value?: string; currency_code?: string };
+        net_amount?: { value?: string; currency_code?: string };
+      };
     };
   };
   try {
@@ -241,10 +245,19 @@ export async function POST(req: NextRequest) {
       });
       if (existing && !existing.paypalCaptureId) {
         // Idempotent reconciliation (D3-09, T-03-13): only write if we
-        // have not already captured via the user-facing path.
+        // have not already captured via the user-facing path. Also record
+        // amountPaid + PayPal fee/net so accounting counts webhook-only
+        // captured orders correctly (the resource carries the breakdown).
+        const recv = event.resource?.seller_receivable_breakdown;
         await db
           .update(orders)
-          .set({ status: "paid", paypalCaptureId: captureId })
+          .set({
+            status: "paid",
+            paypalCaptureId: captureId,
+            amountPaid: existing.totalAmount,
+            paypalFee: recv?.paypal_fee?.value ?? null,
+            paypalNet: recv?.net_amount?.value ?? null,
+          })
           .where(eq(orders.id, existing.id));
       }
     }
