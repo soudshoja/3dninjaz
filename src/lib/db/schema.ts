@@ -2142,3 +2142,83 @@ export const customFonts = mysqlTable("custom_fonts", {
 });
 
 export type CustomFont = typeof customFonts.$inferSelect;
+
+// ============================================================================
+// Accounting tables — expenses, assets, payouts.
+//
+// Simple cash-basis bookkeeping. Sales/COGS/shipping/fees are derived from
+// existing paid orders (see src/lib/accounting.ts); these three tables hold the
+// manually-entered side: business expenses, one-off assets (register only —
+// EXCLUDED from profit), and PayPal→Bank/Cash withdrawals (payouts).
+//
+// Standalone — no FKs into orders. App-generated UUIDs (crypto.randomUUID).
+// Entry dates are VARCHAR(10) "YYYY-MM-DD" (admin picks via <input type=date>);
+// compared lexicographically (= chronological) so no Date() coercion in WHERE.
+// ============================================================================
+
+export const expenseCategoryValues = [
+  "materials",
+  "utilities",
+  "marketing",
+  "shipping",
+  "equipment",
+  "other",
+] as const;
+
+export const accountValues = ["paypal", "bank", "cash"] as const;
+
+export const expenses = mysqlTable(
+  "expenses",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    expenseDate: varchar("expense_date", { length: 10 }).notNull(), // YYYY-MM-DD
+    category: mysqlEnum("category", expenseCategoryValues).notNull(),
+    note: varchar("note", { length: 500 }),
+    amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+    paidFrom: mysqlEnum("paid_from", accountValues).notNull().default("bank"),
+    supplierName: varchar("supplier_name", { length: 200 }),
+    // Relative URL to the archived invoice/receipt (PDF or image) when the
+    // expense was created via invoice import. NULL for hand-entered rows.
+    sourceDocUrl: varchar("source_doc_url", { length: 500 }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({
+    dateIdx: index("idx_expenses_date").on(t.expenseDate),
+    categoryIdx: index("idx_expenses_category").on(t.category),
+  }),
+);
+
+export const assets = mysqlTable(
+  "assets",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    assetDate: varchar("asset_date", { length: 10 }).notNull(),
+    name: varchar("name", { length: 200 }).notNull(),
+    amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+    note: varchar("note", { length: 500 }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({ dateIdx: index("idx_assets_date").on(t.assetDate) }),
+);
+
+export const payouts = mysqlTable(
+  "payouts",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    payoutDate: varchar("payout_date", { length: 10 }).notNull(),
+    amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+    // Money leaves PayPal and lands here — models a PayPal→Bank/Cash transfer.
+    // Gives the Bank/Cash balances an inflow source.
+    paidInto: mysqlEnum("paid_into", ["bank", "cash"]).notNull().default("bank"),
+    note: varchar("note", { length: 500 }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({ dateIdx: index("idx_payouts_date").on(t.payoutDate) }),
+);
+
+export type Expense = typeof expenses.$inferSelect;
+export type Asset = typeof assets.$inferSelect;
+export type Payout = typeof payouts.$inferSelect;
