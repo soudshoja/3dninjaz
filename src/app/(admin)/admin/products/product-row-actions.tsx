@@ -3,11 +3,12 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MoreHorizontal, Star, Edit, Trash2, Eye, EyeOff, Layers } from "lucide-react";
+import { MoreHorizontal, Star, Edit, Trash2, Eye, EyeOff, Layers, Copy } from "lucide-react";
 import {
   deleteProduct,
   toggleProductActive,
   toggleProductFeatured,
+  duplicateProduct,
 } from "@/actions/products";
 import { Button } from "@/components/ui/button";
 import {
@@ -63,6 +64,23 @@ export function ProductRowActions({
     });
   }
 
+  function handleDuplicate() {
+    startTransition(async () => {
+      const res = await duplicateProduct(id);
+      if ("success" in res && res.success && res.productId) {
+        router.push(`/admin/products/${res.productId}/edit`);
+      } else {
+        window.alert(
+          typeof res === "object" && "error" in res
+            ? typeof res.error === "string"
+              ? res.error
+              : "Failed to duplicate product"
+            : "Failed to duplicate product",
+        );
+      }
+    });
+  }
+
   return (
     <>
       <DropdownMenu>
@@ -107,6 +125,10 @@ export function ProductRowActions({
               }`}
             />
             {isFeatured ? "Unfeature" : "Feature"}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleDuplicate}>
+            <Copy className="mr-2 h-4 w-4" />
+            Duplicate
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
