@@ -56,6 +56,8 @@ type Props = {
     category: { name: string; slug: string } | null;
     pictures?: PictureData[];
     productType?: "stocked" | "configurable" | "keychain" | "vending" | "simple";
+    /** Quick task 260705-azw — keychain preview body shape (default "square"). */
+    keychainShape?: "square" | "round";
   };
   fields: PublicConfigField[];
   maxUnitCount: number | null;
@@ -411,6 +413,7 @@ export function ConfigurableProductView({
               ? "YOURTEXT"
               : ""
           }
+          shape={product.keychainShape ?? "square"}
         />
       )}
     </div>
@@ -563,6 +566,7 @@ export function ConfigurableProductView({
                           ? "YOURTEXT"
                           : ""
                       }
+                      shape={product.keychainShape ?? "square"}
                     />
                   </div>
                 </div>
