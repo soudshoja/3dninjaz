@@ -165,7 +165,7 @@ export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLengt
                   background: clickerHex,
                   boxShadow: `inset 2px 2px 4px rgba(255,255,255,0.38),
                                inset -2px -2px 4px rgba(0,0,0,0.14)`,
-                  border: shape === "round" ? `4px solid ${letterHex}` : "none",
+                  border: shape === "round" ? `2px solid ${letterHex}` : "none",
                   boxSizing: "border-box",
                 }}
               />
