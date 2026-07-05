@@ -6,6 +6,8 @@ import {
   products,
   productVariants,
   productConfigFields,
+  productOptions,
+  productOptionValues,
   categories,
   subcategories,
 } from "@/lib/db/schema";
@@ -16,7 +18,7 @@ import { productSchema, type ProductInput } from "@/lib/validators";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { computeVariantCost } from "@/lib/cost-breakdown";
 import { getStoreSettingsCached } from "@/lib/store-settings";
-import { ensureImagesV2 } from "@/lib/config-fields";
+import { ensureImagesV2, ensureConfigJson, type SelectFieldConfig } from "@/lib/config-fields";
 import { seedKeychainFields } from "@/lib/keychain-fields";
 import { seedVendingFields } from "@/lib/vending-fields";
 // Quick task 260430-kmr — sanitise description HTML on every save (defence-in-depth).
@@ -27,7 +29,8 @@ import {
   deleteConfigField,
   reorderConfigFields,
 } from "@/actions/configurator";
-import { migrateNewImages } from "@/lib/storage";
+import { migrateNewImages, copyProductImages } from "@/lib/storage";
+import { generateVariantSku } from "@/lib/sku";
 import type { FieldType, AnyFieldConfig } from "@/lib/config-fields";
 
 export type ProductActionResult =
@@ -339,6 +342,8 @@ export async function createProduct(
     productType: productData.productType ?? "stocked",
     // Bug 3 — hide flat-rate price pill on storefront PDP.
     hideBasePrice: productData.hideBasePrice ?? false,
+    // Quick task 260705-azw — keychain preview body shape.
+    keychainShape: productData.keychainShape ?? "square",
   });
 
   if (variants.length > 0) {
@@ -548,6 +553,8 @@ export async function updateProduct(
       productType: productData.productType ?? "stocked",
       // Bug 3 — hide flat-rate price pill on storefront PDP.
       hideBasePrice: productData.hideBasePrice ?? false,
+      // Quick task 260705-azw — keychain preview body shape.
+      keychainShape: productData.keychainShape ?? "square",
     })
     .where(eq(products.id, id));
 
@@ -845,4 +852,293 @@ export async function getProducts() {
       ? subcategoryById.get(p.subcategoryId) ?? null
       : null,
   }));
+}
+
+// ============================================================================
+// Quick task 260705-dw2 — Duplicate product
+// ============================================================================
+
+/**
+ * Clone every product_config_fields row from sourceId to destId with fresh
+ * ids. Select-field per-option images are physically copied + rewritten too.
+ * Returns a Map<oldFieldId, newFieldId> so callers can remap pointers
+ * (e.g. products.unitField) after the clone.
+ *
+ * Does NOT call seedKeychainFields/seedVendingFields — those would create
+ * duplicate rows. Keychain/vending/simple/configurable config fields are all
+ * plain productConfigFields rows and are covered by this single clone path.
+ */
+async function cloneConfigFields(
+  sourceId: string,
+  destId: string,
+): Promise<Map<string, string>> {
+  const rows = await db
+    .select()
+    .from(productConfigFields)
+    .where(eq(productConfigFields.productId, sourceId));
+
+  const map = new Map<string, string>();
+
+  for (const row of rows) {
+    const newFieldId = randomUUID();
+
+    let configJsonToPersist: string | null = row.configJson;
+    if (row.fieldType === "select") {
+      try {
+        const parsed = ensureConfigJson(row.fieldType, row.configJson) as SelectFieldConfig;
+        const rewrittenOptions = await Promise.all(
+          parsed.options.map(async (opt) => {
+            if (!opt.imageUrl) return opt;
+            const [copiedUrl] = await copyProductImages(sourceId, destId, [opt.imageUrl]);
+            return { ...opt, imageUrl: copiedUrl ?? opt.imageUrl };
+          }),
+        );
+        configJsonToPersist = JSON.stringify({ options: rewrittenOptions });
+      } catch (err) {
+        console.error(
+          `[cloneConfigFields] failed to parse/rewrite select configJson for field ${row.id}:`,
+          err,
+        );
+        // Fall back to copying configJson verbatim rather than dropping it.
+        configJsonToPersist = row.configJson;
+      }
+    }
+
+    await db.insert(productConfigFields).values({
+      id: newFieldId,
+      productId: destId,
+      position: row.position,
+      fieldType: row.fieldType,
+      label: row.label,
+      helpText: row.helpText,
+      required: row.required,
+      locked: row.locked,
+      configJson: configJsonToPersist,
+    });
+
+    map.set(row.id, newFieldId);
+  }
+
+  return map;
+}
+
+/**
+ * Clone the options -> values -> variants tree from sourceId to destId.
+ * Only meaningfully populated for stocked products, but safe to run for any
+ * productType — it no-ops when there are no options/variants.
+ *
+ * Every cloned variant gets a FRESH, batch-unique SKU (never the source
+ * SKU string) derived from the remapped option-value labels + destSlug.
+ * Variant-level imageUrl is physically copied via copyProductImages.
+ */
+async function cloneVariantTree(
+  sourceId: string,
+  destId: string,
+  destSlug: string,
+): Promise<void> {
+  // 1. Options
+  const opts = await db
+    .select()
+    .from(productOptions)
+    .where(eq(productOptions.productId, sourceId));
+
+  const optionIdMap = new Map<string, string>();
+  for (const opt of opts) {
+    const newOptionId = randomUUID();
+    await db.insert(productOptions).values({
+      id: newOptionId,
+      productId: destId,
+      name: opt.name,
+      position: opt.position,
+    });
+    optionIdMap.set(opt.id, newOptionId);
+  }
+
+  if (opts.length === 0) return;
+
+  // 2. Values
+  const values = await db
+    .select()
+    .from(productOptionValues)
+    .where(inArray(productOptionValues.optionId, opts.map((o) => o.id)));
+
+  const valueIdMap = new Map<string, string>();
+  // Keep the original value row around for cloned-variant SKU/label lookups.
+  const clonedValueById = new Map<string, typeof values[number]>();
+
+  for (const val of values) {
+    const newValueId = randomUUID();
+    const newOptionId = optionIdMap.get(val.optionId);
+    if (!newOptionId) continue; // defensive — should not happen
+    await db.insert(productOptionValues).values({
+      id: newValueId,
+      optionId: newOptionId,
+      value: val.value,
+      position: val.position,
+      swatchHex: val.swatchHex,
+      colorId: val.colorId,
+    });
+    valueIdMap.set(val.id, newValueId);
+    clonedValueById.set(val.id, val);
+  }
+
+  // 3. Variants
+  const vars = await db
+    .select()
+    .from(productVariants)
+    .where(eq(productVariants.productId, sourceId));
+
+  const usedSkus = new Set<string>();
+
+  for (const v of vars) {
+    const oldValueIds = [
+      v.option1ValueId,
+      v.option2ValueId,
+      v.option3ValueId,
+      v.option4ValueId,
+      v.option5ValueId,
+      v.option6ValueId,
+    ];
+    const newValueIds = oldValueIds.map((id) => (id ? valueIdMap.get(id) ?? null : null));
+    const labelParts = oldValueIds.map((id) => (id ? clonedValueById.get(id)?.value ?? null : null));
+
+    let newImageUrl: string | null = v.imageUrl;
+    if (v.imageUrl) {
+      const [copied] = await copyProductImages(sourceId, destId, [v.imageUrl]);
+      newImageUrl = copied ?? v.imageUrl;
+    }
+
+    const base = generateVariantSku(destSlug, labelParts);
+    let sku = base;
+    let n = 2;
+    while (usedSkus.has(sku)) {
+      sku = `${base}-${n}`;
+      n += 1;
+    }
+    usedSkus.add(sku);
+
+    await db.insert(productVariants).values({
+      id: randomUUID(),
+      productId: destId,
+      price: v.price,
+      costPrice: v.costPrice,
+      inStock: v.inStock,
+      lowStockThreshold: v.lowStockThreshold,
+      stock: v.stock,
+      trackStock: v.trackStock,
+      filamentGrams: v.filamentGrams,
+      printTimeHours: v.printTimeHours,
+      laborMinutes: v.laborMinutes,
+      otherCost: v.otherCost,
+      filamentRateOverride: v.filamentRateOverride,
+      laborRateOverride: v.laborRateOverride,
+      costPriceManual: v.costPriceManual,
+      option1ValueId: newValueIds[0],
+      option2ValueId: newValueIds[1],
+      option3ValueId: newValueIds[2],
+      option4ValueId: newValueIds[3],
+      option5ValueId: newValueIds[4],
+      option6ValueId: newValueIds[5],
+      sku,
+      imageUrl: newImageUrl,
+      labelCache: v.labelCache,
+      position: v.position,
+      salePrice: v.salePrice,
+      saleFrom: v.saleFrom,
+      saleTo: v.saleTo,
+      isDefault: v.isDefault,
+      weightG: v.weightG,
+      allowPreorder: v.allowPreorder,
+    });
+  }
+}
+
+/**
+ * Deep-clones a product (any productType) into a new draft. Handler-level
+ * requireAdmin() is the FIRST await (T-dw2-01, CVE-2025-29927 convention).
+ *
+ * The duplicate is ALWAYS isActive=false regardless of the source active
+ * state. Order history, reviews, and wishlists are never touched — the
+ * clone is restricted to product-owned tables (T-dw2-05, accepted).
+ *
+ * Slug: reuses this file existing uniqueProductSlug() (title-based,
+ * -2/-3-on-clash) rather than a separate helper, matching the convention
+ * createProduct/updateProduct already use on this branch (#165).
+ */
+export async function duplicateProduct(productId: string): Promise<ProductActionResult> {
+  await requireAdmin();
+
+  const [src] = await db
+    .select()
+    .from(products)
+    .where(eq(products.id, productId))
+    .limit(1);
+  if (!src) {
+    return { error: "Product not found" };
+  }
+
+  const newId = randomUUID();
+
+  // Product-level images: parse (preserves caption/alt), physically copy,
+  // then rebuild the V2 objects with rewritten URLs.
+  const sourceEntries = ensureImagesV2(src.images);
+  const rewrittenUrls = await copyProductImages(
+    productId,
+    newId,
+    sourceEntries.map((e) => e.url),
+  );
+  const rewrittenEntries = sourceEntries.map((e, i) => ({
+    ...e,
+    url: rewrittenUrls[i] ?? e.url,
+  }));
+
+  const newName = `${src.name} (Copy)`;
+  const newSlug = await uniqueProductSlug(newName);
+
+  await db.insert(products).values({
+    id: newId,
+    name: newName,
+    slug: newSlug,
+    description: src.description,
+    images: rewrittenEntries,
+    thumbnailIndex: src.thumbnailIndex,
+    materialType: src.materialType,
+    productType: src.productType,
+    maxUnitCount: src.maxUnitCount,
+    priceTiers: src.priceTiers,
+    weightTiers: src.weightTiers,
+    unitField: null, // remapped below once cloneConfigFields returns the id map
+    estimatedProductionDays: src.estimatedProductionDays,
+    isActive: false, // ALWAYS draft, regardless of src.isActive
+    isFeatured: src.isFeatured,
+    categoryId: src.categoryId,
+    subcategoryId: src.subcategoryId,
+    shippingWeightKg: src.shippingWeightKg,
+    shippingLengthCm: src.shippingLengthCm,
+    shippingWidthCm: src.shippingWidthCm,
+    shippingHeightCm: src.shippingHeightCm,
+    hideBasePrice: src.hideBasePrice,
+    keychainShape: src.keychainShape,
+  });
+
+  const fieldIdMap = await cloneConfigFields(productId, newId);
+
+  if (src.unitField) {
+    const newUnitFieldId = fieldIdMap.get(src.unitField);
+    if (newUnitFieldId) {
+      await db
+        .update(products)
+        .set({ unitField: newUnitFieldId })
+        .where(eq(products.id, newId));
+    }
+  }
+
+  await cloneVariantTree(productId, newId, newSlug);
+
+  revalidatePath("/admin/products");
+  revalidatePath("/admin");
+  revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
+
+  return { success: true, productId: newId };
 }
