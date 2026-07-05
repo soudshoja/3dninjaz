@@ -9,7 +9,7 @@ import {
   categories,
   subcategories,
 } from "@/lib/db/schema";
-import { eq, desc, inArray, count } from "drizzle-orm";
+import { eq, desc, inArray, count, like } from "drizzle-orm";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { CATEGORY_TREE_TAG } from "@/lib/catalog";
 import { productSchema, type ProductInput } from "@/lib/validators";
@@ -42,6 +42,30 @@ function slugify(name: string): string {
     .replace(/[^a-z0-9-]/g, "")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+/**
+ * Quick task 260705-dw2 — guarantee a unique slug for a duplicated product.
+ * Reuses the existing slugify() base logic, then appends the documented
+ * "-2/-3 on clash" suffix (matching the product-slug-from-title convention)
+ * until a free slug is found. products.slug UNIQUE constraint is the
+ * backstop (T-dw2-04).
+ */
+async function generateUniqueProductSlug(name: string): Promise<string> {
+  const base = slugify(name) || "product";
+  const existing = await db
+    .select({ slug: products.slug })
+    .from(products)
+    .where(like(products.slug, `${base}%`));
+  const taken = new Set(existing.map((r) => r.slug));
+  if (!taken.has(base)) return base;
+  let n = 2;
+  let candidate = `${base}-${n}`;
+  while (taken.has(candidate)) {
+    n += 1;
+    candidate = `${base}-${n}`;
+  }
+  return candidate;
 }
 
 function toDecimalOrNull(v: string | undefined | null): string | null {
