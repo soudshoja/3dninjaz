@@ -103,6 +103,81 @@ export function publicUrlFor(bucket: string, filename: string): string {
 }
 
 /**
+ * Quick task 260705-dw2 — physically copy product image directories when
+ * duplicating a product. Mirrors migrateNewImages' guards but COPIES
+ * (fs.cp) rather than MOVES (fs.rename), since the source product's images
+ * must remain intact.
+ *
+ * Only URLs that live under the SOURCE product's own bucket
+ * (${PUBLIC_PREFIX}/products/<sourceProductId>/) are rewritten + copied.
+ * Foreign/legacy URLs (e.g. pointing at a different product, or an external
+ * URL) are passed through unchanged — never used to read arbitrary
+ * directories (T-dw2-03).
+ *
+ * Dedupes already-copied subdirectories so the same source dir is never
+ * copied twice even if referenced by multiple URLs (e.g. product images +
+ * a variant imageUrl pointing at the same physical file).
+ */
+export async function copyProductImages(
+  sourceProductId: string,
+  destProductId: string,
+  urls: string[],
+): Promise<string[]> {
+  const safeSrc = safeBucket(sourceProductId);
+  const safeDest = safeBucket(destProductId);
+  const srcPrefix = `${PUBLIC_PREFIX}/products/${safeSrc}/`;
+
+  const root = path.resolve(path.join(process.cwd(), UPLOADS_DIR));
+  const copiedSubdirs = new Map<string, string>(); // subdir -> rewritten URL
+
+  const result: string[] = [];
+  for (const url of urls) {
+    if (!url.startsWith(srcPrefix)) {
+      // Foreign/legacy URL — never rewrite blindly.
+      result.push(url);
+      continue;
+    }
+
+    const subdir = url.slice(srcPrefix.length).split("/")[0];
+    if (!subdir) {
+      result.push(url);
+      continue;
+    }
+
+    const alreadyCopied = copiedSubdirs.get(subdir);
+    if (alreadyCopied) {
+      result.push(alreadyCopied);
+      continue;
+    }
+
+    const srcDir = path.join(process.cwd(), UPLOADS_DIR, "products", safeSrc, subdir);
+    const destDir = path.join(process.cwd(), UPLOADS_DIR, "products", safeDest, subdir);
+
+    // Traversal guard.
+    if (
+      !path.resolve(srcDir).startsWith(root) ||
+      !path.resolve(destDir).startsWith(root)
+    ) {
+      result.push(url);
+      continue;
+    }
+
+    try {
+      await fs.mkdir(path.dirname(destDir), { recursive: true });
+      await fs.cp(srcDir, destDir, { recursive: true, force: true });
+      const rewritten = `${PUBLIC_PREFIX}/products/${safeDest}/${subdir}`;
+      copiedSubdirs.set(subdir, rewritten);
+      result.push(rewritten);
+    } catch (err) {
+      console.error(`[copyProductImages] failed to copy ${srcDir} -> ${destDir}:`, err);
+      // Never silently drop — keep the original URL (mirrors migrateNewImages).
+      result.push(url);
+    }
+  }
+  return result;
+}
+
+/**
  * Called by createProduct after the product UUID is known.
  *
  * During "new product" creation the ImageUploader uploads images with

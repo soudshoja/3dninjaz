@@ -190,6 +190,9 @@ export const productSchema = z.object({
     .optional(),
   // Bug 3 — hide flat-rate price pill on storefront PDP. Default false.
   hideBasePrice: z.boolean().optional().default(false),
+  // Quick task 260705-azw — keychain preview body shape. Only meaningful
+  // when productType === "keychain"; default preserves existing behavior.
+  keychainShape: z.enum(["square", "round"]).optional().default("square"),
 });
 
 export type ProductInput = z.infer<typeof productSchema>;

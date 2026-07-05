@@ -198,6 +198,10 @@ export const products = mysqlTable("products", {
   // product uses multi-option Select fields whose prices determine cost.
   // Default FALSE = existing behaviour (always show the top price pill).
   hideBasePrice: boolean("hide_base_price").notNull().default(false),
+  // Quick task 260705-azw — visual-only shape discriminator for keychain-type
+  // products (square = existing keycap row; round = circular body). Default
+  // preserves all existing rows' rendering.
+  keychainShape: mysqlEnum("keychainShape", ["square", "round"]).notNull().default("square"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at")
     .notNull()
