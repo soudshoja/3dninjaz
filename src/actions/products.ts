@@ -6,6 +6,8 @@ import {
   products,
   productVariants,
   productConfigFields,
+  productOptions,
+  productOptionValues,
   categories,
   subcategories,
 } from "@/lib/db/schema";
@@ -16,7 +18,7 @@ import { productSchema, type ProductInput } from "@/lib/validators";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { computeVariantCost } from "@/lib/cost-breakdown";
 import { getStoreSettingsCached } from "@/lib/store-settings";
-import { ensureImagesV2 } from "@/lib/config-fields";
+import { ensureImagesV2, ensureConfigJson, type SelectFieldConfig } from "@/lib/config-fields";
 import { seedKeychainFields } from "@/lib/keychain-fields";
 import { seedVendingFields } from "@/lib/vending-fields";
 // Quick task 260430-kmr — sanitise description HTML on every save (defence-in-depth).
@@ -27,7 +29,7 @@ import {
   deleteConfigField,
   reorderConfigFields,
 } from "@/actions/configurator";
-import { migrateNewImages } from "@/lib/storage";
+import { migrateNewImages, copyProductImages } from "@/lib/storage";
 import type { FieldType, AnyFieldConfig } from "@/lib/config-fields";
 
 export type ProductActionResult =
@@ -842,4 +844,156 @@ export async function getProducts() {
       ? subcategoryById.get(p.subcategoryId) ?? null
       : null,
   }));
+}
+
+// ============================================================================
+// Quick task 260705-dw2 — Duplicate product
+// ============================================================================
+
+/**
+ * Clone every product_config_fields row from sourceId to destId with fresh
+ * ids. Select-field per-option images are physically copied + rewritten too.
+ * Returns a Map<oldFieldId, newFieldId> so callers can remap pointers
+ * (e.g. products.unitField) after the clone.
+ *
+ * Does NOT call seedKeychainFields/seedVendingFields — those would create
+ * duplicate rows. Keychain/vending/simple/configurable config fields are all
+ * plain productConfigFields rows and are covered by this single clone path.
+ */
+async function cloneConfigFields(
+  sourceId: string,
+  destId: string,
+): Promise<Map<string, string>> {
+  const rows = await db
+    .select()
+    .from(productConfigFields)
+    .where(eq(productConfigFields.productId, sourceId));
+
+  const map = new Map<string, string>();
+
+  for (const row of rows) {
+    const newFieldId = randomUUID();
+
+    let configJsonToPersist: string | null = row.configJson;
+    if (row.fieldType === "select") {
+      try {
+        const parsed = ensureConfigJson(row.fieldType, row.configJson) as SelectFieldConfig;
+        const rewrittenOptions = await Promise.all(
+          parsed.options.map(async (opt) => {
+            if (!opt.imageUrl) return opt;
+            const [copiedUrl] = await copyProductImages(sourceId, destId, [opt.imageUrl]);
+            return { ...opt, imageUrl: copiedUrl ?? opt.imageUrl };
+          }),
+        );
+        configJsonToPersist = JSON.stringify({ options: rewrittenOptions });
+      } catch (err) {
+        console.error(
+          `[cloneConfigFields] failed to parse/rewrite select configJson for field ${row.id}:`,
+          err,
+        );
+        // Fall back to copying configJson verbatim rather than dropping it.
+        configJsonToPersist = row.configJson;
+      }
+    }
+
+    await db.insert(productConfigFields).values({
+      id: newFieldId,
+      productId: destId,
+      position: row.position,
+      fieldType: row.fieldType,
+      label: row.label,
+      helpText: row.helpText,
+      required: row.required,
+      locked: row.locked,
+      configJson: configJsonToPersist,
+    });
+
+    map.set(row.id, newFieldId);
+  }
+
+  return map;
+}
+
+/**
+ * Deep-clones a product (any productType) into a new draft. Handler-level
+ * requireAdmin() is the FIRST await (T-dw2-01, CVE-2025-29927 convention).
+ *
+ * The duplicate is ALWAYS isActive=false regardless of the source's active
+ * state. Order history, reviews, and wishlists are never touched — the
+ * clone is restricted to product-owned tables (T-dw2-05, accepted).
+ */
+export async function duplicateProduct(productId: string): Promise<ProductActionResult> {
+  await requireAdmin();
+
+  const [src] = await db
+    .select()
+    .from(products)
+    .where(eq(products.id, productId))
+    .limit(1);
+  if (!src) {
+    return { error: "Product not found" };
+  }
+
+  const newId = randomUUID();
+
+  // Product-level images: parse (preserves caption/alt), physically copy,
+  // then rebuild the V2 objects with rewritten URLs.
+  const sourceEntries = ensureImagesV2(src.images);
+  const rewrittenUrls = await copyProductImages(
+    productId,
+    newId,
+    sourceEntries.map((e) => e.url),
+  );
+  const rewrittenEntries = sourceEntries.map((e, i) => ({
+    ...e,
+    url: rewrittenUrls[i] ?? e.url,
+  }));
+
+  const newName = `${src.name} (Copy)`;
+  const newSlug = await generateUniqueProductSlug(newName);
+
+  await db.insert(products).values({
+    id: newId,
+    name: newName,
+    slug: newSlug,
+    description: src.description,
+    images: rewrittenEntries,
+    thumbnailIndex: src.thumbnailIndex,
+    materialType: src.materialType,
+    productType: src.productType,
+    maxUnitCount: src.maxUnitCount,
+    priceTiers: src.priceTiers,
+    weightTiers: src.weightTiers,
+    unitField: null, // remapped below once cloneConfigFields returns the id map
+    estimatedProductionDays: src.estimatedProductionDays,
+    isActive: false, // ALWAYS draft, regardless of src.isActive
+    isFeatured: src.isFeatured,
+    categoryId: src.categoryId,
+    subcategoryId: src.subcategoryId,
+    shippingWeightKg: src.shippingWeightKg,
+    shippingLengthCm: src.shippingLengthCm,
+    shippingWidthCm: src.shippingWidthCm,
+    shippingHeightCm: src.shippingHeightCm,
+    hideBasePrice: src.hideBasePrice,
+    keychainShape: src.keychainShape,
+  });
+
+  const fieldIdMap = await cloneConfigFields(productId, newId);
+
+  if (src.unitField) {
+    const newUnitFieldId = fieldIdMap.get(src.unitField);
+    if (newUnitFieldId) {
+      await db
+        .update(products)
+        .set({ unitField: newUnitFieldId })
+        .where(eq(products.id, newId));
+    }
+  }
+
+  revalidatePath("/admin/products");
+  revalidatePath("/admin");
+  revalidatePath("/", "layout");
+  revalidateTag(CATEGORY_TREE_TAG);
+
+  return { success: true, productId: newId };
 }
