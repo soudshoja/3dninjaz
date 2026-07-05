@@ -30,6 +30,7 @@ import {
   reorderConfigFields,
 } from "@/actions/configurator";
 import { migrateNewImages, copyProductImages } from "@/lib/storage";
+import { generateVariantSku } from "@/lib/sku";
 import type { FieldType, AnyFieldConfig } from "@/lib/config-fields";
 
 export type ProductActionResult =
@@ -915,6 +916,137 @@ async function cloneConfigFields(
 }
 
 /**
+ * Clone the options -> values -> variants tree from sourceId to destId.
+ * Only meaningfully populated for stocked products, but safe to run for any
+ * productType — it no-ops when there are no options/variants.
+ *
+ * Every cloned variant gets a FRESH, batch-unique SKU (never the source's
+ * SKU string) derived from the remapped option-value labels + destSlug.
+ * Variant-level imageUrl is physically copied via copyProductImages.
+ */
+async function cloneVariantTree(
+  sourceId: string,
+  destId: string,
+  destSlug: string,
+): Promise<void> {
+  // 1. Options
+  const opts = await db
+    .select()
+    .from(productOptions)
+    .where(eq(productOptions.productId, sourceId));
+
+  const optionIdMap = new Map<string, string>();
+  for (const opt of opts) {
+    const newOptionId = randomUUID();
+    await db.insert(productOptions).values({
+      id: newOptionId,
+      productId: destId,
+      name: opt.name,
+      position: opt.position,
+    });
+    optionIdMap.set(opt.id, newOptionId);
+  }
+
+  if (opts.length === 0) return;
+
+  // 2. Values
+  const values = await db
+    .select()
+    .from(productOptionValues)
+    .where(inArray(productOptionValues.optionId, opts.map((o) => o.id)));
+
+  const valueIdMap = new Map<string, string>();
+  // Keep the original value row around for cloned-variant SKU/label lookups.
+  const clonedValueById = new Map<string, typeof values[number]>();
+
+  for (const val of values) {
+    const newValueId = randomUUID();
+    const newOptionId = optionIdMap.get(val.optionId);
+    if (!newOptionId) continue; // defensive — shouldn't happen
+    await db.insert(productOptionValues).values({
+      id: newValueId,
+      optionId: newOptionId,
+      value: val.value,
+      position: val.position,
+      swatchHex: val.swatchHex,
+      colorId: val.colorId,
+    });
+    valueIdMap.set(val.id, newValueId);
+    clonedValueById.set(val.id, val);
+  }
+
+  // 3. Variants
+  const vars = await db
+    .select()
+    .from(productVariants)
+    .where(eq(productVariants.productId, sourceId));
+
+  const usedSkus = new Set<string>();
+
+  for (const v of vars) {
+    const oldValueIds = [
+      v.option1ValueId,
+      v.option2ValueId,
+      v.option3ValueId,
+      v.option4ValueId,
+      v.option5ValueId,
+      v.option6ValueId,
+    ];
+    const newValueIds = oldValueIds.map((id) => (id ? valueIdMap.get(id) ?? null : null));
+    const labelParts = oldValueIds.map((id) => (id ? clonedValueById.get(id)?.value ?? null : null));
+
+    let newImageUrl: string | null = v.imageUrl;
+    if (v.imageUrl) {
+      const [copied] = await copyProductImages(sourceId, destId, [v.imageUrl]);
+      newImageUrl = copied ?? v.imageUrl;
+    }
+
+    const base = generateVariantSku(destSlug, labelParts);
+    let sku = base;
+    let n = 2;
+    while (usedSkus.has(sku)) {
+      sku = `${base}-${n}`;
+      n += 1;
+    }
+    usedSkus.add(sku);
+
+    await db.insert(productVariants).values({
+      id: randomUUID(),
+      productId: destId,
+      price: v.price,
+      costPrice: v.costPrice,
+      inStock: v.inStock,
+      lowStockThreshold: v.lowStockThreshold,
+      stock: v.stock,
+      trackStock: v.trackStock,
+      filamentGrams: v.filamentGrams,
+      printTimeHours: v.printTimeHours,
+      laborMinutes: v.laborMinutes,
+      otherCost: v.otherCost,
+      filamentRateOverride: v.filamentRateOverride,
+      laborRateOverride: v.laborRateOverride,
+      costPriceManual: v.costPriceManual,
+      option1ValueId: newValueIds[0],
+      option2ValueId: newValueIds[1],
+      option3ValueId: newValueIds[2],
+      option4ValueId: newValueIds[3],
+      option5ValueId: newValueIds[4],
+      option6ValueId: newValueIds[5],
+      sku,
+      imageUrl: newImageUrl,
+      labelCache: v.labelCache,
+      position: v.position,
+      salePrice: v.salePrice,
+      saleFrom: v.saleFrom,
+      saleTo: v.saleTo,
+      isDefault: v.isDefault,
+      weightG: v.weightG,
+      allowPreorder: v.allowPreorder,
+    });
+  }
+}
+
+/**
  * Deep-clones a product (any productType) into a new draft. Handler-level
  * requireAdmin() is the FIRST await (T-dw2-01, CVE-2025-29927 convention).
  *
@@ -989,6 +1121,8 @@ export async function duplicateProduct(productId: string): Promise<ProductAction
         .where(eq(products.id, newId));
     }
   }
+
+  await cloneVariantTree(productId, newId, newSlug);
 
   revalidatePath("/admin/products");
   revalidatePath("/admin");
