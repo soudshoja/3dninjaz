@@ -156,18 +156,6 @@ export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLengt
                 </div>
               )}
 
-              {/* Round-only: letter-coloured rim around the clicker face (quick 260705-l0h) */}
-              {shape === "round" && (
-                <div
-                  style={{
-                    position: "absolute",
-                    inset: 3,
-                    borderRadius: "50%",
-                    background: letterHex,
-                  }}
-                />
-              )}
-
               {/* Inset clicker face */}
               <div
                 style={{
