@@ -74,6 +74,11 @@ export type ProductFormInitial = {
   initialVariants?: HydratedVariant[];
   /** Bug 3 — when true, hides the flat-rate base-price pill on the storefront PDP. */
   hideBasePrice?: boolean;
+  /**
+   * Quick task 260705-azw — keychain preview body shape. Only meaningful for
+   * productType === "keychain"; defaults to "square" (existing behavior).
+   */
+  keychainShape?: "square" | "round";
 };
 
 export type CategoryOption = { id: string; name: string };
@@ -168,6 +173,10 @@ export function ProductForm({
   const [isFeatured, setIsFeatured] = useState(initialData?.isFeatured ?? false);
   // Bug 3 — hide flat-rate price pill on storefront PDP.
   const [hideBasePrice, setHideBasePrice] = useState(initialData?.hideBasePrice ?? false);
+  // Quick task 260705-azw — keychain preview body shape.
+  const [keychainShape, setKeychainShape] = useState<"square" | "round">(
+    initialData?.keychainShape ?? "square"
+  );
   // Phase 19 (19-03) — product type state
   // Quick task 260430-icx — `simple` added.
   const [productType, setProductType] = useState<"stocked" | "configurable" | "keychain" | "vending" | "simple">(
@@ -218,6 +227,7 @@ export function ProductForm({
       simplePrice,
       fields,
       hideBasePrice,
+      keychainShape,
     }),
     [
       name,
@@ -235,6 +245,7 @@ export function ProductForm({
       simplePrice,
       fields,
       hideBasePrice,
+      keychainShape,
     ],
   );
 
@@ -267,6 +278,7 @@ export function ProductForm({
     if (typeof v.simplePrice === "string") setSimplePrice(v.simplePrice);
     if (Array.isArray(v.fields)) setFields(v.fields as PendingField[]);
     if (typeof v.hideBasePrice === "boolean") setHideBasePrice(v.hideBasePrice);
+    if (v.keychainShape === "square" || v.keychainShape === "round") setKeychainShape(v.keychainShape);
     setBannerDismissed(true);
   }
 
@@ -356,6 +368,8 @@ export function ProductForm({
       variants: [],
       // Bug 3 — hide flat-rate price pill on storefront PDP.
       hideBasePrice,
+      // Quick task 260705-azw — keychain preview body shape.
+      keychainShape,
       // Quick task 260430-icx — only include simplePrice when relevant.
       // Edit flow: omit entirely when field is empty so the action preserves
       // the existing tier. Create flow: always include (validate() guards above).
@@ -757,13 +771,44 @@ export function ProductForm({
               Created with 4 starter fields: 1 name text field + 3 colour fields (base / clicker / letter). All fields are fully editable — rename labels, restrict palettes, add or remove fields.
             </p>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <a
               href={`/admin/products/${initialData.id}/configurator`}
               className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
             >
               Manage Keyboard Clicker Fields →
             </a>
+            {/* Quick task 260705-azw — keychain body Shape picker. */}
+            <div className="space-y-2">
+              <Label>Shape</Label>
+              <p className="text-xs text-[var(--color-brand-text-muted)]">
+                Controls the live preview shape — square keycap or round body.
+              </p>
+              <div className="inline-flex rounded-lg border border-[var(--color-brand-border)] p-1">
+                <button
+                  type="button"
+                  onClick={() => setKeychainShape("square")}
+                  className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+                    keychainShape === "square"
+                      ? "bg-[var(--color-brand-ink)] text-white"
+                      : "text-[var(--color-brand-text-muted)] hover:bg-muted"
+                  }`}
+                >
+                  Square
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setKeychainShape("round")}
+                  className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+                    keychainShape === "round"
+                      ? "bg-[var(--color-brand-ink)] text-white"
+                      : "text-[var(--color-brand-text-muted)] hover:bg-muted"
+                  }`}
+                >
+                  Round
+                </button>
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}

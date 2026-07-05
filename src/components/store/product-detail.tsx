@@ -57,6 +57,8 @@ type ProductDetailProps = {
     productType?: "stocked" | "configurable" | "keychain" | "vending" | "simple";
     /** Bug 3 — when true, hide the flat-rate base-price pill on simple/configurable PDPs. */
     hideBasePrice?: boolean;
+    /** Quick task 260705-azw — keychain preview body shape (default "square"). */
+    keychainShape?: "square" | "round";
   };
   isWishlistedInitial?: boolean;
   ratingAvg?: number;

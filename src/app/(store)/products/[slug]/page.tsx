@@ -98,6 +98,8 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
           productType: product.productType,
           // Bug 3 — pass hide-base-price flag to view components
           hideBasePrice: product.hideBasePrice ?? false,
+          // Quick task 260705-azw — keychain preview body shape
+          keychainShape: product.keychainShape ?? "square",
         }}
         isWishlistedInitial={wished}
         ratingAvg={reviewsSummary.avgRating}

@@ -313,6 +313,8 @@ export async function createProduct(
     productType: productData.productType ?? "stocked",
     // Bug 3 — hide flat-rate price pill on storefront PDP.
     hideBasePrice: productData.hideBasePrice ?? false,
+    // Quick task 260705-azw — keychain preview body shape.
+    keychainShape: productData.keychainShape ?? "square",
   });
 
   if (variants.length > 0) {
@@ -517,6 +519,8 @@ export async function updateProduct(
       productType: productData.productType ?? "stocked",
       // Bug 3 — hide flat-rate price pill on storefront PDP.
       hideBasePrice: productData.hideBasePrice ?? false,
+      // Quick task 260705-azw — keychain preview body shape.
+      keychainShape: productData.keychainShape ?? "square",
     })
     .where(eq(products.id, id));
 

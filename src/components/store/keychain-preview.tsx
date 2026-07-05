@@ -25,6 +25,9 @@
  *                 placeholder letters so the customer sees a sample keychain.
  *                 Empty string (default) disables the placeholder (single
  *                 swatch cube fallback).
+ *   shape       — "square" (default, pixel-identical to legacy behavior) or
+ *                 "round" (circular body + circular inset face + rounded
+ *                 ring/loop tab). Quick task 260705-azw.
  */
 
 type Props = {
@@ -39,11 +42,24 @@ type Props = {
    * Empty string disables the placeholder (single swatch cube fallback).
    */
   placeholder?: string;
+  /**
+   * Visual body shape. "square" is the original keycap shape and MUST remain
+   * pixel-identical. "round" renders a circular body/inset/ring.
+   */
+  shape?: "square" | "round";
 };
 
-export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLength, placeholder = "" }: Props) {
+export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLength, placeholder = "", shape = "square" }: Props) {
   const display = text || placeholder;
   const chars = display.slice(0, maxLength).split("").filter(Boolean);
+
+  // Shape-dependent geometry — only these three values differ between the
+  // square (legacy, pixel-identical) and round paths. Everything else
+  // (letter glyph, fonts, shadows, gap, padding, swatch/placeholder logic,
+  // cube-count logic) is shape-independent.
+  const bodyRadius = shape === "round" ? "50%" : 14;
+  const insetRadius = shape === "round" ? "50%" : 10;
+  const ringRadius = shape === "round" ? "50%" : "14px 0 0 14px";
 
   // When display is empty: show one swatch cube (no letter). Otherwise show chars.
   const isSwatch = chars.length === 0;
@@ -96,7 +112,7 @@ export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLengt
                 width: cubeSizeExpr,
                 height: cubeSizeExpr,
                 flexShrink: 0,
-                borderRadius: 14,
+                borderRadius: bodyRadius,
                 background: baseHex,
                 border: "none",
                 // Body bevel — top highlight, side shadow, bottom drop
@@ -116,7 +132,7 @@ export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLengt
                     transform: "translateY(-50%)",
                     width: 28,
                     height: 32,
-                    borderRadius: "14px 0 0 14px",
+                    borderRadius: ringRadius,
                     background: baseHex,
                     boxShadow: `inset 4px 4px 7px rgba(255,255,255,0.50),
                                  inset -5px -5px 8px rgba(0,0,0,0.16),
@@ -145,7 +161,7 @@ export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLengt
                 style={{
                   position: "absolute",
                   inset: 5,
-                  borderRadius: 10,
+                  borderRadius: insetRadius,
                   background: clickerHex,
                   boxShadow: `inset 2px 2px 4px rgba(255,255,255,0.38),
                                inset -2px -2px 4px rgba(0,0,0,0.14)`,

@@ -165,6 +165,8 @@ export default async function EditProductPage({
     initialVariants: inlineVariantsData?.variants ?? undefined,
     // Bug 3 — pass through hide-base-price flag.
     hideBasePrice: product.hideBasePrice ?? false,
+    // Quick task 260705-azw — keychain preview body shape.
+    keychainShape: product.keychainShape ?? "square",
   };
 
   return (
