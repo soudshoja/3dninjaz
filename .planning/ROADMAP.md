@@ -420,3 +420,13 @@ Plans:
 - [x] 20-11-PLAN.md — Admin order-detail payment-proof review surface + Download Invoice button (Wave 5)
 - [x] 20-12-PLAN.md — /admin/settings bank-details + draft-template fieldsets (Wave 6)
 - [x] 20-13-PLAN.md — isManualLine render guards on invoice + order details + email (Wave 6)
+
+### Phase 21: Admin Meshy AI 3D Generation Tool — admin uploads a reference photo, generates a textured 3D model via Meshy's Image-to-3D API, reviews/requests changes, approves, runs printability analyze/repair, and downloads STL/3MF for Bambu Studio slicing/printing
+
+**Goal:** Admin can upload a product reference photo, generate a textured 3D model via Meshy's Image-to-3D API, review/retexture/regenerate until satisfied, approve (running free printability analyze + explicit-click paid repair), optionally run multi-color 3MF conversion, and download print-ready STL/3MF files for Bambu Studio — all server-side, admin-only, polling-driven with a cron reconciliation sweep, files persisted to private storage before Meshy's 3-day asset expiry.
+**Requirements**: TBD (derive at /gsd-plan-phase time from 21-CONTEXT.md)
+**Depends on:** Phase 20
+**Plans:** 0 plans — see `21-CONTEXT.md` for locked architecture decisions from the meshy-3d-pipeline skill-informed replan (2026-07-07); 2 open questions remain (credit budget cap, product linkage) — resolve at planning time
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 21 to break down)
