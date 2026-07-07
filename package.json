@@ -60,6 +60,7 @@
     "@types/three": "^0.185.0",
     "dotenv-cli": "^11.0.0",
     "drizzle-kit": "^0.31.10",
+    "playwright": "^1.61.1",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5",

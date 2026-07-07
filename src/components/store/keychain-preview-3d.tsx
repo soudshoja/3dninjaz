@@ -75,6 +75,7 @@ export function KeychainPreview3D(props: Props) {
     <div
       ref={containerRef}
       data-keychain-preview-3d
+      data-ready={ready ? "true" : "false"}
       className="relative w-full"
       style={{ aspectRatio: "1 / 1" }}
     >

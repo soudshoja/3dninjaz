@@ -97,11 +97,15 @@ function RaisedGlyph({ char, color }: { char: string; color: string }) {
         {char}
       </Text>
       {/* Back "shadow" layer — same glyph, slightly larger + darker + behind,
-          reads as a subtle raised bevel without real 3D geometry. */}
+          reads as a subtle raised bevel without real 3D geometry.
+          NOTE: THREE.Color does not parse 8-digit (alpha-suffixed) hex
+          strings — "#00000030" silently fails color parsing. Use a solid
+          black fill with fillOpacity for the translucency instead. */}
       <Text
         font={CHAKRA_PETCH_FONT_URL}
         fontSize={0.5 * 1.04}
-        color="#00000030"
+        color="#000000"
+        fillOpacity={0.3}
         anchorX="center"
         anchorY="middle"
         position={[0, 0, 0]}
@@ -196,7 +200,20 @@ export default function KeychainPreview3DScene({
     <Canvas
       dpr={[1, 2]}
       camera={{ position: [0, CAMERA_Y, cameraZ], fov: CAMERA_FOV }}
-      gl={{ antialias: true, alpha: true }}
+      // preserveDrawingBuffer is required alongside frameloop="demand": with
+      // no continuous render loop, the browser clears the WebGL drawing
+      // buffer on the next compositing pass unless told to preserve it,
+      // which otherwise shows as a blank/transparent canvas once the tab
+      // repaints for any other reason (verified via Playwright screenshot —
+      // without this flag the hero rendered fully transparent).
+      gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
+      // Fully static scene (no OrbitControls, no per-frame animation) — a
+      // continuous "always" render loop serves no visual purpose here and
+      // was observed to trigger WebGL context loss under sustained headless
+      // rendering during Playwright verification. "demand" renders once on
+      // mount/prop changes (r3f invalidates automatically on scene commits)
+      // and otherwise stays idle, which is both cheaper and more stable.
+      frameloop="demand"
       onCreated={() => onReady?.()}
     >
       <ambientLight intensity={0.6} />
