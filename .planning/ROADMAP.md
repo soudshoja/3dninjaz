@@ -424,9 +424,9 @@ Plans:
 ### Phase 21: Admin Meshy AI 3D Generation Tool — admin uploads a reference photo, generates a textured 3D model via Meshy's Image-to-3D API, reviews/requests changes, approves, runs printability analyze/repair, and downloads STL/3MF for Bambu Studio slicing/printing
 
 **Goal:** Admin can upload a product reference photo, generate a textured 3D model via Meshy's Image-to-3D API, review/retexture/regenerate until satisfied, approve (running free printability analyze + explicit-click paid repair), optionally run multi-color 3MF conversion, and download print-ready STL/3MF files for Bambu Studio — all server-side, admin-only, polling-driven with a cron reconciliation sweep, files persisted to private storage before Meshy's 3-day asset expiry.
-**Requirements**: TBD (derive at /gsd-plan-phase time from 21-CONTEXT.md)
+**Requirements**: REQ-21-1..9 (schema+migration, private storage w/ 3-day-expiry download-before-advance, createGeneration guardrails, advanceGeneration state machine + poll/cron, retexture/regenerate revision workflow, explicit-click repair, multi-color 3MF, authed download route, admin UI) — see `.planning/REQUIREMENTS.md`
 **Depends on:** Phase 20
-**Plans:** 0 plans — see `21-CONTEXT.md` for locked architecture decisions from the meshy-3d-pipeline skill-informed replan (2026-07-07); 2 open questions remain (credit budget cap, product linkage) — resolve at planning time
+**Plans:** 8 plans (21-01..21-08) — planned 2026-07-07, verified PASSED by gsd-plan-checker. Credit cap resolved as warn-only soft guard (no monthly counter table); product_id kept as nullable indexed column, no FK, no v1 UI.
 
 Plans:
 - [ ] TBD (run /gsd-plan-phase 21 to break down)
