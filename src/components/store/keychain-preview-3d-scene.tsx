@@ -23,11 +23,40 @@
  * the Task 2 Playwright screenshots. See SUMMARY for details.
  */
 
-import { useRef } from "react";
+import { Suspense, useRef } from "react";
 import { Canvas, useFrame, type RootState } from "@react-three/fiber";
 import { RoundedBox, Text } from "@react-three/drei";
 
 const CHAKRA_PETCH_FONT_URL = "/fonts/chakra-petch-bold.ttf";
+
+// Quick task 260707-ctx — fix for 'THREE.WebGLRenderer: Context Lost' on
+// Chrome/ANGLE-D3D11/NVIDIA, confirmed via bisection to be caused by
+// mounting many (~8+) never-before-seen troika <Text> glyphs in a single
+// React commit: each new glyph triggers a synchronous GPU render-to-texture
+// + readback (SDF generation), and a tight burst of 8+ of those trips a
+// driver TDR that kills the WebGLRenderer's context.
+//
+// The keychain "Your name" field is locked to `allowedChars: "A-Z"`
+// uppercase-only (see src/lib/keychain-fields.ts), so the full glyph set is
+// fixed and small. drei's <Text> already has a built-in preload mechanism
+// for exactly this: passing a `characters` prop makes it call troika's
+// `preloadFont({font, characters}, ...)` wrapped in a `suspend-react` cache
+// keyed by `[font, characters]` — shared globally across every <Text>
+// instance that passes the same (font, characters) pair, regardless of how
+// many KeycapSlot/RaisedGlyph components exist. Passing the full A-Z
+// alphabet here means all 16 live <Text> nodes (2 layers x up to 8 slots)
+// share ONE cached preload call, and — because they all suspend on the same
+// promise — none of them mount (and therefore none call the real
+// `.sync()`/SDF-generation path) until that single preload resolves. troika's
+// SDF atlas also lives on its own persistent offscreen canvas, entirely
+// separate from the r3f renderer's canvas, so any GPU work done during that
+// one preload has no live r3f context to lose. By the time the `<Suspense>`
+// below actually reveals the keycaps, every A-Z glyph is already cache-hit
+// in troika's shared atlas, so the live mount burst does zero SDF
+// generation — eliminating the driver TDR trigger. The `<Suspense
+// fallback={null}>` boundary is required for this to work: without an
+// ancestor boundary the suspended promise has nowhere to unwind to.
+const KEYCAP_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 // ── Geometry constants ──────────────────────────────────────────────────────
 const BODY_DEPTH = 0.28;
@@ -111,6 +140,7 @@ function RaisedGlyph({ char, color }: { char: string; color: string }) {
       {/* Front face — sharp SDF glyph */}
       <Text
         font={CHAKRA_PETCH_FONT_URL}
+        characters={KEYCAP_ALPHABET}
         fontSize={0.5}
         color={color}
         anchorX="center"
@@ -126,6 +156,7 @@ function RaisedGlyph({ char, color }: { char: string; color: string }) {
           black fill with fillOpacity for the translucency instead. */}
       <Text
         font={CHAKRA_PETCH_FONT_URL}
+        characters={KEYCAP_ALPHABET}
         fontSize={0.5 * 1.04}
         color="#000000"
         fillOpacity={0.3}
@@ -251,21 +282,28 @@ export default function KeychainPreview3DScene({
         });
       }}
     >
-      <FirstFrameSignal onFirstFrame={() => onReady?.()} />
       <ambientLight intensity={0.6} />
       <directionalLight position={[3, 4, 5]} intensity={1.2} />
       <directionalLight position={[-3, -2, 2]} intensity={0.4} />
-      {slots.map((slot) => (
-        <KeycapSlot
-          key={slot.key}
-          ch={slot.ch}
-          x={slot.x}
-          baseHex={baseHex}
-          clickerHex={clickerHex}
-          letterHex={letterHex}
-          shape={shape}
-        />
-      ))}
+      {/* Suspense boundary required for the characters-prop preload above:
+          all <Text> nodes here suspend on the shared A-Z preload promise, so
+          nothing in this subtree (including the "first frame" signal) mounts
+          until every glyph is already cached — the live mount burst that
+          used to trigger context loss now does zero SDF generation. */}
+      <Suspense fallback={null}>
+        <FirstFrameSignal onFirstFrame={() => onReady?.()} />
+        {slots.map((slot) => (
+          <KeycapSlot
+            key={slot.key}
+            ch={slot.ch}
+            x={slot.x}
+            baseHex={baseHex}
+            clickerHex={clickerHex}
+            letterHex={letterHex}
+            shape={shape}
+          />
+        ))}
+      </Suspense>
     </Canvas>
   );
 }
