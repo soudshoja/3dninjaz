@@ -36,13 +36,8 @@ type Props = {
   /** Called when user clicks "Yours" (true) or a display thumbnail (false) */
   onTogglePreview: (yours: boolean) => void;
   /** Live preview component — rendered as hero when showPreview === true.
-   *  Also rendered small in the "Yours" thumbnail (unless thumbSlot is set). */
+   *  Also rendered small in the "Yours" thumbnail. */
   previewSlot: React.ReactNode;
-  /** Optional separate node for the thumbnail miniature; defaults to
-   *  previewSlot if omitted — lets the hero and thumbnail render different
-   *  components (e.g. a 3D hero vs a cheap CSS thumbnail) without mounting
-   *  the hero's component twice. */
-  thumbSlot?: React.ReactNode;
 };
 
 export function ConfigurableImageGallery({
@@ -52,7 +47,6 @@ export function ConfigurableImageGallery({
   showPreview,
   onTogglePreview,
   previewSlot,
-  thumbSlot,
 }: Props) {
   // Which display image is active (index into displayImages)
   const [activeDisplayIdx, setActiveDisplayIdx] = useState(0);
@@ -343,7 +337,7 @@ export function ConfigurableImageGallery({
                       width: "500%",
                     }}
                   >
-                    {thumbSlot ?? previewSlot}
+                    {previewSlot}
                   </div>
                 </div>
                 <span
