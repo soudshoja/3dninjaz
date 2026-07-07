@@ -411,6 +411,15 @@ async function advanceRepairing(row: GenerationRow): Promise<GenerationRow> {
     // Repair output format mirrors input — download whichever of glb/stl
     // came back, merging over the existing localModelFiles.
     const persisted = await persistModelAssets(row.id, task);
+    const testMode = isMeshyTestMode();
+
+    if (!persisted.ok && !testMode) {
+      // Prod: leave status "repairing" so the next tick retries the
+      // download — same 3-day-expiry download-before-advance guard as the
+      // other three SUCCEEDED branches (generating/revising/multicolor).
+      return row;
+    }
+
     const existing = parseLocalModelFiles(row.localModelFiles);
     const mergedFiles: LocalModelFiles = toJsonSafe({ ...existing, ...persisted.files });
 
