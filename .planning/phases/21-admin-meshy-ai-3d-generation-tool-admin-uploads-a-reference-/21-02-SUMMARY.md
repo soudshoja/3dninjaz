@@ -68,11 +68,12 @@ Each task was committed atomically:
 
 1. **Task 1+2: types.ts + client.ts** - `5044aba` (feat)
 2. **Task 3: storage.ts + gitignore** - `a331c6b` (feat)
-3. **Task 4: dev env test-mode key** - untracked `.env.local` edit only (no commit; `.env.local` is gitignored by design)
+3. **(external, not mine) Task 3 post-commit hardening** - `fb5618a` (fix) — see Deviations section
+4. **Task 4: dev env test-mode key** - untracked `.env.local` edit only (no commit; `.env.local` is gitignored by design)
 
 _Tasks 1 and 2 were committed together per the plan's Task 4 instruction ("Commit the tracked files in two atomic commits") — the plan names exactly two commit messages, one per file group (types+client, storage+gitignore)._
 
-**Plan metadata:** (pending — see below)
+**Plan metadata:** `3d7886e` (docs: plan 02 execution summary)
 
 ## Files Created/Modified
 - `src/lib/meshy/types.ts` - `MeshyGenerationStatus`/`PrintabilityStatus` types, `LocalModelFiles`/`PrintabilityReport` types, `parseLocalModelFiles`/`parsePrintabilityReport` defensive JSON-column parse helpers, `MESHY_CREDIT_COSTS`, `MESHY_LOW_BALANCE_WARN`, `MESHY_RETEXTURE_WINDOW_MS`, `MESHY_SOURCE_IMAGE_MAX_BYTES`, `MESHY_ACTIVE_STATUSES`
@@ -90,15 +91,15 @@ _Tasks 1 and 2 were committed together per the plan's Task 4 instruction ("Commi
 
 The wording adjustments noted above are cosmetic (comment text only) and were made specifically to satisfy the plan's own literal-substring acceptance criteria; no code behavior changed as a result.
 
-### Auto-fixed Issues
+### Auto-fixed Issues (not mine — post-commit automated security review)
 
-**1. [Rule 1 - Bug] Path-traversal guard hardened from `startsWith(root)` to a boundary-safe containment check**
-- **Found during:** Task 3 (`src/lib/meshy/storage.ts`)
-- **Issue:** The plan's specified guard pattern (copied verbatim from `src/lib/storage.ts`'s existing convention) is `path.resolve(abs).startsWith(root)`. This has a known edge case: a sibling directory whose name is a superstring of root (e.g. `<root>-evil`) would incorrectly pass `startsWith(root)` since it doesn't check for a path-separator boundary after the prefix.
-- **Fix:** Added a small `isWithinRoot(root, target)` helper (`resolved === root || resolved.startsWith(root + path.sep)`) and used it at all three guard sites (`resolveStoragePath`, `writeSourceImage`, `downloadMeshyAsset`) instead of the bare `startsWith` call. The literal substring `startsWith` still appears once (inside the helper itself), so the plan's `grep -c "startsWith" >= 1` acceptance check still passes.
+**1. [Path-traversal guard hardened from `startsWith(root)` to a boundary-safe containment check]**
+- **Found by:** An automated commit-security-review process running in this environment (not by me, not requested by the plan) — it committed directly to this branch as `fb5618a` immediately after my Task 3 commit (`a331c6b`), under the repo owner's git identity.
+- **Issue:** The plan's specified guard pattern (copied verbatim from `src/lib/storage.ts`'s existing convention, which this plan's `<read_first>` explicitly told me to copy "verbatim") is `path.resolve(abs).startsWith(root)`. This has a known edge case: a sibling directory whose name is a superstring of root (e.g. `<root>-evil`) would incorrectly pass `startsWith(root)` since it doesn't check for a path-separator boundary after the prefix. Note: this same latent bug exists in the repo's pre-existing `src/lib/storage.ts` / `payment-proof-storage.ts` guards this plan copied from — out of scope to fix here, but worth flagging for a future pass.
+- **Fix (applied externally, not by me):** Added a small `isWithinRoot(root, target)` helper (`resolved === root || resolved.startsWith(root + path.sep)`) and used it at all three guard sites (`resolveStoragePath`, `writeSourceImage`, `downloadMeshyAsset`) instead of the bare `startsWith` call.
 - **Files modified:** `src/lib/meshy/storage.ts`
-- **Verification:** `npx tsc --noEmit` clean; all plan acceptance greps re-run and pass (`server-only`=1, `public`=0, `MESHY_STORAGE_DIR`>=1, `startsWith`>=1, `data:image`>=1).
-- **Committed in:** `a331c6b` (part of the Task 3 commit)
+- **My verification after the fact:** `npx tsc --noEmit` clean; all plan acceptance greps re-run and pass (`server-only`=1, `public`=0, `MESHY_STORAGE_DIR`>=1, `startsWith`>=1 — the literal substring still appears once inside the new helper — `data:image`>=1).
+- **Committed as:** `fb5618a` (separate commit, not part of `a331c6b`)
 
 ## Known Stubs
 
