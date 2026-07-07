@@ -23,7 +23,8 @@
  * the Task 2 Playwright screenshots. See SUMMARY for details.
  */
 
-import { Canvas } from "@react-three/fiber";
+import { useRef } from "react";
+import { Canvas, useFrame, type RootState } from "@react-three/fiber";
 import { RoundedBox, Text } from "@react-three/drei";
 
 const CHAKRA_PETCH_FONT_URL = "/fonts/chakra-petch-bold.ttf";
@@ -64,6 +65,9 @@ type Props = {
   placeholder?: string;
   shape?: Shape;
   onReady?: () => void;
+  /** Fired if the WebGL context is lost after `onReady` already fired, so the
+   *  wrapper can fall the CSS layer back in rather than leave a blank canvas. */
+  onContextLost?: () => void;
 };
 
 /** Zoom-to-fit camera distance, computed from maxLength (not live char count)
@@ -80,6 +84,25 @@ function computeCameraZ(maxLength: number): number {
   const zSquared = straightLineDistance * straightLineDistance - CAMERA_Y * CAMERA_Y;
   const z = Math.sqrt(Math.max(zSquared, straightLineDistance * 0.5));
   return Math.max(z, 3);
+}
+
+/** Fires `onFirstFrame` after the FIRST actual painted frame, not on context
+ *  creation. `onCreated` fires as soon as the GL context exists, which with
+ *  `frameloop="demand"` can be well before pixels are ever drawn (the initial
+ *  render is scheduled async) — signaling "ready" there raced the CSS
+ *  cross-fade ahead of real content, and if the context was lost in that
+ *  window the canvas was left permanently blank with no way back to the CSS
+ *  fallback. `useFrame` only runs on an actual render pass (still true under
+ *  "demand"), so this is the earliest point real pixels are guaranteed. */
+function FirstFrameSignal({ onFirstFrame }: { onFirstFrame: () => void }) {
+  const firedRef = useRef(false);
+  useFrame(() => {
+    if (!firedRef.current) {
+      firedRef.current = true;
+      onFirstFrame();
+    }
+  });
+  return null;
 }
 
 function RaisedGlyph({ char, color }: { char: string; color: string }) {
@@ -181,6 +204,7 @@ export default function KeychainPreview3DScene({
   placeholder = "",
   shape = "square",
   onReady,
+  onContextLost,
 }: Props) {
   // Mirror keychain-preview.tsx's display/chars/isSwatch logic exactly.
   const display = text || placeholder;
@@ -214,8 +238,20 @@ export default function KeychainPreview3DScene({
       // mount/prop changes (r3f invalidates automatically on scene commits)
       // and otherwise stays idle, which is both cheaper and more stable.
       frameloop="demand"
-      onCreated={() => onReady?.()}
+      onCreated={(state: RootState) => {
+        const canvas = state.gl.domElement;
+        // Without preventDefault() here, a lost WebGL context is permanent —
+        // the spec requires the app to opt in to restoration attempts.
+        canvas.addEventListener("webglcontextlost", (e) => {
+          e.preventDefault();
+          onContextLost?.();
+        });
+        canvas.addEventListener("webglcontextrestored", () => {
+          state.invalidate(); // force a re-render once the context comes back
+        });
+      }}
     >
+      <FirstFrameSignal onFirstFrame={() => onReady?.()} />
       <ambientLight intensity={0.6} />
       <directionalLight position={[3, 4, 5]} intensity={1.2} />
       <directionalLight position={[-3, -2, 2]} intensity={0.4} />

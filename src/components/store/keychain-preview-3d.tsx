@@ -92,7 +92,11 @@ export function KeychainPreview3D(props: Props) {
           className="absolute inset-0 transition-opacity duration-300"
           style={{ opacity: ready ? 1 : 0 }}
         >
-          <Scene {...props} onReady={() => setReady(true)} />
+          <Scene
+            {...props}
+            onReady={() => setReady(true)}
+            onContextLost={() => setReady(false)}
+          />
         </div>
       )}
     </div>
