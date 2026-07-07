@@ -28,6 +28,12 @@ function storageRoot(): string {
   return path.resolve(process.cwd(), MESHY_STORAGE_DIR);
 }
 
+/** Boundary-safe containment check — startsWith(root) alone would also match a sibling like "<root>-evil". */
+function isWithinRoot(root: string, target: string): boolean {
+  const resolved = path.resolve(target);
+  return resolved === root || resolved.startsWith(root + path.sep);
+}
+
 /** Strip a generation id to a safe path segment — prevents path traversal via a crafted id. */
 function safeGenerationId(id: string): string {
   if (!/^[a-zA-Z0-9-]+$/.test(id)) {
@@ -45,7 +51,7 @@ function safeGenerationId(id: string): string {
 export function resolveStoragePath(relPath: string): string {
   const root = storageRoot();
   const abs = path.join(root, relPath);
-  if (!path.resolve(abs).startsWith(root)) {
+  if (!isWithinRoot(root, abs)) {
     throw new Error("Invalid storage path");
   }
   return abs;
@@ -78,7 +84,7 @@ export async function writeSourceImage(
   const safeId = safeGenerationId(generationId);
   const root = storageRoot();
   const dir = path.join(root, safeId);
-  if (!path.resolve(dir).startsWith(root)) {
+  if (!isWithinRoot(root, dir)) {
     return { ok: false, error: "Invalid storage path." };
   }
 
@@ -126,7 +132,7 @@ export async function downloadMeshyAsset(
   const safeId = safeGenerationId(generationId);
   const root = storageRoot();
   const dir = path.join(root, safeId);
-  if (!path.resolve(dir).startsWith(root)) {
+  if (!isWithinRoot(root, dir)) {
     return { ok: false, error: "Invalid storage path." };
   }
 
