@@ -28,6 +28,7 @@ import { useCartStore } from "@/stores/cart-store";
 import { ConfiguratorForm } from "@/components/store/configurator-form";
 import { ConfigurableImageGallery } from "@/components/store/configurable-image-gallery";
 import { KeychainPreview } from "@/components/store/keychain-preview";
+import { KeychainPreview3D } from "@/components/store/keychain-preview-3d";
 import { VendingPreview } from "@/components/store/vending-preview";
 import { WishlistButton } from "@/components/store/wishlist-button";
 import { RatingBadge } from "@/components/store/rating-badge";
@@ -391,31 +392,41 @@ export function ConfigurableProductView({
   // previewNode is rendered inside the hero square (which has containerType set
   // on it in ConfigurableImageGallery). Keep this wrapper minimal — no extra
   // padding or nested container queries that would interfere with cube sizing.
-  const previewNode = (
-    <div
-      ref={previewRef}
-      className="w-full flex items-center justify-center"
-    >
-      {product.productType === "vending" ? (
-        <VendingPreview
-          primaryHex={baseHex}
-          secondaryHex={clickerHex}
-        />
-      ) : (
-        <KeychainPreview
-          text={textValue}
-          baseHex={baseHex}
-          clickerHex={clickerHex}
-          letterHex={letterHex}
-          maxLength={maxLength}
-          placeholder={
-            product.productType === "keychain" || textFields.length > 0
-              ? "YOURTEXT"
-              : ""
-          }
-          shape={product.keychainShape ?? "square"}
-        />
-      )}
+  //
+  // Quick task 260707-evn: the hero slot renders the real r3f 3D scene
+  // (KeychainPreview3D); the thumbnail miniature (thumbSlot, below) and the
+  // mobile sticky-preview-strip (untouched, further down this file) keep
+  // rendering the cheap CSS KeychainPreview — this keeps concurrent WebGL
+  // contexts on the page at 1 (hero only), never 2-3 (T-evn-02).
+  function renderPreviewInner(use3d: boolean) {
+    if (product.productType === "vending") {
+      return <VendingPreview primaryHex={baseHex} secondaryHex={clickerHex} />;
+    }
+    const Comp = use3d ? KeychainPreview3D : KeychainPreview;
+    return (
+      <Comp
+        text={textValue}
+        baseHex={baseHex}
+        clickerHex={clickerHex}
+        letterHex={letterHex}
+        maxLength={maxLength}
+        placeholder={
+          product.productType === "keychain" || textFields.length > 0
+            ? "YOURTEXT"
+            : ""
+        }
+        shape={product.keychainShape ?? "square"}
+      />
+    );
+  }
+  const heroPreviewNode = (
+    <div ref={previewRef} className="w-full flex items-center justify-center">
+      {renderPreviewInner(true)}
+    </div>
+  );
+  const thumbPreviewNode = (
+    <div className="w-full flex items-center justify-center">
+      {renderPreviewInner(false)}
     </div>
   );
 
@@ -475,7 +486,8 @@ export function ConfigurableProductView({
                   pictures={product.pictures}
                   showPreview={showPreview}
                   onTogglePreview={setShowPreview}
-                  previewSlot={previewNode}
+                  previewSlot={heroPreviewNode}
+                  thumbSlot={thumbPreviewNode}
                 />
               </div>
 
