@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ImageOff } from "lucide-react";
+import { ImageOff as NoThumbnailIcon } from "lucide-react";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { listGenerations } from "@/actions/admin-meshy";
 import { AdminMeshyStatusBadge } from "@/components/admin/admin-meshy-status-badge";
@@ -102,7 +102,7 @@ export default async function AdminMeshyPage() {
                           />
                         ) : (
                           <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100 text-slate-400">
-                            <ImageOff className="h-5 w-5" aria-hidden />
+                            <NoThumbnailIcon className="h-5 w-5" aria-hidden />
                           </span>
                         )}
                       </Link>
