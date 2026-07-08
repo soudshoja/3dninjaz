@@ -430,3 +430,13 @@ Plans:
 
 Plans:
 - [ ] TBD (run /gsd-plan-phase 21 to break down)
+
+### Phase 22: Admin Parametric Model Maker — admin-only tool: parametric keycap/keychain base-shape generation (footprint, height, corner radius, wall thickness, Cherry MX stem via keycap_playground OpenSCAD library) combined with Phase 21's Meshy AI top-design generation via boolean CSG combine, producing a final print-ready STL/3MF
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 21
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 22 to break down)
