@@ -283,6 +283,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 - [ ] **VAR-07**: Admin can set optional per-variant weight in grams; Delyva shipping quote uses the variant weight when present, else falls back to product-level weight, else to 500 g default.
 
+## Phase 21 — Admin Meshy AI 3D Generation
+
+- [ ] **REQ-21-1**: meshy_generations + meshy_revisions tables live on MariaDB; Drizzle mirror matches SHOW CREATE TABLE
+- [ ] **REQ-21-2**: Server-only Meshy client + private (non-public) model storage; every SUCCEEDED task's files downloaded before workflow state advances (3-day expiry rule)
+- [ ] **REQ-21-3**: createGeneration with pre-flight guardrails (jpeg/png only, 10MB cap, 600-char prompt cap client+server, moderation:true, balance guard)
+- [ ] **REQ-21-4**: Single advanceGeneration(id) state machine driven by client polling (5-8s) + 5-min cron reconciliation sweep
+- [ ] **REQ-21-5**: Review workflow — retexture (10cr) with meshy_revisions history + COUNT(*)-based revisionNumber, regenerate fallback, 3-day retexture-window guard
+- [ ] **REQ-21-6**: Approve runs free print/analyze; paid repair (10cr) fires ONLY on explicit admin click
+- [ ] **REQ-21-7**: Optional multi-color 3MF conversion (10cr, max_colors 1-16, max_depth 3-6)
+- [ ] **REQ-21-8**: Authenticated download Route Handler streams STL/3MF/GLB from private storage (requireAdmin first await)
+- [ ] **REQ-21-9**: Admin UI /admin/meshy (list), /new (upload), /[id] (detail with model-viewer, state-matrix actions, printability card, revision history) per 21-UI-SPEC
+
 ---
 *Requirements defined: 2026-04-12*
-*Last updated: 2026-04-22 — Phase 17 VAR-07 added (per-variant shipping weight, AD-08)*
+*Last updated: 2026-07-07 — Phase 21 requirements added (admin Meshy AI 3D generation tool, Plan 21-01 schema landed on live dev MariaDB)*
