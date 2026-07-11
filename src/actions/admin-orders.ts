@@ -507,23 +507,23 @@ export async function bulkDeleteOrders(
   if (ids.length === 0) return { ok: false, error: "No orders selected." };
   if (ids.length > 100) return { ok: false, error: "Too many orders selected (max 100)." };
 
-  // Only PENDING or CANCELLED orders may be deleted (2026-06-17). Anything in
-  // between (awaiting payment, paid, processing, shipped, delivered) must be
-  // CANCELLED first, never hard-deleted while live — preserves the
-  // financial/audit trail until the order is explicitly cancelled.
+  // Only PENDING, AWAITING_PAYMENT_REVIEW, or CANCELLED orders may be deleted
+  // (2026-06-17, extended 2026-07-11). Anything past that (paid, processing,
+  // shipped, delivered) must be CANCELLED first, never hard-deleted while
+  // live — preserves the financial/audit trail once payment is confirmed.
   const statusRows = await db
     .select({ id: orders.id, status: orders.status })
     .from(orders)
     .where(inArray(orders.id, ids));
   if (statusRows.length === 0) return { ok: false, error: "Orders not found." };
   const notDeletable = statusRows.filter(
-    (r) => r.status !== "pending" && r.status !== "cancelled",
+    (r) => r.status !== "pending" && r.status !== "awaiting_payment_review" && r.status !== "cancelled",
   );
   if (notDeletable.length > 0) {
     return {
       ok: false,
       error:
-        `Only pending or cancelled orders can be deleted. ${notDeletable.length} of the ` +
+        `Only pending, awaiting payment review, or cancelled orders can be deleted. ${notDeletable.length} of the ` +
         `selected order(s) are still active — cancel them first.`,
     };
   }
@@ -915,13 +915,13 @@ export async function deleteOrder(orderId: string): Promise<DeleteOrderResult> {
     .limit(1);
   if (!row) return { ok: false, error: "Order not found." };
 
-  // Only PENDING or CANCELLED orders may be deleted (2026-06-17). Anything still
-  // active in between must be CANCELLED first — preserves the financial/audit
-  // trail until the order is explicitly cancelled.
-  if (row.status !== "pending" && row.status !== "cancelled") {
+  // Only PENDING, AWAITING_PAYMENT_REVIEW, or CANCELLED orders may be deleted
+  // (2026-06-17, extended 2026-07-11). Anything past that must be CANCELLED
+  // first — preserves the financial/audit trail once payment is confirmed.
+  if (row.status !== "pending" && row.status !== "awaiting_payment_review" && row.status !== "cancelled") {
     return {
       ok: false,
-      error: "Only pending or cancelled orders can be deleted — cancel this order first.",
+      error: "Only pending, awaiting payment review, or cancelled orders can be deleted — cancel this order first.",
     };
   }
 
