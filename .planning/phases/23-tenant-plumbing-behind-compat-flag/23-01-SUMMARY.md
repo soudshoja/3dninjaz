@@ -86,9 +86,29 @@ Per `EXEC-GUARDRAILS.tmp.md`: "Task 3 (live platform-DB creation + migration run
 
 Tasks 1 and 2 are code-complete, typecheck-clean, and syntax-valid, ready for the orchestrator to run Task 3 against `ninjaz_platform_dev`.
 
+## Task 3 — COMPLETED by orchestrator (2026-07-13)
+
+The delegated live-DB checkpoint is done. Full proof (both `SHOW CREATE TABLE`
+blocks, the idempotent re-run, the UAPI create-database + grant path, and the
+live-verified `max_connections`) is recorded in
+`DEPLOY-NOTES.md § Platform DB creation (dev)`. Summary:
+
+- **`ninjaz_platform_dev` created** via cPanel UAPI over root SSH; the app user
+  `ninjaz_3dn` granted ALL PRIVILEGES on it (shared-app-user model). New empty
+  DB — cannot affect the live store DBs; reversible with `DROP DATABASE`.
+- **`PLATFORM_DATABASE_URL` added** to `.env.local` (gitignored), db=`ninjaz_platform_dev`.
+- **Migration applied** via the `127.0.0.1:3307` SSH tunnel (laptop IP not
+  whitelisted for `:3306` direct). Charset probed live from `ninjaz_3dn.user` =
+  `latin1`; both tables created `latin1`.
+- **Byte-for-byte match** with `platform-schema.ts` (dsn varchar(512), both PKs,
+  `uq_tenants_slug`, `uq_tenant_domains_domain`, LONGTEXT settings_json).
+- **Idempotency proven** — second run: `Applied (0)` / `Skipped (2)`.
+- Phase 23 **success criterion 3 is now satisfied** (platform DB exists with
+  the registry). Prod `ninjaz_platform` deferred to the Phase 27 cutover runbook.
+
 ## Next Phase Readiness
 - `src/lib/tenant/platform-schema.ts` exports the exact `Tenant`/`TenantRow`/`TenantSettings`/`ensureTenantSettings` surface that plans 23-02 (pool manager), 23-03 (registry), and 23-04 (tenant context) are written against — no further schema changes expected before those plans consume it.
-- Blocker: Phase 23 success criterion 3 (platform DB exists with the registry) is NOT yet satisfied — that requires Task 3 (orchestrator) to create `ninjaz_platform_dev` and run `scripts/phase23-migrate.cjs` against it, then verify the idempotent second run and record `SHOW CREATE TABLE` output in `DEPLOY-NOTES.md`.
+- Success criterion 3 (platform DB exists with the registry) is SATISFIED as of Task 3 completion above.
 
 ---
 *Phase: 23-tenant-plumbing-behind-compat-flag*
