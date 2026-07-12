@@ -719,6 +719,164 @@ export const paymentProofsRelations = relations(paymentProofs, ({ one }) => ({
 }));
 
 // ============================================================================
+// Phase 21: Meshy AI 3D generation (21-01)
+//
+// Admin-only Meshy Image-to-3D generation workflow. Parent table tracks one
+// admin-uploaded reference photo through the full pipeline (generate ->
+// review -> revise/approve -> analyze/repair -> optional multicolor). Child
+// table tracks retexture/regenerate revision history — revisionNumber is a
+// real COUNT(*) at insert time, never a stored counter (21-CONTEXT decision).
+//
+// UUIDs are app-generated (randomUUID) per CLAUDE.md MariaDB quirk.
+// printabilityReport + localModelFiles are JSON columns stored as LONGTEXT by
+// MariaDB — mysql2 does not auto-parse; every read MUST go through a parse
+// helper in src/lib/meshy/ (never re-declare an ensureXxx per call site).
+// Live tables created via scripts/phase21-migrate.cjs; DEFAULT CHARSET matches
+// the live-probed `user` table charset (never hardcoded — see migration script).
+// product_id and approved_by carry NO FK constraint (app-layer only) per the
+// resolved open question #2 in 21-CONTEXT.md — no v1 admin UI links a
+// generation to a catalog product.
+//
+// DDL shape — meshy_generations:
+//   id                       CHAR(36) PK
+//   adminUserId              CHAR(36) NOT NULL (FK -> user.id)
+//   productId                CHAR(36) NULL (no FK, no v1 UI)
+//   sourceImagePath          VARCHAR(1024) NOT NULL
+//   texturePrompt            VARCHAR(600) NULL
+//   aiModel                  VARCHAR(32) NOT NULL DEFAULT 'meshy-6'
+//   status                   ENUM(9 values) NOT NULL DEFAULT 'generating'
+//   meshyTaskId              VARCHAR(64) NULL
+//   meshyAnalyzeTaskId       VARCHAR(64) NULL
+//   meshyRepairTaskId        VARCHAR(64) NULL
+//   meshyMulticolorTaskId    VARCHAR(64) NULL
+//   printabilityStatus       ENUM('healthy','warning','error','unknown') NULL
+//   printabilityReport       LONGTEXT NULL (JSON)
+//   isMultiColor             TINYINT(1) NOT NULL DEFAULT 0
+//   localThumbnailPath       VARCHAR(1024) NULL
+//   localModelFiles          LONGTEXT NULL (JSON)
+//   creditsUsed              INT NOT NULL DEFAULT 0
+//   taskErrorType            VARCHAR(64) NULL
+//   taskErrorMessage         VARCHAR(512) NULL
+//   modelReadyAt             DATETIME NULL
+//   approvedAt               DATETIME NULL
+//   approvedBy               CHAR(36) NULL (no FK)
+//   createdAt                DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+//   updatedAt                DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+//   KEY idx_mg_status_updated(status, updated_at)
+//   KEY idx_mg_created(created_at)
+//   KEY idx_mg_product(product_id)
+//
+// DDL shape — meshy_revisions:
+//   id                       CHAR(36) PK
+//   generationId             CHAR(36) NOT NULL (FK -> meshy_generations.id ON DELETE CASCADE)
+//   revisionNumber           INT NOT NULL
+//   endpointUsed             ENUM('retexture','regenerate','remesh') NOT NULL
+//   changeNote               VARCHAR(1000) NULL
+//   newTexturePrompt         VARCHAR(600) NULL
+//   meshyTaskId              VARCHAR(64) NULL
+//   creditsUsed              INT NOT NULL DEFAULT 0
+//   createdAt                DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+//   KEY idx_mr_generation_created(generation_id, created_at)
+// ============================================================================
+
+export const meshyGenerations = mysqlTable(
+  "meshy_generations",
+  {
+    id: char("id", { length: 36 }).notNull().primaryKey(),
+    adminUserId: char("admin_user_id", { length: 36 }).notNull(),
+    productId: char("product_id", { length: 36 }),
+    sourceImagePath: varchar("source_image_path", { length: 1024 }).notNull(),
+    texturePrompt: varchar("texture_prompt", { length: 600 }),
+    aiModel: varchar("ai_model", { length: 32 }).notNull().default("meshy-6"),
+    status: mysqlEnum("status", ["generating","awaiting_review","revising","analyzing","repairing","processing_multicolor","ready","failed","canceled"])
+      .notNull()
+      .default("generating"),
+    meshyTaskId: varchar("meshy_task_id", { length: 64 }),
+    meshyAnalyzeTaskId: varchar("meshy_analyze_task_id", { length: 64 }),
+    meshyRepairTaskId: varchar("meshy_repair_task_id", { length: 64 }),
+    meshyMulticolorTaskId: varchar("meshy_multicolor_task_id", { length: 64 }),
+    printabilityStatus: mysqlEnum("printability_status", [
+      "healthy",
+      "warning",
+      "error",
+      "unknown",
+    ]),
+    printabilityReport: json("printability_report").$type<Record<string, unknown> | null>(),
+    isMultiColor: boolean("is_multi_color").notNull().default(false),
+    localThumbnailPath: varchar("local_thumbnail_path", { length: 1024 }),
+    localModelFiles: json("local_model_files").$type<{
+      glb?: string;
+      stl?: string;
+      threeMf?: string;
+    } | null>(),
+    creditsUsed: int("credits_used").notNull().default(0),
+    taskErrorType: varchar("task_error_type", { length: 64 }),
+    taskErrorMessage: varchar("task_error_message", { length: 512 }),
+    modelReadyAt: datetime("model_ready_at"),
+    approvedAt: datetime("approved_at"),
+    approvedBy: char("approved_by", { length: 36 }),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    // NOTE: MySqlDateTimeBuilder (the `datetime()` column type) does not
+    // expose `.onUpdateNow()` in the installed drizzle-orm 0.45.2 (that
+    // helper only exists on `timestamp()` columns — MySqlDateColumnBaseBuilder).
+    // `$onUpdateFn` is the documented ORM-level equivalent for any column
+    // type. The live DDL (scripts/phase21-migrate.cjs) still declares the
+    // authoritative `ON UPDATE CURRENT_TIMESTAMP` at the database level —
+    // this is a client-side mirror so Drizzle-issued UPDATEs that omit
+    // updatedAt still populate the correct SQL default.
+    updatedAt: datetime("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`)
+      .$onUpdateFn(() => sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => ({
+    statusUpdatedIdx: index("idx_mg_status_updated").on(t.status, t.updatedAt),
+    createdIdx: index("idx_mg_created").on(t.createdAt),
+    productIdx: index("idx_mg_product").on(t.productId),
+  }),
+);
+
+export const meshyRevisions = mysqlTable(
+  "meshy_revisions",
+  {
+    id: char("id", { length: 36 }).notNull().primaryKey(),
+    generationId: char("generation_id", { length: 36 }).notNull(),
+    revisionNumber: int("revision_number").notNull(),
+    endpointUsed: mysqlEnum("endpoint_used", [
+      "retexture",
+      "regenerate",
+      "remesh",
+    ]).notNull(),
+    changeNote: varchar("change_note", { length: 1000 }),
+    newTexturePrompt: varchar("new_texture_prompt", { length: 600 }),
+    meshyTaskId: varchar("meshy_task_id", { length: 64 }),
+    creditsUsed: int("credits_used").notNull().default(0),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => ({
+    generationCreatedIdx: index("idx_mr_generation_created").on(
+      t.generationId,
+      t.createdAt,
+    ),
+  }),
+);
+
+// NOTE: relations below are declared for completeness (Drizzle Studio, type
+// inference) but reads MUST use manual multi-query hydration (MariaDB has no
+// LATERAL join support) — never call
+// db.query.meshyGenerations.findMany({ with: { revisions: true } }).
+export const meshyGenerationsRelations = relations(meshyGenerations, ({ many }) => ({
+  revisions: many(meshyRevisions),
+}));
+
+export const meshyRevisionsRelations = relations(meshyRevisions, ({ one }) => ({
+  generation: one(meshyGenerations, {
+    fields: [meshyRevisions.generationId],
+    references: [meshyGenerations.id],
+  }),
+}));
+
+// ============================================================================
 // Phase 6: Customer Account (06-01)
 // New tables: addresses, wishlists, order_requests, reviews
 // New column on user: deletedAt (above)

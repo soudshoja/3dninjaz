@@ -76,3 +76,6 @@ next-env.d.ts
 .claude/
 backups/
 public/logo-original-backup.png
+
+# Meshy private model storage (Phase 21)
+/storage/
