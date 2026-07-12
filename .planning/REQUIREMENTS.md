@@ -295,6 +295,73 @@ Which phases cover which requirements. Updated during roadmap creation.
 - [ ] **REQ-21-8**: Authenticated download Route Handler streams STL/3MF/GLB from private storage (requireAdmin first await)
 - [ ] **REQ-21-9**: Admin UI /admin/meshy (list), /new (upload), /[id] (detail with model-viewer, state-matrix actions, printability card, revision history) per 21-UI-SPEC
 
+## Milestone v2.0 Requirements — Multi-Tenant Platform
+
+Admin-provisioned multi-tenant platform pivot. Database-per-tenant isolation, custom domains, admin-provisioned fleet (no self-serve signup/billing), the current live store migrates in as Tenant #1, a payment-gateway plugin architecture, and the first concrete plugin: Reseller (wholesale catalog access, resold under the tenant's own domain). Grounded in `.planning/research/SUMMARY.md` (2026-07-12) — see that file for the full architecture rationale, the resolved Reseller catalog-sharing decision, and the pitfall-to-phase mapping.
+
+### Tenant Infrastructure (TEN)
+
+- [ ] **TEN-01**: Super-admin can create a new tenant, which provisions its own fully isolated MariaDB database
+- [ ] **TEN-02**: Incoming requests resolve to the correct tenant based on the request's domain, with no cross-tenant data ever returned
+- [ ] **TEN-03**: A request to an unrecognized domain hard-fails (404/421) — it never falls back to serving an existing tenant's data
+- [ ] **TEN-04**: Every tenant's database schema is migrated independently via a fleet-aware migration runner, with per-tenant migration version tracked
+- [ ] **TEN-05**: Each tenant's database is backed up independently of the others
+
+### Super-Admin Panel (SUPER)
+
+- [ ] **SUPER-01**: Super-admin logs in via a platform identity that is completely separate from any tenant's admin account
+- [ ] **SUPER-02**: Super-admin can view a list of all tenants with their current status (active/suspended/provisioning)
+- [ ] **SUPER-03**: Super-admin can create a new tenant via a guided wizard (domain, initial admin credentials)
+- [ ] **SUPER-04**: Super-admin can suspend and later reactivate a tenant
+- [ ] **SUPER-05**: Super-admin can view catalog sync status for tenants running the Reseller plugin
+
+### Tenant #1 Cutover (CUTOVER)
+
+- [ ] **CUTOVER-01**: The existing live 3D Ninjaz store operates as Tenant #1 with zero data migration — a registry pointer change only, not a data copy
+- [ ] **CUTOVER-02**: The cutover can be rolled back within minutes with no data loss if an issue is found
+- [ ] **CUTOVER-03**: All existing customer sessions, carts, and in-flight orders survive the cutover uninterrupted
+
+### Payment Plugin Architecture (PLUGIN)
+
+- [ ] **PLUGIN-01**: Payment gateways are implemented behind a common interface so a new gateway can be added without modifying tenant-facing checkout code
+- [ ] **PLUGIN-02**: PayPal is ported to the plugin interface as the first implementation, preserving current checkout behavior for Tenant #1
+- [ ] **PLUGIN-03**: Each tenant's payment gateway credentials are stored per-tenant at runtime, never baked into the build (no `NEXT_PUBLIC_*` gateway secrets)
+
+### Reseller Plugin (RESELL)
+
+- [ ] **RESELL-01**: Super-admin can grant a tenant "reseller" entitlement with access to a defined set of products at wholesale pricing
+- [ ] **RESELL-02**: Entitled products sync one-way from the supplier catalog (Tenant #1) into the reseller tenant's own database, preserving product identity (same UUIDs)
+- [ ] **RESELL-03**: A reseller tenant can set their own retail price on synced products; platform-owned fields (content, structure, wholesale cost) stay supplier-controlled and are not editable by the reseller
+- [ ] **RESELL-04**: Wholesale cost flows into the existing `product_variants.cost_price` field so profit margin is visible through the store's existing margin/accounting reporting with no new UI
+- [ ] **RESELL-05**: A reseller's sold orders are forwarded to the supplier's production/fulfillment queue
+- [ ] **RESELL-06**: A margin rule can auto-set a reseller's retail price as a percentage markup over wholesale cost
+
+### Isolation Verification (VERIFY)
+
+- [ ] **VERIFY-01**: A second (test) tenant provisions fully end-to-end (domain, database, admin account) and passes a cross-tenant isolation check battery before the platform is considered production-ready
+
+### Future Requirements (v1.x — deferred, trigger-based)
+
+- Impersonation: super-admin can log in as a tenant's admin for support, with an audit log — deferred until the first real need to debug inside a tenant arises
+- Reseller order tracking sync-back + reseller-branded shipping notifications — deferred until real reseller order volume exists
+- Cross-fleet analytics rollup for the super-admin panel
+- Reseller browse-and-import self-serve catalog UI — v1 reseller catalog access is admin-granted, not self-serve
+
+### Out of Scope
+
+- **Self-serve tenant signup + billing** — this is an admin-provisioned fleet the store owner manages directly, not an open SaaS product. No subscription/billing plumbing in v1.
+- **Two-way catalog sync / reseller content edits** — the supplier (Tenant #1) remains the sole content owner; two-way sync would need conflict-resolution logic that isn't needed for a wholesale-resell model.
+- **Per-tenant feature gating** — every tenant runs the full existing feature set in v1; gating is a future milestone if ever needed.
+- **Process-per-tenant deployment** — a single Node process serves all tenants via per-request tenant resolution; this fits the single cPanel box hosting reality.
+- **Automated payment splitting** — the Reseller plugin uses a manual-transfer settlement ledger in v1, not automated payout splitting.
+- **Real-time cross-database stock/catalog checks** — the sync-copy model accepts minutes-level staleness; orders already snapshot prices, so this is harmless.
+- **Cross-tenant SSO** — each tenant runs its own independent Better Auth instance.
+- **Theme builder / wildcard subdomains** — not requested; custom domains per tenant is the locked routing model.
+
+### Traceability
+
+(Filled in by the roadmapper when phases are created.)
+
 ---
 *Requirements defined: 2026-04-12*
-*Last updated: 2026-07-07 — Phase 21 requirements added (admin Meshy AI 3D generation tool, Plan 21-01 schema landed on live dev MariaDB)*
+*Last updated: 2026-07-12 — Milestone v2.0 (Multi-Tenant Platform) requirements added, grounded in 4-dimension Fable research pass*
