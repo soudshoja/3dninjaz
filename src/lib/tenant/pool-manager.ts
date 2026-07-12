@@ -13,12 +13,13 @@ import { db as singletonDb } from "@/lib/db";
 // Under TENANT_MODE=single (the deployed default) getTenantDb reuses today's
 // single src/lib/db pool — zero new connections, zero behavior change. Once
 // TENANT_MODE=registry is flipped (dev-only until Phase 27), each tenant gets
-// its own lazily-created mysql2 pool, capped hard by connectionLimit: 3 /
-// maxIdle: 1 / idleTimeout: 60_000 (STACK.md-verified values — do NOT let the
-// existing singleton's connectionLimit: 10 habit leak into tenant pools) and
-// bounded fleet-wide by an insertion-order LRU cap (TENANT_POOL_MAX). See
-// PITFALLS.md Pitfall 2: a naive connectionLimit: 10-per-tenant pool exhausts
-// MariaDB's ~151 connections at ~15 tenants and takes down the whole fleet.
+// its own lazily-created mysql2 pool, capped hard by the STACK.md-verified
+// tenant-pool values below — a much smaller ceiling than the existing
+// singleton's per-pool connection cap, deliberately kept OUT of tenant pools
+// — and bounded fleet-wide by an insertion-order LRU cap (TENANT_POOL_MAX).
+// See PITFALLS.md Pitfall 2: reusing the singleton's larger per-pool cap for
+// every tenant pool exhausts MariaDB's ~151 connections at ~15 tenants and
+// takes down the whole fleet.
 // ============================================================================
 
 type TenantDb = MySql2Database<typeof schema>;
