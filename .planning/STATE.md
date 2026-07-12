@@ -41,11 +41,10 @@ See: .planning/PROJECT.md (updated 2026-04-12)
 
 ## Current Position
 
-Phase: 19 (Made-to-Order Product Type) — COMPLETE + post-shipment hotfix sweep
-Plans: 11/11 shipped + 5 hotfix commits applied (e5b55bd → c118ae6) addressing pre-existing Phase 7 upload bug, 50MB cap lift, XHR progress UI, server log monitor
-Next Phase: 20 (User & Role Management) — backlog, awaiting /gsd-spec-phase 20
-Status: c118ae6 on dev. CI auto-deploying. Server-side log monitor LIVE (1-min cron WhatsApp alerts to +96599800027). Awaiting human smoke on app.3dninjaz.com
-Last activity: 2026-07-05 - Fixed round clicker ring (260705-n1x): draw as inward border on clicker face instead of separate layer behind base, per user visual feedback that it looked like part of the base — pending push to dev + visual verify
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements for Milestone v2.0 — Multi-Tenant Platform
+Last activity: 2026-07-12 — Milestone v2.0 (Multi-Tenant Platform) started via /gsd-new-milestone. Database-per-tenant isolation, custom domains, admin-provisioned fleet (no self-serve billing), existing store migrates in as Tenant #1, plugin architecture for payment gateways + a named first plugin (Reseller — discounted/wholesale catalog pricing under tenant's own domain).
 
 Progress: [██████████] 100% (code) | Pre-launch admin actions pending
 
