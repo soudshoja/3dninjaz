@@ -450,7 +450,7 @@ Grounded in `.planning/research/SUMMARY.md` (2026-07-12). The core insight: the 
 
 ### Phases (v2.0)
 
-- [ ] **Phase 23: Tenant Plumbing Behind Compat Flag** — Platform registry DB, host-header tenant resolution, per-tenant pool manager, tenant-aware cache tags; `TENANT_MODE=single` preserves today's behavior byte-for-byte
+- [x] **Phase 23: Tenant Plumbing Behind Compat Flag** — Platform registry DB, host-header tenant resolution, per-tenant pool manager, tenant-aware cache tags; `TENANT_MODE=single` preserves today's behavior byte-for-byte (completed 2026-07-12)
 - [ ] **Phase 24: Singleton Dissolution Sweep** — Guards return `{ session, tenant, db }`; per-tenant Better Auth/mailer/publicUrl; ~70-file `db`-import sweep with compile-error enforcement; money-path regression in compat mode
 - [ ] **Phase 25: Provisioning & Fleet Operations Tooling** — AutoSSL DCV spike, idempotent create-tenant state machine, domain+TLS provisioning runbook, fleet migration runner with per-tenant version tracking, per-tenant backups
 - [ ] **Phase 26: Super-Admin Panel** — Platform identity (separate Better Auth instance + `requireSuperAdmin()`), tenant list/status, guided create wizard, suspend/reactivate; panel bound to a dedicated platform domain
@@ -566,7 +566,7 @@ Grounded in `.planning/research/SUMMARY.md` (2026-07-12). The core insight: the 
 
 | Phase | Requirements | Status | Completed |
 |-------|--------------|--------|-----------|
-| 23. Tenant Plumbing Behind Compat Flag | TEN-03 | Not started | — |
+| 23. Tenant Plumbing Behind Compat Flag | 4/4 | Complete    | 2026-07-12 |
 | 24. Singleton Dissolution Sweep | TEN-02 | Not started | — |
 | 25. Provisioning & Fleet Operations Tooling | TEN-01, TEN-04, TEN-05 | Not started | — |
 | 26. Super-Admin Panel | SUPER-01..04 | Not started | — |

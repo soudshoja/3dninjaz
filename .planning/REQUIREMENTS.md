@@ -303,7 +303,7 @@ Admin-provisioned multi-tenant platform pivot. Database-per-tenant isolation, cu
 
 - [ ] **TEN-01**: Super-admin can create a new tenant, which provisions its own fully isolated MariaDB database
 - [ ] **TEN-02**: Incoming requests resolve to the correct tenant based on the request's domain, with no cross-tenant data ever returned
-- [ ] **TEN-03**: A request to an unrecognized domain hard-fails (404/421) — it never falls back to serving an existing tenant's data
+- [x] **TEN-03**: A request to an unrecognized domain hard-fails (404/421) — it never falls back to serving an existing tenant's data
 - [ ] **TEN-04**: Every tenant's database schema is migrated independently via a fleet-aware migration runner, with per-tenant migration version tracked
 - [ ] **TEN-05**: Each tenant's database is backed up independently of the others
 
@@ -366,7 +366,7 @@ Mapped during v2.0 roadmap creation (2026-07-12). Phases 23–30 — Phase 22 is
 |-------------|-------|--------|
 | TEN-01 | Phase 25 | Pending |
 | TEN-02 | Phase 24 | Pending |
-| TEN-03 | Phase 23 | Pending |
+| TEN-03 | Phase 23 | Complete |
 | TEN-04 | Phase 25 | Pending |
 | TEN-05 | Phase 25 | Pending |
 | SUPER-01 | Phase 26 | Pending |
