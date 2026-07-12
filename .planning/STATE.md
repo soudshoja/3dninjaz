@@ -1,7 +1,7 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
+milestone: v2.0
+milestone_name: multi-tenant-platform
 status: c118ae6 on dev. CI auto-deploying. Server-side log monitor LIVE (1-min cron WhatsApp alerts to +96599800027). Awaiting human smoke on app.3dninjaz.com
 stopped_at: Phase 20 SHIPPED — 13 plans + verifier PASS — pending push
 last_updated: "2026-05-17T15:47:06.976Z"
