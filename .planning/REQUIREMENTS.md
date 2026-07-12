@@ -360,7 +360,35 @@ Admin-provisioned multi-tenant platform pivot. Database-per-tenant isolation, cu
 
 ### Traceability
 
-(Filled in by the roadmapper when phases are created.)
+Mapped during v2.0 roadmap creation (2026-07-12). Phases 23–30 — Phase 22 is reserved for the Admin Parametric Model Maker (PR #184, separate branch).
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| TEN-01 | Phase 25 | Pending |
+| TEN-02 | Phase 24 | Pending |
+| TEN-03 | Phase 23 | Pending |
+| TEN-04 | Phase 25 | Pending |
+| TEN-05 | Phase 25 | Pending |
+| SUPER-01 | Phase 26 | Pending |
+| SUPER-02 | Phase 26 | Pending |
+| SUPER-03 | Phase 26 | Pending |
+| SUPER-04 | Phase 26 | Pending |
+| SUPER-05 | Phase 30 | Pending |
+| CUTOVER-01 | Phase 27 | Pending |
+| CUTOVER-02 | Phase 27 | Pending |
+| CUTOVER-03 | Phase 27 | Pending |
+| PLUGIN-01 | Phase 29 | Pending |
+| PLUGIN-02 | Phase 29 | Pending |
+| PLUGIN-03 | Phase 29 | Pending |
+| RESELL-01 | Phase 30 | Pending |
+| RESELL-02 | Phase 30 | Pending |
+| RESELL-03 | Phase 30 | Pending |
+| RESELL-04 | Phase 30 | Pending |
+| RESELL-05 | Phase 30 | Pending |
+| RESELL-06 | Phase 30 | Pending |
+| VERIFY-01 | Phase 28 | Pending |
+
+**Coverage:** 23/23 v2.0 requirements mapped to Phases 23–30. Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-12*
