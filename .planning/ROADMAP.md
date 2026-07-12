@@ -430,3 +430,149 @@ Plans:
 
 Plans:
 - [x] TBD (run /gsd-plan-phase 21 to break down) (completed 2026-07-07)
+
+---
+
+## Milestone v2.0 — Multi-Tenant Platform (Phases 23–30)
+
+**Milestone goal:** Turn the single-tenant 3D Ninjaz store into an admin-provisioned multi-tenant platform — super-admin creates and controls tenant stores, each fully isolated (own MariaDB database, own custom domain), each running the complete current feature set, with the current live store migrating in as Tenant #1, a payment-gateway plugin architecture, and the first concrete plugin: Reseller (wholesale catalog access resold under the tenant's own domain).
+
+> **Phase numbering note:** Phase 22 (Admin Parametric Model Maker) is registered on branch `docs/phase22-parametric-model-maker` (PR #184, not yet merged to dev) and is therefore not visible in `.planning/phases/` on this branch. **Phase 22 is reserved** — this milestone starts at Phase 23 to avoid a numbering collision when that branch merges.
+
+### Milestone Overview
+
+Grounded in `.planning/research/SUMMARY.md` (2026-07-12). The core insight: the existing prod DB (`ninjaz_3dnp`) already IS a tenant database, so Tenant #1 cutover is a registry pointer move, not a data migration. The milestone's mechanical risk (dissolving the `db`/`auth`/`publicOrigin()`/mailer/PayPal singletons across ~70 files) is front-loaded into Phases 23–24 behind a `TENANT_MODE=single` compat flag with zero behavior change, merged continuously to dev (avoiding the documented dev/master squash-divergence conflict storm a long-lived branch would cause). The live store is protected structurally: cutover is late (Phase 27), rehearsed on dev first, reversible in minutes, and requires no data movement.
+
+**Adjustments vs SUMMARY.md's proposed 7-phase structure:**
+
+1. SUMMARY's Phase 3 (super-admin surface + provisioning tooling) is **split** into Phase 25 (provisioning & fleet ops tooling) and Phase 26 (super-admin panel). Rationale: the bundle mixed root-SSH server ops + a blocking phase-entry spike (AutoSSL DCV behind the ProxyPass — the milestone's one MEDIUM-confidence unknown) with a new Better Auth instance + a full admin UI surface — two execution passes' worth of heterogeneous work. Splitting isolates the spike risk from the UI work, maps TEN-* vs SUPER-* requirements cleanly, and makes the panel domain a true consumer of the Phase 25 runbook (better dogfooding, not worse).
+2. The rest of the chain was validated and kept: cutover after tooling+panel (needs registry rows, runbook, and status visibility); isolation verification after cutover (prod "production-ready" is only declarable once prod actually runs ≥2 tenants — meanwhile the dev fleet runs ≥2 tenants from Phase 24 onward, which is the only configuration that detects singleton/cache leakage at all); payment plugin after cutover (PLUGIN-02 requires Tenant #1 to exist *as a tenant*); Reseller last (depends on Tenant #1 as supplier, a proven second tenant, and Phase 29's plugin enablement flags).
+
+### Phases (v2.0)
+
+- [x] **Phase 23: Tenant Plumbing Behind Compat Flag** — Platform registry DB, host-header tenant resolution, per-tenant pool manager, tenant-aware cache tags; `TENANT_MODE=single` preserves today's behavior byte-for-byte (completed 2026-07-12)
+- [ ] **Phase 24: Singleton Dissolution Sweep** — Guards return `{ session, tenant, db }`; per-tenant Better Auth/mailer/publicUrl; ~70-file `db`-import sweep with compile-error enforcement; money-path regression in compat mode
+- [ ] **Phase 25: Provisioning & Fleet Operations Tooling** — AutoSSL DCV spike, idempotent create-tenant state machine, domain+TLS provisioning runbook, fleet migration runner with per-tenant version tracking, per-tenant backups
+- [ ] **Phase 26: Super-Admin Panel** — Platform identity (separate Better Auth instance + `requireSuperAdmin()`), tenant list/status, guided create wizard, suspend/reactivate; panel bound to a dedicated platform domain
+- [ ] **Phase 27: Tenant #1 Cutover (Dev First, Then Prod)** — Live store becomes Tenant #1 via registry pointer change only; rollback rehearsed; sessions/carts/in-flight orders survive
+- [ ] **Phase 28: Second Tenant + Isolation Verification** — Test tenant provisions end-to-end on a real spare domain; cross-tenant isolation battery passes; platform declared production-ready
+- [ ] **Phase 29: Payment Plugin Architecture** — `PaymentProvider` interface, PayPal ported as first implementation, per-tenant runtime credentials (no `NEXT_PUBLIC_*` gateway secrets), plugin enablement flags
+- [ ] **Phase 30: Reseller Plugin** — Entitlements + wholesale price lists + margin rules, one-way catalog sync-copy (same UUIDs), wholesale→`cost_price` mapping, order forwarding to supplier, settlement ledger, sync-status dashboard
+
+### Phase Details (v2.0)
+
+#### Phase 23: Tenant Plumbing Behind Compat Flag
+
+**Goal**: The multi-tenant request path exists — registry, host resolution, per-tenant pools, tenant-scoped caching — while the deployed app's behavior is provably unchanged under the default `TENANT_MODE=single` compat flag
+**Depends on**: Nothing in v2.0 (first phase of milestone); rides on the live v1.0 codebase
+**Requirements**: TEN-03
+**Success Criteria** (what must be TRUE):
+
+  1. With `TENANT_MODE=single` (the default), the deployed app behaves identically to today — full storefront/admin/checkout regression passes on dev with a single tenant synthesized from `DATABASE_URL`
+  2. In multi mode on dev, a request whose Host header matches a registered domain resolves to that tenant's context (correct DSN, pool, and cache namespace); a request to an unrecognized domain returns a hard 404/421 and NEVER falls back to serving any existing tenant's data (TEN-03)
+  3. Platform DB (`ninjaz_platform_dev` / `ninjaz_platform`) exists with the tenant registry (full DSNs, not just DB names) and domains tables; registry resolution is served from an in-process cache with TTL + explicit bust
+  4. The pool manager opens per-tenant pools lazily with `connectionLimit: 3` / `maxIdle: 1` / `idleTimeout`, and MariaDB `max_connections` has been verified on the box with the fleet budget math recorded in DEPLOY-NOTES
+  5. Tenant-aware cache helpers exist and prefix every `unstable_cache` key/tag with `t:<tenantId>:` — landed before any consumer so partial prefixing is impossible
+
+#### Phase 24: Singleton Dissolution Sweep
+
+**Goal**: No module-level singleton can touch the wrong tenant — every DB/auth/mail/URL/payment access flows through tenant context, enforced by the compiler, while behavior in compat mode is regression-proven unchanged
+**Depends on**: Phase 23
+**Requirements**: TEN-02
+**Success Criteria** (what must be TRUE):
+
+  1. The module-level `db`, `auth`, mailer, PayPal-client, and `publicOrigin()` singleton exports no longer exist — a stale import is a compile error, an ESLint `no-restricted-imports` rule bans reintroduction, and an `rg` audit of all ~70 former import sites returns zero matches
+  2. Every guarded handler receives `{ session, tenant, db }` from the tenant-aware guards (`requireAdmin()` / `requireUser()` keep their names and first-`await` call sites); tenant binding precedes session lookup, so validating a session against the wrong tenant is structurally impossible
+  3. On a ≥2-tenant dev fleet (second tenant hand-provisioned), browsing and admin CRUD on tenant A returns only tenant A's data, and a session cookie minted on tenant A presented to tenant B's domain is rejected (TEN-02)
+  4. Full money-path regression passes on dev in compat mode: checkout, PayPal webhook, Delyva webhook, auth flows (register/login/reset), admin CRUD, and transactional email — all behavior-identical to pre-sweep
+  5. All outbound URLs (emails, PayPal return URLs, invoice links) derive from the registry's canonical domain for the tenant — never echoed from the incoming Host header
+
+#### Phase 25: Provisioning & Fleet Operations Tooling
+
+**Goal**: A new tenant can be stamped out and the whole fleet operated (migrated, backed up) with idempotent, retryable tooling — proven first on a throwaway domain via the AutoSSL spike
+**Depends on**: Phase 23 (registry schema); executes after Phase 24 per this project's sequential-execution rule
+**Requirements**: TEN-01, TEN-04, TEN-05
+**Success Criteria** (what must be TRUE):
+
+  1. Phase-entry spike passed: AutoSSL issues a valid certificate for a throwaway addon domain routed through the tenant vhost template with the `/.well-known/acme-challenge` ProxyPass exclusion — result documented (with the `acme.sh` + UAPI `install_ssl` fallback recorded if it fails), and the shared-vs-per-tenant MySQL user decision is made and logged
+  2. Running the create-tenant tool provisions a new, fully isolated MariaDB database with baseline schema and a seeded tenant admin, recording every state transition (`pending → provisioning → active`); killing it mid-run and re-running resumes idempotently instead of duplicating or corrupting (TEN-01)
+  3. The fleet migration runner applies a schema migration to every registered tenant DB independently, records a per-tenant schema version, reports (not silently skips) any tenant that fails, and a boot guard flags version drift (TEN-04)
+  4. Each tenant's database is backed up on schedule independently of the others, and a single tenant's backup restores successfully without touching any other tenant's data (TEN-05)
+
+#### Phase 26: Super-Admin Panel
+
+**Goal**: The platform has its own control surface — a super-admin identity completely separate from any tenant, managing the fleet through a panel that exists only on the platform's own domain
+**Depends on**: Phase 25 (panel domain provisioned via the runbook — dogfooding; wizard drives the create-tenant state machine), Phase 24 (guard/auth-factory patterns)
+**Requirements**: SUPER-01, SUPER-02, SUPER-03, SUPER-04
+**Success Criteria** (what must be TRUE):
+
+  1. Super-admin logs in with a platform identity stored in the platform DB's own Better Auth instance — no tenant database contains the super-admin account, and a tenant admin's credentials cannot open the panel (SUPER-01); every panel action starts with `requireSuperAdmin()` as the first await
+  2. The panel is served only on its dedicated platform domain — requesting any panel route on a tenant domain returns 404
+  3. The panel lists all tenants with live status (active / suspended / provisioning) (SUPER-02), and the guided wizard creates a tenant end-to-end (domain, initial admin credentials) by driving the Phase 25 state machine with visible step progress (SUPER-03)
+  4. Suspending a tenant makes its storefront and admin stop serving (suspended response) within one registry-cache bust, and reactivating restores it with no data loss (SUPER-04)
+
+#### Phase 27: Tenant #1 Cutover (Dev First, Then Prod)
+
+**Goal**: The live 3D Ninjaz store runs as Tenant #1 through the multi-tenant request path — with zero data movement, a rehearsed minutes-long rollback, and no customer-visible interruption
+**Depends on**: Phase 24 (sweep soaked on dev), Phase 25 (registry rows + runbook), Phase 26 (fleet status visibility)
+**Requirements**: CUTOVER-01, CUTOVER-02, CUTOVER-03
+**Success Criteria** (what must be TRUE):
+
+  1. The live store serves as Tenant #1 through tenant resolution with zero rows copied — its registry entry points at the existing `ninjaz_3dnp` database (dev store rehearses first as Tenant #0 against `ninjaz_3dn`, per the dev-first rule) (CUTOVER-01)
+  2. Rollback is rehearsed and timed on dev before prod: flipping back to `TENANT_MODE=single` restores pre-cutover behavior in minutes with no data loss (CUTOVER-02) — additive-only schema during the transition window means the previous single-tenant build still boots against the same DB
+  3. Sessions active before the cutover are still logged in after it; localStorage carts persist; an in-flight order created before the flip captures successfully after it, with PayPal and Delyva webhooks landing on the correct tenant (CUTOVER-03)
+  4. Negative smoke on prod: a request with an unrecognized Host header against the prod box returns 404/421 — never Tenant #1 data
+
+#### Phase 28: Second Tenant + Isolation Verification
+
+**Goal**: The platform is real — a synthetic second tenant provisions fully end-to-end through the actual tooling, and the cross-tenant isolation battery proves the guarantees by test, not reasoning
+**Depends on**: Phase 27 (prod runs multi-tenant), Phases 25–26 (provisioning path under test)
+**Requirements**: VERIFY-01
+**Success Criteria** (what must be TRUE):
+
+  1. A second (test) tenant provisions fully end-to-end via the Phase 25/26 tooling — spare domain, DNS, database, AutoSSL cert, seeded admin — and serves a working storefront + admin on its own domain (VERIFY-01)
+  2. The cross-tenant isolation battery passes: tenant A's session cookie rejected on tenant B's domain; per-tenant cache cold-start difference confirmed (no shared cache entries); uploads namespaced per tenant; `SHOW GRANTS` audit clean; CI grep for cross-database SQL qualifiers (`ninjaz_\w+\.`) returns zero
+  3. Crons, webhooks, scripts, and the watchdog all handle tenancy explicitly (no Host-header assumption — webhook tenant identity comes from the registration path), and per-tenant health checks run in the existing Telegram watchdog for both tenants independently
+  4. The full "Looks Done But Isn't" checklist from PITFALLS.md is executed and its results recorded in the phase verification doc — only then is the platform declared production-ready
+
+#### Phase 29: Payment Plugin Architecture
+
+**Goal**: Payment gateways are pluggable — checkout speaks only to a common interface, PayPal is the first implementation behind it with Tenant #1's behavior preserved, and gateway credentials are per-tenant runtime data, never build-time constants
+**Depends on**: Phase 27 (Tenant #1 exists as a tenant — PLUGIN-02's preservation target), Phase 28 (isolation verified before touching money paths)
+**Requirements**: PLUGIN-01, PLUGIN-02, PLUGIN-03
+**Success Criteria** (what must be TRUE):
+
+  1. Tenant-facing checkout code calls only the `PaymentProvider` interface (receiving `{ tenant, db, config }`) — proven by adding a stub second gateway with zero changes to checkout code (PLUGIN-01)
+  2. Tenant #1 completes a full PayPal checkout through the ported plugin — sandbox first, then a live prod order — with order capture, webhook handling, capture financials, refunds, and confirmation emails all behaving exactly as before the port (PLUGIN-02)
+  3. `NEXT_PUBLIC_PAYPAL_CLIENT_ID` is gone from the build — the client ID is delivered per-tenant at runtime, gateway secrets are stored per-tenant encrypted at rest, and a grep of the built bundle shows no baked gateway credentials (PLUGIN-03)
+  4. Per-tenant plugin enablement flags exist in the platform registry with a minimal admin surface — the substrate the Reseller plugin rides on
+
+#### Phase 30: Reseller Plugin
+
+**Goal**: A tenant can resell the supplier's catalog under their own domain and margin — entitled products sync-copy into the reseller's own DB (isolation intact), wholesale cost lights up existing margin reporting, and sold orders flow back to the supplier's production queue
+**Depends on**: Phase 27 (Tenant #1 = supplier), Phase 28 (a second tenant exists and is verified), Phase 29 (plugin enablement flags)
+**Requirements**: RESELL-01, RESELL-02, RESELL-03, RESELL-04, RESELL-05, RESELL-06, SUPER-05
+**Success Criteria** (what must be TRUE):
+
+  1. Super-admin grants a tenant reseller entitlement over a defined product set at wholesale pricing (RESELL-01); entitled products appear in the reseller tenant's own database with identical UUIDs via the one-way sync engine (FK-ordered graph copy), and a supplier-side content edit propagates on the next sync cycle while the reseller's local edits to tenant-owned fields survive it (RESELL-02)
+  2. The reseller can set retail price manually, or a margin rule auto-sets it as a percentage markup over wholesale cost (RESELL-06); platform-owned fields (content, structure, wholesale cost) are not editable from the reseller's admin (RESELL-03)
+  3. Wholesale cost lands in the reseller tenant's `product_variants.cost_price`, so the existing margin readout, `order_items.unit_cost` snapshot, and accounting module show resale profit with no new reporting UI (RESELL-04)
+  4. A paid order on the reseller's storefront is forwarded into the supplier's (Tenant #1's) production/fulfillment queue, and the settlement ledger records the wholesale amount owed (manual-transfer settlement in v1) (RESELL-05)
+  5. The super-admin panel shows per-reseller catalog sync status — last run, synced/failed product counts, errors (SUPER-05) — and no cross-database SQL join exists anywhere in the sync path (in-memory joins across the tenant pool + platform pool only)
+
+### Progress (v2.0)
+
+**Execution Order:** 23 → 24 → 25 → 26 → 27 → 28 → 29 → 30 (strictly sequential — the dependency chain is strict, and this project defaults to sequential execution)
+
+| Phase | Requirements | Status | Completed |
+|-------|--------------|--------|-----------|
+| 23. Tenant Plumbing Behind Compat Flag | 4/4 | Complete    | 2026-07-12 |
+| 24. Singleton Dissolution Sweep | TEN-02 | Not started | — |
+| 25. Provisioning & Fleet Operations Tooling | TEN-01, TEN-04, TEN-05 | Not started | — |
+| 26. Super-Admin Panel | SUPER-01..04 | Not started | — |
+| 27. Tenant #1 Cutover | CUTOVER-01..03 | Not started | — |
+| 28. Second Tenant + Isolation Verification | VERIFY-01 | Not started | — |
+| 29. Payment Plugin Architecture | PLUGIN-01..03 | Not started | — |
+| 30. Reseller Plugin | RESELL-01..06, SUPER-05 | Not started | — |
+
+**Coverage:** 23/23 v2.0 requirements mapped (TEN 5, SUPER 5, CUTOVER 3, PLUGIN 3, RESELL 6, VERIFY 1). Unmapped: 0 ✓

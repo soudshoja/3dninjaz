@@ -64,6 +64,24 @@ Customers can easily browse and buy unique 3D printed products with a simple, cl
 | PayPal for payments | Skill already available, works in Malaysia | — Pending |
 | Simple size tiers (S/M/L) | Keep pricing and options simple for v1 | — Pending |
 
+## Current Milestone: v2.0 Multi-Tenant Platform
+
+**Goal:** Turn the single-tenant 3D Ninjaz store into an admin-provisioned multi-tenant platform — the super-admin creates and controls tenant stores, each fully isolated (own database, own custom domain), each running the complete current feature set, with the current live store migrating in as Tenant #1.
+
+**Target features:**
+- Central tenant registry (platform-level) resolving incoming requests by custom domain to the correct tenant + database connection
+- Database-per-tenant isolation (full data separation, not a shared tenant_id column)
+- Super-admin panel: create/manage/suspend tenants, no self-serve tenant signup
+- Every tenant gets the full existing feature set (catalog, cart, checkout, orders, admin panel, Meshy AI tool) — no per-tenant feature gating in v1
+- Live 3D Ninjaz store + real production data migrates in as Tenant #1
+- Plugin architecture for payment gateways and store add-ons (PayPal, Hesabe/KNET, MyFatoorah, etc. as installable modules) — architecture only in v1, marketplace UI deferred
+- **Reseller plugin (first concrete plugin, named by user, in v1 scope):** tenants get discounted/wholesale pricing on a shared product catalog and resell under their own domain/branding, keeping the margin. Open question for research: does this mean a shared platform catalog that tenant DBs read from, or a sync/copy mechanism into each tenant's own DB — this is in tension with pure database-per-tenant isolation and needs to be resolved explicitly, not assumed.
+
+**Key context from milestone scoping:**
+- No self-serve billing/signup needed in v1 — this is a fleet the admin manages, not an open SaaS signup product (though the plugin architecture should leave room for billing later)
+- Custom domains per tenant (not subdomains) — each tenant's own domain points at the platform
+- Real production data migration risk on the existing store — needs careful, tested rollout, not a big-bang cutover
+
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.

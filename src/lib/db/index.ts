@@ -44,3 +44,16 @@ if (process.env.NODE_ENV !== "production") {
 
 export const db = drizzle(pool, { schema, mode: "default" });
 export { pool };
+
+// Phase 23 (23-03) — additive only, below this line. Compat flag. Default
+// "single" = today's behavior, Host ignored, one tenant synthesized from
+// DATABASE_URL. "registry" activates Host-based resolution (dev only until
+// Phase 27 cutover).
+export const TENANT_MODE = (process.env.TENANT_MODE ?? "single") as
+  | "single"
+  | "registry";
+
+// Re-export the platform accessor so callers have one import path. This is a
+// plain function reference, not a call — getPlatformDb stays lazy in
+// pool-manager.ts so single-mode boots without PLATFORM_DATABASE_URL set.
+export { getPlatformDb } from "@/lib/tenant/pool-manager";

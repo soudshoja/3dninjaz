@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: c118ae6 on dev. CI auto-deploying. Server-side log monitor LIVE (1-min cron WhatsApp alerts to +96599800027). Awaiting human smoke on app.3dninjaz.com
+milestone: v2.0
+milestone_name: — Multi-Tenant Platform
+status: executing
 stopped_at: Phase 20 SHIPPED — 13 plans + verifier PASS — pending push
-last_updated: "2026-05-17T15:47:06.976Z"
-last_activity: "2026-04-30 — Completed quick task 260430-icx: simple productType + textarea field type"
+last_updated: "2026-07-12T17:17:22.272Z"
+last_activity: 2026-07-12
 progress:
-  total_phases: 20
-  completed_phases: 9
-  total_plans: 86
-  completed_plans: 68
-  percent: 45
+  total_phases: 29
+  completed_phases: 11
+  total_plans: 98
+  completed_plans: 81
+  percent: 38
 ---
 
 # Project State
@@ -41,11 +41,10 @@ See: .planning/PROJECT.md (updated 2026-04-12)
 
 ## Current Position
 
-Phase: 19 (Made-to-Order Product Type) — COMPLETE + post-shipment hotfix sweep
-Plans: 11/11 shipped + 5 hotfix commits applied (e5b55bd → c118ae6) addressing pre-existing Phase 7 upload bug, 50MB cap lift, XHR progress UI, server log monitor
-Next Phase: 20 (User & Role Management) — backlog, awaiting /gsd-spec-phase 20
-Status: c118ae6 on dev. CI auto-deploying. Server-side log monitor LIVE (1-min cron WhatsApp alerts to +96599800027). Awaiting human smoke on app.3dninjaz.com
-Last activity: 2026-07-05 - Fixed round clicker ring (260705-n1x): draw as inward border on clicker face instead of separate layer behind base, per user visual feedback that it looked like part of the base — pending push to dev + visual verify
+Phase: 24
+Plan: Not started
+Status: Ready to execute
+Last activity: 2026-07-12
 
 Progress: [██████████] 100% (code) | Pre-launch admin actions pending
 
@@ -53,7 +52,7 @@ Progress: [██████████] 100% (code) | Pre-launch admin action
 
 **Velocity:**
 
-- Total plans completed: 30
+- Total plans completed: 34
 - Phase 01 total duration: ~2 hours executor time (cumulative incremental work)
 - Phase 02 total duration: ~35 minutes executor time (single session)
 - Phase 03 total duration: ~varies (4 plans shipped)
@@ -73,6 +72,7 @@ Progress: [██████████] 100% (code) | Pre-launch admin action
 | 05    | 7     | ~195min| ~28min   |
 | 06    | 7     | ~98min | ~14min   |
 | 07    | 9     | ~120min| ~13min   |
+| 23 | 4 | - | - |
 
 **Recent Trend:**
 
@@ -211,6 +211,7 @@ Recent decisions affecting current work:
 - 2026-04-24: Phase 16 added — Product Variant System (Generic Options). Replaces rigid `productVariants.size` enum with generic options/values/variants model. Supports size+color AND parts-based products. Plans not yet created.
 - 2026-04-24: Phase 17 added — variant enhancements + reactivity + legacy cleanup. Planned by Opus, executed by Sonnet, deploy: Haiku. Closes the 5 critical WooCommerce gaps surfaced by the Phase 16 gap analysis (sale price, variant image upload + PDP swap, bulk edit toolbar, OOS hardening, default pre-selection), codifies the admin-editor reactivity contract (AD-06 — Pattern A optimistic + Pattern B `getVariantEditorData` refetch; no `router.refresh()` in mutation paths), and executes a 19-finding legacy cleanup sweep (SizeSelector/SizeGuide deletion, `"S"|"M"|"L"` purge, `legacyAddToCart` removal, admin-guide rewrite, CSV price_s/m/l back-compat removal, stale JSDoc comments). Schema adds 5 columns to `product_variants`: `sale_price`, `sale_from`, `sale_to`, `is_default`, `weight_g`. `order_items` schema untouched. 5 plans shipped 2026-04-22.
 - 2026-07-07: Phase 21 (Admin Meshy AI 3D Generation Tool) planned — 8 plans (21-01..21-08), verified PASSED by gsd-plan-checker (Opus), planned by gsd-planner (Fable) per the meshy-3d-pipeline skill-informed replan. REQ-21-1..9 appended to REQUIREMENTS.md. Both open questions from 21-CONTEXT.md resolved as conservative defaults: credit cap = warn-only soft guard via per-action `getBalance()` check (no monthly counter table); `product_id` kept as nullable indexed column, no FK, no v1 UI. Wave order: 21-01/02 (schema+live DDL, client/storage libs) → 21-03/04 (pipeline+actions, download route) → 21-05/06 (cron sweep, list+upload UI) → 21-07 (detail cockpit) → 21-08 (CI+smoke). Ready for `/gsd-execute-phase 21`.
+- 2026-07-12: Milestone v2.0 (Multi-Tenant Platform) roadmap created — Phases 23–30 appended to ROADMAP.md; 23/23 requirements (TEN/SUPER/CUTOVER/PLUGIN/RESELL/VERIFY) mapped 1:1 to phases; REQUIREMENTS.md traceability filled. Phase numbering starts at 23 because Phase 22 (Admin Parametric Model Maker) is reserved on `docs/phase22-parametric-model-maker` (PR #184, unmerged). Structural adjustment vs research SUMMARY.md: its Phase 3 split into Phase 25 (provisioning & fleet ops tooling — carries the AutoSSL DCV spike + shared-vs-per-tenant MySQL user decision) and Phase 26 (super-admin panel — dogfoods the Phase 25 runbook for its own platform domain); remaining chain validated and kept. Sequence: 23 plumbing (compat flag) → 24 singleton sweep → 25 tooling → 26 panel → 27 Tenant #1 cutover (dev-first, pointer-move only) → 28 second tenant + isolation battery (production-ready gate) → 29 payment plugin (PayPal ported, no NEXT_PUBLIC gateway secrets) → 30 Reseller plugin (sync-copy model, same UUIDs, cost_price mapping, order forwarding, settlement ledger).
 
 ## Session Continuity
 
