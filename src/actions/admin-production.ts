@@ -1,13 +1,13 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { orders, orderItems } from "@/lib/db/schema";
+import { orders, orderItems, products } from "@/lib/db/schema";
 import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { formatOrderNumber, isManualLine } from "@/lib/orders";
 import { ensureOrderItemConfigData } from "@/lib/config-fields";
-import { parseKeychainParts } from "@/lib/keychain-parts";
+import { parseKeychainParts, type KeychainParts } from "@/lib/keychain-parts";
 
 // ============================================================================
 // Production board — admin fulfilment queue.
@@ -363,6 +363,8 @@ export type KeychainUnit = {
   baseDone: boolean;
   clickerLetterDone: boolean;
   productionDone: boolean;
+  /** Base body shape — product-level attribute, drives BASE batch splitting. */
+  shape: "square" | "round";
 };
 
 /** Aggregated base-colour printing batch. */
@@ -372,6 +374,8 @@ export type KeychainBaseBatch = {
   items: KeychainUnit[];
   doneCount: number;
   allDone: boolean;
+  /** Base body shape shared by every item in this batch. */
+  shape: "square" | "round";
 };
 
 /** Aggregated clicker+letter printing batch (printed together as one piece). */
@@ -431,39 +435,61 @@ export async function getKeychainBatches(): Promise<KeychainBatches> {
     .where(inArray(orderItems.orderId, ids));
 
   // 3) Parse keychain parts — skip non-keychain lines.
-  const units: KeychainUnit[] = [];
+  const matched: { it: (typeof itemRows)[number]; parts: KeychainParts }[] = [];
   for (const it of itemRows) {
     const parts = parseKeychainParts(it.configurationData);
     if (!parts) continue; // not a keychain line — skip
-    units.push({
-      itemId: it.id,
-      orderId: it.orderId,
-      invoiceNumber: formatOrderNumber(it.orderId),
-      clientName: clientNameById.get(it.orderId) ?? "",
-      name: parts.name,
-      letters: parts.letters,
-      base: parts.base,
-      clicker: parts.clicker,
-      letter: parts.letter,
-      quantity: it.quantity,
-      baseDone: it.baseDone,
-      clickerLetterDone: it.clickerLetterDone,
-      productionDone: it.productionDone,
-    });
+    matched.push({ it, parts });
   }
 
-  // 4) Group BASES — by base colour string.
+  // 3a) Resolve base SHAPE per product — one extra MariaDB-safe query
+  // (manual select + inArray, no LATERAL). Guard the empty-array case to
+  // avoid an `IN ()` query.
+  const productIds = [
+    ...new Set(matched.map((m) => m.it.productId).filter((id) => id !== "manual")),
+  ];
+  const shapeByProductId = new Map<string, "square" | "round">();
+  if (productIds.length > 0) {
+    const shapeRows = await db
+      .select({ id: products.id, keychainShape: products.keychainShape })
+      .from(products)
+      .where(inArray(products.id, productIds));
+    for (const r of shapeRows) shapeByProductId.set(r.id, r.keychainShape);
+  }
+
+  const units: KeychainUnit[] = matched.map(({ it, parts }) => ({
+    itemId: it.id,
+    orderId: it.orderId,
+    invoiceNumber: formatOrderNumber(it.orderId),
+    clientName: clientNameById.get(it.orderId) ?? "",
+    name: parts.name,
+    letters: parts.letters,
+    base: parts.base,
+    clicker: parts.clicker,
+    letter: parts.letter,
+    quantity: it.quantity,
+    baseDone: it.baseDone,
+    clickerLetterDone: it.clickerLetterDone,
+    productionDone: it.productionDone,
+    shape: it.productId === "manual" ? "square" : (shapeByProductId.get(it.productId) ?? "square"),
+  }));
+
+  // 4) Group BASES — by shape + base colour composite key. Round and square
+  // bodies of the SAME colour are physically different STLs and cannot be
+  // printed together, so shape is folded into the grouping key.
   const baseMap = new Map<string, KeychainUnit[]>();
   for (const u of units) {
-    const list = baseMap.get(u.base) ?? [];
+    const key = `${u.shape}|||${u.base}`;
+    const list = baseMap.get(key) ?? [];
     list.push(u);
-    baseMap.set(u.base, list);
+    baseMap.set(key, list);
   }
   const bases: KeychainBaseBatch[] = Array.from(baseMap.entries())
-    .map(([base, items]) => {
+    .map(([key, items]) => {
+      const [shape, base] = key.split("|||") as ["square" | "round", string];
       const totalQty = items.reduce((s, u) => s + u.quantity, 0);
       const doneCount = items.filter((u) => u.baseDone).length;
-      return { base, totalQty, items, doneCount, allDone: doneCount === items.length };
+      return { base, shape, totalQty, items, doneCount, allDone: doneCount === items.length };
     })
     .sort((a, b) => b.totalQty - a.totalQty);
 

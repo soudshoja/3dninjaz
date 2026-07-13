@@ -10,6 +10,8 @@ import {
   ChevronDown,
   CheckCheck,
   Hammer,
+  Circle,
+  Square,
 } from "lucide-react";
 import {
   markKeychainPartPrinted,
@@ -99,6 +101,20 @@ function BoxPill({ n, accent, muted = false }: { n: number; accent: string; mute
   );
 }
 
+/** Round/Square marker — shown on BASE batch cards only, so staff print the correct base STL. */
+function ShapeBadge({ shape }: { shape: "square" | "round" }) {
+  const Icon = shape === "round" ? Circle : Square;
+  return (
+    <span
+      className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums"
+      style={{ background: "rgba(11,16,32,0.06)", color: INK }}
+    >
+      <Icon className="h-3 w-3" strokeWidth={2.5} />
+      {shape === "round" ? "Round" : "Square"}
+    </span>
+  );
+}
+
 // ── Colour batch card (shared by Bases + Clicker/Letter) ──────────────────────
 
 function BatchCard({
@@ -110,6 +126,7 @@ function BatchCard({
   partDone,
   onToggleOne,
   onToggleAll,
+  badge,
 }: {
   title: string;
   sub?: string;
@@ -119,6 +136,7 @@ function BatchCard({
   partDone: (u: KeychainBaseBatch["items"][number]) => boolean;
   onToggleOne: (id: string, done: boolean) => void;
   onToggleAll: (ids: string[], done: boolean) => void;
+  badge?: React.ReactNode;
 }) {
   const total = items.length;
   const allDone = doneCount === total && total > 0;
@@ -152,6 +170,7 @@ function BatchCard({
                   {title}
                 </p>
                 {allDone ? <CheckCheck className="h-4 w-4 shrink-0" style={{ color: GREEN }} /> : null}
+                {badge ? <span className="shrink-0">{badge}</span> : null}
                 <ChevronDown
                   className="h-4 w-4 shrink-0 transition-transform"
                   style={{ color: "rgba(11,16,32,0.4)", transform: open ? "rotate(180deg)" : "none" }}
@@ -527,7 +546,7 @@ export function KeychainBatchesView({ data }: { data: KeychainBatchesData }) {
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {bases.map((b) => (
               <BatchCard
-                key={b.base}
+                key={`${b.shape}|||${b.base}`}
                 title={`${b.base}`}
                 sub="base"
                 accent={BLUE}
@@ -536,6 +555,7 @@ export function KeychainBatchesView({ data }: { data: KeychainBatchesData }) {
                 partDone={(u) => u.baseDone}
                 onToggleOne={(id, done) => onToggleBase([id], done)}
                 onToggleAll={onToggleBase}
+                badge={<ShapeBadge shape={b.shape} />}
               />
             ))}
           </div>
