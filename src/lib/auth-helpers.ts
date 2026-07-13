@@ -1,8 +1,7 @@
 import "server-only";
 import { headers } from "next/headers";
 import { eq } from "drizzle-orm";
-import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { getTenantContext } from "@/lib/tenant/context";
 import { user as userTable } from "@/lib/db/schema";
 
 /**
@@ -10,19 +9,29 @@ import { user as userTable } from "@/lib/db/schema";
  * action that mutates admin-protected data MUST call this at the top of the
  * function — middleware-only protection was bypassable via CVE-2025-29927,
  * so we verify the session role on every handler.
+ *
+ * Phase 24 (24-03): tenant binding (via getTenantContext) is resolved BEFORE
+ * the session lookup, so a session is only ever validated against its own
+ * tenant's session table — wrong-tenant session validation is structurally
+ * impossible. The return is a backward-compatible SPREAD of Better Auth's
+ * `{ session, user }` result plus `{ tenant, db }`, so every existing
+ * `const session = await requireAdmin(); session.user...` call site keeps
+ * compiling unchanged.
  */
 export async function requireAdmin() {
+  const { tenant, db, auth } = await getTenantContext(); // tenant binding FIRST
   const session = await auth.api.getSession({ headers: await headers() });
   const userWithRole = session?.user as unknown as { role: string } | undefined;
   if (!session || userWithRole?.role !== "admin") {
     throw new Error("Forbidden");
   }
-  return session;
+  return { ...session, tenant, db }; // { session, user, tenant, db }
 }
 
 export async function getSessionUser() {
+  const { auth } = await getTenantContext();
   const session = await auth.api.getSession({ headers: await headers() });
-  return session?.user ?? null;
+  return session?.user ?? null; // shape UNCHANGED — 18 callers depend on this
 }
 
 /**
@@ -41,8 +50,15 @@ export async function getSessionUser() {
  *     Defense-in-depth against the brief window between
  *     `/account/close` writing the soft-delete and the session cache catching
  *     up (T-06-01-closure, T-06-07-lag).
+ *
+ * Phase 24 (24-03): tenant binding (via getTenantContext) is resolved BEFORE
+ * the session lookup, and the cold-path reload runs against the CONTEXT
+ * tenant db — so a stale session on one tenant cannot be validated against
+ * another tenant's user table. The return is a backward-compatible SPREAD
+ * of Better Auth's `{ session, user }` result plus `{ tenant, db }`.
  */
 export async function requireUser() {
+  const { tenant, db, auth } = await getTenantContext(); // tenant binding FIRST
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) {
     throw new Error("Unauthorized");
@@ -54,7 +70,8 @@ export async function requireUser() {
   }
 
   // Cold-path reload — at most one extra SELECT per request when Better Auth
-  // doesn't surface the column on session.user.
+  // doesn't surface the column on session.user. Runs against the context
+  // tenant db (verbatim logic from Phase 6, now tenant-scoped).
   if (surface.deletedAt === undefined) {
     const [row] = await db
       .select({
@@ -69,5 +86,5 @@ export async function requireUser() {
     }
   }
 
-  return session;
+  return { ...session, tenant, db }; // { session, user, tenant, db }
 }
