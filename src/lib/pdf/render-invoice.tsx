@@ -17,12 +17,13 @@ import "server-only";
 import fs from "fs";
 import path from "path";
 import ReactPDF from "@react-pdf/renderer";
-import { db } from "@/lib/db";
 import { orders, orderItems } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { NinjazInvoiceDocument } from "@/lib/pdf/invoice-branded";
 import type { NinjazInvoiceBusiness } from "@/lib/pdf/invoice-branded";
 import { BUSINESS } from "@/lib/business-info";
+import { getTenantContext } from "@/lib/tenant/context";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 
 const PDPA_LINE =
   "This is a digital invoice; no signature required. Records retained for 7 years per Malaysian PDPA 2010.";
@@ -94,7 +95,7 @@ async function resolveBusiness(): Promise<NinjazInvoiceBusiness> {
  * Fetch the order row + items from DB by orderId (no auth check — trusted
  * server context only).
  */
-async function fetchOrderForPdf(orderId: string) {
+async function fetchOrderForPdf(orderId: string, db: TenantDb) {
   const rows = await db
     .select()
     .from(orders)
@@ -115,9 +116,11 @@ async function fetchOrderForPdf(orderId: string) {
  */
 export async function renderInvoicePdfBuffer(
   orderId: string,
+  db?: TenantDb,
 ): Promise<Buffer | null> {
   try {
-    const order = await fetchOrderForPdf(orderId);
+    db ??= (await getTenantContext()).db;
+    const order = await fetchOrderForPdf(orderId, db);
     if (!order) return null;
 
     const business = await resolveBusiness();
@@ -176,8 +179,9 @@ export async function renderInvoicePdfBuffer(
  */
 export async function renderInvoicePdfBase64(
   orderId: string,
+  db?: TenantDb,
 ): Promise<string | null> {
-  const buf = await renderInvoicePdfBuffer(orderId);
+  const buf = await renderInvoicePdfBuffer(orderId, db);
   if (!buf) return null;
   return buf.toString("base64");
 }

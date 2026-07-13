@@ -23,8 +23,9 @@
  */
 
 import { desc, eq } from "drizzle-orm";
-import { db } from "@/lib/db";
 import { meshyGenerations, meshyRevisions } from "@/lib/db/schema";
+import { getTenantContext } from "@/lib/tenant/context";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 import {
   getImageTo3DTask,
   getRetextureTask,
@@ -56,13 +57,14 @@ type RevisionRow = typeof meshyRevisions.$inferSelect;
  * only one place that knows how to turn the raw DB row into parsed JSON
  * fields.
  */
-export async function getGenerationRow(id: string): Promise<
+export async function getGenerationRow(id: string, db?: TenantDb): Promise<
   | (Omit<GenerationRow, "localModelFiles" | "printabilityReport"> & {
       localModelFiles: LocalModelFiles;
       printabilityReport: ReturnType<typeof parsePrintabilityReport>;
     })
   | null
 > {
+  db ??= (await getTenantContext()).db;
   const [row] = await db
     .select()
     .from(meshyGenerations)
@@ -133,7 +135,7 @@ function toJsonSafe<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-async function latestRevision(generationId: string): Promise<RevisionRow | null> {
+async function latestRevision(generationId: string, db: TenantDb): Promise<RevisionRow | null> {
   const [row] = await db
     .select()
     .from(meshyRevisions)
@@ -150,7 +152,8 @@ async function latestRevision(generationId: string): Promise<RevisionRow | null>
  * blip must never wedge a row into "failed"; it just returns the row
  * unchanged so the next tick retries.
  */
-export async function advanceGeneration(id: string): Promise<GenerationRow | null> {
+export async function advanceGeneration(id: string, db?: TenantDb): Promise<GenerationRow | null> {
+  db ??= (await getTenantContext()).db;
   const [row] = await db
     .select()
     .from(meshyGenerations)
@@ -164,21 +167,21 @@ export async function advanceGeneration(id: string): Promise<GenerationRow | nul
 
   switch (row.status as MeshyGenerationStatus) {
     case "generating":
-      return advanceGenerating(row);
+      return advanceGenerating(row, db);
     case "revising":
-      return advanceRevising(row);
+      return advanceRevising(row, db);
     case "analyzing":
-      return advanceAnalyzing(row);
+      return advanceAnalyzing(row, db);
     case "repairing":
-      return advanceRepairing(row);
+      return advanceRepairing(row, db);
     case "processing_multicolor":
-      return advanceMulticolor(row);
+      return advanceMulticolor(row, db);
     default:
       return row;
   }
 }
 
-async function advanceGenerating(row: GenerationRow): Promise<GenerationRow> {
+async function advanceGenerating(row: GenerationRow, db: TenantDb): Promise<GenerationRow> {
   if (!row.meshyTaskId) return row;
 
   let task: GenerationTaskResult;
@@ -214,7 +217,7 @@ async function advanceGenerating(row: GenerationRow): Promise<GenerationRow> {
         updatedAt: new Date(),
       })
       .where(eq(meshyGenerations.id, row.id));
-    return (await refetch(row.id)) ?? row;
+    return (await refetch(row.id, db)) ?? row;
   }
 
   if (task.status === "FAILED") {
@@ -233,15 +236,15 @@ async function advanceGenerating(row: GenerationRow): Promise<GenerationRow> {
         updatedAt: new Date(),
       })
       .where(eq(meshyGenerations.id, row.id));
-    return (await refetch(row.id)) ?? row;
+    return (await refetch(row.id, db)) ?? row;
   }
 
   // PENDING / IN_PROGRESS -> no write.
   return row;
 }
 
-async function advanceRevising(row: GenerationRow): Promise<GenerationRow> {
-  const revision = await latestRevision(row.id);
+async function advanceRevising(row: GenerationRow, db: TenantDb): Promise<GenerationRow> {
+  const revision = await latestRevision(row.id, db);
   if (!revision || !revision.meshyTaskId) return row;
 
   let task: GenerationTaskResult;
@@ -282,7 +285,7 @@ async function advanceRevising(row: GenerationRow): Promise<GenerationRow> {
         updatedAt: new Date(),
       })
       .where(eq(meshyGenerations.id, row.id));
-    return (await refetch(row.id)) ?? row;
+    return (await refetch(row.id, db)) ?? row;
   }
 
   if (task.status === "FAILED") {
@@ -310,7 +313,7 @@ async function advanceRevising(row: GenerationRow): Promise<GenerationRow> {
         })
         .where(eq(meshyGenerations.id, row.id));
     }
-    return (await refetch(row.id)) ?? row;
+    return (await refetch(row.id, db)) ?? row;
   }
 
   return row;
@@ -328,7 +331,7 @@ async function advanceRevising(row: GenerationRow): Promise<GenerationRow> {
  * which never mentions "SUCCEEDED" for this endpoint at all). We read the
  * raw value once through `unknown` and branch on its actual runtime string.
  */
-async function advanceAnalyzing(row: GenerationRow): Promise<GenerationRow> {
+async function advanceAnalyzing(row: GenerationRow, db: TenantDb): Promise<GenerationRow> {
   if (!row.meshyAnalyzeTaskId) return row;
 
   let raw: GenerationTaskResult;
@@ -375,7 +378,7 @@ async function advanceAnalyzing(row: GenerationRow): Promise<GenerationRow> {
         updatedAt: new Date(),
       })
       .where(eq(meshyGenerations.id, row.id));
-    return (await refetch(row.id)) ?? row;
+    return (await refetch(row.id, db)) ?? row;
   }
 
   if (analyzed.status === "FAILED") {
@@ -389,14 +392,14 @@ async function advanceAnalyzing(row: GenerationRow): Promise<GenerationRow> {
         updatedAt: new Date(),
       })
       .where(eq(meshyGenerations.id, row.id));
-    return (await refetch(row.id)) ?? row;
+    return (await refetch(row.id, db)) ?? row;
   }
 
   // PENDING / IN_PROGRESS -> no write.
   return row;
 }
 
-async function advanceRepairing(row: GenerationRow): Promise<GenerationRow> {
+async function advanceRepairing(row: GenerationRow, db: TenantDb): Promise<GenerationRow> {
   if (!row.meshyRepairTaskId) return row;
 
   let task: GenerationTaskResult;
@@ -447,7 +450,7 @@ async function advanceRepairing(row: GenerationRow): Promise<GenerationRow> {
         updatedAt: new Date(),
       })
       .where(eq(meshyGenerations.id, row.id));
-    return (await refetch(row.id)) ?? row;
+    return (await refetch(row.id, db)) ?? row;
   }
 
   if (task.status === "FAILED") {
@@ -461,13 +464,13 @@ async function advanceRepairing(row: GenerationRow): Promise<GenerationRow> {
         updatedAt: new Date(),
       })
       .where(eq(meshyGenerations.id, row.id));
-    return (await refetch(row.id)) ?? row;
+    return (await refetch(row.id, db)) ?? row;
   }
 
   return row;
 }
 
-async function advanceMulticolor(row: GenerationRow): Promise<GenerationRow> {
+async function advanceMulticolor(row: GenerationRow, db: TenantDb): Promise<GenerationRow> {
   if (!row.meshyMulticolorTaskId) return row;
 
   let task: GenerationTaskResult;
@@ -504,7 +507,7 @@ async function advanceMulticolor(row: GenerationRow): Promise<GenerationRow> {
         updatedAt: new Date(),
       })
       .where(eq(meshyGenerations.id, row.id));
-    return (await refetch(row.id)) ?? row;
+    return (await refetch(row.id, db)) ?? row;
   }
 
   if (task.status === "FAILED") {
@@ -517,13 +520,13 @@ async function advanceMulticolor(row: GenerationRow): Promise<GenerationRow> {
         updatedAt: new Date(),
       })
       .where(eq(meshyGenerations.id, row.id));
-    return (await refetch(row.id)) ?? row;
+    return (await refetch(row.id, db)) ?? row;
   }
 
   return row;
 }
 
-async function refetch(id: string): Promise<GenerationRow | null> {
+async function refetch(id: string, db: TenantDb): Promise<GenerationRow | null> {
   const [row] = await db
     .select()
     .from(meshyGenerations)

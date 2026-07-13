@@ -1,10 +1,13 @@
 import "server-only";
-import { db } from "@/lib/db";
 import { orders, orderItems } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { sendMail } from "@/lib/mailer";
 import { formatOrderNumber, isManualLine } from "@/lib/orders";
 import { ensureOrderItemConfigData } from "@/lib/config-fields";
+import { getTenantContext } from "@/lib/tenant/context";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
+import type { Tenant } from "@/lib/tenant/platform-schema";
+import { publicOrigin } from "@/lib/public-url";
 
 /**
  * Order confirmation email (HTML + plain-text).
@@ -27,7 +30,18 @@ function formatMYRServer(n: string | number): string {
   return `RM ${v.toFixed(2)}`;
 }
 
-function baseUrl(): string {
+/**
+ * Phase 24 (24-05 / SC5 — B1 outbound URL): a non-"single" registry-mode
+ * tenant's order-confirmation links derive from its registry canonical
+ * domain (publicOrigin(tenant)), NEVER the incoming Host header. When no
+ * tenant is resolved, or the tenant is the synthesized "single" tenant, this
+ * keeps today's exact env-driven chain — byte-identical single-mode output
+ * (mirrors resolveBaseUrl(tenant) in sitemap.ts/robots.ts, 24-04).
+ */
+function baseUrl(tenant?: Tenant): string {
+  if (tenant && process.env.TENANT_MODE === "registry" && tenant.id !== "single") {
+    return publicOrigin(tenant);
+  }
   return (
     process.env.BETTER_AUTH_URL ??
     process.env.NEXT_PUBLIC_BASE_URL ??
@@ -66,12 +80,12 @@ function escapeHtml(s: string | null | undefined): string {
   );
 }
 
-export function renderOrderConfirmationHtml(order: OrderWithItems): string {
+export function renderOrderConfirmationHtml(order: OrderWithItems, tenant?: Tenant): string {
   const orderNo = formatOrderNumber(order.id);
   // Guest orders carry a guestAccessToken; authenticated orders use a plain URL.
   const orderUrl = (order.guestAccessToken && !order.userId)
-    ? `${baseUrl()}/orders/${order.id}?t=${order.guestAccessToken}`
-    : `${baseUrl()}/orders/${order.id}`;
+    ? `${baseUrl(tenant)}/orders/${order.id}?t=${order.guestAccessToken}`
+    : `${baseUrl(tenant)}/orders/${order.id}`;
 
   const itemsHtml = order.items
     .map((i) => {
@@ -179,7 +193,7 @@ export function renderOrderConfirmationHtml(order: OrderWithItems): string {
 </html>`;
 }
 
-export function renderOrderConfirmationText(order: OrderWithItems): string {
+export function renderOrderConfirmationText(order: OrderWithItems, tenant?: Tenant): string {
   const lines: string[] = [];
   lines.push(`3D Ninjaz — Order ${formatOrderNumber(order.id)}`);
   lines.push("");
@@ -217,8 +231,8 @@ export function renderOrderConfirmationText(order: OrderWithItems): string {
   lines.push(`  ${order.shippingPhone}`);
   lines.push("");
   const textOrderUrl = (order.guestAccessToken && !order.userId)
-    ? `${baseUrl()}/orders/${order.id}?t=${order.guestAccessToken}`
-    : `${baseUrl()}/orders/${order.id}`;
+    ? `${baseUrl(tenant)}/orders/${order.id}?t=${order.guestAccessToken}`
+    : `${baseUrl(tenant)}/orders/${order.id}`;
   lines.push(`View online: ${textOrderUrl}`);
   lines.push("");
   lines.push("Questions? Reply to this email.");
@@ -277,7 +291,10 @@ function renderItemsTableFragment(order: OrderWithItems): string {
  */
 export async function sendOrderConfirmationEmail(
   orderId: string,
+  db?: TenantDb,
 ): Promise<void> {
+  const { tenant, db: ctxDb } = await getTenantContext();
+  db ??= ctxDb;
   // Manual two-query hydration — MariaDB 10.11 does not support the LATERAL
   // joins Drizzle emits for db.query.*.findFirst({ with: { items: true } }).
   const orderHead = await db
@@ -309,8 +326,8 @@ export async function sendOrderConfirmationEmail(
     // Build the order link: guest orders include the access token so the
     // recipient can view without logging in.
     const orderLink = (row.guestAccessToken && !row.userId)
-      ? `${baseUrl()}/orders/${row.id}?t=${row.guestAccessToken}`
-      : `${baseUrl()}/orders/${row.id}`;
+      ? `${baseUrl(tenant)}/orders/${row.id}?t=${row.guestAccessToken}`
+      : `${baseUrl(tenant)}/orders/${row.id}`;
     const rendered = await renderTemplate("order_confirmation", {
       customer_name: row.shippingName,
       order_number: formatOrderNumber(row.id),
@@ -332,15 +349,15 @@ export async function sendOrderConfirmationEmail(
       err,
     );
     subject = `3D Ninjaz — Order ${formatOrderNumber(row.id)} confirmed`;
-    html = renderOrderConfirmationHtml(row);
-    text = renderOrderConfirmationText(row);
+    html = renderOrderConfirmationHtml(row, tenant);
+    text = renderOrderConfirmationText(row, tenant);
   }
 
   // Skip the customer send for internal/sentinel addresses (manual/POS orders
   // without a real customer email). The admin notification below still fires.
   if (!row.customerEmail.endsWith("@3dninjaz.local")) {
     try {
-      await sendMail({ to: row.customerEmail, subject, html, text });
+      await sendMail({ to: row.customerEmail, subject, html, text, tenant });
     } catch (err) {
       console.error("[order-email] send failed:", err);
     }
@@ -362,19 +379,20 @@ export async function sendOrderConfirmationEmail(
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">${renderItemsTableFragment(row)}</table>
       <h3 style="margin:16px 0 4px;">Ship to</h3>
       <p style="margin:0;line-height:1.5;">${escapeHtml(row.shippingName)}<br>${escapeHtml(row.shippingLine1)}<br>${row.shippingLine2 ? escapeHtml(row.shippingLine2) + "<br>" : ""}${escapeHtml(row.shippingCity)} ${escapeHtml(row.shippingPostcode)}<br>${escapeHtml(row.shippingState)}, ${escapeHtml(row.shippingCountry)}</p>
-      <p style="margin:20px 0;"><a href="${baseUrl()}/admin/orders/${row.id}" style="display:inline-block;padding:10px 20px;background:#0B1020;color:#fff;border-radius:8px;text-decoration:none;">Open in admin</a></p>
+      <p style="margin:20px 0;"><a href="${baseUrl(tenant)}/admin/orders/${row.id}" style="display:inline-block;padding:10px 20px;background:#0B1020;color:#fff;border-radius:8px;text-decoration:none;">Open in admin</a></p>
     </body></html>`;
     const adminText =
       `New order ${orderNo}\n` +
       `Customer: ${row.shippingName} (${row.customerEmail})\n` +
       `Phone: ${row.shippingPhone}\n` +
       `Total: ${formatMYRServer(row.totalAmount)} ${row.currency}\n` +
-      `Admin: ${baseUrl()}/admin/orders/${row.id}`;
+      `Admin: ${baseUrl(tenant)}/admin/orders/${row.id}`;
     await sendMail({
       to: ["sumaiyaaniz@gmail.com", "info@3dninjaz.com"],
       subject: adminSubject,
       html: adminHtml,
       text: adminText,
+      tenant,
     });
   } catch (err) {
     console.error("[order-email] admin notification failed:", err);

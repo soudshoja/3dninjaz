@@ -1,5 +1,4 @@
 import "server-only";
-import { db } from "@/lib/db";
 import {
   emailTemplates,
   seedEmailTemplates,
@@ -8,6 +7,9 @@ import { eq } from "drizzle-orm";
 import { sanitiseEmailHtml, escapeHtml } from "@/lib/email/sanitize";
 import { BUSINESS } from "@/lib/business-info";
 import { publicOrigin } from "@/lib/public-url";
+import { getTenantContext } from "@/lib/tenant/context";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
+import type { Tenant } from "@/lib/tenant/platform-schema";
 
 // ----------------------------------------------------------------------------
 // Common branding variables injected into EVERY template render.
@@ -22,12 +24,19 @@ import { publicOrigin } from "@/lib/public-url";
 // Callers may still override any of these by passing the same key.
 // current_year is computed per-render (not a static const) so the footer year
 // stays correct across the New Year without a redeploy.
+//
+// Phase 24 (24-05 / W5): store_url is tenant-derived (publicOrigin(tenant))
+// rather than a static module-scope const, so a tenant's rendered email
+// links to that tenant's registry domain — not Tenant #1's. Byte-identical
+// in single mode (publicOrigin falls through to the same env chain).
 // ----------------------------------------------------------------------------
-const BASE_TEMPLATE_VARS: Record<string, string> = {
-  store_name: "3D Ninjaz",
-  store_url: publicOrigin(),
-  support_email: BUSINESS.contactEmail,
-};
+function baseTemplateVars(tenant: Tenant): Record<string, string> {
+  return {
+    store_name: "3D Ninjaz",
+    store_url: publicOrigin(tenant),
+    support_email: BUSINESS.contactEmail,
+  };
+}
 
 // ============================================================================
 // Plan 05-06 — DB-backed email template renderer.
@@ -228,7 +237,7 @@ export const availableVariables: Record<TemplateKey, string[]> = {
 // sanitiseEmailHtml (which strips scripts) but are NOT HTML-escaped.
 const HTML_VARS = new Set(["items_table"]);
 
-async function getOrSeed(key: TemplateKey) {
+async function getOrSeed(key: TemplateKey, db: TenantDb) {
   const [row] = await db
     .select()
     .from(emailTemplates)
@@ -258,13 +267,16 @@ async function getOrSeed(key: TemplateKey) {
 export async function renderTemplate(
   key: TemplateKey,
   variables: Record<string, unknown>,
+  db?: TenantDb,
 ): Promise<{ subject: string; html: string; text: string }> {
-  const tpl = await getOrSeed(key);
+  const { tenant, db: ctxDb } = await getTenantContext();
+  db ??= ctxDb;
+  const tpl = await getOrSeed(key, db);
 
   // Merge common branding/footer vars under the caller's values. Caller wins
   // on conflict; current_year is stamped per-render so it never goes stale.
   const merged: Record<string, unknown> = {
-    ...BASE_TEMPLATE_VARS,
+    ...baseTemplateVars(tenant),
     current_year: new Date().getFullYear(),
     ...variables,
   };

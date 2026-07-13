@@ -1,6 +1,7 @@
-import { db } from "@/lib/db";
 import { orders, orderItems, paymentProofs } from "@/lib/db/schema";
 import { and, eq, gte, inArray, isNull } from "drizzle-orm";
+import { getTenantContext } from "@/lib/tenant/context";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 
 /**
  * Checkout duplicate-order guard (incident 2026-06-12: two customers produced
@@ -84,7 +85,8 @@ export async function dedupeUnpaidOrders({
    * PayPal passes null — every PayPal click needs a fresh paypal_order_id.
    */
   reuseSignature: string | null;
-}): Promise<DedupeResult> {
+}, db?: TenantDb): Promise<DedupeResult> {
+  db ??= (await getTenantContext()).db;
   const result: DedupeResult = { reuseOrderId: null, cancelledIds: [] };
 
   const normEmail =

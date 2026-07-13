@@ -5,7 +5,6 @@
  * + clear function. NOT "use server" — exports sync helpers.
  */
 import "server-only";
-import { db } from "@/lib/db";
 import {
   whatsappSettings,
   whatsappNotifications,
@@ -14,35 +13,47 @@ import {
 import { eq } from "drizzle-orm";
 import { seedWhatsappNotifications } from "@/lib/whatsapp/events";
 import type { WhatsappNotificationRow } from "@/lib/whatsapp/types";
+import { getTenantContext } from "@/lib/tenant/context";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 
 // ---------------------------------------------------------------------------
-// In-memory cache (single Node process — acceptable for v1)
+// In-memory cache — single Node process serves every tenant, so this MUST be
+// keyed by tenant id (Pitfall 8 — the second concrete first-request-wins
+// global cache after store-settings.ts, 24-04 W4). Mirrors that Map<tenantId,
+// {value, expiresAt}> shape exactly. In single mode there is exactly one key
+// ("single"), so behavior is byte-identical to the old single-value cache.
 // ---------------------------------------------------------------------------
 declare global {
   // eslint-disable-next-line no-var
   var __whatsappSettingsCache:
-    | { value: typeof whatsappSettings.$inferSelect; expiresAt: number }
-    | null
+    | Map<string, { value: typeof whatsappSettings.$inferSelect; expiresAt: number }>
     | undefined;
+}
+
+const cache: Map<string, { value: typeof whatsappSettings.$inferSelect; expiresAt: number }> =
+  global.__whatsappSettingsCache ?? new Map();
+if (process.env.NODE_ENV !== "production") {
+  global.__whatsappSettingsCache = cache;
 }
 
 const TTL_MS = 60_000;
 
 /**
- * Cached singleton accessor for `whatsapp_settings`. Lazy-seeds the row on
+ * Cached per-tenant accessor for `whatsapp_settings`. Lazy-seeds the row on
  * first call when the table is empty. Subsequent calls within 60 seconds
  * reuse the cached value. The sender should use getWhatsappStateFresh() for
  * freshness-critical reads (connection state).
  */
-export async function getWhatsappSettingsCached(): Promise<
-  typeof whatsappSettings.$inferSelect
-> {
+export async function getWhatsappSettingsCached(
+  db?: TenantDb,
+): Promise<typeof whatsappSettings.$inferSelect> {
+  const { tenant, db: ctxDb } = await getTenantContext();
+  db ??= ctxDb;
+
   const now = Date.now();
-  if (
-    global.__whatsappSettingsCache &&
-    global.__whatsappSettingsCache.expiresAt > now
-  ) {
-    return global.__whatsappSettingsCache.value;
+  const cached = cache.get(tenant.id);
+  if (cached && cached.expiresAt > now) {
+    return cached.value;
   }
 
   const [row] = await db
@@ -66,24 +77,34 @@ export async function getWhatsappSettingsCached(): Promise<
     value = fresh;
   }
 
-  global.__whatsappSettingsCache = { value, expiresAt: now + TTL_MS };
+  cache.set(tenant.id, { value, expiresAt: now + TTL_MS });
   return value;
 }
 
-/** Invalidate the settings cache. */
-export function clearWhatsappSettingsCache(): void {
-  global.__whatsappSettingsCache = null;
+/**
+ * Invalidate the settings cache. STAYS SYNCHRONOUS (W6, mirrors W4 in
+ * store-settings.ts 24-04): with an id, deletes only that tenant's entry;
+ * with no id, clears every entry — in single mode there is exactly one, so
+ * this is byte-identical to today's `= null`.
+ */
+export function clearWhatsappSettingsCache(tenantId?: string): void {
+  if (tenantId) {
+    cache.delete(tenantId);
+  } else {
+    cache.clear();
+  }
 }
 
 /**
  * Read connection state FRESH (no cache). Used by the sender so it doesn't
  * send after a disconnect that happened within the 60s cache window.
  */
-export async function getWhatsappStateFresh(): Promise<{
+export async function getWhatsappStateFresh(db?: TenantDb): Promise<{
   state: "close" | "connecting" | "open";
   connectedNumber: string | null;
   notificationsEnabled: boolean;
 }> {
+  db ??= (await getTenantContext()).db;
   const [row] = await db
     .select({
       connectionState: whatsappSettings.connectionState,
@@ -117,7 +138,10 @@ export async function updateWhatsappConnectionState(
   state: "close" | "connecting" | "open",
   connectedNumber?: string | null,
   opts?: { qr?: boolean },
+  db?: TenantDb,
 ): Promise<void> {
+  const { tenant, db: ctxDb } = await getTenantContext();
+  db ??= ctxDb;
   const now = new Date();
   await db
     .update(whatsappSettings)
@@ -128,16 +152,18 @@ export async function updateWhatsappConnectionState(
       ...(opts?.qr ? { lastQrAt: now } : {}),
     })
     .where(eq(whatsappSettings.id, "default"));
-  clearWhatsappSettingsCache();
+  clearWhatsappSettingsCache(tenant.id);
 }
 
 /** Update the master notifications toggle. */
-export async function setNotificationsEnabled(enabled: boolean): Promise<void> {
+export async function setNotificationsEnabled(enabled: boolean, db?: TenantDb): Promise<void> {
+  const { tenant, db: ctxDb } = await getTenantContext();
+  db ??= ctxDb;
   await db
     .update(whatsappSettings)
     .set({ notificationsEnabled: enabled })
     .where(eq(whatsappSettings.id, "default"));
-  clearWhatsappSettingsCache();
+  clearWhatsappSettingsCache(tenant.id);
 }
 
 // ---------------------------------------------------------------------------
@@ -148,9 +174,10 @@ export async function setNotificationsEnabled(enabled: boolean): Promise<void> {
  * Get all notification rows. Lazy-seeds default rows when the table is empty.
  * Coerces TINYINT(1) enabled → boolean.
  */
-export async function getWhatsappNotificationsAll(): Promise<
-  WhatsappNotificationRow[]
-> {
+export async function getWhatsappNotificationsAll(
+  db?: TenantDb,
+): Promise<WhatsappNotificationRow[]> {
+  db ??= (await getTenantContext()).db;
   let rows = await db.select().from(whatsappNotifications);
 
   // Lazy-seed: empty table gets all defaults; a populated table gets any
@@ -178,9 +205,11 @@ export async function getWhatsappNotificationsAll(): Promise<
  */
 export async function getWhatsappNotification(
   eventKey: string,
+  db?: TenantDb,
 ): Promise<WhatsappNotificationRow | null> {
+  db ??= (await getTenantContext()).db;
   // Ensure table is seeded
-  await getWhatsappNotificationsAll();
+  await getWhatsappNotificationsAll(db);
 
   const [row] = await db
     .select()

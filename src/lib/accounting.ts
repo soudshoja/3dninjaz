@@ -1,6 +1,5 @@
 import "server-only";
 
-import { db } from "@/lib/db";
 import {
   orders,
   orderItems,
@@ -12,6 +11,8 @@ import {
 } from "@/lib/db/schema";
 import { and, gte, lt, inArray, eq, sql } from "drizzle-orm";
 import { toNum } from "@/lib/profit";
+import { getTenantContext } from "@/lib/tenant/context";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 
 // ============================================================================
 // Accounting aggregation engine (cash basis).
@@ -157,7 +158,7 @@ function resolveShippingCost(
   return { cost: round2(Math.max(0, base)), estimated: true };
 }
 
-async function getMarkupConfig(): Promise<{ percent: number; flat: number }> {
+async function getMarkupConfig(db: TenantDb): Promise<{ percent: number; flat: number }> {
   const [row] = await db
     .select({ percent: shippingConfig.markupPercent, flat: shippingConfig.markupFlat })
     .from(shippingConfig)
@@ -182,7 +183,7 @@ type OrderRow = {
 };
 
 /** Shared fetch: paid orders in range + their per-order COGS + courier base. */
-async function fetchOrderFinancials(range: DateRange) {
+async function fetchOrderFinancials(range: DateRange, db: TenantDb) {
   const orderRows: OrderRow[] = await db
     .select({
       id: orders.id,
@@ -236,9 +237,10 @@ async function fetchOrderFinancials(range: DateRange) {
 // Public API
 // ---------------------------------------------------------------------------
 
-export async function getAccountingSummary(range: DateRange): Promise<AccountingSummary> {
+export async function getAccountingSummary(range: DateRange, db?: TenantDb): Promise<AccountingSummary> {
+  db ??= (await getTenantContext()).db;
   const [{ orderRows, cogsByOrder, snapBaseByOrder, missingItemCostCount }, markup, expensesTotal] =
-    await Promise.all([fetchOrderFinancials(range), getMarkupConfig(), sumExpenses(range)]);
+    await Promise.all([fetchOrderFinancials(range, db), getMarkupConfig(db), sumExpenses(range, db)]);
 
   let sales = 0;
   let cogs = 0;
@@ -280,9 +282,10 @@ export async function getAccountingSummary(range: DateRange): Promise<Accounting
   };
 }
 
-export async function getSalesReport(range: DateRange): Promise<SalesReportRow[]> {
-  const { orderRows, cogsByOrder, snapBaseByOrder } = await fetchOrderFinancials(range);
-  const markup = await getMarkupConfig();
+export async function getSalesReport(range: DateRange, db?: TenantDb): Promise<SalesReportRow[]> {
+  db ??= (await getTenantContext()).db;
+  const { orderRows, cogsByOrder, snapBaseByOrder } = await fetchOrderFinancials(range, db);
+  const markup = await getMarkupConfig(db);
 
   type Acc = Omit<SalesReportRow, "month" | "profit">;
   const byMonth = new Map<string, Acc>();
@@ -321,7 +324,7 @@ export async function getSalesReport(range: DateRange): Promise<SalesReportRow[]
 }
 
 /** Σ expenses.amount within the date range (expenseDate is "YYYY-MM-DD" string). */
-async function sumExpenses(range: DateRange): Promise<number> {
+async function sumExpenses(range: DateRange, db: TenantDb): Promise<number> {
   const conds = [];
   if (range.from) conds.push(gte(expenses.expenseDate, range.from));
   if (range.to) conds.push(lt(expenses.expenseDate, nextDay(range.to)));
@@ -340,7 +343,8 @@ function nextDay(ymd: string): string {
   return d.toISOString().slice(0, 10);
 }
 
-export async function getAccountBalances(): Promise<AccountBalances> {
+export async function getAccountBalances(db?: TenantDb): Promise<AccountBalances> {
+  db ??= (await getTenantContext()).db;
   // PayPal inflow/refunds restricted to paid orders. Bank/Cash move via payouts.
   const [ordAgg] = await db
     .select({

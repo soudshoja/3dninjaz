@@ -1,7 +1,8 @@
-import { db } from "@/lib/db";
 import { checkoutDrafts } from "@/lib/db/schema";
 import { and, eq, or } from "drizzle-orm";
 import { normalizeMsisdn } from "@/lib/order-dedupe";
+import { getTenantContext } from "@/lib/tenant/context";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 
 /**
  * Flip a customer's open checkout drafts to "converted" once a real order
@@ -15,8 +16,9 @@ export async function markDraftsConverted({
 }: {
   phone: string;
   userId: string | null;
-}): Promise<void> {
+}, db?: TenantDb): Promise<void> {
   try {
+    db ??= (await getTenantContext()).db;
     const phoneNorm = normalizeMsisdn(phone);
     if (!phoneNorm && !userId) return;
     const match = userId
