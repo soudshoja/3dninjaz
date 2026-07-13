@@ -32,7 +32,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
-import { db, pool } from "../src/lib/db";
+import { __singletonDb as db, __singletonPool as pool } from "../src/lib/db";
 import { colors } from "../src/lib/db/schema";
 
 type Brand = "Bambu" | "Polymaker";

@@ -22,7 +22,7 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { db, pool } from "../src/lib/db";
+import { __singletonDb as db, __singletonPool as pool } from "../src/lib/db";
 import { products, productConfigFields, colors } from "../src/lib/db/schema";
 
 // ─── Constants ───────────────────────────────────────────────────────────────

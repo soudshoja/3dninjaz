@@ -19,6 +19,11 @@
  *
  * Q-07-08 graceful failure: if PayPal returns NOT_AUTHORIZED, writes
  * recon_runs.status='error' + errorMessage and exits 1.
+ *
+ * FLEET ITERATION DEFERRED TO PHASE 25 (tenant-iter): compat mode processes
+ * the single tenant (DATABASE_URL); the fleet migration runner + registry
+ * iteration is a Phase 25 deliverable. This scaffold + the tenant-id log
+ * line prevents a silent single-tenant-forever recurring cron (Pitfall 10).
  */
 "use strict";
 const mysql = require("mysql2/promise");
@@ -222,10 +227,19 @@ function computeDrift(paypalTxns, localOrders) {
   return drift;
 }
 
+// --tenant scaffold (Phase 25 will iterate the registry with this arg;
+// compat mode always processes the single tenant regardless of the value).
+function tenantArg() {
+  const idx = process.argv.indexOf("--tenant");
+  return idx !== -1 ? process.argv[idx + 1] : "single";
+}
+
 async function main() {
   loadEnv();
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL missing");
+
+  console.log(`[recon] tenant=${tenantArg()}`);
 
   const { startUTC, endUTC, dateStr } = mytYesterdayRange();
   console.log(

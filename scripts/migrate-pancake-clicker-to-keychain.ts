@@ -29,7 +29,7 @@
 
 import "dotenv/config";
 import { eq, and } from "drizzle-orm";
-import { db, pool } from "../src/lib/db";
+import { __singletonDb as db, __singletonPool as pool } from "../src/lib/db";
 import { products, productConfigFields } from "../src/lib/db/schema";
 import { seedKeychainFields } from "../src/lib/keychain-fields";
 
@@ -162,7 +162,7 @@ async function run() {
     } else {
       // None of the 3 core fields exist — seed fresh (no existing fields to preserve)
       console.log("[migrate-clicker] core colour fields not found — seeding fresh...");
-      await seedKeychainFields(product.id);
+      await seedKeychainFields(product.id, undefined, db);
     }
   }
 

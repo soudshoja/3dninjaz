@@ -13,7 +13,7 @@
 
 import { randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
-import { db } from "../src/lib/db";
+import { __singletonDb as db } from "../src/lib/db";
 import { categories, subcategories } from "../src/lib/db/schema";
 
 type SeedSubcategory = { name: string; slug: string };

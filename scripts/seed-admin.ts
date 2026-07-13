@@ -23,10 +23,13 @@
  *     non-zero status rather than silently creating one.
  */
 
-import { auth } from "../src/lib/auth";
-import { db } from "../src/lib/db";
+import { buildTenantAuth } from "../src/lib/auth";
+import { synthesizeSingleTenant } from "../src/lib/tenant/registry";
+import { __singletonDb as db } from "../src/lib/db";
 import { account, user } from "../src/lib/db/schema";
 import { and, eq } from "drizzle-orm";
+
+const auth = buildTenantAuth(synthesizeSingleTenant(), db);
 
 async function rotatePassword(userId: string, newPassword: string) {
   // Better Auth exposes its hash/verify implementation via the internal

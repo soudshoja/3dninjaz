@@ -15,7 +15,7 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { db, pool } from "../src/lib/db";
+import { __singletonDb as db, __singletonPool as pool } from "../src/lib/db";
 import { products } from "../src/lib/db/schema";
 import { seedVendingFields } from "../src/lib/vending-fields";
 
@@ -59,7 +59,7 @@ async function run() {
 
   console.log(`[seed-vending] created product ${productId} at MYR ${FLAT_PRICE} (admin can edit price)`);
 
-  await seedVendingFields(productId);
+  await seedVendingFields(productId, undefined, db);
 
   console.log(`[seed-vending] done — product '${SLUG}' created with 2 locked colour fields.`);
   console.log(

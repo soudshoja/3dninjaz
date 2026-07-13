@@ -22,7 +22,7 @@
 import "dotenv/config";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { db, pool } from "../src/lib/db";
+import { __singletonDb as db, __singletonPool as pool } from "../src/lib/db";
 import { products } from "../src/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { compressUploadedImage } from "../src/lib/image-pipeline";

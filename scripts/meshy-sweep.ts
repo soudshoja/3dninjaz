@@ -30,17 +30,30 @@
 // client.ts and storage.ts is neutralized via the _mock-server-only.cjs
 // require hook (scripts/_mock-server-only.cjs), the repo's established
 // escape hatch for running server-only-guarded libs under tsx.
+//
+// FLEET ITERATION DEFERRED TO PHASE 25 (tenant-iter): compat mode processes
+// the single tenant; the fleet migration runner + registry iteration is a
+// Phase 25 deliverable. This scaffold + the explicit db passed to
+// advanceGeneration prevents a silent single-tenant-forever / off-request-
+// throw cron (Pitfall 10).
 
 import { and, asc, inArray, lt } from "drizzle-orm";
 import { advanceGeneration } from "../src/lib/meshy/pipeline";
-import { db } from "../src/lib/db";
+import { __singletonDb as db } from "../src/lib/db";
 import { meshyGenerations } from "../src/lib/db/schema";
 import { MESHY_ACTIVE_STATUSES } from "../src/lib/meshy/types";
 
 const STALE_MS = 2 * 60 * 1000;
 const MAX_PER_RUN = 10;
 
+// --tenant scaffold (Phase 25 will iterate the registry with this arg;
+// compat mode always processes the single tenant regardless of the value).
+const tenantArgIdx = process.argv.indexOf("--tenant");
+const tenantArg =
+  tenantArgIdx !== -1 ? process.argv[tenantArgIdx + 1] : "single";
+
 async function main(): Promise<void> {
+  console.log(`[meshy-sweep] tenant=${tenantArg}`);
   const staleCutoff = new Date(Date.now() - STALE_MS);
 
   const rows = await db
@@ -63,7 +76,7 @@ async function main(): Promise<void> {
   let errors = 0;
   for (const row of rows) {
     try {
-      await advanceGeneration(row.id);
+      await advanceGeneration(row.id, db);
       console.log(`[meshy-sweep] advanced ${row.id}`);
     } catch (e) {
       errors += 1;
