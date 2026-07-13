@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: — Multi-Tenant Platform
 status: executing
-stopped_at: Phase 20 SHIPPED — 13 plans + verifier PASS — pending push
-last_updated: "2026-07-13T06:14:10.999Z"
+stopped_at: Phase 24 Plan 07 complete — Wave 5 admin actions batch 2 + admin RSC pages
+last_updated: "2026-07-13T09:34:40.137Z"
 last_activity: 2026-07-13 -- Phase 24 planning complete
 progress:
   total_phases: 29
   completed_phases: 11
-  total_plans: 110
-  completed_plans: 81
+  total_plans: 111
+  completed_plans: 89
   percent: 38
 ---
 
@@ -42,11 +42,11 @@ See: .planning/PROJECT.md (updated 2026-04-12)
 ## Current Position
 
 Phase: 24
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-07-13 -- Phase 24 planning complete
+Plan: 07 of 13 (singleton-dissolution-sweep, wave 5 — admin actions batch 2 + admin RSC pages complete)
+Status: Executing — proceed to next wave (24-08+)
+Last activity: 2026-07-13 -- Phase 24 Plan 07 complete (20 files swept: 16 admin actions + 4 admin RSC pages)
 
-Progress: [██████████] 100% (code) | Pre-launch admin actions pending
+Progress: [████████░░] 80% (89/111 plans) | Pre-launch admin actions pending
 
 ## Performance Metrics
 
@@ -86,6 +86,7 @@ Progress: [██████████] 100% (code) | Pre-launch admin action
 | Phase 18 P06 | 5 | 4 tasks | 4 files |
 | Phase 18 P07 | 2 | 2 tasks | 1 files |
 | Phase 18 P08 | 5 | 4 tasks | 3 files |
+| Phase 24 P07 | 45min | 2 tasks | 20 files |
 
 ## Accumulated Context
 
@@ -157,6 +158,7 @@ Recent decisions affecting current work:
 - 2026-04-26 (Phase 18 Plan 06): variant-editor.tsx integration shipped. Module-scoped isColourOption helper (case-insensitive `name === "color" || === "colour"`) gates 4 sites: input placeholder relabel ("Add custom (not in library)..."), section header caption ("Custom (not in library)"), Pick from library button (with lucide:Palette icon), helper-text paragraph below the row. ColourPickerDialog mounts as a sibling to the existing delete-option/delete-value dialogs at the JSX bottom; pickerOptionId state (string | null) supports multiple Colour-named options on the same product without ambiguity. alreadyAttachedColourIds computed inline at mount via options.find().values.map(v => v.colorId).filter(Boolean) into Set<string>. onConfirmed wired to `await refresh()` — Phase 17 AD-06 Pattern B refetch contract preserved (no router.refresh() anywhere). HydratedOptionValue.colorId field added (was missing from public type even though Plan 18-01 schema had the column); both hydration mappers (variants.ts, catalog.ts) updated to surface it. REQ-6 6-axis cap verified by inspection: addProductOption guard at existing.length >= 6 is name-agnostic; picker dialog has zero references to addProductOption. Stale Plan 18-04 reference on /admin/colours/[id]/edit page intro updated to current cascade-rename behaviour.
 - 2026-04-26 (Phase 18 Plan 08): /shop sidebar Colour chip filter shipped. Two new manual-hydration helpers in src/lib/catalog.ts: `getActiveProductColourChips()` (4-step DISTINCT JOIN — fetch active colours → fetch pov rows with non-null colorId → six parallel slot queries with `innerJoin(products)` + `eq(products.isActive, true)` + `eq(productVariants.inStock, true)` guards → project to {slug, name, hex} via `buildColourSlugMap` for D-14 cross-brand collision suffix) and `getProductIdsByColourSlugs(slugs)` (mirror shape returning Set<productId>). Both strip code/previous_hex/family_* at the SELECT clause boundary; only id/name/hex/brand ever leave the DB. New `src/components/store/colour-filter-section.tsx` client component — collapsible accordion (default open via useState(true)), first 12 chips visible with Show all (N) / Show less toggle, hex-tinted active state with `getReadableTextOn(hex)` for WCAG 2.2 SC 1.4.11 contrast, active count badge (16x16 ink-fill circle) beside accordion title, focus-visible 2px purple outline + 2px offset, min-h 36px desktop sidebar density, hide-when-empty via `chips.length === 0` early return null. URL grammar `?colour=galaxy-black,jade-white` — multi-select via `URLSearchParams` (preserves `?category=`/`?subcategory=`, sorts alphabetically for deterministic href). /shop `page.tsx` extended: SearchParams adds `colour?: string`; `resolveProducts` refactored from return-per-branch to assign-to-`base` so colour intersection runs uniformly after the existing 3-branch switch — `getProductIdsByColourSlugs(colourSlugs)` returns allowedIds Set, then `base.products.filter(p => allowedIds.has(p.id))`. ColourFilterSection mounted twice: inside `<aside className="hidden md:block">` AND inside `<div className="md:hidden">` above the grid for mobile parity. Customer-side admin-field audit grep clean: 0 matches for `previous_hex`, `family_type`, `family_subtype` anywhere in `src/app/(store)/` or `src/components/store/`. Manual-hydration discipline preserved: 0 new `db.query.X.findMany({with})` introduced; 2 new `innerJoin(products)` blocks (one per helper). `npx tsc --noEmit` clean. `npm run build` skipped per plan-level constraint (pre-existing CSS issue unrelated to this plan). 3 atomic commits (9f3a21f catalog helpers + 0208806 component + ad2c714 page wiring).
 - 2026-04-26 (Phase 18 Plan 07): PDP swatch grid refactor shipped. variant-selector.tsx `{isColorOption ? (...)}` branch (formerly lines 201-267) now uses a vertical-flex wrapper (`flex flex-col items-center gap-1`, fixed `width: 80px`) holding the existing 48x48 button (with the 32x32 hex circle child) on top and a sibling `<span>` below as the always-visible 12px Chakra_Petch name caption. Caption typography per UI-SPEC §Surface 4: `var(--font-body)` 12px, weight 500 default / 700 + `var(--color-brand-ink)` selected, line-through + `#A1A1AA` OOS, `max-w-[80px] truncate` so long names ellipsis-truncate without breaking layout. Outer container gap tightened from `gap-2` (8px) to `gap-3` (12px) to compensate for the extra caption row height. Caption is `aria-hidden` because the button's `aria-label` already names the colour for AT (avoids double-announcement). Phase 17 contracts preserved verbatim: hover-image-preview (`onMouseEnter`/`Leave` + `findPreviewVariant` + `hoverCapable` matchMedia gate), OOS hardening (disabled + aria-disabled + tabIndex=-1 + title="Out of stock" + diagonal-line gradient overlay), Phase 17 AD-06 reactivity contract (zero mutations on PDP, so contract preserved by inaction). Pill render branch for non-Colour options (Size, Material, Part, etc.) untouched. Customer-side audit grep on `src/app/(store)/` + `src/components/store/` returns zero matches for `previous_hex`, `previousHex`, `family_type`, `familyType`, `family_subtype`, `familySubtype`, `colors.code`, `color.code`, `colour.code` — REQ-7 admin-only field hygiene verified. Plan 18-01 public/admin query split (`getColourPublic` vs `getColourAdmin`) holds end-to-end. `npx tsc --noEmit` clean. Plan-level constraint applied: skipped `npm run build` due to pre-existing CSS issue.
+- [Phase ?]: Phase 24 Plan 07: swept 16 admin actions + 4 admin RSC pages onto guard-supplied tenant db; admin-profile.ts auth resolved from getTenantContext (B2); catalog cache-tag busts (products.ts/categories.ts) now tenant-scoped via tenantTag; custom-fonts.ts unguarded storefront loader reads use getTenantContext not a guard
 
 ### Pending Todos
 
@@ -215,6 +217,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-05-17T15:47:06.966Z
-Stopped at: Phase 20 SHIPPED — 13 plans + verifier PASS — pending push
-Resume file: .planning/phases/20-admin-pos-draft-order-flow/20-VERIFICATION.md
+Last session: 2026-07-13T09:34:40.131Z
+Stopped at: Phase 24 Plan 07 complete — Wave 5 admin actions batch 2 + admin RSC pages
+Resume file: None
