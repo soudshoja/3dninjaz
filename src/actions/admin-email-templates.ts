@@ -1,6 +1,5 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { emailTemplates } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -33,7 +32,7 @@ export type EmailTemplateRow = {
 };
 
 export async function listEmailTemplates(): Promise<EmailTemplateRow[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const rows = await db.select().from(emailTemplates);
   // Stable order: order_confirmation first then password_reset
   const order = ["order_confirmation", "password_reset"];
@@ -54,7 +53,7 @@ export async function listEmailTemplates(): Promise<EmailTemplateRow[]> {
 export async function getEmailTemplate(
   key: string,
 ): Promise<EmailTemplateRow | null> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const [row] = await db
     .select()
     .from(emailTemplates)
@@ -75,7 +74,7 @@ type UpdateResult = { ok: true } | { ok: false; error: string };
 export async function updateEmailTemplate(
   formData: FormData,
 ): Promise<UpdateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const parsed = emailTemplateSchema.safeParse({
     key: formData.get("key"),

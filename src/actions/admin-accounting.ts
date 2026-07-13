@@ -10,7 +10,6 @@
 // MutateResult shape live in @/lib/accounting-types.
 // ============================================================================
 
-import { db } from "@/lib/db";
 import { expenses, assets, payouts } from "@/lib/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -52,23 +51,23 @@ function req(fd: FormData, k: string): string {
 // ---------------------------------------------------------------------------
 
 export async function readAccountingSummary(range: DateRange): Promise<AccountingSummary> {
-  await requireAdmin();
-  return getAccountingSummary(range);
+  const { db } = await requireAdmin();
+  return getAccountingSummary(range, db);
 }
 
 export async function readSalesReport(range: DateRange): Promise<SalesReportRow[]> {
-  await requireAdmin();
-  return getSalesReport(range);
+  const { db } = await requireAdmin();
+  return getSalesReport(range, db);
 }
 
 export async function readAccountBalances(): Promise<AccountBalances> {
-  await requireAdmin();
-  return getAccountBalances();
+  const { db } = await requireAdmin();
+  return getAccountBalances(db);
 }
 
 /** Known vendor labels (registry) ∪ distinct supplier names already used. */
 export async function listKnownVendors(): Promise<string[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const rows = await db
     .selectDistinct({ name: expenses.supplierName })
     .from(expenses);
@@ -82,7 +81,7 @@ export async function listKnownVendors(): Promise<string[]> {
 // ---------------------------------------------------------------------------
 
 export async function listExpenses(): Promise<ExpenseRow[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const rows = await db
     .select()
     .from(expenses)
@@ -100,7 +99,7 @@ export async function listExpenses(): Promise<ExpenseRow[]> {
 }
 
 export async function getExpenseById(id: string): Promise<ExpenseRow | null> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const [r] = await db.select().from(expenses).where(eq(expenses.id, id)).limit(1);
   if (!r) return null;
   return {
@@ -116,7 +115,7 @@ export async function getExpenseById(id: string): Promise<ExpenseRow | null> {
 }
 
 export async function createExpense(fd: FormData): Promise<MutateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const parsed = expenseSchema.safeParse({
     expenseDate: req(fd, "expenseDate"),
     category: fd.get("category"),
@@ -150,7 +149,7 @@ export async function createExpense(fd: FormData): Promise<MutateResult> {
 }
 
 export async function updateExpense(id: string, fd: FormData): Promise<MutateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const parsed = expenseSchema.safeParse({
     expenseDate: req(fd, "expenseDate"),
     category: fd.get("category"),
@@ -185,7 +184,7 @@ export async function updateExpense(id: string, fd: FormData): Promise<MutateRes
 }
 
 export async function deleteExpense(id: string): Promise<MutateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   try {
     await db.delete(expenses).where(eq(expenses.id, id));
   } catch (e) {
@@ -202,7 +201,7 @@ export async function deleteExpense(id: string): Promise<MutateResult> {
 // ---------------------------------------------------------------------------
 
 export async function listAssets(): Promise<AssetRow[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const rows = await db
     .select()
     .from(assets)
@@ -217,14 +216,14 @@ export async function listAssets(): Promise<AssetRow[]> {
 }
 
 export async function getAssetById(id: string): Promise<AssetRow | null> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const [r] = await db.select().from(assets).where(eq(assets.id, id)).limit(1);
   if (!r) return null;
   return { id: r.id, assetDate: r.assetDate, name: r.name, amount: r.amount, note: r.note ?? null };
 }
 
 export async function createAsset(fd: FormData): Promise<MutateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const parsed = assetSchema.safeParse({
     assetDate: req(fd, "assetDate"),
     name: req(fd, "name"),
@@ -252,7 +251,7 @@ export async function createAsset(fd: FormData): Promise<MutateResult> {
 }
 
 export async function updateAsset(id: string, fd: FormData): Promise<MutateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const parsed = assetSchema.safeParse({
     assetDate: req(fd, "assetDate"),
     name: req(fd, "name"),
@@ -276,7 +275,7 @@ export async function updateAsset(id: string, fd: FormData): Promise<MutateResul
 }
 
 export async function deleteAsset(id: string): Promise<MutateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   try {
     await db.delete(assets).where(eq(assets.id, id));
   } catch (e) {
@@ -293,7 +292,7 @@ export async function deleteAsset(id: string): Promise<MutateResult> {
 // ---------------------------------------------------------------------------
 
 export async function listPayouts(): Promise<PayoutRow[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const rows = await db
     .select()
     .from(payouts)
@@ -308,14 +307,14 @@ export async function listPayouts(): Promise<PayoutRow[]> {
 }
 
 export async function getPayoutById(id: string): Promise<PayoutRow | null> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const [r] = await db.select().from(payouts).where(eq(payouts.id, id)).limit(1);
   if (!r) return null;
   return { id: r.id, payoutDate: r.payoutDate, amount: r.amount, paidInto: r.paidInto, note: r.note ?? null };
 }
 
 export async function createPayout(fd: FormData): Promise<MutateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const parsed = payoutSchema.safeParse({
     payoutDate: req(fd, "payoutDate"),
     amount: req(fd, "amount"),
@@ -343,7 +342,7 @@ export async function createPayout(fd: FormData): Promise<MutateResult> {
 }
 
 export async function updatePayout(id: string, fd: FormData): Promise<MutateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const parsed = payoutSchema.safeParse({
     payoutDate: req(fd, "payoutDate"),
     amount: req(fd, "amount"),
@@ -367,7 +366,7 @@ export async function updatePayout(id: string, fd: FormData): Promise<MutateResu
 }
 
 export async function deletePayout(id: string): Promise<MutateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   try {
     await db.delete(payouts).where(eq(payouts.id, id));
   } catch (e) {

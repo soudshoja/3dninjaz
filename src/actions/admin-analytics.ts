@@ -1,6 +1,5 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { orders, orderItems, session, events } from "@/lib/db/schema";
 import { and, gte, inArray, sql, count } from "drizzle-orm";
 import { requireAdmin } from "@/lib/auth-helpers";
@@ -52,7 +51,7 @@ export type AnalyticsResult = {
 export async function getAnalytics(
   range: AnalyticsRange,
 ): Promise<AnalyticsResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const start = rangeStartDate(range);
 
   // 1) Revenue total + paid order count
@@ -222,7 +221,7 @@ export type MonthlyProfitSummary = {
 };
 
 export async function getMonthlyProfitSummary(): Promise<MonthlyProfitSummary> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const startOfMonth = new Date();
   startOfMonth.setDate(1);

@@ -17,7 +17,6 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db";
 import { expenses } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { tikaExtract } from "@/lib/tika";
@@ -47,7 +46,8 @@ export async function previewInvoice(
   uploadedUrl: string,
   fileName: string,
 ): Promise<InvoicePreview> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
+  void db; // no direct db access here — file read + Tika extract only
 
   const filePath = resolveUploadPath(uploadedUrl);
   if (!filePath) return { ok: false, error: "Invalid file reference" };
@@ -90,7 +90,7 @@ export async function previewInvoice(
 export async function confirmInvoiceImport(
   input: ConfirmInvoiceInput,
 ): Promise<MutateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const parsed = expenseSchema.safeParse({
     expenseDate: input.expenseDate?.trim(),

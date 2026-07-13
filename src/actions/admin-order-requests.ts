@@ -19,7 +19,6 @@
 
 import { desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db";
 import {
   orderRequests,
   orders,
@@ -37,6 +36,7 @@ import {
   sendOrderCancelledEmail,
 } from "@/actions/send-emails";
 import { sendWhatsAppNotification } from "@/lib/whatsapp/sender";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 
 // ============================================================================
 // Shared admin row type
@@ -71,6 +71,7 @@ export type AdminOrderRequestRow = {
 // ============================================================================
 
 async function expireStaleReturnsAdmin(
+  db: TenantDb,
   rows: AdminOrderRequestRow[],
 ): Promise<void> {
   const stale = rows.filter(
@@ -128,7 +129,7 @@ async function expireStaleReturnsAdmin(
 export async function listOrderRequestsForOrder(
   orderId: string,
 ): Promise<AdminOrderRequestRow[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const rows = await db
     .select()
     .from(orderRequests)
@@ -153,7 +154,7 @@ export async function listOrderRequestsForOrder(
     resolvedAt: r.resolvedAt ?? null,
   }));
 
-  await expireStaleReturnsAdmin(result);
+  await expireStaleReturnsAdmin(db, result);
   return result;
 }
 
@@ -167,7 +168,7 @@ export async function approveOrderRequest(
   requestId: string,
   adminNotes?: string,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const result = await db.transaction(async (tx) => {
     const [req] = await tx
       .select()
@@ -297,7 +298,7 @@ export async function rejectOrderRequest(
   requestId: string,
   adminNotes?: string,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const [req] = await db
     .select()
     .from(orderRequests)
@@ -354,7 +355,7 @@ export async function rejectOrderRequest(
 export async function markReturnReceived(
   requestId: string,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [req] = await db
     .select()

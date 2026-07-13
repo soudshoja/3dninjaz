@@ -3,7 +3,6 @@
 import { randomUUID } from "node:crypto";
 import { count, desc, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db";
 import { meshyGenerations, meshyRevisions } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { advanceGeneration } from "@/lib/meshy/pipeline";
@@ -164,7 +163,7 @@ export type CreateGenerationResult =
   | { ok: false; error: string };
 
 export async function createGeneration(formData: FormData): Promise<CreateGenerationResult> {
-  const session = await requireAdmin();
+  const { db, ...session } = await requireAdmin();
 
   const photo = formData.get("photo");
   if (!(photo instanceof File) || !photo.type || photo.size === 0) {
@@ -242,9 +241,9 @@ export type PollGenerationResult =
   | { ok: false; error: string };
 
 export async function pollGeneration(id: string): Promise<PollGenerationResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
-  const row = await advanceGeneration(id);
+  const row = await advanceGeneration(id, db);
   if (!row) return { ok: false, error: "Not found" };
 
   return { ok: true, generation: serializeGeneration(row) };
@@ -265,7 +264,7 @@ export type GenerationListRow = {
 };
 
 export async function listGenerations(): Promise<GenerationListRow[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const rows = await db
     .select()
@@ -303,7 +302,7 @@ export type GenerationDetail = SerializedGeneration & {
 };
 
 export async function getGeneration(id: string): Promise<GenerationDetail | null> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [row] = await db
     .select()
@@ -340,7 +339,7 @@ export async function requestRevision(
   id: string,
   input: RequestRevisionInput,
 ): Promise<RequestRevisionResult> {
-  const session = await requireAdmin();
+  const { db, ...session } = await requireAdmin();
 
   const limit = rateLimiter.checkRateLimit(`meshy-revise:${session.user.id}`, 10, 60_000);
   if (!limit.ok) {
@@ -455,7 +454,7 @@ export async function requestRevision(
 export type ApproveGenerationResult = { ok: true } | { ok: false; error: string };
 
 export async function approveGeneration(id: string): Promise<ApproveGenerationResult> {
-  const session = await requireAdmin();
+  const { db, ...session } = await requireAdmin();
 
   const [row] = await db
     .select()
@@ -504,7 +503,7 @@ export async function approveGeneration(id: string): Promise<ApproveGenerationRe
 export type RepairGenerationResult = { ok: true } | { ok: false; error: string };
 
 export async function repairGeneration(id: string): Promise<RepairGenerationResult> {
-  const session = await requireAdmin();
+  const { db, ...session } = await requireAdmin();
 
   const limit = rateLimiter.checkRateLimit(`meshy-repair:${session.user.id}`, 10, 60_000);
   if (!limit.ok) {
@@ -565,7 +564,7 @@ export async function runMulticolor(
   id: string,
   input: RunMulticolorInput,
 ): Promise<RunMulticolorResult> {
-  const session = await requireAdmin();
+  const { db, ...session } = await requireAdmin();
 
   const limit = rateLimiter.checkRateLimit(`meshy-multicolor:${session.user.id}`, 10, 60_000);
   if (!limit.ok) {
@@ -627,7 +626,7 @@ export async function runMulticolor(
 export type CancelGenerationResult = { ok: true } | { ok: false; error: string };
 
 export async function cancelGeneration(id: string): Promise<CancelGenerationResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [row] = await db
     .select()

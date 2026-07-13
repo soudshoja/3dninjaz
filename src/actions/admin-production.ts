@@ -1,6 +1,5 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { orders, orderItems } from "@/lib/db/schema";
 import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -106,7 +105,7 @@ function itemView(item: typeof orderItems.$inferSelect): {
  * processed orders (all made), and the flattened sortable line queue.
  */
 export async function getProductionBoard(): Promise<ProductionBoard> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const orderRows = await db
     .select({
@@ -227,7 +226,7 @@ export async function toggleProductionItemDone(
   orderItemId: string,
   done: boolean,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   if (typeof orderItemId !== "string" || orderItemId.length === 0) {
     return { ok: false, error: "Invalid item." };
   }
@@ -249,7 +248,7 @@ export async function setOrderProductionDone(
   orderId: string,
   done: boolean,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   if (typeof orderId !== "string" || orderId.length === 0) {
     return { ok: false, error: "Invalid order." };
   }
@@ -273,7 +272,7 @@ export async function setOrderProductionDone(
 export async function reorderProductionLineItems(
   orderedIds: string[],
 ): Promise<{ ok: boolean; error?: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
     return { ok: true };
   }
@@ -325,7 +324,7 @@ export async function setOrderInProduction(
   orderId: string,
   on: boolean,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   if (typeof orderId !== "string" || orderId.length === 0) {
     return { ok: false, error: "Invalid order." };
   }
@@ -403,7 +402,7 @@ export type KeychainBatches = {
  * MariaDB 10.11 safe: two sequential SELECTs + in-memory join.
  */
 export async function getKeychainBatches(): Promise<KeychainBatches> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   // 1) Orders that have been flagged for the production floor.
   const orderRows = await db
@@ -517,7 +516,7 @@ export async function markKeychainPartPrinted(
   part: "base" | "clickerLetter",
   done: boolean,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   if (!Array.isArray(itemIds)) {
     return { ok: false, error: "itemIds must be an array." };
@@ -558,7 +557,7 @@ export async function setKeychainAssembled(
   itemId: string,
   done: boolean,
 ): Promise<{ ok: boolean; error?: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   if (typeof itemId !== "string" || !UUID_RE.test(itemId)) {
     return { ok: false, error: "Invalid item ID." };

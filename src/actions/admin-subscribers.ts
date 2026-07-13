@@ -3,7 +3,6 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-helpers";
-import { db } from "@/lib/db";
 import { emailSubscribers } from "@/lib/db/schema";
 import type { SubscriberStatusFilter } from "@/lib/subscriber-filters";
 
@@ -37,7 +36,7 @@ export type SubscriberCounts = {
 };
 
 export async function getSubscriberCounts(): Promise<SubscriberCounts> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const rows = await db
     .select({
       status: emailSubscribers.status,
@@ -70,7 +69,7 @@ export async function listSubscribers(
   limit = 100,
   offset = 0,
 ): Promise<AdminSubscriberRow[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const base = db
     .select({
@@ -109,7 +108,7 @@ export async function listSubscribers(
 
 /** Admin override — force a subscriber into `unsubscribed`. */
 export async function adminUnsubscribe(id: string): Promise<{ ok: true }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   if (!id || typeof id !== "string") {
     throw new Error("Missing subscriber id");
   }
@@ -129,7 +128,7 @@ export async function adminUnsubscribe(id: string): Promise<{ ok: true }> {
 
 /** Admin override — flip an entry back to active (rare but useful). */
 export async function adminReactivate(id: string): Promise<{ ok: true }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   if (!id || typeof id !== "string") {
     throw new Error("Missing subscriber id");
   }

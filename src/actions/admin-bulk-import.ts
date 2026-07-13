@@ -1,6 +1,5 @@
 "use server";
 
-import { db } from "@/lib/db";
 import {
   products,
   productVariants,
@@ -166,7 +165,7 @@ function uploadsImportsPath(fileName: string): string {
 export async function previewCsv(
   fileName: string,
 ): Promise<{ ok: true; result: PreviewResult } | { ok: false; error: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const safeName = safeFileName(fileName);
   if (!safeName) return { ok: false, error: "Invalid file name" };
 
@@ -284,7 +283,7 @@ export type CommitResult =
   | { ok: false; error: string };
 
 export async function commitCsvImport(fileName: string): Promise<CommitResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const safeName = safeFileName(fileName);
   if (!safeName) return { ok: false, error: "Invalid file name" };
 
