@@ -386,6 +386,8 @@ export type KeychainClickerLetterBatch = {
   items: KeychainUnit[];
   doneCount: number;
   allDone: boolean;
+  /** Clicker/letter body shape shared by every item in this batch. */
+  shape: "square" | "round";
 };
 
 /** Assembly view of a single keychain unit. */
@@ -493,17 +495,20 @@ export async function getKeychainBatches(): Promise<KeychainBatches> {
     })
     .sort((a, b) => b.totalQty - a.totalQty);
 
-  // 5) Group CLICKER+LETTER — by combined key.
+  // 5) Group CLICKER+LETTER — by shape + clicker + letter composite key.
+  // Round and square clicker/letter pieces of the SAME colours are physically
+  // different STLs and cannot be printed together, so shape is folded into
+  // the grouping key (mirrors the BASE grouping above).
   const clMap = new Map<string, KeychainUnit[]>();
   for (const u of units) {
-    const key = `${u.clicker}|||${u.letter}`;
+    const key = `${u.shape}|||${u.clicker}|||${u.letter}`;
     const list = clMap.get(key) ?? [];
     list.push(u);
     clMap.set(key, list);
   }
   const clickerLetters: KeychainClickerLetterBatch[] = Array.from(clMap.entries())
     .map(([key, items]) => {
-      const [clicker, letter] = key.split("|||");
+      const [shape, clicker, letter] = key.split("|||") as ["square" | "round", string, string];
       const totalQty = items.reduce((s, u) => s + u.quantity, 0);
       const doneCount = items.filter((u) => u.clickerLetterDone).length;
       return {
@@ -513,14 +518,19 @@ export async function getKeychainBatches(): Promise<KeychainBatches> {
         items,
         doneCount,
         allDone: doneCount === items.length,
+        shape,
       };
     })
     .sort((a, b) => b.totalQty - a.totalQty);
 
-  // 6) Assembly — flat list sorted by clientName then name.
+  // 6) Assembly — flat list sorted shape-first (so same-shape units stay
+  // contiguous), then clientName, then name. For a single-shape store every
+  // unit shares one shape, so this falls through to the original ordering.
   const assembly: KeychainAssemblyUnit[] = units
     .map((u) => ({ ...u, bothPartsDone: u.baseDone && u.clickerLetterDone }))
     .sort((a, b) => {
+      const sc = a.shape.localeCompare(b.shape);
+      if (sc !== 0) return sc;
       const nc = a.clientName.localeCompare(b.clientName);
       if (nc !== 0) return nc;
       return a.name.localeCompare(b.name);
