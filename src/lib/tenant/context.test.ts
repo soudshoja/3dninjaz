@@ -3,8 +3,11 @@
  * Run: npx vitest run src/lib/tenant/context.test.ts
  *
  * "server-only" is mocked the same way pool-manager.test.ts/registry.test.ts
- * do. next/headers, next/navigation, ./registry, and ./pool-manager are all
- * mocked so this exercises context.ts's own resolution logic in isolation.
+ * do. next/headers, next/navigation, ./registry, ./pool-manager, and
+ * ./auth-cache are all mocked so this exercises context.ts's own resolution
+ * logic in isolation. ./auth-cache is mocked (24-03/W2) specifically so the
+ * real Better Auth graph never loads at unit-test time — resolveTenantContext
+ * now calls getTenantAuth(tenant, db) as part of its resolved shape.
  *
  * MEMOIZATION NOTE (23-04 guardrails): React `cache()` only memoizes inside
  * a request-scoped render dispatcher (AsyncLocalStorage-backed) that a real
@@ -33,8 +36,11 @@ const {
   warmRegistryMock,
   getTenantDbMock,
   dbSentinel,
+  getTenantAuthMock,
+  authSentinel,
 } = vi.hoisted(() => {
   const dbSentinel = { __tenantDb: true };
+  const authSentinel = { __tenantAuth: true };
   return {
     headersMock: vi.fn(),
     notFoundMock: vi.fn(() => {
@@ -44,6 +50,8 @@ const {
     warmRegistryMock: vi.fn().mockResolvedValue(undefined),
     getTenantDbMock: vi.fn(() => dbSentinel),
     dbSentinel,
+    getTenantAuthMock: vi.fn(() => authSentinel),
+    authSentinel,
   };
 });
 
@@ -59,6 +67,12 @@ vi.mock("./registry", () => ({
 }));
 vi.mock("./pool-manager", () => ({
   getTenantDb: (...args: unknown[]) => getTenantDbMock(...args),
+}));
+// 24-03/W2 — mock auth-cache so resolveTenantContext's getTenantAuth call
+// never loads the real Better Auth graph at test time (checked at the
+// 24-11 `npm test` gate).
+vi.mock("./auth-cache", () => ({
+  getTenantAuth: (...args: unknown[]) => getTenantAuthMock(...args),
 }));
 
 import {
@@ -93,10 +107,11 @@ beforeEach(() => {
   resolveDomainMock.mockReset();
   warmRegistryMock.mockClear().mockResolvedValue(undefined);
   getTenantDbMock.mockClear().mockReturnValue(dbSentinel);
+  getTenantAuthMock.mockClear().mockReturnValue(authSentinel);
 });
 
 describe("resolveTenantContext (inner resolver)", () => {
-  it("happy path: resolves { tenant, db } for a registered host, db === getTenantDb(tenant)", async () => {
+  it("happy path: resolves { tenant, db, auth } for a registered host, db === getTenantDb(tenant), auth === getTenantAuth(tenant, db)", async () => {
     const tenant = makeTenant();
     headersMock.mockResolvedValue(makeHeaders("t1.example.com"));
     resolveDomainMock.mockReturnValue(tenant);
@@ -105,7 +120,9 @@ describe("resolveTenantContext (inner resolver)", () => {
 
     expect(result.tenant).toBe(tenant);
     expect(result.db).toBe(dbSentinel);
+    expect(result.auth).toBe(authSentinel);
     expect(getTenantDbMock).toHaveBeenCalledWith(tenant);
+    expect(getTenantAuthMock).toHaveBeenCalledWith(tenant, dbSentinel);
     expect(warmRegistryMock).toHaveBeenCalled();
     expect(resolveDomainMock).toHaveBeenCalledWith("t1.example.com");
   });
@@ -127,6 +144,7 @@ describe("resolveTenantContext (inner resolver)", () => {
     await expect(resolveTenantContext()).rejects.toThrow("NEXT_NOT_FOUND");
     expect(notFoundMock).toHaveBeenCalled();
     expect(getTenantDbMock).not.toHaveBeenCalled();
+    expect(getTenantAuthMock).not.toHaveBeenCalled();
   });
 
   it("suspended tenant throws TenantSuspendedError with the tenant id (distinct from notFound)", async () => {
@@ -139,6 +157,7 @@ describe("resolveTenantContext (inner resolver)", () => {
     );
     expect(notFoundMock).not.toHaveBeenCalled();
     expect(getTenantDbMock).not.toHaveBeenCalled();
+    expect(getTenantAuthMock).not.toHaveBeenCalled();
   });
 
   it("TenantSuspendedError carries the tenant id", async () => {
@@ -167,6 +186,7 @@ describe("resolveTenantContext (inner resolver)", () => {
     const result = await resolveTenantContext();
     expect(result.tenant).toBe(single);
     expect(result.db).toBe(dbSentinel);
+    expect(result.auth).toBe(authSentinel);
   });
 
   it("missing Host header resolves to an empty string, not undefined/crash", async () => {
@@ -179,7 +199,7 @@ describe("resolveTenantContext (inner resolver)", () => {
 });
 
 describe("getTenantContext (React cache()-wrapped)", () => {
-  it("delegates to the same resolution logic — happy path returns { tenant, db }", async () => {
+  it("delegates to the same resolution logic — happy path returns { tenant, db, auth }", async () => {
     const tenant = makeTenant();
     headersMock.mockResolvedValue(makeHeaders("t1.example.com"));
     resolveDomainMock.mockReturnValue(tenant);
@@ -187,6 +207,7 @@ describe("getTenantContext (React cache()-wrapped)", () => {
     const result = await getTenantContext();
     expect(result.tenant).toBe(tenant);
     expect(result.db).toBe(dbSentinel);
+    expect(result.auth).toBe(authSentinel);
   });
 
   it("delegates to the same resolution logic — unknown host still hard-fails via notFound()", async () => {

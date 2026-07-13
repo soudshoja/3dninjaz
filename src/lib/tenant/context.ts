@@ -4,23 +4,24 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { resolveDomain, warmRegistry } from "./registry";
 import { getTenantDb } from "./pool-manager";
+import { getTenantAuth } from "./auth-cache";
 import type { Tenant } from "./platform-schema";
 
 // ============================================================================
 // Phase 23 (23-04) — getTenantContext(): binds the current request's Host
-// header to a resolved { tenant, db }. This is the handler-layer trust
+// header to a resolved { tenant, db, auth }. This is the handler-layer trust
 // boundary TEN-03 requires: an unrecognized Host hard-fails via notFound()
 // and NEVER falls back to an existing tenant (ARCHITECTURE.md anti-pattern
 // 2 / PITFALLS.md Pitfall 4 — ProxyPreserveHost forwards arbitrary/spoofable
 // Host values, so the app is the last line of defense).
 //
-// Phase 23 scope: return exactly { tenant, db }. Phase 24 adds `auth`
-// (per-tenant Better Auth) to this same resolved shape — do not add it here.
+// Phase 24 (24-03): auth added to the resolved shape via getTenantAuth.
 //
-// Does NOT touch src/lib/auth-helpers.ts or src/middleware.ts — middleware
-// keeps maintenance-mode-only duties and gains no trust responsibilities
-// (CVE-2025-29927 discipline: tenant identity is resolved in the handler
-// layer, never trusted from a middleware-set header).
+// Does NOT touch src/middleware.ts — middleware keeps maintenance-mode-only
+// duties and gains no trust responsibilities (CVE-2025-29927 discipline:
+// tenant identity is resolved in the handler layer, never trusted from a
+// middleware-set header). src/lib/auth-helpers.ts's guards now consume this
+// resolved shape directly (24-03).
 // ============================================================================
 
 export class TenantSuspendedError extends Error {
@@ -42,6 +43,7 @@ export class TenantSuspendedError extends Error {
 export async function resolveTenantContext(): Promise<{
   tenant: Tenant;
   db: ReturnType<typeof getTenantDb>;
+  auth: ReturnType<typeof getTenantAuth>;
 }> {
   // Warm before resolve — resolveDomain() is synchronous once warm and
   // returns null on a cold cache (registry.ts's documented contract).
@@ -54,7 +56,8 @@ export async function resolveTenantContext(): Promise<{
   if (tenant.status === "suspended") {
     throw new TenantSuspendedError(tenant.id); // -> 503-class, distinct from notFound
   }
-  return { tenant, db: getTenantDb(tenant) };
+  const db = getTenantDb(tenant);
+  return { tenant, db, auth: getTenantAuth(tenant, db) };
 }
 
 /**
