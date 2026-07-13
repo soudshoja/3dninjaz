@@ -1,4 +1,5 @@
 import nodemailer, { type Transporter } from "nodemailer";
+import type { Tenant } from "@/lib/tenant/platform-schema";
 
 /**
  * Nodemailer transport backed by the cPanel SMTP mailbox created on
@@ -42,10 +43,34 @@ export function getMailer(): Transporter {
 export const MAIL_FROM =
   process.env.SMTP_FROM ?? "3D Ninjaz <noreply@3dninjaz.com>";
 
+/**
+ * Resolves the transport + From address for an outbound send.
+ *
+ * Phase 24 (24-01): `tenant` undefined -> today's exact global transport +
+ * MAIL_FROM (the byte-identical single-mode / pre-Wave-2-caller path).
+ * `tenant` provided -> routed through the per-tenant mailer cache
+ * (src/lib/tenant/mailer-cache.ts), which itself short-circuits back to
+ * this same global transport under TENANT_MODE=single. Dynamic import
+ * avoids a static circular import (mailer-cache.ts imports getMailer/
+ * MAIL_FROM from this module).
+ */
+async function resolveSender(
+  tenant?: Tenant,
+): Promise<{ transport: Transporter; from: string }> {
+  if (!tenant) {
+    return { transport: getMailer(), from: MAIL_FROM };
+  }
+  const { getTenantMailer, getTenantMailFrom } = await import(
+    "@/lib/tenant/mailer-cache"
+  );
+  return { transport: getTenantMailer(tenant), from: getTenantMailFrom(tenant) };
+}
+
 export async function sendResetPasswordEmail(opts: {
   to: string;
   name: string;
   url: string;
+  tenant?: Tenant;
 }): Promise<void> {
   // Plan 05-06: render via DB-backed template. Fallback to legacy hardcoded
   // body if template render fails (DB hiccup must not block password reset).
@@ -75,8 +100,9 @@ export async function sendResetPasswordEmail(opts: {
     text = undefined;
   }
   try {
-    await getMailer().sendMail({
-      from: MAIL_FROM,
+    const { transport, from } = await resolveSender(opts.tenant);
+    await transport.sendMail({
+      from,
       to: opts.to,
       subject,
       html,
@@ -92,9 +118,11 @@ export async function sendMail(opts: {
   subject: string;
   html: string;
   text?: string;
+  tenant?: Tenant;
 }): Promise<void> {
-  await getMailer().sendMail({
-    from: MAIL_FROM,
+  const { transport, from } = await resolveSender(opts.tenant);
+  await transport.sendMail({
+    from,
     to: opts.to,
     subject: opts.subject,
     html: opts.html,
