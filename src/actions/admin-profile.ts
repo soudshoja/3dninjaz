@@ -3,10 +3,9 @@
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
 import { user as userTable } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth-helpers";
+import { getTenantContext } from "@/lib/tenant/context";
 import {
   changePasswordSchema,
   profileUpdateSchema,
@@ -22,7 +21,7 @@ import {
 // ============================================================================
 
 export async function updateAdminProfile(input: unknown) {
-  const session = await requireAdmin();
+  const { db, ...session } = await requireAdmin();
   const parsed = profileUpdateSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false as const, error: parsed.error.issues[0].message };
@@ -42,6 +41,7 @@ export async function changeAdminPassword(input: unknown) {
     return { ok: false as const, error: parsed.error.issues[0].message };
   }
   try {
+    const { auth } = await getTenantContext(); // React.cache-memoized — free after requireAdmin()
     await auth.api.changePassword({
       body: {
         currentPassword: parsed.data.currentPassword,

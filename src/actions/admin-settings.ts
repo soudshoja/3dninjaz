@@ -1,6 +1,5 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { storeSettings } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -23,7 +22,8 @@ import {
 // ============================================================================
 
 export async function getStoreSettings() {
-  await requireAdmin();
+  const { db } = await requireAdmin();
+  void db;
   return getStoreSettingsCached();
 }
 
@@ -39,7 +39,7 @@ type UpdateResult = { ok: true } | { ok: false; error: string };
 export async function updateStoreSettings(
   formData: FormData,
 ): Promise<UpdateResult> {
-  await requireAdmin();
+  const { db, tenant } = await requireAdmin();
   const parsed = storeSettingsSchema.safeParse({
     businessName: formData.get("businessName"),
     contactEmail: formData.get("contactEmail"),
@@ -100,7 +100,7 @@ export async function updateStoreSettings(
     })
     .where(eq(storeSettings.id, "default"));
 
-  clearStoreSettingsCache();
+  clearStoreSettingsCache(tenant.id);
   revalidatePath("/", "layout");
   revalidatePath("/about");
   revalidatePath("/contact");
@@ -110,7 +110,7 @@ export async function updateStoreSettings(
 }
 
 export async function invalidateSettingsCache(): Promise<{ ok: true }> {
-  await requireAdmin();
-  clearStoreSettingsCache();
+  const { tenant } = await requireAdmin();
+  clearStoreSettingsCache(tenant.id);
   return { ok: true };
 }

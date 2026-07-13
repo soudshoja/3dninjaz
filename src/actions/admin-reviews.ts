@@ -1,6 +1,5 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { reviews, products, user } from "@/lib/db/schema";
 import { eq, desc, count } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -44,7 +43,7 @@ export type ReviewStatusFilter = "pending" | "approved" | "hidden" | "all";
 export async function listAdminReviews(
   filter: ReviewStatusFilter = "pending",
 ): Promise<AdminReviewRow[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const baseQuery = db
     .select({
@@ -95,7 +94,7 @@ type ModerateResult = { ok: true } | { ok: false; error: string };
 export async function moderateReview(
   formData: FormData,
 ): Promise<ModerateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const parsed = reviewModerationSchema.safeParse({
     id: formData.get("id"),
@@ -118,7 +117,7 @@ export async function moderateReview(
  * audit log not in v1.
  */
 export async function deleteReview(id: string): Promise<ModerateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   if (typeof id !== "string" || id.length === 0) {
     return { ok: false, error: "Invalid review ID" };
   }
@@ -136,7 +135,7 @@ export async function deleteReview(id: string): Promise<ModerateResult> {
  * gated entry, so this is belt-and-braces.
  */
 export async function getPendingReviewCount(): Promise<number> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const [row] = await db
     .select({ c: count() })
     .from(reviews)

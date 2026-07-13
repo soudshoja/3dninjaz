@@ -1,6 +1,5 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { shippingRates } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -11,6 +10,7 @@ import {
   MALAYSIAN_STATES,
 } from "@/lib/validators";
 import { getStoreSettingsCached } from "@/lib/store-settings";
+import { getTenantContext } from "@/lib/tenant/context";
 
 // ============================================================================
 // Plan 05-04 admin shipping rates + customer-side getShippingRate.
@@ -33,7 +33,7 @@ export type ShippingRateRow = {
 };
 
 export async function listShippingRates(): Promise<ShippingRateRow[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   let rows = await db.select().from(shippingRates);
   if (rows.length === 0) {
@@ -67,7 +67,7 @@ type UpdateResult = { ok: true } | { ok: false; error: string };
 export async function updateShippingRates(
   entries: Array<{ state: string; flatRate: string }>,
 ): Promise<UpdateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   if (!Array.isArray(entries) || entries.length === 0) {
     return { ok: false, error: "No rates supplied" };
   }
@@ -103,6 +103,7 @@ export async function getShippingRate(
   state: string,
   subtotalMYR: number,
 ): Promise<{ cost: number; freeShipApplied: boolean }> {
+  const { db } = await getTenantContext();
   const settings = await getStoreSettingsCached();
   const threshold = settings.freeShipThreshold
     ? parseFloat(settings.freeShipThreshold)

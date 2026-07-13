@@ -10,7 +10,6 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { requireAdmin } from "@/lib/auth-helpers";
-import { db } from "@/lib/db";
 import { whatsappNotifications } from "@/lib/db/schema";
 import {
   getWhatsappNotificationsAll,
@@ -25,8 +24,8 @@ import type { WhatsappNotificationRow } from "@/lib/whatsapp/types";
 export async function listWhatsappNotifications(): Promise<
   WhatsappNotificationRow[]
 > {
-  await requireAdmin();
-  return getWhatsappNotificationsAll();
+  const { db } = await requireAdmin();
+  return getWhatsappNotificationsAll(db);
 }
 
 // ---------------------------------------------------------------------------
@@ -42,7 +41,7 @@ const updateSchema = z.object({
 export async function updateWhatsappNotification(
   formData: FormData,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const raw = {
     eventKey: formData.get("eventKey"),

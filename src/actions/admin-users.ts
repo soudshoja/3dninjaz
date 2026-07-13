@@ -1,6 +1,5 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { user, orders } from "@/lib/db/schema";
 import { eq, ne, desc, count, sum, max, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -22,7 +21,7 @@ export type AdminUserRow = {
 };
 
 export async function listAdminUsers(): Promise<AdminUserRow[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const users = await db
     .select()
@@ -74,7 +73,7 @@ export async function listAdminUsers(): Promise<AdminUserRow[]> {
 type SuspendResult = { ok: true } | { ok: false; error: string };
 
 export async function suspendUser(formData: FormData): Promise<SuspendResult> {
-  const session = await requireAdmin();
+  const { db, ...session } = await requireAdmin();
 
   const parsed = userSuspendSchema.safeParse({
     userId: formData.get("userId"),
@@ -114,7 +113,7 @@ export async function suspendUser(formData: FormData): Promise<SuspendResult> {
 }
 
 export async function unsuspendUser(userId: string): Promise<SuspendResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   if (typeof userId !== "string" || userId.length === 0) {
     return { ok: false, error: "Invalid user ID" };

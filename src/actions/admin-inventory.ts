@@ -1,6 +1,5 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { productVariants, products } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -27,7 +26,7 @@ export async function toggleVariantStock(
   variantId: string,
   inStock: boolean,
 ): Promise<ToggleResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   if (typeof variantId !== "string" || variantId.length === 0) {
     return { ok: false, error: "Invalid variant ID" };
   }
@@ -65,7 +64,7 @@ export async function setLowStockThreshold(
   variantId: string,
   threshold: number | null,
 ): Promise<ToggleResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   if (typeof variantId !== "string" || variantId.length === 0) {
     return { ok: false, error: "Invalid variant ID" };
   }

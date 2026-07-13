@@ -1,6 +1,5 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { storeSettings } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -53,7 +52,7 @@ export type SaveDraftLinkTemplateResult =
 export async function saveStoreBankDetails(
   input: BankDetailsInput,
 ): Promise<SaveBankDetailsResult> {
-  const session = await requireAdmin(); // CVE-2025-29927 — FIRST await
+  const { db, tenant, ...session } = await requireAdmin(); // CVE-2025-29927 — FIRST await
 
   // Normalise empty strings to null
   const bankName = input.bankName?.trim() || null;
@@ -77,7 +76,7 @@ export async function saveStoreBankDetails(
   }
 
   // Invalidate cache + revalidate pages that render the bank details
-  invalidateStoreSettingsCache();
+  invalidateStoreSettingsCache(tenant.id);
   revalidatePath("/admin/settings");
   revalidatePath("/payment-links/[token]", "page");
 
@@ -98,7 +97,7 @@ export async function saveStoreBankDetails(
 export async function saveDraftLinkTemplate(input: {
   draftLinkTemplate: string | null;
 }): Promise<SaveDraftLinkTemplateResult> {
-  const session = await requireAdmin(); // CVE-2025-29927 — FIRST await
+  const { db, tenant, ...session } = await requireAdmin(); // CVE-2025-29927 — FIRST await
 
   // Normalise empty string to null
   const draftLinkTemplate = input.draftLinkTemplate?.trim() || null;
@@ -120,7 +119,7 @@ export async function saveDraftLinkTemplate(input: {
   }
 
   // Invalidate cache + revalidate admin settings page
-  clearStoreSettingsCache();
+  clearStoreSettingsCache(tenant.id);
   revalidatePath("/admin/settings");
   revalidatePath("/payment-links/[token]", "page");
 

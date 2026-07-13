@@ -1,6 +1,5 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { user, orders, addresses } from "@/lib/db/schema";
 import { eq, desc, count, max } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -123,7 +122,7 @@ export type AdminUserDetail = {
 export async function getAdminUserDetail(
   userId: string,
 ): Promise<AdminUserDetail | null> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   if (typeof userId !== "string" || userId.length === 0) return null;
 
@@ -272,7 +271,7 @@ export async function updateUserNotes(
   userId: string,
   notes: string | null,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   if (typeof userId !== "string" || userId.length === 0) {
     return { ok: false, error: "Invalid user ID" };
@@ -305,7 +304,7 @@ export async function updateUserTags(
   userId: string,
   tags: string[],
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   if (typeof userId !== "string" || userId.length === 0) {
     return { ok: false, error: "Invalid user ID" };
