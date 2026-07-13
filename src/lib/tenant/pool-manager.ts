@@ -22,7 +22,7 @@ import { db as singletonDb } from "@/lib/db";
 // takes down the whole fleet.
 // ============================================================================
 
-type TenantDb = MySql2Database<typeof schema>;
+export type TenantDb = MySql2Database<typeof schema>;
 type PlatformDb = MySql2Database<typeof platformSchema>;
 
 const SINGLE_TENANT_ID = "single";
