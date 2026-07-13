@@ -1,13 +1,22 @@
 import type { MetadataRoute } from "next";
+import { unstable_rethrow } from "next/navigation";
 import { SITE } from "@/lib/site-metadata";
 import { getActiveProducts, getActiveCategories } from "@/lib/catalog";
+import { getTenantContext } from "@/lib/tenant/context";
+import { publicOrigin } from "@/lib/public-url";
+import type { Tenant } from "@/lib/tenant/platform-schema";
 
 /**
  * /sitemap.xml via Next.js 15 Metadata API (file-based convention).
  *
- * Base URL resolves from NEXT_PUBLIC_SITE_URL when set (production should set
- * this to https://app.3dninjaz.com so sitemap entries stay self-consistent
- * with the deployed origin), otherwise falls back to SITE.url.
+ * force-dynamic (Phase 24 24-04): the catalog reads below resolve tenant
+ * identity via headers(), so this route genuinely varies per-request once
+ * the singleton sweep lands — it can no longer be statically prerendered.
+ *
+ * Base URL resolves per-tenant (B1/SC5 — see resolveBaseUrl below):
+ * registry-mode tenants get their registry primaryDomain; the synthesized
+ * "single" tenant keeps today's NEXT_PUBLIC_SITE_URL ?? SITE.url chain
+ * verbatim (byte-identical in single mode).
  *
  * Only emits ACTIVE products (getActiveProducts filters isActive=true) so
  * draft / inactive products never leak into the crawl surface (T-04-04-02).
@@ -18,10 +27,18 @@ import { getActiveProducts, getActiveCategories } from "@/lib/catalog";
  *
  * If the DB is unreachable at render time (network blip, Passenger cold
  * start hitting the pool before it warms) we fall back to STATIC ROUTES
- * ONLY. A failing DB must not 500 the sitemap — crawlers will retry.
+ * ONLY. A failing DB must not 500 the sitemap — crawlers will retry. A
+ * build-time DynamicServerError (framework control flow, NOT a DB blip) is
+ * re-thrown via unstable_rethrow BEFORE that fallback so Next renders this
+ * route dynamically instead of baking a product-less static sitemap (B1).
  */
 
-function resolveBaseUrl(): string {
+export const dynamic = "force-dynamic";
+
+function resolveBaseUrl(tenant?: Tenant): string {
+  if (tenant && tenant.id !== "single") {
+    return publicOrigin(tenant).replace(/\/$/, "");
+  }
   const env = process.env.NEXT_PUBLIC_SITE_URL?.trim();
   if (env && env.length > 0) {
     // Strip trailing slash to keep URL concatenation consistent.
@@ -31,7 +48,8 @@ function resolveBaseUrl(): string {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const base = resolveBaseUrl();
+  const { tenant } = await getTenantContext();
+  const base = resolveBaseUrl(tenant);
   const now = new Date();
 
   const staticRoutes: MetadataRoute.Sitemap = [
@@ -99,6 +117,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.7,
     }));
   } catch (err) {
+    // Re-throw framework control-flow errors (e.g. a build-time
+    // DynamicServerError) — a bare catch here would otherwise swallow it and
+    // bake a product-less sitemap at build time (B1). No-op for real errors.
+    unstable_rethrow(err);
     // Non-fatal: emit static routes only and log for diagnostics. Crawlers
     // will refetch the sitemap on their normal cadence; stale product data
     // for one cycle is acceptable and preferable to a 500.

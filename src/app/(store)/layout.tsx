@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { unstable_rethrow } from "next/navigation";
 import { SiteNav } from "@/components/store/site-nav";
 import { SiteFooter } from "@/components/store/site-footer";
 import { CartDrawer } from "@/components/store/cart-drawer";
@@ -23,6 +24,12 @@ export default async function StoreLayout({ children }: { children: ReactNode })
   try {
     categoryTree = await getActiveCategoryTree();
   } catch (err) {
+    // Re-throw framework control-flow errors (e.g. a build-time
+    // DynamicServerError) — a bare catch here would otherwise swallow it and
+    // bake an empty nav mega-menu into static pages (/about /contact
+    // /privacy /terms) at build time (B1). No-op for real errors, so a
+    // genuine pool blip still falls through to the empty-nav fallback below.
+    unstable_rethrow(err);
     // eslint-disable-next-line no-console
     console.warn("[layout] category tree fetch failed:", err);
   }

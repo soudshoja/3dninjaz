@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { unstable_rethrow } from "next/navigation";
 import { BRAND } from "@/lib/brand";
 import { Hero } from "@/components/store/hero";
 import { FeaturedRail } from "@/components/store/featured-rail";
@@ -21,6 +22,11 @@ export default async function HomePage({
   searchParams?: Promise<{ closed?: string }>;
 }) {
   const featured = await getActiveFeaturedProducts(4).catch((err) => {
+    // Re-throw framework control-flow errors (e.g. a build-time
+    // DynamicServerError) — a bare catch here would otherwise swallow it and
+    // bake an empty featured-products grid at build time (B1). No-op for
+    // real errors, so a genuine DB blip still falls through to `[]`.
+    unstable_rethrow(err);
     console.warn("[home] getActiveFeaturedProducts failed:", err);
     return [];
   });
