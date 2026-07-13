@@ -1,6 +1,5 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
-import { db } from "@/lib/db";
 import {
   products,
   productVariants,
@@ -20,6 +19,9 @@ import {
 import { buildColourSlugMap } from "@/lib/colours";
 import { sortByShade } from "@/lib/colour-sort";
 import { ensureTiers, ensureImagesV2, type ImageEntryV2 } from "@/lib/config-fields";
+import { getTenantContext } from "@/lib/tenant/context";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
+import { tenantTag, tenantCacheKey } from "@/lib/tenant/cache-tags";
 
 // ============================================================================
 // MariaDB 10.11 note — Drizzle's relational `db.query.products.findMany({ with })`
@@ -120,7 +122,7 @@ export function pickThumbnail(p: {
   return p.images[0];
 }
 
-async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
+async function hydrateProducts(rows: ProductRow[], db: TenantDb): Promise<CatalogProduct[]> {
   if (rows.length === 0) return [];
 
   const ids = rows.map((p) => p.id);
@@ -283,18 +285,21 @@ async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
   });
 }
 
-export async function getActiveProducts(): Promise<CatalogProduct[]> {
+export async function getActiveProducts(db?: TenantDb): Promise<CatalogProduct[]> {
+  db ??= (await getTenantContext()).db;
   const rows = await db
     .select()
     .from(products)
     .where(eq(products.isActive, true))
     .orderBy(desc(products.createdAt));
-  return hydrateProducts(rows);
+  return hydrateProducts(rows, db);
 }
 
 export async function searchActiveProducts(
   q: string,
+  db?: TenantDb,
 ): Promise<CatalogProduct[]> {
+  db ??= (await getTenantContext()).db;
   const pattern = `%${q}%`;
   const rows = await db
     .select()
@@ -309,35 +314,40 @@ export async function searchActiveProducts(
       ),
     )
     .orderBy(desc(products.createdAt));
-  return hydrateProducts(rows);
+  return hydrateProducts(rows, db);
 }
 
 export async function getActiveFeaturedProducts(
-  limit = 4
+  limit = 4,
+  db?: TenantDb,
 ): Promise<CatalogProduct[]> {
+  db ??= (await getTenantContext()).db;
   const rows = await db
     .select()
     .from(products)
     .where(and(eq(products.isActive, true), eq(products.isFeatured, true)))
     .orderBy(desc(products.createdAt))
     .limit(limit);
-  return hydrateProducts(rows);
+  return hydrateProducts(rows, db);
 }
 
 export async function getActiveProductBySlug(
-  slug: string
+  slug: string,
+  db?: TenantDb,
 ): Promise<CatalogProduct | null> {
+  db ??= (await getTenantContext()).db;
   const [row] = await db
     .select()
     .from(products)
     .where(and(eq(products.slug, slug), eq(products.isActive, true)))
     .limit(1);
   if (!row) return null;
-  const [hydrated] = await hydrateProducts([row]);
+  const [hydrated] = await hydrateProducts([row], db);
   return hydrated ?? null;
 }
 
-export async function getActiveCategories(): Promise<CategoryRow[]> {
+export async function getActiveCategories(db?: TenantDb): Promise<CategoryRow[]> {
+  db ??= (await getTenantContext()).db;
   return db
     .select()
     .from(categories)
@@ -360,7 +370,7 @@ export const CATEGORY_TREE_TAG = "nav-category-tree";
  * subquery and thumbnailUrl (first active product's image).
  * MariaDB 10.11: manual hydration — no LATERAL joins.
  */
-async function getActiveCategoryTreeUncached(): Promise<CategoryTreeNode[]> {
+async function getActiveCategoryTreeUncached(db: TenantDb): Promise<CategoryTreeNode[]> {
   const cats = await db
     .select()
     .from(categories)
@@ -475,15 +485,39 @@ async function getActiveCategoryTreeUncached(): Promise<CategoryTreeNode[]> {
   });
 }
 
-export const getActiveCategoryTree = unstable_cache(
-  getActiveCategoryTreeUncached,
-  ["nav-category-tree"],
-  { tags: [CATEGORY_TREE_TAG] },
-);
+/**
+ * W3 (dual-tag transition, locked 24-04 plan): the nav cache cannot know the
+ * tenant at module-eval time (unstable_cache's old module-scope form could
+ * only ever cache ONE tenant's tree — a Pitfall-8 cross-tenant leak once
+ * multiple tenants share this process), so this resolves the tenant first
+ * and builds a per-tenant memoized reader on every call. The cache KEY is
+ * namespaced via tenantCacheKey (tenant-scoped by construction). The TAGS
+ * array carries BOTH the tenant-scoped tag and the bare CATEGORY_TREE_TAG:
+ * the busting side (`revalidateTag(CATEGORY_TREE_TAG)` in admin product/
+ * category mutations) isn't converted to tenantTag(...) until 24-07, and
+ * unstable_cache has no TTL, so a tenant-tag-only entry would go
+ * indefinitely stale in the wave-4->wave-5 window. Keep both tags
+ * permanently — after 24-07 the bare tag becomes a dead-but-harmless label
+ * (it can only over-invalidate, never leak, because the KEY is tenant-
+ * scoped). In single mode tenant.id === "single", so the key/tags become
+ * `t:single:nav-category-tree` + the bare tag — a different but stable
+ * namespace than the old literal key; byte-identical behavior (first
+ * request after this ships is a cold-cache miss, not a leak).
+ */
+export async function getActiveCategoryTree(): Promise<CategoryTreeNode[]> {
+  const { tenant, db } = await getTenantContext();
+  return unstable_cache(
+    () => getActiveCategoryTreeUncached(db),
+    tenantCacheKey(tenant.id, "nav-category-tree"),
+    { tags: [tenantTag(tenant.id, CATEGORY_TREE_TAG), CATEGORY_TREE_TAG] },
+  )();
+}
 
 export async function getActiveProductsByCategorySlug(
   categorySlug: string,
+  db?: TenantDb,
 ): Promise<{ category: CategoryRow | null; products: CatalogProduct[] }> {
+  db ??= (await getTenantContext()).db;
   const [category] = await db
     .select()
     .from(categories)
@@ -515,7 +549,7 @@ export async function getActiveProductsByCategorySlug(
     .where(and(eq(products.isActive, true), predicate))
     .orderBy(desc(products.createdAt));
 
-  return { category, products: await hydrateProducts(rows) };
+  return { category, products: await hydrateProducts(rows, db) };
 }
 
 /**
@@ -527,11 +561,13 @@ export async function getActiveProductsByCategorySlug(
 export async function getActiveProductsBySubcategorySlug(
   subcategorySlug: string,
   categorySlug?: string,
+  db?: TenantDb,
 ): Promise<{
   category: CategoryRow | null;
   subcategory: SubcategoryRow | null;
   products: CatalogProduct[];
 }> {
+  db ??= (await getTenantContext()).db;
   let parentCat: CategoryRow | null = null;
   if (categorySlug) {
     const [c] = await db
@@ -582,7 +618,7 @@ export async function getActiveProductsBySubcategorySlug(
   return {
     category: parentCat,
     subcategory: sub,
-    products: await hydrateProducts(rows),
+    products: await hydrateProducts(rows, db),
   };
 }
 
@@ -610,7 +646,8 @@ export type ShopColourChip = { slug: string; name: string; hex: string };
  *   4. Filter the colour list to those used ids; build collision-aware slug
  *      map; project to {slug, name, hex} sorted alphabetically.
  */
-export async function getActiveProductColourChips(): Promise<ShopColourChip[]> {
+export async function getActiveProductColourChips(db?: TenantDb): Promise<ShopColourChip[]> {
+  db ??= (await getTenantContext()).db;
   // Step 1 — all active colours
   const allColours = await db
     .select({
@@ -694,8 +731,10 @@ export async function getActiveProductColourChips(): Promise<ShopColourChip[]> {
  */
 export async function getProductIdsByColourSlugs(
   slugs: string[],
+  db?: TenantDb,
 ): Promise<Set<string>> {
   if (slugs.length === 0) return new Set();
+  db ??= (await getTenantContext()).db;
 
   // Step 1 — all active colours (slug map is built collision-aware)
   const allColours = await db
