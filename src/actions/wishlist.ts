@@ -19,10 +19,10 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
-import { db } from "@/lib/db";
 import { products, productVariants, wishlists } from "@/lib/db/schema";
 import { wishlistAddSchema } from "@/lib/validators";
 import { getSessionUser, requireUser } from "@/lib/auth-helpers";
+import { getTenantContext } from "@/lib/tenant/context";
 
 const WISHLIST_LIMIT = 50; // Q-06-08 resolution: 50 items per user max
 
@@ -49,6 +49,7 @@ export async function isWishlisted(productId: string): Promise<boolean> {
   // Used inside server components on PDP / product card during render.
   const user = await getSessionUser();
   if (!user) return false;
+  const { db } = await getTenantContext();
   const [row] = await db
     .select({ id: wishlists.id })
     .from(wishlists)
@@ -70,6 +71,7 @@ export async function getWishlistedProductIds(
   if (productIds.length === 0) return new Set();
   const user = await getSessionUser();
   if (!user) return new Set();
+  const { db } = await getTenantContext();
   const rows = await db
     .select({ productId: wishlists.productId })
     .from(wishlists)
@@ -88,7 +90,7 @@ export async function toggleWishlist(
   | { ok: true; state: "added" | "removed" }
   | { ok: false; error: string }
 > {
-  const session = await requireUser();
+  const { db, ...session } = await requireUser();
   const parsed = wishlistAddSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Invalid product id." };
@@ -152,7 +154,7 @@ export async function toggleWishlist(
 }
 
 export async function removeFromWishlist(productId: string) {
-  const session = await requireUser();
+  const { db, ...session } = await requireUser();
   await db
     .delete(wishlists)
     .where(
@@ -185,7 +187,7 @@ export type WishlistedItem = {
 };
 
 export async function listMyWishlist(): Promise<WishlistedItem[]> {
-  const session = await requireUser();
+  const { db, ...session } = await requireUser();
 
   // Manual hydration — MariaDB 10.11 rejects LATERAL joins (see catalog.ts).
   const rows = await db

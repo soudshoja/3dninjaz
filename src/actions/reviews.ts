@@ -25,7 +25,6 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
-import { db } from "@/lib/db";
 import {
   orderItems,
   orders,
@@ -34,6 +33,7 @@ import {
 } from "@/lib/db/schema";
 import { reviewSubmitSchema } from "@/lib/validators";
 import { getSessionUser, requireUser } from "@/lib/auth-helpers";
+import { getTenantContext } from "@/lib/tenant/context";
 
 // Statuses that prove the user actually received (or is receiving) the product.
 const QUALIFYING_ORDER_STATUSES = [
@@ -48,6 +48,7 @@ export async function hasUserReviewedProduct(
 ): Promise<boolean> {
   const session = await getSessionUser();
   if (!session) return false;
+  const { db } = await getTenantContext();
   const [row] = await db
     .select({ id: reviews.id })
     .from(reviews)
@@ -69,6 +70,7 @@ export async function getReviewedProductIds(
   if (productIds.length === 0) return new Set();
   const session = await getSessionUser();
   if (!session) return new Set();
+  const { db } = await getTenantContext();
   const rows = await db
     .select({ productId: reviews.productId })
     .from(reviews)
@@ -82,7 +84,7 @@ export async function getReviewedProductIds(
 }
 
 export async function submitReview(input: unknown) {
-  const session = await requireUser();
+  const { db, ...session } = await requireUser();
   const parsed = reviewSubmitSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false as const, error: parsed.error.issues[0].message };
@@ -186,6 +188,7 @@ export async function listProductReviews(
   opts: { limit?: number } = {},
 ): Promise<ProductReviewsSummary> {
   const limit = Math.min(opts.limit ?? 10, 50);
+  const { db } = await getTenantContext();
 
   // Approved reviews list (latest first, capped).
   const rows = await db

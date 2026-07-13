@@ -2,9 +2,10 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { eq, inArray } from "drizzle-orm";
-import { db } from "@/lib/db";
 import { orders as ordersTable, orderItems as orderItemsTable, products as productsTable } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/auth-helpers";
+import { getTenantContext } from "@/lib/tenant/context";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 import { getMyOrder } from "@/actions/orders";
 import { ensureOrderItemConfigData, ensureImagesV2 } from "@/lib/config-fields";
 import { BRAND } from "@/lib/brand";
@@ -37,6 +38,7 @@ type GuestOrderRow = typeof ordersTable.$inferSelect & {
  * product_id so the thumbnail still shows. Returns productId -> imageUrl.
  */
 async function productImageFallback(
+  db: TenantDb,
   items: Array<{ productImage: string | null; productId: string; variantId: string }>,
 ): Promise<Record<string, string>> {
   const missing = Array.from(
@@ -257,6 +259,7 @@ export default async function OrderDetailPage({
   searchParams: Promise<{ from?: string; t?: string }>;
 }) {
   const user = await getSessionUser();
+  const { db } = await getTenantContext();
   const { id } = await params;
   const { from, t: tokenParam } = await searchParams;
 
@@ -292,7 +295,7 @@ export default async function OrderDetailPage({
         .where(eq(orderItemsTable.orderId, orderRow.id));
 
       const row = { ...orderRow, items };
-      const guestImgFallback = await productImageFallback(items);
+      const guestImgFallback = await productImageFallback(db, items);
       // Render a simplified view for the guest (no cancel/return, no review).
       return (
         <GuestOrderView
@@ -310,7 +313,7 @@ export default async function OrderDetailPage({
   if (!row) notFound();
 
   // Thumbnail fallback for configurable items (no image snapshot at add-to-bag).
-  const imgFallback = await productImageFallback(row.items);
+  const imgFallback = await productImageFallback(db, row.items);
 
   // "Just paid" shows the green banner. Either the capture action tacked
   // `?from=checkout` on the redirect, or the order transitioned to paid

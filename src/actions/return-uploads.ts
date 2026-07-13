@@ -14,7 +14,6 @@
  */
 
 import { eq } from "drizzle-orm";
-import { db } from "@/lib/db";
 import { orders } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth-helpers";
 import { writeReturnPhoto } from "@/lib/storage-returns";
@@ -31,7 +30,7 @@ export async function uploadReturnPhoto(
   orderId: string,
   formData: FormData,
 ): Promise<UploadResult> {
-  const session = await requireUser();
+  const { db, ...session } = await requireUser();
 
   // Ownership gate (T-afs-IDOR).
   const [order] = await db

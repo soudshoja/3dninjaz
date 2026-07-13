@@ -23,8 +23,6 @@
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
 import {
   addresses,
   session as sessionTable,
@@ -33,9 +31,10 @@ import {
 } from "@/lib/db/schema";
 import { accountCloseSchema } from "@/lib/validators";
 import { requireUser } from "@/lib/auth-helpers";
+import { getTenantContext } from "@/lib/tenant/context";
 
 export async function closeMyAccount(input: unknown) {
-  const s = await requireUser();
+  const { db, ...s } = await requireUser();
 
   const parsed = accountCloseSchema.safeParse(input);
   if (!parsed.success) {
@@ -73,6 +72,7 @@ export async function closeMyAccount(input: unknown) {
   // caches. DB state is already closed; failure here doesn't matter — the
   // requireUser() deletedAt cold-reload is the backstop.
   try {
+    const { auth } = await getTenantContext(); // React.cache-memoized — free
     const banApi = (
       auth.api as unknown as {
         banUser?: (args: {

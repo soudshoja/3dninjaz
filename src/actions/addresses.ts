@@ -20,7 +20,6 @@
 import { and, count, desc, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
-import { db } from "@/lib/db";
 import { addresses } from "@/lib/db/schema";
 import { addressBookSchema } from "@/lib/validators";
 import { requireUser } from "@/lib/auth-helpers";
@@ -28,7 +27,7 @@ import { requireUser } from "@/lib/auth-helpers";
 const MAX_ADDRESSES = 10; // 06-CONTEXT Assumption 8
 
 export async function listMyAddresses() {
-  const session = await requireUser();
+  const { db, ...session } = await requireUser();
   return db
     .select()
     .from(addresses)
@@ -37,7 +36,7 @@ export async function listMyAddresses() {
 }
 
 export async function getMyAddress(id: string) {
-  const session = await requireUser();
+  const { db, ...session } = await requireUser();
   if (typeof id !== "string" || id.length === 0) return null;
   const [row] = await db
     .select()
@@ -50,7 +49,7 @@ export async function getMyAddress(id: string) {
 }
 
 export async function createAddress(input: unknown) {
-  const session = await requireUser();
+  const { db, ...session } = await requireUser();
   const parsed = addressBookSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false as const, error: parsed.error.issues[0].message };
@@ -97,7 +96,7 @@ export async function createAddress(input: unknown) {
 }
 
 export async function updateAddress(id: string, input: unknown) {
-  const session = await requireUser();
+  const { db, ...session } = await requireUser();
   const parsed = addressBookSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false as const, error: parsed.error.issues[0].message };
@@ -141,7 +140,7 @@ export async function updateAddress(id: string, input: unknown) {
 }
 
 export async function deleteAddress(id: string) {
-  const session = await requireUser();
+  const { db, ...session } = await requireUser();
   // Ownership gate in WHERE — no separate SELECT needed.
   await db
     .delete(addresses)
@@ -154,7 +153,7 @@ export async function deleteAddress(id: string) {
 }
 
 export async function setDefaultAddress(id: string) {
-  const session = await requireUser();
+  const { db, ...session } = await requireUser();
   const existing = await getMyAddress(id);
   if (!existing) {
     return { ok: false as const, error: "Address not found." };

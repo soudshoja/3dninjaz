@@ -19,10 +19,9 @@
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
 import { user as userTable } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth-helpers";
+import { getTenantContext } from "@/lib/tenant/context";
 import {
   changeEmailSchema,
   changePasswordSchema,
@@ -31,7 +30,7 @@ import {
 import { sendPasswordChangedEmail } from "@/actions/send-emails";
 
 export async function updateProfile(input: unknown) {
-  const session = await requireUser();
+  const { db, ...session } = await requireUser();
   const parsed = profileUpdateSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false as const, error: parsed.error.issues[0].message };
@@ -46,6 +45,7 @@ export async function updateProfile(input: unknown) {
 
 export async function changeEmail(input: unknown) {
   await requireUser();
+  const { auth } = await getTenantContext(); // React.cache-memoized — free
   const parsed = changeEmailSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false as const, error: parsed.error.issues[0].message };
@@ -80,6 +80,7 @@ export async function changeEmail(input: unknown) {
 
 export async function changePassword(input: unknown) {
   const session = await requireUser();
+  const { auth } = await getTenantContext(); // React.cache-memoized — free
   const parsed = changePasswordSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false as const, error: parsed.error.issues[0].message };

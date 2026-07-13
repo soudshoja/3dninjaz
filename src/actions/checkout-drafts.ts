@@ -1,10 +1,10 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { checkoutDrafts, orders, orderItems } from "@/lib/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getSessionUser, requireAdmin } from "@/lib/auth-helpers";
+import { getTenantContext } from "@/lib/tenant/context";
 import { normalizeMsisdn } from "@/lib/order-dedupe";
 import { getShippingRate } from "@/actions/admin-shipping";
 import { MALAYSIAN_STATES } from "@/lib/validators";
@@ -67,6 +67,7 @@ export async function saveCheckoutDraft(
     if (!recipientName || phoneNorm.length < 8) return { ok: false };
 
     const user = await getSessionUser();
+    const { db } = await getTenantContext();
     const email = clamp(input?.email, 255) || null;
 
     const a = input?.address ?? null;
@@ -167,7 +168,7 @@ export type AdminDraftRow = {
 
 /** Admin: list drafts, open first then most recently touched. */
 export async function listCheckoutDrafts(): Promise<AdminDraftRow[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const rows = await db
     .select()
     .from(checkoutDrafts)
@@ -212,7 +213,7 @@ export async function listCheckoutDrafts(): Promise<AdminDraftRow[]> {
 export async function convertDraftToOrder(
   draftId: string,
 ): Promise<{ ok: true; orderId: string } | { ok: false; error: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [draft] = await db
     .select()
@@ -355,7 +356,7 @@ export async function convertDraftToOrder(
 export async function dismissCheckoutDraft(
   id: string,
 ): Promise<{ ok: boolean }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   await db
     .update(checkoutDrafts)
     .set({ status: "dismissed" })

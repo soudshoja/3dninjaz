@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { count, eq } from "drizzle-orm";
 import { getSessionUser } from "@/lib/auth-helpers";
-import { db } from "@/lib/db";
+import { getTenantContext } from "@/lib/tenant/context";
 import { orders } from "@/lib/db/schema";
 import { LoyaltyCard } from "@/components/account/loyalty-card";
 import { ProfileForm } from "@/components/account/profile-form";
@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
 export default async function AccountPage() {
   const sessionUser = await getSessionUser();
   if (!sessionUser) return null; // layout already redirected — defensive
+  const { db } = await getTenantContext();
 
   const [totals] = await db
     .select({ c: count() })

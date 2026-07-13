@@ -23,7 +23,6 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
-import { db } from "@/lib/db";
 import {
   orderRequests,
   orderItems,
@@ -33,6 +32,7 @@ import {
 } from "@/lib/db/schema";
 import { orderRequestSchema, returnRequestSchema } from "@/lib/validators";
 import { requireUser } from "@/lib/auth-helpers";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 import {
   RETURN_WINDOW_MS,
   isReturnShipExpired,
@@ -77,6 +77,7 @@ export type OrderRequestRow = {
 // ============================================================================
 
 export async function expireStaleReturns(
+  db: TenantDb,
   rows: OrderRequestRow[],
 ): Promise<void> {
   const stale = rows.filter(
@@ -123,7 +124,7 @@ export async function expireStaleReturns(
 export async function listMyOrderRequests(
   orderId: string,
 ): Promise<OrderRequestRow[]> {
-  const session = await requireUser();
+  const { db, ...session } = await requireUser();
   // Ownership check via orders.userId — a user cannot enumerate other
   // users' requests.
   const [order] = await db
@@ -171,7 +172,7 @@ export async function listMyOrderRequests(
   }));
 
   // Lazy expiry — mutates rows in place + fires DB update
-  await expireStaleReturns(result);
+  await expireStaleReturns(db, result);
 
   return result;
 }
@@ -181,7 +182,7 @@ export async function listMyOrderRequests(
 // ============================================================================
 
 export async function submitOrderRequest(input: unknown) {
-  const session = await requireUser();
+  const { db, ...session } = await requireUser();
   const parsed = orderRequestSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false as const, error: parsed.error.issues[0].message };
@@ -261,7 +262,7 @@ export async function submitOrderRequest(input: unknown) {
 // ============================================================================
 
 export async function submitReturnRequest(input: unknown) {
-  const session = await requireUser();
+  const { db, ...session } = await requireUser();
   const parsed = returnRequestSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false as const, error: parsed.error.issues[0].message };
@@ -387,7 +388,7 @@ export async function submitReturnTracking(
   courier: string,
   trackingNumber: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const session = await requireUser();
+  const { db, ...session } = await requireUser();
 
   const [req] = await db
     .select({
@@ -423,7 +424,7 @@ export async function submitReturnTracking(
     createdAt: new Date(),
     resolvedAt: null,
   };
-  await expireStaleReturns([asRow]);
+  await expireStaleReturns(db, [asRow]);
   if (asRow.status === "expired") {
     return {
       ok: false,
