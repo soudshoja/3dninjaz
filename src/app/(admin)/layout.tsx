@@ -3,7 +3,7 @@ import Image from "next/image";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
-import { auth } from "@/lib/auth";
+import { getTenantContext } from "@/lib/tenant/context";
 import { SidebarNav } from "@/components/admin/sidebar-nav";
 import { SignOutButton } from "@/components/admin/sign-out-button";
 import { getPendingReviewCount } from "@/actions/admin-reviews";
@@ -67,6 +67,7 @@ export default async function AdminLayout({
   // Convenience redirect. NOT a security boundary — every server action that
   // mutates admin data must independently call requireAdmin() (T-03-01 /
   // CVE-2025-29927 mitigation).
+  const { auth } = await getTenantContext();
   const session = await auth.api.getSession({ headers: await headers() });
 
   if (!session) {

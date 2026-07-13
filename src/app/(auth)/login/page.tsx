@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { getTenantContext } from "@/lib/tenant/context";
 import { UnifiedAuthForm, type AuthMode } from "@/components/auth/unified-auth-form";
 
 export const metadata: Metadata = {
@@ -33,6 +33,7 @@ export default async function LoginPage({
   // If the user already has a session, don't let them sit on /login —
   // push them to the role-appropriate dashboard. Honors ?next= the same
   // way the form does.
+  const { auth } = await getTenantContext();
   const session = await auth.api.getSession({ headers: await headers() });
   if (session?.user) {
     const params = await searchParams;

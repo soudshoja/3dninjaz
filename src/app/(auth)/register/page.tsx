@@ -1,11 +1,12 @@
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
+import { getTenantContext } from "@/lib/tenant/context";
 
 export const dynamic = "force-dynamic";
 
 export default async function RegisterPage() {
   // Already-signed-in users get sent to their dashboard.
+  const { auth } = await getTenantContext();
   const session = await auth.api.getSession({ headers: await headers() });
   if (session?.user) {
     const role =
