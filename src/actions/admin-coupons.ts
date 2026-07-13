@@ -1,6 +1,5 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { coupons, couponRedemptions } from "@/lib/db/schema";
 import { eq, desc, count } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -40,7 +39,7 @@ export type CouponListRow = {
 };
 
 export async function listCoupons(): Promise<CouponListRow[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const rows = await db
     .select()
     .from(coupons)
@@ -63,7 +62,7 @@ export async function listCoupons(): Promise<CouponListRow[]> {
 }
 
 export async function getCoupon(id: string): Promise<CouponListRow | null> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const [row] = await db
     .select()
     .from(coupons)
@@ -113,7 +112,7 @@ function parseCouponForm(formData: FormData, fallbackCode?: string) {
 export async function createCoupon(
   formData: FormData,
 ): Promise<MutateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const parsed = parseCouponForm(formData);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0].message };
@@ -151,7 +150,7 @@ export async function updateCoupon(
   id: string,
   formData: FormData,
 ): Promise<MutateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   // Fetch the stored code so parseCouponForm can use it as a fallback.
   // The `code` input is disabled in edit mode and therefore absent from
   // FormData; without the fallback the couponSchema code-regex fails.
@@ -188,21 +187,21 @@ export async function updateCoupon(
 }
 
 export async function deactivateCoupon(id: string): Promise<MutateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   await db.update(coupons).set({ active: false }).where(eq(coupons.id, id));
   revalidatePath("/admin/coupons");
   return { ok: true };
 }
 
 export async function reactivateCoupon(id: string): Promise<MutateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   await db.update(coupons).set({ active: true }).where(eq(coupons.id, id));
   revalidatePath("/admin/coupons");
   return { ok: true };
 }
 
 export async function deleteCoupon(id: string): Promise<MutateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   // T-05-03-delete-audit — refuse if redemptions exist
   const [redRow] = await db

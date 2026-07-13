@@ -1,13 +1,15 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { db } from "@/lib/db";
 import { categories, subcategories, products } from "@/lib/db/schema";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { CATEGORY_TREE_TAG } from "@/lib/catalog";
 import { categorySchema, subcategorySchema } from "@/lib/validators";
 import { requireAdmin } from "@/lib/auth-helpers";
+import { getTenantContext } from "@/lib/tenant/context";
+import { tenantTag } from "@/lib/tenant/cache-tags";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 
 // ============================================================================
 // Phase 8 (08-01) — Category + Subcategory management.
@@ -35,14 +37,14 @@ function slugify(name: string): string {
     .replace(/^-|-$/g, "");
 }
 
-async function nextCategoryPosition(): Promise<number> {
+async function nextCategoryPosition(db: TenantDb): Promise<number> {
   const [row] = await db
     .select({ max: sql<number>`COALESCE(MAX(${categories.position}), -1)`.mapWith(Number) })
     .from(categories);
   return (row?.max ?? -1) + 1;
 }
 
-async function nextSubcategoryPosition(categoryId: string): Promise<number> {
+async function nextSubcategoryPosition(db: TenantDb, categoryId: string): Promise<number> {
   const [row] = await db
     .select({ max: sql<number>`COALESCE(MAX(${subcategories.position}), -1)`.mapWith(Number) })
     .from(subcategories)
@@ -57,7 +59,7 @@ async function nextSubcategoryPosition(categoryId: string): Promise<number> {
 export async function createCategory(
   formData: FormData,
 ): Promise<CategoryActionResult> {
-  await requireAdmin();
+  const { db, tenant } = await requireAdmin();
 
   const rawSlug = (formData.get("slug") as string | null) ?? "";
   const parsed = categorySchema.safeParse({
@@ -73,7 +75,7 @@ export async function createCategory(
   if (!slug) return { error: { name: ["Could not derive slug from name"] } };
 
   const id = randomUUID();
-  const position = await nextCategoryPosition();
+  const position = await nextCategoryPosition(db);
 
   try {
     await db.insert(categories).values({ id, name, slug, position });
@@ -96,7 +98,7 @@ export async function createCategory(
   revalidatePath("/admin/products");
   revalidatePath("/shop");
   revalidatePath("/", "layout");
-  revalidateTag(CATEGORY_TREE_TAG);
+  revalidateTag(tenantTag(tenant.id, CATEGORY_TREE_TAG));
   return { success: true, id };
 }
 
@@ -104,7 +106,7 @@ export async function updateCategory(
   id: string,
   formData: FormData,
 ): Promise<CategoryActionResult> {
-  await requireAdmin();
+  const { db, tenant } = await requireAdmin();
 
   const rawSlug = (formData.get("slug") as string | null) ?? "";
   const parsed = categorySchema.safeParse({
@@ -143,14 +145,14 @@ export async function updateCategory(
   revalidatePath("/admin/products");
   revalidatePath("/shop");
   revalidatePath("/", "layout");
-  revalidateTag(CATEGORY_TREE_TAG);
+  revalidateTag(tenantTag(tenant.id, CATEGORY_TREE_TAG));
   return { success: true };
 }
 
 export async function deleteCategory(
   id: string,
 ): Promise<CategoryActionResult> {
-  await requireAdmin();
+  const { db, tenant } = await requireAdmin();
 
   // Subcategories cascade via FK; but products keep their subcategory_id set
   // to NULL (FK ON DELETE SET NULL). Null out the legacy category_id pointer
@@ -162,7 +164,7 @@ export async function deleteCategory(
   revalidatePath("/admin/products");
   revalidatePath("/shop");
   revalidatePath("/", "layout");
-  revalidateTag(CATEGORY_TREE_TAG);
+  revalidateTag(tenantTag(tenant.id, CATEGORY_TREE_TAG));
   return { success: true };
 }
 
@@ -171,7 +173,7 @@ export async function moveCategory(
   id: string,
   direction: "up" | "down",
 ): Promise<CategoryActionResult> {
-  await requireAdmin();
+  const { db, tenant } = await requireAdmin();
 
   const ordered = await db
     .select({ id: categories.id, position: categories.position })
@@ -194,7 +196,7 @@ export async function moveCategory(
   revalidatePath("/admin/categories");
   revalidatePath("/shop");
   revalidatePath("/", "layout");
-  revalidateTag(CATEGORY_TREE_TAG);
+  revalidateTag(tenantTag(tenant.id, CATEGORY_TREE_TAG));
   return { success: true };
 }
 
@@ -205,7 +207,7 @@ export async function moveCategory(
 export async function createSubcategory(
   formData: FormData,
 ): Promise<CategoryActionResult> {
-  await requireAdmin();
+  const { db, tenant } = await requireAdmin();
 
   const rawSlug = (formData.get("slug") as string | null) ?? "";
   const parsed = subcategorySchema.safeParse({
@@ -222,7 +224,7 @@ export async function createSubcategory(
   if (!slug) return { error: { name: ["Could not derive slug from name"] } };
 
   const id = randomUUID();
-  const position = await nextSubcategoryPosition(parsed.data.categoryId);
+  const position = await nextSubcategoryPosition(db, parsed.data.categoryId);
 
   try {
     await db.insert(subcategories).values({
@@ -251,7 +253,7 @@ export async function createSubcategory(
   revalidatePath("/admin/products");
   revalidatePath("/shop");
   revalidatePath("/", "layout");
-  revalidateTag(CATEGORY_TREE_TAG);
+  revalidateTag(tenantTag(tenant.id, CATEGORY_TREE_TAG));
   return { success: true, id };
 }
 
@@ -259,7 +261,7 @@ export async function updateSubcategory(
   id: string,
   formData: FormData,
 ): Promise<CategoryActionResult> {
-  await requireAdmin();
+  const { db, tenant } = await requireAdmin();
 
   const rawSlug = (formData.get("slug") as string | null) ?? "";
   const parsed = subcategorySchema.safeParse({
@@ -303,14 +305,14 @@ export async function updateSubcategory(
   revalidatePath("/admin/products");
   revalidatePath("/shop");
   revalidatePath("/", "layout");
-  revalidateTag(CATEGORY_TREE_TAG);
+  revalidateTag(tenantTag(tenant.id, CATEGORY_TREE_TAG));
   return { success: true };
 }
 
 export async function deleteSubcategory(
   id: string,
 ): Promise<CategoryActionResult> {
-  await requireAdmin();
+  const { db, tenant } = await requireAdmin();
 
   // Block delete if any product still points to this subcategory — admin must
   // reassign first. (Schema FK is ON DELETE SET NULL so a cascade delete
@@ -330,7 +332,7 @@ export async function deleteSubcategory(
   revalidatePath("/admin/products");
   revalidatePath("/shop");
   revalidatePath("/", "layout");
-  revalidateTag(CATEGORY_TREE_TAG);
+  revalidateTag(tenantTag(tenant.id, CATEGORY_TREE_TAG));
   return { success: true };
 }
 
@@ -338,7 +340,7 @@ export async function moveSubcategory(
   id: string,
   direction: "up" | "down",
 ): Promise<CategoryActionResult> {
-  await requireAdmin();
+  const { db, tenant } = await requireAdmin();
 
   const [sub] = await db
     .select()
@@ -367,7 +369,7 @@ export async function moveSubcategory(
   revalidatePath("/admin/categories");
   revalidatePath("/shop");
   revalidatePath("/", "layout");
-  revalidateTag(CATEGORY_TREE_TAG);
+  revalidateTag(tenantTag(tenant.id, CATEGORY_TREE_TAG));
   return { success: true };
 }
 
@@ -376,6 +378,7 @@ export async function moveSubcategory(
 // ----------------------------------------------------------------------------
 
 export async function getCategories() {
+  const { db } = await getTenantContext();
   return db
     .select()
     .from(categories)
@@ -383,6 +386,7 @@ export async function getCategories() {
 }
 
 export async function getSubcategoriesByCategory(categoryId: string) {
+  const { db } = await getTenantContext();
   return db
     .select()
     .from(subcategories)
@@ -391,6 +395,7 @@ export async function getSubcategoriesByCategory(categoryId: string) {
 }
 
 export async function getAllSubcategories() {
+  const { db } = await getTenantContext();
   return db
     .select()
     .from(subcategories)
@@ -406,6 +411,7 @@ export async function getAllSubcategories() {
  * MariaDB 10.11 has no LATERAL joins — we manually hydrate (CLAUDE.md).
  */
 export async function getCategoriesWithSubcategories() {
+  const { db } = await getTenantContext();
   const cats = await db
     .select()
     .from(categories)
@@ -471,6 +477,7 @@ export async function getCategoriesWithSubcategories() {
  * the pre-hierarchy helper.
  */
 export async function getCategoriesWithCounts() {
+  const { db } = await getTenantContext();
   const rows = await db
     .select({
       id: categories.id,
@@ -513,6 +520,7 @@ export async function getSubcategoryBySlug(
   subcategorySlug: string,
   categorySlug?: string,
 ) {
+  const { db } = await getTenantContext();
   if (categorySlug) {
     const [cat] = await db
       .select()

@@ -32,7 +32,6 @@ import { RefreshShippingButton } from "@/components/admin/refresh-shipping-butto
 // Phase 10 (10-01) — cost + profit panel with inline edits.
 import { OrderCostsPanel } from "@/components/admin/order-costs-panel";
 // Phase 20 (20-11) — payment proof review surface + Download Invoice button.
-import { db } from "@/lib/db";
 import { paymentProofs, products, orders } from "@/lib/db/schema";
 import { eq, desc, inArray } from "drizzle-orm";
 import { publicUrl } from "@/lib/public-url";
@@ -137,7 +136,7 @@ export default async function AdminOrderDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireAdmin();
+  const { db, tenant } = await requireAdmin();
   const { id } = await params;
   const row = await getAdminOrder(id);
   if (!row) notFound();
@@ -151,9 +150,7 @@ export default async function AdminOrderDetailPage({
     .from(orders)
     .where(eq(orders.id, id))
     .limit(1);
-  const customerTrackingUrl = publicUrl(
-    `/orders/${row.id}${tokenRow?.guestAccessToken ? `?t=${tokenRow.guestAccessToken}` : ""}`,
-  );
+  const customerTrackingUrl = publicUrl(`/orders/${row.id}${tokenRow?.guestAccessToken ? `?t=${tokenRow.guestAccessToken}` : ""}`, tenant);
 
   // Phase 6 06-06 — pending + resolved cancel/return requests for the
   // approve/reject UI. Empty state handled inside OrderRequestsAdmin.

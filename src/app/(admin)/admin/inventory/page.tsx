@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth-helpers";
-import { db } from "@/lib/db";
 import {
   products,
   productVariants,
@@ -29,7 +28,7 @@ export const metadata: Metadata = {
  * MariaDB no-LATERAL: 4 separate SELECTs joined in memory.
  */
 export default async function AdminInventoryPage() {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   // 1. Fetch all active products
   const productRows = await db

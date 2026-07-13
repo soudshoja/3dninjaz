@@ -1,6 +1,5 @@
 "use server";
 
-import { db } from "@/lib/db";
 import {
   colors,
   productOptionValues,
@@ -48,7 +47,7 @@ export type MutateResult =
 // ---------------------------------------------------------------------------
 
 export async function listColours(): Promise<ColourAdmin[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   // Active rows first (preserved as a primary sort), then shade-aware order.
   // We split the rows in two groups so archived colours always sit below
   // active ones, matching the prior UX contract.
@@ -71,7 +70,7 @@ export async function listColours(): Promise<ColourAdmin[]> {
 }
 
 export async function getColour(id: string): Promise<ColourAdmin | null> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const [r] = await db.select().from(colors).where(eq(colors.id, id)).limit(1);
   if (!r) return null;
   return {
@@ -119,7 +118,7 @@ function parseColourForm(formData: FormData) {
 export async function createColour(
   formData: FormData,
 ): Promise<MutateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const parsed = parseColourForm(formData);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0].message };
@@ -159,7 +158,7 @@ export async function updateColour(
   id: string,
   formData: FormData,
 ): Promise<MutateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const parsed = parseColourForm(formData);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0].message };
@@ -201,7 +200,7 @@ export async function updateColour(
 }
 
 export async function archiveColour(id: string): Promise<MutateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   await db.update(colors).set({ isActive: false }).where(eq(colors.id, id));
   revalidatePath("/admin/colours");
   revalidatePath("/shop");
@@ -209,7 +208,7 @@ export async function archiveColour(id: string): Promise<MutateResult> {
 }
 
 export async function reactivateColour(id: string): Promise<MutateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   await db.update(colors).set({ isActive: true }).where(eq(colors.id, id));
   revalidatePath("/admin/colours");
   revalidatePath("/shop");
@@ -217,7 +216,7 @@ export async function reactivateColour(id: string): Promise<MutateResult> {
 }
 
 export async function toggleMyColour(id: string): Promise<MutateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   try {
     // Read current value first to toggle
     const [r] = await db.select().from(colors).where(eq(colors.id, id)).limit(1);
@@ -265,7 +264,7 @@ export async function toggleMyColour(id: string): Promise<MutateResult> {
 export async function getProductsUsingColour(
   colourId: string,
 ): Promise<{ id: string; name: string; slug: string }[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   // 1. Find pov rows referencing this colour
   const povRows = await db
@@ -313,7 +312,7 @@ export async function getProductsUsingColour(
 // ---------------------------------------------------------------------------
 
 export async function deleteColour(id: string): Promise<MutateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const using = await getProductsUsingColour(id);
   if (using.length > 0) {
@@ -372,7 +371,7 @@ export async function renameColour(
   id: string,
   input: { name?: string; hex?: string },
 ): Promise<MutateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [pre] = await db
     .select()
@@ -506,7 +505,7 @@ export type ColourPickerRow = ColourAdmin; // alias — picker shows full admin 
  * Sorted shade-wise (hue family + lightness) so related shades sit together.
  */
 export async function getActiveColoursForPicker(): Promise<ColourPickerRow[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const rows = await db
     .select()
     .from(colors)
@@ -531,7 +530,7 @@ export async function getActiveColoursForPicker(): Promise<ColourPickerRow[]> {
  * Used to offer admins a "Load My Colours" prompt when opening the picker.
  */
 export async function getMyColoursForPicker(): Promise<ColourPickerRow[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const rows = await db
     .select()
     .from(colors)
@@ -571,7 +570,7 @@ export async function attachLibraryColours(
   optionId: string,
   colourIds: string[],
 ): Promise<AttachResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   if (!Array.isArray(colourIds) || colourIds.length === 0) {
     return { ok: false, error: "No colours selected." };
   }

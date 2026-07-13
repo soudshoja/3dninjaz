@@ -4,16 +4,17 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { db } from "@/lib/db";
 import { customFonts } from "@/lib/db/schema";
 import type { CustomFont } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth-helpers";
+import { getTenantContext } from "@/lib/tenant/context";
 
 /**
  * List all custom fonts. Pass activeOnly=true to filter to is_active=true rows.
  * No admin guard — storefront needs active fonts to render @font-face rules.
  */
 export async function listCustomFonts(activeOnly = false): Promise<CustomFont[]> {
+  const { db } = await getTenantContext();
   if (activeOnly) {
     return db.select().from(customFonts).where(eq(customFonts.isActive, true));
   }
@@ -26,6 +27,7 @@ export async function listCustomFonts(activeOnly = false): Promise<CustomFont[]>
 export async function getActiveCustomFontsForLoader(): Promise<
   { familySlug: string; fileUrl: string; displayName: string }[]
 > {
+  const { db } = await getTenantContext();
   const rows = await db
     .select({
       familySlug: customFonts.familySlug,
@@ -44,7 +46,7 @@ export async function toggleCustomFontActive(
   id: string,
   isActive: boolean,
 ): Promise<void> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   await db
     .update(customFonts)
     .set({ isActive })
@@ -55,7 +57,7 @@ export async function toggleCustomFontActive(
  * Delete a font row and best-effort remove the file from disk. Admin-guarded.
  */
 export async function deleteCustomFont(id: string): Promise<void> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [row] = await db
     .select({ fileUrl: customFonts.fileUrl })

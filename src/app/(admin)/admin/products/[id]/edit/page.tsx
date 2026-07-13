@@ -8,11 +8,13 @@ import {
   ProductForm,
   type ProductFormInitial,
 } from "@/components/admin/product-form";
-import { db } from "@/lib/db";
 import { productVariants, productConfigFields } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { getActiveCustomFontsForLoader } from "@/actions/custom-fonts";
 import { hydrateProductVariants } from "@/lib/variants";
+import { getTenantContext } from "@/lib/tenant/context";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Admin · Edit Product",
@@ -25,6 +27,7 @@ export default async function EditProductPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const { db } = await getTenantContext();
   const product = await getProduct(id);
   if (!product) notFound();
 

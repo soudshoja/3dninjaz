@@ -3,7 +3,6 @@
 import { randomUUID } from "node:crypto";
 import { promises as fsPromises } from "node:fs";
 import path from "node:path";
-import { db } from "@/lib/db";
 import {
   products,
   productConfigFields,
@@ -114,7 +113,7 @@ export async function updateProductType(
   | { ok: true }
   | { ok: false; error: "Product not found" }
 > {
-  await requireAdmin(); // FIRST await — CVE-2025-29927
+  const { db } = await requireAdmin(); // FIRST await — CVE-2025-29927
 
   const [row] = await db
     .select({ id: products.id, type: products.productType })
@@ -157,7 +156,7 @@ export async function getConfiguratorData(productId: string): Promise<{
   };
   fields: ConfigField[];
 }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [product] = await db
     .select({
@@ -213,7 +212,7 @@ export async function addConfigField(
     config: AnyFieldConfig;
   },
 ): Promise<{ ok: true; field: ConfigField } | { ok: false; error: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const schema = pickSchemaByFieldType(input.fieldType);
   // Quick task 260430-icx — sanitise textarea HTML BEFORE schema validation
@@ -280,7 +279,7 @@ export async function updateConfigField(
     config: AnyFieldConfig;
   }>,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   // Fetch row to get fieldType for config re-validation
   const [existing] = await db
@@ -342,7 +341,7 @@ export async function updateConfigField(
 export async function deleteConfigField(
   fieldId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   // Get productId + locked flag before delete for revalidation and guard
   const [existing] = await db
@@ -382,7 +381,7 @@ export async function reorderConfigFields(
   productId: string,
   orderedIds: string[],
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   // Validate that orderedIds exactly matches existing field IDs for this product
   const existing = await db
@@ -440,7 +439,7 @@ export async function saveTierTable(
   unitField: string,
   weightTiers: Record<string, number> = {},
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   if (!Number.isInteger(maxUnitCount) || maxUnitCount < 1 || maxUnitCount > 200) {
     return {
@@ -562,7 +561,7 @@ export async function uploadSelectOptionImage(
   optionValue: string,
   formData: FormData,
 ): Promise<{ ok: true; imageUrl: string } | { ok: false; error: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const file = formData.get("file");
   if (!(file instanceof File)) return { ok: false as const, error: "No file provided" };
@@ -639,7 +638,7 @@ export async function uploadSelectOptionImage(
 export async function listProductImages(
   productId: string,
 ): Promise<{ url: string; name: string }[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const UPLOADS_DIR = process.env.UPLOADS_DIR ?? "./public/uploads";
   const PUBLIC_PREFIX = process.env.UPLOADS_PUBLIC_PREFIX ?? "/uploads";
@@ -734,7 +733,7 @@ export async function removeSelectOptionImage(
   fieldId: string,
   optionValue: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [row] = await db
     .select()

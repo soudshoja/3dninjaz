@@ -25,7 +25,6 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { db } from "@/lib/db";
 import {
   productOptions,
   productOptionValues,
@@ -34,11 +33,12 @@ import {
 } from "@/lib/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 
 // Phase 18 — revalidate both admin editor AND public PDP after every variant
 // mutation. Issue 4: inventory/price edits weren't reflected on /products/[slug]
 // because only the admin path was revalidated.
-async function revalidateProductSurfaces(productId: string): Promise<void> {
+async function revalidateProductSurfaces(db: TenantDb, productId: string): Promise<void> {
   revalidatePath(`/admin/products/${productId}/variants`);
   const [p] = await db
     .select({ slug: products.slug })
@@ -69,7 +69,7 @@ export async function addProductOption(
   productId: string,
   name: string,
 ): Promise<ActionResult<{ id: string }>> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const trimmed = name.trim().slice(0, 64);
   if (!trimmed) return { error: "Option name is required" };
@@ -137,7 +137,7 @@ export async function addProductOption(
     position: nextPosition,
   });
 
-  await revalidateProductSurfaces(productId);
+  await revalidateProductSurfaces(db, productId);
   return { success: true, data: { id } };
 }
 
@@ -145,7 +145,7 @@ export async function renameProductOption(
   optionId: string,
   name: string,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const trimmed = name.trim().slice(0, 64);
   if (!trimmed) return { error: "Option name is required" };
@@ -162,14 +162,14 @@ export async function renameProductOption(
     .set({ name: trimmed })
     .where(eq(productOptions.id, optionId));
 
-  await revalidateProductSurfaces(option.productId);
+  await revalidateProductSurfaces(db, option.productId);
   return { success: true };
 }
 
 export async function deleteProductOption(
   optionId: string,
 ): Promise<ActionResult<{ variantsDeleted: number }>> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [option] = await db
     .select()
@@ -220,7 +220,7 @@ export async function deleteProductOption(
   // Delete option (cascades to option_values via FK)
   await db.delete(productOptions).where(eq(productOptions.id, optionId));
 
-  await revalidateProductSurfaces(option.productId);
+  await revalidateProductSurfaces(db, option.productId);
   return { success: true, data: { variantsDeleted } };
 }
 
@@ -233,7 +233,7 @@ export async function addOptionValue(
   value: string,
   swatchHex?: string,
 ): Promise<ActionResult<{ id: string }>> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const trimmed = value.trim().slice(0, 64);
   if (!trimmed) return { error: "Value is required" };
@@ -278,7 +278,7 @@ export async function addOptionValue(
     .from(productOptions)
     .where(eq(productOptions.id, optionId))
     .limit(1);
-  if (option) await revalidateProductSurfaces(option.productId);
+  if (option) await revalidateProductSurfaces(db, option.productId);
 
   return { success: true, data: { id } };
 }
@@ -288,7 +288,7 @@ export async function renameOptionValue(
   value: string,
   swatchHex?: string | null,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const trimmed = value.trim().slice(0, 64);
   if (!trimmed) return { error: "Value is required" };
@@ -334,7 +334,7 @@ export async function renameOptionValue(
     .from(productOptions)
     .where(eq(productOptions.id, val.optionId))
     .limit(1);
-  if (option) await revalidateProductSurfaces(option.productId);
+  if (option) await revalidateProductSurfaces(db, option.productId);
 
   return { success: true };
 }
@@ -342,7 +342,7 @@ export async function renameOptionValue(
 export async function deleteOptionValue(
   valueId: string,
 ): Promise<ActionResult<{ variantsDeleted: number }>> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [val] = await db
     .select({ optionId: productOptionValues.optionId })
@@ -375,7 +375,7 @@ export async function deleteOptionValue(
     .from(productOptions)
     .where(eq(productOptions.id, val.optionId))
     .limit(1);
-  if (option) await revalidateProductSurfaces(option.productId);
+  if (option) await revalidateProductSurfaces(db, option.productId);
 
   return { success: true, data: { variantsDeleted: allAffected.length } };
 }
@@ -392,7 +392,7 @@ export async function deleteOptionValue(
 export async function generateVariantMatrix(
   productId: string,
 ): Promise<ActionResult<{ inserted: number }>> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   // Fetch product slug for SKU generation
   const [productRow] = await db
@@ -543,7 +543,7 @@ export async function generateVariantMatrix(
     inserted++;
   }
 
-  await revalidateProductSurfaces(productId);
+  await revalidateProductSurfaces(db, productId);
   return { success: true, data: { inserted } };
 }
 
@@ -555,7 +555,7 @@ export async function updateVariant(
   variantId: string,
   fields: Record<string, unknown>,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const parsed = variantUpdateSchema.safeParse(fields);
   if (!parsed.success) {
@@ -669,13 +669,13 @@ export async function updateVariant(
     .from(productVariants)
     .where(eq(productVariants.id, variantId))
     .limit(1);
-  if (v) await revalidateProductSurfaces(v.productId);
+  if (v) await revalidateProductSurfaces(db, v.productId);
 
   return { success: true };
 }
 
 export async function deleteVariant(variantId: string): Promise<ActionResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [v] = await db
     .select({ productId: productVariants.productId })
@@ -685,7 +685,7 @@ export async function deleteVariant(variantId: string): Promise<ActionResult> {
 
   await db.delete(productVariants).where(eq(productVariants.id, variantId));
 
-  if (v) await revalidateProductSurfaces(v.productId);
+  if (v) await revalidateProductSurfaces(db, v.productId);
   return { success: true };
 }
 
@@ -696,8 +696,8 @@ export async function deleteVariant(variantId: string): Promise<ActionResult> {
 export async function getVariantEditorData(
   productId: string,
 ): Promise<{ data: { options: Awaited<ReturnType<typeof hydrateProductVariants>>["options"]; variants: Awaited<ReturnType<typeof hydrateProductVariants>>["variants"] } } | { error: string }> {
-  await requireAdmin();
-  const { options, variants } = await hydrateProductVariants(productId);
+  const { db } = await requireAdmin();
+  const { options, variants } = await hydrateProductVariants(productId, db);
   return { data: { options, variants } };
 }
 
@@ -708,7 +708,7 @@ export async function getVariantEditorData(
 export async function countVariantsAffectedByValueDelete(
   valueId: string,
 ): Promise<ActionResult<{ count: number }>> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [a1, a2, a3, a4, a5, a6] = await Promise.all([
     db.select({ id: productVariants.id }).from(productVariants).where(eq(productVariants.option1ValueId, valueId)),
@@ -735,7 +735,7 @@ export async function uploadVariantImage(
   variantId: string,
   formData: FormData,
 ): Promise<ActionResult<{ imageUrl: string }>> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [v] = await db
     .select({ productId: productVariants.productId, oldUrl: productVariants.imageUrl })
@@ -770,7 +770,7 @@ export async function uploadVariantImage(
     await deleteUpload(v.oldUrl).catch(() => {});
   }
 
-  await revalidateProductSurfaces(v.productId);
+  await revalidateProductSurfaces(db, v.productId);
   return { success: true, data: { imageUrl: newUrl } };
 }
 
@@ -779,7 +779,7 @@ export async function uploadVariantImage(
  * best-effort deletes the file from disk.
  */
 export async function removeVariantImage(variantId: string): Promise<ActionResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [v] = await db
     .select({ productId: productVariants.productId, oldUrl: productVariants.imageUrl })
@@ -797,7 +797,7 @@ export async function removeVariantImage(variantId: string): Promise<ActionResul
     await deleteUpload(v.oldUrl).catch(() => {});
   }
 
-  await revalidateProductSurfaces(v.productId);
+  await revalidateProductSurfaces(db, v.productId);
   return { success: true };
 }
 
@@ -812,7 +812,7 @@ export async function removeVariantImage(variantId: string): Promise<ActionResul
  * partial unique index). Race: last write wins — acceptable for single-admin store.
  */
 export async function setDefaultVariant(variantId: string): Promise<ActionResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [v] = await db
     .select({ productId: productVariants.productId })
@@ -834,7 +834,7 @@ export async function setDefaultVariant(variantId: string): Promise<ActionResult
       .where(eq(productVariants.id, variantId));
   });
 
-  await revalidateProductSurfaces(v.productId);
+  await revalidateProductSurfaces(db, v.productId);
   return { success: true };
 }
 
@@ -863,7 +863,7 @@ export async function bulkUpdateVariants(
   variantIds: string[],
   op: BulkOp,
 ): Promise<ActionResult<{ affected: number }>> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   if (!variantIds.length) return { error: "No variants selected" };
 
@@ -937,6 +937,6 @@ export async function bulkUpdateVariants(
     }
   });
 
-  await revalidateProductSurfaces(productId);
+  await revalidateProductSurfaces(db, productId);
   return { success: true, data: { affected } };
 }

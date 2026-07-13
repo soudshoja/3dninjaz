@@ -1,7 +1,6 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { db } from "@/lib/db";
 import {
   products,
   productVariants,
@@ -16,6 +15,9 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { CATEGORY_TREE_TAG } from "@/lib/catalog";
 import { productSchema, type ProductInput } from "@/lib/validators";
 import { requireAdmin } from "@/lib/auth-helpers";
+import { getTenantContext } from "@/lib/tenant/context";
+import { tenantTag } from "@/lib/tenant/cache-tags";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 import { computeVariantCost } from "@/lib/cost-breakdown";
 import { getStoreSettingsCached } from "@/lib/store-settings";
 import { ensureImagesV2, ensureConfigJson, type SelectFieldConfig } from "@/lib/config-fields";
@@ -54,7 +56,7 @@ function slugify(name: string): string {
  * until a free slug is found. products.slug UNIQUE constraint is the
  * backstop (T-dw2-04).
  */
-async function generateUniqueProductSlug(name: string): Promise<string> {
+async function generateUniqueProductSlug(db: TenantDb, name: string): Promise<string> {
   const base = slugify(name) || "product";
   const existing = await db
     .select({ slug: products.slug })
@@ -109,6 +111,7 @@ function clampThumbnailIndex(
  * from the UI but defends against stale form data).
  */
 async function resolveParentCategoryId(
+  db: TenantDb,
   subcategoryId: string,
 ): Promise<string | null> {
   const [row] = await db
@@ -146,6 +149,7 @@ type IncomingField = {
 };
 
 async function reconcileInlineFields(
+  db: TenantDb,
   productId: string,
   incoming: IncomingField[],
 ): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -237,7 +241,7 @@ export async function createProduct(
    */
   preGeneratedId?: string,
 ): Promise<ProductActionResult> {
-  await requireAdmin();
+  const { db, tenant } = await requireAdmin();
 
   const parsed = productSchema.safeParse(data);
   if (!parsed.success) {
@@ -320,7 +324,7 @@ export async function createProduct(
   // category so the legacy products.category_id stays consistent (nav and
   // shop filters still read from both columns during transition).
   const resolvedCategoryId = productData.subcategoryId
-    ? await resolveParentCategoryId(productData.subcategoryId)
+    ? await resolveParentCategoryId(db, productData.subcategoryId)
     : productData.categoryId || null;
 
   await db.insert(products).values({
@@ -482,7 +486,7 @@ export async function createProduct(
     productData.fields &&
     (productData.productType === "simple" || productData.productType === "configurable")
   ) {
-    const result = await reconcileInlineFields(id, productData.fields as IncomingField[]);
+    const result = await reconcileInlineFields(db, id, productData.fields as IncomingField[]);
     if (!result.ok) {
       // Product row already inserted; client will see an error and can retry.
       return { error: { _form: [result.error] } };
@@ -492,7 +496,7 @@ export async function createProduct(
   revalidatePath("/admin/products");
   revalidatePath("/admin");
   revalidatePath("/", "layout");
-  revalidateTag(CATEGORY_TREE_TAG);
+  revalidateTag(tenantTag(tenant.id, CATEGORY_TREE_TAG));
   return { success: true, productId: id };
 }
 
@@ -500,7 +504,7 @@ export async function updateProduct(
   id: string,
   data: ProductInput
 ): Promise<ProductActionResult> {
-  await requireAdmin();
+  const { db, tenant } = await requireAdmin();
 
   const parsed = productSchema.safeParse(data);
   if (!parsed.success) {
@@ -519,7 +523,7 @@ export async function updateProduct(
   );
 
   const resolvedCategoryId = productData.subcategoryId
-    ? await resolveParentCategoryId(productData.subcategoryId)
+    ? await resolveParentCategoryId(db, productData.subcategoryId)
     : productData.categoryId || null;
 
   // Phase 19 (19-10) — if imagesV2 is provided (new shape with captions),
@@ -688,7 +692,7 @@ export async function updateProduct(
     productData.fields &&
     (productData.productType === "simple" || productData.productType === "configurable")
   ) {
-    const result = await reconcileInlineFields(id, productData.fields as IncomingField[]);
+    const result = await reconcileInlineFields(db, id, productData.fields as IncomingField[]);
     if (!result.ok) {
       return { error: { _form: [result.error] } };
     }
@@ -698,18 +702,18 @@ export async function updateProduct(
   revalidatePath(`/admin/products/${id}/edit`);
   revalidatePath("/admin");
   revalidatePath("/", "layout");
-  revalidateTag(CATEGORY_TREE_TAG);
+  revalidateTag(tenantTag(tenant.id, CATEGORY_TREE_TAG));
   return { success: true };
 }
 
 export async function deleteProduct(id: string): Promise<ProductActionResult> {
-  await requireAdmin();
+  const { db, tenant } = await requireAdmin();
   // productVariants are cascade-deleted via FK ON DELETE CASCADE on the schema.
   await db.delete(products).where(eq(products.id, id));
   revalidatePath("/admin/products");
   revalidatePath("/admin");
   revalidatePath("/", "layout");
-  revalidateTag(CATEGORY_TREE_TAG);
+  revalidateTag(tenantTag(tenant.id, CATEGORY_TREE_TAG));
   return { success: true };
 }
 
@@ -717,12 +721,12 @@ export async function toggleProductActive(
   id: string,
   isActive: boolean
 ): Promise<ProductActionResult> {
-  await requireAdmin();
+  const { db, tenant } = await requireAdmin();
   await db.update(products).set({ isActive }).where(eq(products.id, id));
   revalidatePath("/admin/products");
   revalidatePath("/admin");
   revalidatePath("/", "layout");
-  revalidateTag(CATEGORY_TREE_TAG);
+  revalidateTag(tenantTag(tenant.id, CATEGORY_TREE_TAG));
   return { success: true };
 }
 
@@ -730,12 +734,12 @@ export async function toggleProductFeatured(
   id: string,
   isFeatured: boolean
 ): Promise<ProductActionResult> {
-  await requireAdmin();
+  const { db, tenant } = await requireAdmin();
   await db.update(products).set({ isFeatured }).where(eq(products.id, id));
   revalidatePath("/admin/products");
   revalidatePath("/admin");
   revalidatePath("/", "layout");
-  revalidateTag(CATEGORY_TREE_TAG);
+  revalidateTag(tenantTag(tenant.id, CATEGORY_TREE_TAG));
   return { success: true };
 }
 
@@ -744,6 +748,7 @@ export async function toggleProductFeatured(
 // relations via extra SELECTs instead — small N, so no N+1 concern.
 
 export async function getProduct(id: string) {
+  const { db } = await getTenantContext();
   const [row] = await db
     .select()
     .from(products)
@@ -791,6 +796,7 @@ export async function getProduct(id: string) {
 }
 
 export async function getProducts() {
+  const { db } = await getTenantContext();
   const list = await db
     .select()
     .from(products)
@@ -862,6 +868,7 @@ export async function getProducts() {
  * plain productConfigFields rows and are covered by this single clone path.
  */
 async function cloneConfigFields(
+  db: TenantDb,
   sourceId: string,
   destId: string,
 ): Promise<Map<string, string>> {
@@ -925,6 +932,7 @@ async function cloneConfigFields(
  * Variant-level imageUrl is physically copied via copyProductImages.
  */
 async function cloneVariantTree(
+  db: TenantDb,
   sourceId: string,
   destId: string,
   destSlug: string,
@@ -1055,7 +1063,7 @@ async function cloneVariantTree(
  * clone is restricted to product-owned tables (T-dw2-05, accepted).
  */
 export async function duplicateProduct(productId: string): Promise<ProductActionResult> {
-  await requireAdmin();
+  const { db, tenant } = await requireAdmin();
 
   const [src] = await db
     .select()
@@ -1082,7 +1090,7 @@ export async function duplicateProduct(productId: string): Promise<ProductAction
   }));
 
   const newName = `${src.name} (Copy)`;
-  const newSlug = await generateUniqueProductSlug(newName);
+  const newSlug = await generateUniqueProductSlug(db, newName);
 
   await db.insert(products).values({
     id: newId,
@@ -1110,7 +1118,7 @@ export async function duplicateProduct(productId: string): Promise<ProductAction
     keychainShape: src.keychainShape,
   });
 
-  const fieldIdMap = await cloneConfigFields(productId, newId);
+  const fieldIdMap = await cloneConfigFields(db, productId, newId);
 
   if (src.unitField) {
     const newUnitFieldId = fieldIdMap.get(src.unitField);
@@ -1122,12 +1130,12 @@ export async function duplicateProduct(productId: string): Promise<ProductAction
     }
   }
 
-  await cloneVariantTree(productId, newId, newSlug);
+  await cloneVariantTree(db, productId, newId, newSlug);
 
   revalidatePath("/admin/products");
   revalidatePath("/admin");
   revalidatePath("/", "layout");
-  revalidateTag(CATEGORY_TREE_TAG);
+  revalidateTag(tenantTag(tenant.id, CATEGORY_TREE_TAG));
 
   return { success: true, productId: newId };
 }

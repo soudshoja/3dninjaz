@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { listAdminOrders } from "@/actions/admin-orders";
 import { getPaymentProofsAwaitingReviewCount } from "@/actions/admin-payment-proofs";
-import { db } from "@/lib/db";
 import { paymentProofs } from "@/lib/db/schema";
 import { eq, inArray, desc } from "drizzle-orm";
 import { BRAND } from "@/lib/brand";
@@ -50,7 +49,7 @@ export default async function AdminOrdersPage({
 }: {
   searchParams: Promise<{ status?: string }>;
 }) {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const { status } = await searchParams;
   const filter = (VALID.includes(status as StatusFilter) ? status : "all") as StatusFilter;
   const rows = await listAdminOrders(filter);
