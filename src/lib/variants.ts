@@ -10,9 +10,10 @@
  * pattern (fetch parents → fetch children by inArray → join in memory).
  */
 
-import { db } from "@/lib/db";
 import { productOptions, productOptionValues, productVariants } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
+import { getTenantContext } from "@/lib/tenant/context";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -138,7 +139,9 @@ export function composeVariantLabel(values: (string | null | undefined)[]): stri
  */
 export async function hydrateProductVariants(
   productId: string,
+  db?: TenantDb,
 ): Promise<HydratedProductVariants> {
+  db ??= (await getTenantContext()).db;
   // Query 1: options
   const optionRows = await db
     .select()

@@ -1,8 +1,9 @@
 import "server-only";
 import { eq } from "drizzle-orm";
-import { db } from "@/lib/db";
 import { shippingServiceCatalog } from "@/lib/db/schema";
 import type { ShippingConfigRow } from "@/lib/shipping-config";
+import { getTenantContext } from "@/lib/tenant/context";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 
 // ============================================================================
 // Phase 15 — shared service-catalog filter.
@@ -39,7 +40,9 @@ type ServiceLike = {
 export async function filterByEnabledCatalog<T extends ServiceLike>(
   services: T[],
   cfg: Pick<ShippingConfigRow, "enabledServices">,
+  db?: TenantDb,
 ): Promise<T[]> {
+  db ??= (await getTenantContext()).db;
   const catalogEnabledRows = await db
     .select({
       serviceCode: shippingServiceCatalog.serviceCode,

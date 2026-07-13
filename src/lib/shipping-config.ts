@@ -1,7 +1,8 @@
 import "server-only";
 import { eq } from "drizzle-orm";
-import { db } from "@/lib/db";
 import { shippingConfig } from "@/lib/db/schema";
+import { getTenantContext } from "@/lib/tenant/context";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 
 // ============================================================================
 // Phase 9 (09-01) — internal shipping-config accessor.
@@ -96,7 +97,8 @@ export function rowToShippingConfig(
  * Load the singleton shipping-config row. Throws if the row is missing —
  * callers in the admin path should always have run the Phase 9 migration.
  */
-export async function loadShippingConfig(): Promise<ShippingConfigRow> {
+export async function loadShippingConfig(db?: TenantDb): Promise<ShippingConfigRow> {
+  db ??= (await getTenantContext()).db;
   const rows = await db
     .select()
     .from(shippingConfig)

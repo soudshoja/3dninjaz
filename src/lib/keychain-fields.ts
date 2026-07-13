@@ -21,9 +21,10 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { db } from "@/lib/db";
 import { productConfigFields, colors } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { getTenantContext } from "@/lib/tenant/context";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 
 const BASE_COLOUR_NAMES    = ["Red", "Black", "White", "Blue", "Green"];
 const CLICKER_COLOUR_NAMES = ["Red", "Black", "White", "Blue", "Green"];
@@ -32,7 +33,9 @@ const LETTER_COLOUR_NAMES  = ["White", "Gold", "Black"];
 export async function seedKeychainFields(
   productId: string,
   options?: { silent?: boolean },
+  db?: TenantDb,
 ): Promise<void> {
+  db ??= (await getTenantContext()).db;
   const log = options?.silent
     ? () => {}
     : (msg: string) => console.log(`[keychain-fields] ${msg}`);

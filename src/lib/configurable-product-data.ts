@@ -1,6 +1,5 @@
 import "server-only";
 
-import { db } from "@/lib/db";
 import { productConfigFields, products, colors } from "@/lib/db/schema";
 import { eq, asc, inArray } from "drizzle-orm";
 import {
@@ -10,6 +9,8 @@ import {
   type FieldType,
 } from "@/lib/config-fields";
 import { sortByShade } from "@/lib/colour-sort";
+import { getTenantContext } from "@/lib/tenant/context";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 
 // ============================================================================
 // Phase 19 (19-06) — Public-side hydration helper for configurable products.
@@ -52,12 +53,16 @@ export type PublicConfigField = {
  * Never throws — config parse errors surface as exceptions to the RSC.
  * Callers should handle notFound() at the page layer.
  */
-export async function getConfigurableProductData(productId: string): Promise<{
+export async function getConfigurableProductData(
+  productId: string,
+  db?: TenantDb,
+): Promise<{
   fields: PublicConfigField[];
   maxUnitCount: number | null;
   priceTiers: Record<string, number>;
   unitField: string | null;
 }> {
+  db ??= (await getTenantContext()).db;
   // Step 1 — fetch config fields ordered by position (no LATERAL)
   const fieldRows = await db
     .select()

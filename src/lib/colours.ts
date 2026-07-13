@@ -13,9 +13,10 @@
  * Wave 2 will add CRUD/cascade helpers in `src/actions/admin-colours.ts`.
  */
 
-import { db } from "@/lib/db";
 import { colors } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
+import { getTenantContext } from "@/lib/tenant/context";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 
 // ----------------------------------------------------------------------------
 // Pure helpers re-exported from colour-slug.ts
@@ -56,7 +57,9 @@ export type ColourAdmin = {
  */
 export async function getColourPublic(
   id: string,
+  db?: TenantDb,
 ): Promise<ColourPublic | null> {
+  db ??= (await getTenantContext()).db;
   const [row] = await db
     .select({
       id: colors.id,
@@ -73,7 +76,8 @@ export async function getColourPublic(
  * Admin-only colour fetch. Returns full row including codes, family, etc.
  * Caller MUST gate this behind `requireAdmin()` — this helper does NOT.
  */
-export async function getColourAdmin(id: string): Promise<ColourAdmin | null> {
+export async function getColourAdmin(id: string, db?: TenantDb): Promise<ColourAdmin | null> {
+  db ??= (await getTenantContext()).db;
   const [row] = await db
     .select()
     .from(colors)

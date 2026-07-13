@@ -17,13 +17,16 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { db } from "@/lib/db";
 import { productConfigFields } from "@/lib/db/schema";
+import { getTenantContext } from "@/lib/tenant/context";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 
 export async function seedVendingFields(
   productId: string,
   options?: { silent?: boolean },
+  db?: TenantDb,
 ): Promise<void> {
+  db ??= (await getTenantContext()).db;
   const log = options?.silent
     ? () => {}
     : (msg: string) => console.log(`[vending-fields] ${msg}`);
