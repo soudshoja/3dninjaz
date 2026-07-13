@@ -42,8 +42,11 @@ if (process.env.NODE_ENV !== "production") {
   global.__mysqlPool = pool;
 }
 
-export const db = drizzle(pool, { schema, mode: "default" });
-export { pool };
+// No `db`/`pool` export by design (Phase 24 SC1) — the singleton is
+// reachable only as __singletonDb/__singletonPool: by the resolver layer
+// (pool-manager) in src, and by the sanctioned script set.
+export const __singletonDb = drizzle(pool, { schema, mode: "default" });
+export { pool as __singletonPool };
 
 // Phase 23 (23-03) — additive only, below this line. Compat flag. Default
 // "single" = today's behavior, Host ignored, one tenant synthesized from

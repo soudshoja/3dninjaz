@@ -1,16 +1,17 @@
 import "server-only";
-import { auth, buildTenantAuth } from "@/lib/auth";
+import { buildTenantAuth } from "@/lib/auth";
 import type { Tenant } from "@/lib/tenant/platform-schema";
 import type { TenantDb } from "@/lib/tenant/pool-manager";
 
 // ============================================================================
-// Phase 24 (24-02) — per-tenant Better Auth instance cache.
+// Phase 24 (24-02, 24-10) — per-tenant Better Auth instance cache.
 //
 // Mirrors pool-manager.ts's getTenantDb short-circuit + hot-reload-safe
 // global Map + insertion-order LRU exactly. Under TENANT_MODE=single (the
-// deployed default) getTenantAuth returns the EXISTING `auth` compat shim
-// (src/lib/auth.ts) untouched — zero new Better Auth instances, zero
-// behavior change. Once TENANT_MODE=registry is flipped (dev-only until
+// deployed default) getTenantAuth lazily builds + caches a single instance
+// (global.__singleAuth) instead of returning the (now-deleted, 24-10) `auth`
+// compat shim — byte-identical behavior, just built on first call instead of
+// at module load. Once TENANT_MODE=registry is flipped (dev-only until
 // Phase 27), each tenant gets its own lazily-built, cached instance.
 //
 // Cache-bust TODO (Phase 26): wire a bustTenantAuthCache() call alongside
@@ -22,7 +23,7 @@ import type { TenantDb } from "@/lib/tenant/pool-manager";
 const SINGLE_TENANT_ID = "single";
 const TENANT_AUTH_MAX = Number(process.env.TENANT_POOL_MAX ?? 20);
 
-type TenantAuthInstance = typeof auth;
+type TenantAuthInstance = ReturnType<typeof buildTenantAuth>;
 
 // Hot-reload-safe module singleton — mirrors pool-manager.ts's
 // __tenantPools pattern. Without this, `next dev` hot reloads would
@@ -30,6 +31,8 @@ type TenantAuthInstance = typeof auth;
 declare global {
   // eslint-disable-next-line no-var
   var __tenantAuths: Map<string, TenantAuthInstance> | undefined;
+  // eslint-disable-next-line no-var
+  var __singleAuth: TenantAuthInstance | undefined;
 }
 
 const tenantAuths: Map<string, TenantAuthInstance> =
@@ -42,12 +45,12 @@ if (process.env.NODE_ENV !== "production") {
  * Lazy per-tenant Better Auth instance, cached by tenant id.
  *
  * Single-mode short-circuit (TENANT_MODE !== "registry", or the synthesized
- * single tenant's id): returns the EXISTING `auth` compat shim untouched —
- * byte-identical to today, no new instance built.
+ * single tenant's id): builds + caches ONE lazy instance (global.__singleAuth)
+ * on first call — byte-identical to today's eager `auth` shim, just deferred.
  */
 export function getTenantAuth(tenant: Tenant, db: TenantDb): TenantAuthInstance {
   if (process.env.TENANT_MODE !== "registry" || tenant.id === SINGLE_TENANT_ID) {
-    return auth;
+    return (global.__singleAuth ??= buildTenantAuth(tenant, db));
   }
 
   const existing = tenantAuths.get(tenant.id);

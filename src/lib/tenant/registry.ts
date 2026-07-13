@@ -47,7 +47,7 @@ function normalizeHost(host: string): string {
   return host.toLowerCase().replace(/:\d+$/, "");
 }
 
-function synthesizeSingleTenant(): Tenant {
+export function synthesizeSingleTenant(): Tenant {
   return {
     id: SINGLE_TENANT_ID,
     name: "single",

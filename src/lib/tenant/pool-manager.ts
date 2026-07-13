@@ -5,7 +5,7 @@ import type { MySql2Database } from "drizzle-orm/mysql2";
 import * as schema from "@/lib/db/schema";
 import * as platformSchema from "@/lib/tenant/platform-schema";
 import type { Tenant } from "@/lib/tenant/platform-schema";
-import { db as singletonDb } from "@/lib/db";
+import { __singletonDb as singletonDb } from "@/lib/db";
 
 // ============================================================================
 // Phase 23 (23-03) — Per-tenant connection-pool manager.

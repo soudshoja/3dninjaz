@@ -2,7 +2,6 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { admin } from "better-auth/plugins";
 import type { MySql2Database } from "drizzle-orm/mysql2";
-import { db as singletonDb } from "@/lib/db";
 import * as schema from "@/lib/db/schema";
 import { sendResetPasswordEmail } from "@/lib/mailer";
 import { sendWelcomeEmail } from "@/actions/send-emails";
@@ -197,27 +196,3 @@ export function buildTenantAuth(tenant: Tenant, tenantDb: TenantDb) {
     ],
   });
 }
-
-// ============================================================================
-// Compat shim (Phase 24 / 24-02) — un-swept importers (the guards +
-// catch-all, until they are swept later in this wave / 24-03) keep
-// compiling against `auth` exactly as before. Bound to the singleton db via
-// a synthesized "single" tenant literal, whose id short-circuits
-// buildTenantAuth's `registryMode` check to `false` regardless of
-// TENANT_MODE — so this shim is always byte-identical to today's `auth`
-// object (same db, same baseURL=undefined-unless-env, same trustedOrigins
-// literal). Deleted in 24-10 alongside the `db` export.
-// ============================================================================
-const SINGLE_SHIM_TENANT: Tenant = {
-  id: "single",
-  name: "single",
-  slug: "single",
-  dsn: process.env.DATABASE_URL ?? "",
-  status: "active",
-  schemaVersion: 0,
-  uploadsPrefix: "products",
-  primaryDomain: process.env.TENANT_SINGLE_DOMAIN ?? "localhost",
-  settings: {},
-};
-
-export const auth = buildTenantAuth(SINGLE_SHIM_TENANT, singletonDb);
