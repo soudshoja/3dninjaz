@@ -10,6 +10,8 @@ import {
   ChevronDown,
   CheckCheck,
   Hammer,
+  Circle,
+  Square,
 } from "lucide-react";
 import {
   markKeychainPartPrinted,
@@ -99,6 +101,20 @@ function BoxPill({ n, accent, muted = false }: { n: number; accent: string; mute
   );
 }
 
+/** Round/Square marker — shown on BASE batch cards only, so staff print the correct base STL. */
+function ShapeBadge({ shape }: { shape: "square" | "round" }) {
+  const Icon = shape === "round" ? Circle : Square;
+  return (
+    <span
+      className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums"
+      style={{ background: "rgba(11,16,32,0.06)", color: INK }}
+    >
+      <Icon className="h-3 w-3" strokeWidth={2.5} />
+      {shape === "round" ? "Round" : "Square"}
+    </span>
+  );
+}
+
 // ── Colour batch card (shared by Bases + Clicker/Letter) ──────────────────────
 
 function BatchCard({
@@ -110,6 +126,7 @@ function BatchCard({
   partDone,
   onToggleOne,
   onToggleAll,
+  badge,
 }: {
   title: string;
   sub?: string;
@@ -119,6 +136,7 @@ function BatchCard({
   partDone: (u: KeychainBaseBatch["items"][number]) => boolean;
   onToggleOne: (id: string, done: boolean) => void;
   onToggleAll: (ids: string[], done: boolean) => void;
+  badge?: React.ReactNode;
 }) {
   const total = items.length;
   const allDone = doneCount === total && total > 0;
@@ -152,6 +170,7 @@ function BatchCard({
                   {title}
                 </p>
                 {allDone ? <CheckCheck className="h-4 w-4 shrink-0" style={{ color: GREEN }} /> : null}
+                {badge ? <span className="shrink-0">{badge}</span> : null}
                 <ChevronDown
                   className="h-4 w-4 shrink-0 transition-transform"
                   style={{ color: "rgba(11,16,32,0.4)", transform: open ? "rotate(180deg)" : "none" }}
@@ -363,12 +382,28 @@ function Seg({
   );
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// ── Board (inner, reused per-shape) ─────────────────────────────────────────────
 
-export function KeychainBatchesView({ data }: { data: KeychainBatchesData }) {
-  const [bases, setBases] = useState<KeychainBaseBatch[]>(data.bases);
-  const [clickerLetters, setClickerLetters] = useState<KeychainClickerLetterBatch[]>(data.clickerLetters);
-  const [assembly, setAssembly] = useState<KeychainAssemblyUnit[]>(data.assembly);
+/**
+ * The actual production board: sticky header, segmented switch, and the 3
+ * views. Extracted so it can be rendered once (single-shape store — today's
+ * behaviour) or twice, side-by-side, one per shape (once a second shape is
+ * actually in production). Each instance owns its own state/switch/counts.
+ */
+function BatchBoard({
+  bases: initialBases,
+  clickerLetters: initialClickerLetters,
+  assembly: initialAssembly,
+  showShapeBadge = true,
+}: {
+  bases: KeychainBaseBatch[];
+  clickerLetters: KeychainClickerLetterBatch[];
+  assembly: KeychainAssemblyUnit[];
+  showShapeBadge?: boolean;
+}) {
+  const [bases, setBases] = useState<KeychainBaseBatch[]>(initialBases);
+  const [clickerLetters, setClickerLetters] = useState<KeychainClickerLetterBatch[]>(initialClickerLetters);
+  const [assembly, setAssembly] = useState<KeychainAssemblyUnit[]>(initialAssembly);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -527,7 +562,7 @@ export function KeychainBatchesView({ data }: { data: KeychainBatchesData }) {
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {bases.map((b) => (
               <BatchCard
-                key={b.base}
+                key={`${b.shape}|||${b.base}`}
                 title={`${b.base}`}
                 sub="base"
                 accent={BLUE}
@@ -536,6 +571,7 @@ export function KeychainBatchesView({ data }: { data: KeychainBatchesData }) {
                 partDone={(u) => u.baseDone}
                 onToggleOne={(id, done) => onToggleBase([id], done)}
                 onToggleAll={onToggleBase}
+                badge={showShapeBadge ? <ShapeBadge shape={b.shape} /> : undefined}
               />
             ))}
           </div>
@@ -550,7 +586,7 @@ export function KeychainBatchesView({ data }: { data: KeychainBatchesData }) {
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {clickerLetters.map((b) => (
               <BatchCard
-                key={`${b.clicker}|||${b.letter}`}
+                key={`${b.shape}|||${b.clicker}|||${b.letter}`}
                 title={`${b.clicker}`}
                 sub={`+ ${b.letter} letter`}
                 accent={PURPLE}
@@ -594,6 +630,61 @@ export function KeychainBatchesView({ data }: { data: KeychainBatchesData }) {
           )}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+// ── Shape section header ────────────────────────────────────────────────────────
+
+/** Lightweight labelled wrapper for a shape's independent BatchBoard. */
+function ShapeSection({ shape, children }: { shape: "round" | "square"; children: React.ReactNode }) {
+  const Icon = shape === "round" ? Circle : Square;
+  return (
+    <section className="mb-8">
+      <div className="mb-3 flex items-center gap-2">
+        <Icon className="h-5 w-5" strokeWidth={2.5} style={{ color: INK }} />
+        <h2 className="text-lg font-black" style={{ color: INK }}>
+          {shape === "round" ? "Round" : "Square"} keychains
+        </h2>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+// ── Main (thin shape-aware wrapper) ──────────────────────────────────────────────
+
+/**
+ * Top-level entry. Splits into two independent Round/Square production sets
+ * ONLY when both shapes actually have units in production — otherwise renders
+ * the single board exactly as before (regression guard for the current
+ * all-square live store).
+ */
+export function KeychainBatchesView({ data }: { data: KeychainBatchesData }) {
+  const hasRound = data.assembly.some((u) => u.shape === "round");
+  const hasSquare = data.assembly.some((u) => u.shape === "square");
+
+  // Single shape (or empty) → existing board, no top-level headers. Byte-identical to pre-change.
+  if (!(hasRound && hasSquare)) {
+    return (
+      <BatchBoard bases={data.bases} clickerLetters={data.clickerLetters} assembly={data.assembly} />
+    );
+  }
+
+  const pick = (shape: "round" | "square") => ({
+    bases: data.bases.filter((b) => b.shape === shape),
+    clickerLetters: data.clickerLetters.filter((c) => c.shape === shape),
+    assembly: data.assembly.filter((u) => u.shape === shape),
+  });
+
+  return (
+    <div>
+      <ShapeSection shape="round">
+        <BatchBoard {...pick("round")} showShapeBadge={false} />
+      </ShapeSection>
+      <ShapeSection shape="square">
+        <BatchBoard {...pick("square")} showShapeBadge={false} />
+      </ShapeSection>
     </div>
   );
 }
