@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { db } from "@/lib/db";
+import { getTenantContext } from "@/lib/tenant/context";
 import { orders } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getPayPalEnvironment } from "@/lib/paypal";
@@ -149,6 +149,12 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
+
+  // Resolve tenant AFTER signature verification — never before (Pitfall 10).
+  // Host resolution is correct for THIS phase's single-tenant compat mode;
+  // the general per-tenant model (Phase 25) will resolve tenant from the
+  // registered path, not Host.
+  const { db } = await getTenantContext();
 
   let event: {
     event_type?: string;

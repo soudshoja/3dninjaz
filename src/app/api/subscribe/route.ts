@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import crypto from "node:crypto";
 import { eq } from "drizzle-orm";
-import { db } from "@/lib/db";
+import { getTenantContext } from "@/lib/tenant/context";
 import { emailSubscribers } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/auth-helpers";
 import { sendNewsletterWelcomeEmail } from "@/actions/send-emails";
@@ -96,6 +96,7 @@ export async function POST(req: NextRequest) {
   // Attach the authenticated user id so admin can see which subscribers have
   // an account tied to them. Not a hard requirement — anonymous subscribes
   // still succeed.
+  const { db } = await getTenantContext();
   const sessionUser = await getSessionUser().catch(() => null);
 
   const existing = await db

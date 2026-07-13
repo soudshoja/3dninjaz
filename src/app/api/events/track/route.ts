@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { z } from "zod";
 import { createHash, randomUUID } from "node:crypto";
-import { db } from "@/lib/db";
+import { getTenantContext } from "@/lib/tenant/context";
 import { events } from "@/lib/db/schema";
 
 // ============================================================================
@@ -89,6 +89,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const { db } = await getTenantContext();
     await db.insert(events).values({
       id: randomUUID(),
       event: parsed.data.event,

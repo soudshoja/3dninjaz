@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { db } from "@/lib/db";
+import { getTenantContext } from "@/lib/tenant/context";
 import { emailSubscribers } from "@/lib/db/schema";
 import { sendNewsletterUnsubscribedEmail } from "@/actions/send-emails";
 
@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(unsubscribedUrl, { status: 302 });
   }
 
+  const { db } = await getTenantContext();
   const rows = await db
     .select({
       id: emailSubscribers.id,

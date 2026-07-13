@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import crypto from "node:crypto";
 import { eq } from "drizzle-orm";
-import { db } from "@/lib/db";
+import { getTenantContext } from "@/lib/tenant/context";
 import { orderShipments, orders } from "@/lib/db/schema";
 import { sendOrderDeliveredEmail } from "@/actions/send-emails";
 import { formatOrderNumber } from "@/lib/orders";
@@ -104,6 +104,12 @@ export async function POST(req: NextRequest) {
     console.warn("[delyva-webhook] no DELYVA_WEBHOOK_SECRET set — accepting unsigned delivery");
   }
 
+  // Resolve tenant AFTER signature verification — never before (Pitfall 10).
+  // Host resolution is correct for THIS phase's single-tenant compat mode;
+  // the general per-tenant model (Phase 25) will resolve tenant from the
+  // registered path (/api/webhooks/delyva/[tenantId] + per-tenant secret).
+  const { tenant, db } = await getTenantContext();
+
   let payload: DelyvaWebhookPayload;
   try {
     payload = JSON.parse(raw);
@@ -115,8 +121,10 @@ export async function POST(req: NextRequest) {
   const data = payload.data ?? {};
   const idRaw = data.id;
 
-  // Idempotency
-  const idempKey = `${idRaw ?? ""}:${data.statusCode ?? ""}:${payload.timestamp ?? ""}`;
+  // Idempotency — key is tenant-scoped so the in-process guard can never
+  // collide across tenants (DB-level UNIQUE delyvaShipmentId stays per-tenant
+  // db, unchanged).
+  const idempKey = `${tenant.id}:${idRaw ?? ""}:${data.statusCode ?? ""}:${payload.timestamp ?? ""}`;
   if (!remember(idempKey)) {
     return NextResponse.json({ ok: true, dup: true });
   }
@@ -199,13 +207,13 @@ export async function POST(req: NextRequest) {
                 customerName: order[0].shippingName,
                 orderNumber: formatOrderNumber(order[0].id),
                 orderId: order[0].id,
-              }).catch((err) =>
+              }, tenant).catch((err) =>
                 console.error("[delyva-webhook] delivery email failed:", err)
               );
               void sendWhatsAppNotification("order_delivered", order[0].shippingPhone, {
                 customerName: order[0].shippingName,
                 orderNumber: formatOrderNumber(order[0].id),
-                orderUrl: publicUrl(`/orders/${order[0].id}`),
+                orderUrl: publicUrl(`/orders/${order[0].id}`, tenant),
               }).catch(() => {});
             }
           }
