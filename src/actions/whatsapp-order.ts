@@ -1,11 +1,11 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { orders, orderItems, productVariants, productOptionValues, products } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { composeVariantLabel, resolveEffectivePrice } from "@/lib/variants";
 import { randomUUID } from "node:crypto";
 import { getSessionUser } from "@/lib/auth-helpers";
+import { getTenantContext } from "@/lib/tenant/context";
 import { orderAddressSchema, type OrderAddressInput } from "@/lib/validators";
 import { validateCoupon, redeemCoupon } from "@/actions/coupons";
 import { getShippingRate } from "@/actions/admin-shipping";
@@ -54,6 +54,7 @@ export async function createWhatsAppOrder(
   input: CreateWhatsAppOrderInput,
 ): Promise<CreateWhatsAppOrderResult> {
   const user = await getSessionUser();
+  const { db } = await getTenantContext();
   const isGuest = !user;
 
   // For guests, guestName is required (it replaces the account name).

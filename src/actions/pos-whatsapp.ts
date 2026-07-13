@@ -25,16 +25,12 @@
  */
 
 import { requireAdmin } from "@/lib/auth-helpers";
-import { db } from "@/lib/db";
 import { orders } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { generatePaymentLink } from "@/actions/admin-manual-orders";
 import { sendWhatsAppNotification, sendWhatsAppInvoicePdf } from "@/lib/whatsapp/sender";
 import { formatOrderNumber } from "@/lib/orders";
 import { publicOrigin } from "@/lib/public-url";
-
-const PUBLIC_LINK_BASE =
-  process.env.NEXT_PUBLIC_BASE_URL ?? publicOrigin();
 
 // ─── sendPosPaymentLinkWhatsApp ───────────────────────────────────────────────
 
@@ -49,7 +45,8 @@ const PUBLIC_LINK_BASE =
 export async function sendPosPaymentLinkWhatsApp(
   orderId: string,
 ): Promise<{ ok: true; link: string } | { ok: false; error: string }> {
-  await requireAdmin();
+  const { db, tenant } = await requireAdmin();
+  const publicLinkBase = process.env.NEXT_PUBLIC_BASE_URL ?? publicOrigin(tenant);
 
   // Fetch the order to get customer phone + name + total.
   // Do this server-side; never trust a phone number from the client.
@@ -74,7 +71,7 @@ export async function sendPosPaymentLinkWhatsApp(
     return { ok: false, error: linkResult.error };
   }
 
-  const paymentLink = `${PUBLIC_LINK_BASE}/payment-links/${linkResult.token}`;
+  const paymentLink = `${publicLinkBase}/payment-links/${linkResult.token}`;
   const orderNumber = formatOrderNumber(orderId);
 
   // Fire the order_pending WhatsApp notification — best-effort, no await on errors.
@@ -100,7 +97,7 @@ export async function sendPosPaymentLinkWhatsApp(
 export async function sendPosInvoicePdfWhatsApp(
   orderId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [orderRow] = await db
     .select({ shippingPhone: orders.shippingPhone })

@@ -1,9 +1,9 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { orders, orderItems } from "@/lib/db/schema";
 import { eq, desc, inArray } from "drizzle-orm";
 import { getSessionUser } from "@/lib/auth-helpers";
+import { getTenantContext } from "@/lib/tenant/context";
 import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
 
 /**
@@ -37,6 +37,7 @@ const resendLog = new Map<string, number>();
 export async function listMyOrders() {
   const user = await getSessionUser();
   if (!user) return null;
+  const { db } = await getTenantContext();
   // Manual two-query hydration — MariaDB 10.11 does not support the LATERAL
   // joins Drizzle emits for db.query.*.findMany({ with: { items: true } }).
   const rows = await db
@@ -63,6 +64,7 @@ export async function getMyOrder(orderId: string) {
   const user = await getSessionUser();
   if (!user) return null;
   if (typeof orderId !== "string" || orderId.length === 0) return null;
+  const { db } = await getTenantContext();
 
   const rows = await db
     .select()
@@ -92,6 +94,7 @@ export async function resendOrderConfirmationEmail(
   if (typeof orderId !== "string" || orderId.length === 0) {
     return { ok: false, error: "Order not found." };
   }
+  const { db } = await getTenantContext();
 
   const row = await db.query.orders.findFirst({ where: eq(orders.id, orderId) });
   const userWithRole = user as unknown as { id: string; role: string };

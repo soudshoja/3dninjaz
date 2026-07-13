@@ -4,7 +4,6 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { eq, inArray } from "drizzle-orm";
-import { db } from "@/lib/db";
 import {
   orders,
   orderItems,
@@ -16,8 +15,10 @@ import {
   productConfigFields,
 } from "@/lib/db/schema";
 import { requireAdmin, getSessionUser } from "@/lib/auth-helpers";
+import { getTenantContext } from "@/lib/tenant/context";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 import { delyvaApi, DelyvaError, parseQuoteServices, getDelyvaWebhookSecret } from "@/lib/delyva";
-import { publicUrl } from "@/lib/public-url";
+import { publicUrl, publicOrigin } from "@/lib/public-url";
 import type { InventoryItem, DelyvaContact, OrderDetails } from "@/lib/delyva";
 import {
   buildTrackingView,
@@ -104,7 +105,7 @@ export type ShipmentRow = {
  * placeholder row if the Phase 9 migration was skipped (defense-in-depth).
  */
 export async function getShippingConfig(): Promise<ShippingConfigRow> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const rows = await db
     .select()
     .from(shippingConfig)
@@ -135,7 +136,7 @@ export async function getShippingConfig(): Promise<ShippingConfigRow> {
 export async function updateShippingConfig(
   input: UpdateShippingConfigInput,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const required = [
     input.originAddress1,
@@ -287,13 +288,13 @@ export async function registerWebhooks(): Promise<
   | { ok: true; registered: string[]; url: string }
   | { ok: false; error: string }
 > {
-  await requireAdmin();
+  const { tenant } = await requireAdmin();
 
   const base =
     process.env.NEXT_PUBLIC_SITE_URL ??
     process.env.NEXT_PUBLIC_BASE_URL ??
     process.env.BETTER_AUTH_URL ??
-    "";
+    publicOrigin(tenant);
   const url = `${base.replace(/\/$/, "")}/api/webhooks/delyva`;
   if (!base) return { ok: false, error: "NEXT_PUBLIC_SITE_URL missing" };
   // Note: DELYVA_WEBHOOK_SECRET is optional — Delyva's current UI has no HMAC
@@ -355,7 +356,7 @@ export async function registerWebhooks(): Promise<
 export async function getOrderShipment(
   orderId: string,
 ): Promise<ShipmentRow | null> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const rows = await db
     .select()
     .from(orderShipments)
@@ -383,7 +384,7 @@ export async function getOrderShipment(
 export async function quoteRatesForOrder(orderId: string): Promise<
   { ok: true; services: NormalizedService[] } | { ok: false; error: string }
 > {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const row = await db
     .select()
     .from(orders)
@@ -393,7 +394,7 @@ export async function quoteRatesForOrder(orderId: string): Promise<
   const order = row[0];
 
   const cfg = await loadShippingConfig();
-  const weight = await sumOrderWeight(orderId, Number(cfg.defaultWeightKg));
+  const weight = await sumOrderWeight(db, orderId, Number(cfg.defaultWeightKg));
 
   try {
     const q = await delyvaApi.quote({
@@ -445,7 +446,7 @@ export async function quoteRatesForOrder(orderId: string): Promise<
 export async function refreshOrderShipping(orderId: string): Promise<
   { ok: true; shipping: number; total: number } | { ok: false; error: string }
 > {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const row = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
   if (row.length === 0) return { ok: false, error: "Order not found" };
   const order = row[0];
@@ -454,7 +455,7 @@ export async function refreshOrderShipping(orderId: string): Promise<
   }
 
   const cfg = await loadShippingConfig();
-  const weight = await sumOrderWeight(orderId, Number(cfg.defaultWeightKg));
+  const weight = await sumOrderWeight(db, orderId, Number(cfg.defaultWeightKg));
 
   let services: NormalizedService[];
   try {
@@ -525,6 +526,7 @@ export async function refreshOrderShipping(orderId: string): Promise<
 }
 
 async function sumOrderWeight(
+  db: TenantDb,
   orderId: string,
   fallbackKg: number,
 ): Promise<number> {
@@ -664,6 +666,7 @@ async function sumOrderWeight(
  * Only call this from bookShipmentForOrder (admin) or autoBookShipmentAfterPayment (trusted server-only).
  */
 async function _bookShipmentInternal(
+  db: TenantDb,
   orderId: string,
   serviceCode: string,
   opts?: { quotedPrice?: string | null; notify?: boolean },
@@ -941,8 +944,8 @@ export async function bookShipmentForOrder(
     }
   | { ok: false; error: string }
 > {
-  await requireAdmin();
-  return _bookShipmentInternal(orderId, serviceCode, opts);
+  const { db } = await requireAdmin();
+  return _bookShipmentInternal(db, orderId, serviceCode, opts);
 }
 
 /**
@@ -964,6 +967,7 @@ export async function autoBookShipmentAfterPayment(
     }
   | { ok: false; error: string }
 > {
+  const { db } = await getTenantContext();
   const orderRows = await db
     .select()
     .from(orders)
@@ -977,7 +981,7 @@ export async function autoBookShipmentAfterPayment(
       error: "No courier selected on order — skipping auto-book",
     };
   }
-  return _bookShipmentInternal(orderId, order.shippingServiceCode, {
+  return _bookShipmentInternal(db, orderId, order.shippingServiceCode, {
     quotedPrice: order.shippingQuotedPrice ?? null,
   });
 }
@@ -985,7 +989,7 @@ export async function autoBookShipmentAfterPayment(
 export async function cancelShipment(
   orderId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const s = await db
     .select()
     .from(orderShipments)
@@ -1048,7 +1052,7 @@ export async function rebookShipment(
   | { ok: true; consignmentNo: string | null }
   | { ok: false; error: string }
 > {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   // Need the order's courier service to re-book. When the admin picked a
   // DIFFERENT courier in the panel, `override.serviceCode` wins and is
@@ -1105,7 +1109,7 @@ export async function rebookShipment(
   }
 
   // Re-book silently (no customer notification) on the chosen service.
-  const res = await _bookShipmentInternal(orderId, serviceCode, {
+  const res = await _bookShipmentInternal(db, orderId, serviceCode, {
     quotedPrice: override?.quotedPrice ?? order.shippingQuotedPrice ?? null,
     notify: false,
   });
@@ -1126,6 +1130,7 @@ export async function rebookShipment(
  * enforce any authorization — the callers are responsible for that.
  */
 async function hydrateTrackingView(
+  db: TenantDb,
   shipment: ShipmentRow | null,
 ): Promise<ShipmentTrackingView> {
   // Pull serviceType (drives live-map eligibility) + ETA window from the
@@ -1231,6 +1236,7 @@ export async function getMyOrderTracking(
   const user = await getSessionUser();
   if (!user) return null;
   if (typeof orderId !== "string" || orderId.length === 0) return null;
+  const { db } = await getTenantContext();
 
   const orderRows = await db
     .select({ id: orders.id, userId: orders.userId })
@@ -1269,7 +1275,7 @@ export async function getMyOrderTracking(
           updatedAt: shipRows[0].updatedAt,
         };
 
-  return hydrateTrackingView(shipment);
+  return hydrateTrackingView(db, shipment);
 }
 
 /**
@@ -1279,7 +1285,7 @@ export async function getMyOrderTracking(
 export async function getAdminOrderTracking(
   orderId: string,
 ): Promise<ShipmentTrackingView> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const rows = await db
     .select()
     .from(orderShipments)
@@ -1303,13 +1309,13 @@ export async function getAdminOrderTracking(
           createdAt: rows[0].createdAt,
           updatedAt: rows[0].updatedAt,
         };
-  return hydrateTrackingView(shipment);
+  return hydrateTrackingView(db, shipment);
 }
 
 export async function refreshShipmentStatus(
   orderId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const s = await db
     .select()
     .from(orderShipments)
@@ -1375,7 +1381,7 @@ export type RefreshCatalogResult =
  * requireAdmin() is the first await (CVE-2025-29927).
  */
 export async function refreshServiceCatalog(): Promise<RefreshCatalogResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const cfg = await loadShippingConfig();
 
@@ -1583,7 +1589,7 @@ export async function refreshServiceCatalog(): Promise<RefreshCatalogResult> {
  * requireAdmin() is first await.
  */
 export async function getServiceCatalog(): Promise<ServiceCatalogRow[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const rows = await db
     .select()
     .from(shippingServiceCatalog)
@@ -1614,7 +1620,7 @@ export async function updateServiceEnabled(
   serviceCode: string,
   enabled: boolean,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   if (!serviceCode?.trim()) return { ok: false, error: "serviceCode required" };
   await db
     .update(shippingServiceCatalog)
@@ -1632,7 +1638,7 @@ export async function updateCompanyEnabled(
   companyCode: string,
   enabled: boolean,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   if (!companyCode?.trim()) return { ok: false, error: "companyCode required" };
   await db
     .update(shippingServiceCatalog)
@@ -1649,7 +1655,7 @@ export async function updateCompanyEnabled(
 export async function batchUpdateServiceEnabled(
   changes: Record<string, boolean>,
 ): Promise<{ ok: true; updated: number } | { ok: false; error: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const entries = Object.entries(changes);
   if (entries.length === 0) return { ok: true, updated: 0 };
 

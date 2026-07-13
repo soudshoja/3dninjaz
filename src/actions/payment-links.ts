@@ -1,6 +1,5 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { orders, paymentLinks, orderItems, paymentProofs, couponRedemptions } from "@/lib/db/schema";
 import { eq, inArray, desc, sql } from "drizzle-orm";
 import { ordersController, PAYPAL_CURRENCY } from "@/lib/paypal";
@@ -12,6 +11,7 @@ import { writePaymentProof } from "@/lib/payment-proof-storage";
 import { assertValidTransition } from "@/lib/orders";
 import crypto from "node:crypto";
 import { publicUrl } from "@/lib/public-url";
+import { getTenantContext } from "@/lib/tenant/context";
 
 /**
  * Phase 7 (07-03) — PUBLIC payment-link actions.
@@ -138,6 +138,7 @@ export async function getPaymentLinkByToken(
   if (!token || typeof token !== "string" || token.length > 64) {
     return { ok: false, error: "not-found" };
   }
+  const { db } = await getTenantContext();
   const link = await db.query.paymentLinks.findFirst({
     where: eq(paymentLinks.token, token),
   });
@@ -261,6 +262,7 @@ export async function uploadPaymentProofByToken(
     return { ok: false, error: "Invalid or expired link." };
   }
 
+  const { db } = await getTenantContext();
   const link = await db.query.paymentLinks.findFirst({
     where: eq(paymentLinks.token, token),
   });
@@ -362,6 +364,7 @@ export async function createPaymentLinkPayPalOrder({
     return { ok: false, error: "Order is already paid." };
   }
 
+  const { db } = await getTenantContext();
   const orderRow = await db.query.orders.findFirst({
     where: eq(orders.id, view.order.id),
   });
@@ -442,6 +445,7 @@ export async function capturePaymentLinkPayment({
     };
   }
 
+  const { db } = await getTenantContext();
   const orderRow = await db.query.orders.findFirst({
     where: eq(orders.id, view.order.id),
   });

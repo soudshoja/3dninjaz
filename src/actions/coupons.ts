@@ -1,10 +1,10 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { coupons, couponRedemptions } from "@/lib/db/schema";
 import { eq, and, isNull, lt, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getSessionUser } from "@/lib/auth-helpers";
+import { getTenantContext } from "@/lib/tenant/context";
 import { couponRedemptionInputSchema } from "@/lib/validators";
 import {
   applyCouponToSubtotal,
@@ -71,6 +71,7 @@ export async function validateCoupon(
     return { ok: false, error: "Invalid code format" };
   }
 
+  const { db } = await getTenantContext();
   const [row] = await db
     .select()
     .from(coupons)
@@ -129,6 +130,7 @@ export async function redeemCoupon(
   userId: string | null,
   subtotalMYR: number,
 ): Promise<RedeemResult> {
+  const { db } = await getTenantContext();
   return await db.transaction(async (tx) => {
     const [row] = await tx
       .select()

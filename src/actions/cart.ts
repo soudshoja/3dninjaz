@@ -13,7 +13,6 @@
  * (the caller should remove them from the store).
  */
 
-import { db } from "@/lib/db";
 import {
   productVariants,
   products,
@@ -21,6 +20,7 @@ import {
 } from "@/lib/db/schema";
 import { inArray } from "drizzle-orm";
 import { composeVariantLabel } from "@/lib/variants";
+import { getTenantContext } from "@/lib/tenant/context";
 import { isConfigurableCartItem } from "@/stores/cart-store";
 import type { CartItem } from "@/stores/cart-store";
 import type { ConfigurationData, ImageEntryV2 } from "@/lib/config-fields";
@@ -87,6 +87,7 @@ export async function hydrateCartItems(
   items: CartItem[],
 ): Promise<HydratedCartItem[]> {
   if (items.length === 0) return [];
+  const { db } = await getTenantContext();
 
   // Partition into stocked and configurable lines
   const stockedItems = items.filter((i) => !isConfigurableCartItem(i)) as Array<{ key: string; variantId: string; quantity: number }>;

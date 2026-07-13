@@ -4,8 +4,8 @@ import "server-only";
 import { inArray } from "drizzle-orm";
 import crypto from "node:crypto";
 import { headers } from "next/headers";
-import { db } from "@/lib/db";
 import { products, productVariants, productConfigFields } from "@/lib/db/schema";
+import { getTenantContext } from "@/lib/tenant/context";
 import { delyvaApi, DelyvaError, parseQuoteServices } from "@/lib/delyva";
 import { loadShippingConfig, resolveItemType } from "@/lib/shipping-config";
 import { filterByEnabledCatalog } from "@/lib/delyva-filter";
@@ -130,6 +130,7 @@ export async function quoteForCart(
     return { ok: false, error: "Valid destination postcode required" };
   }
 
+  const { db } = await getTenantContext();
   const cfg = await loadShippingConfig();
 
   // --- weight + subtotal (AD-08: per-variant weight resolution)

@@ -1,11 +1,11 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { orders, orderItems, productVariants, productOptionValues, products } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { composeVariantLabel, resolveEffectivePrice } from "@/lib/variants";
 import { randomUUID } from "node:crypto";
 import { getSessionUser } from "@/lib/auth-helpers";
+import { getTenantContext } from "@/lib/tenant/context";
 import { orderAddressSchema, type OrderAddressInput } from "@/lib/validators";
 import { ordersController, PAYPAL_CURRENCY } from "@/lib/paypal";
 import { CheckoutPaymentIntent } from "@paypal/paypal-server-sdk";
@@ -88,6 +88,7 @@ export async function createPayPalOrder(
   input: CreateOrderInput,
 ): Promise<CreateOrderResult> {
   const user = await getSessionUser();
+  const { db } = await getTenantContext();
   // Guest checkout: user may be null. Email is OPTIONAL for guests — if they
   // provide one it must be well-formed; otherwise we fall back to a placeholder
   // and (for PayPal) back-fill from the payer info on capture.
@@ -718,6 +719,7 @@ export async function capturePayPalOrder({
   paypalOrderId: string;
 }): Promise<CaptureOrderResult> {
   const user = await getSessionUser(); // may be null for guests
+  const { db, tenant } = await getTenantContext();
   if (!paypalOrderId || typeof paypalOrderId !== "string") {
     return { ok: false, error: "Missing PayPal order ID." };
   }
@@ -912,7 +914,7 @@ export async function capturePayPalOrder({
   void sendWhatsAppNotification("order_confirmation", existing.shippingPhone, {
     customerName: existing.shippingName,
     orderNumber: formatOrderNumber(existing.id),
-    orderUrl: publicUrl(`/orders/${existing.id}`),
+    orderUrl: publicUrl(`/orders/${existing.id}`, tenant),
   }).catch(() => {});
   void sendWhatsAppInvoicePdf(existing.id, existing.shippingPhone).catch(() => {});
 
@@ -944,6 +946,7 @@ export async function capturePayPalOrder({
 export async function getOrderForCurrentUser(orderId: string) {
   const user = await getSessionUser();
   if (!user) return null;
+  const { db } = await getTenantContext();
   // Manual two-query hydration — MariaDB 10.11 does not support the LATERAL
   // joins Drizzle emits for db.query.*.findFirst({ with: { items: true } }).
   const orderRow = await db
