@@ -429,7 +429,8 @@ Plans:
 **Plans:** 8/8 plans complete
 
 Plans:
-- [x] TBD (run /gsd-plan-phase 21 to break down) (completed 2026-07-07)
+- [x] TBD (run /gsd-plan-phase 21 to break down)
+ (completed 2026-07-07)
 
 ---
 
@@ -481,11 +482,28 @@ Grounded in `.planning/research/SUMMARY.md` (2026-07-12). The core insight: the 
 **Requirements**: TEN-02
 **Success Criteria** (what must be TRUE):
 
-  1. The module-level `db`, `auth`, mailer, PayPal-client, and `publicOrigin()` singleton exports no longer exist — a stale import is a compile error, an ESLint `no-restricted-imports` rule bans reintroduction, and an `rg` audit of all ~70 former import sites returns zero matches
+  1. The module-level `db`, `auth`, mailer, and `publicOrigin()` singleton exports no longer exist — a stale `db`/`auth` import is a compile error, an ESLint `no-restricted-imports` rule bans reintroduction, and an `rg` audit of the former `@/lib/db`/`auth` import sites returns zero matches. `db` and `auth` are dissolved by export-deletion; mailer and `publicOrigin()` by encapsulation + tenant-threading (zero external importers to break). The PayPal-client singleton (`src/lib/paypal.ts` `__paypalClient`) is byte-identical in `TENANT_MODE=single`, so its per-tenant-credential dissolution is DEFERRED to Phase 29 (PLUGIN-02/03) and its imports are intentionally excluded from this phase's ESLint ban + `rg` audit; Phase 24 makes only its outbound return-URLs tenant-derived via `publicUrl`.
   2. Every guarded handler receives `{ session, tenant, db }` from the tenant-aware guards (`requireAdmin()` / `requireUser()` keep their names and first-`await` call sites); tenant binding precedes session lookup, so validating a session against the wrong tenant is structurally impossible
   3. On a ≥2-tenant dev fleet (second tenant hand-provisioned), browsing and admin CRUD on tenant A returns only tenant A's data, and a session cookie minted on tenant A presented to tenant B's domain is rejected (TEN-02)
   4. Full money-path regression passes on dev in compat mode: checkout, PayPal webhook, Delyva webhook, auth flows (register/login/reset), admin CRUD, and transactional email — all behavior-identical to pre-sweep
   5. All outbound URLs (emails, PayPal return URLs, invoice links) derive from the registry's canonical domain for the tenant — never echoed from the incoming Host header
+
+**Plans**: 12 plans (8 waves; sequential execution — worktree isolation off for this project)
+
+Plans:
+
+- [ ] 24-01-PLAN.md — Per-tenant mailer + tenant-aware publicUrl/publicOrigin (Wave 1)
+- [ ] 24-02-PLAN.md — Auth factory buildTenantAuth + auth-cache + catch-all Host dispatch (Wave 2)
+- [ ] 24-03-PLAN.md — Extend getTenantContext(+auth) + tenant-aware guards return { session, tenant, db } (Wave 3)
+- [ ] 24-04-PLAN.md — Category D cache modules: catalog + store-settings tenant-scoped (Pitfall 8) (Wave 4)
+- [ ] 24-05-PLAN.md — Category D remaining 15 shared libs (optional-db resolution) (Wave 4)
+- [ ] 24-06-PLAN.md — Category A admin actions batch 1 (money paths) (Wave 5)
+- [ ] 24-07-PLAN.md — Category A admin actions batch 2 + admin RSC pages + catalog tag busts (Wave 5)
+- [ ] 24-08-PLAN.md — Category A customer/guest actions + store RSC pages + PayPal return_url (Wave 5)
+- [ ] 24-09-PLAN.md — Category B route handlers + tenant-threaded send-emails (Wave 5)
+- [ ] 24-10-PLAN.md — Delete db/auth exports + fix .ts scripts + ESLint ban + rg audit (Wave 6)
+- [ ] 24-11-PLAN.md — Money-path regression on dev in compat mode [checkpoint] (Wave 7)
+- [ ] 24-12-PLAN.md — >=2-tenant dev fleet isolation battery [checkpoint] (Wave 8)
 
 #### Phase 25: Provisioning & Fleet Operations Tooling
 
@@ -567,7 +585,7 @@ Grounded in `.planning/research/SUMMARY.md` (2026-07-12). The core insight: the 
 | Phase | Requirements | Status | Completed |
 |-------|--------------|--------|-----------|
 | 23. Tenant Plumbing Behind Compat Flag | 4/4 | Complete    | 2026-07-12 |
-| 24. Singleton Dissolution Sweep | TEN-02 | Not started | — |
+| 24. Singleton Dissolution Sweep | TEN-02 | Planned (12 plans) | — |
 | 25. Provisioning & Fleet Operations Tooling | TEN-01, TEN-04, TEN-05 | Not started | — |
 | 26. Super-Admin Panel | SUPER-01..04 | Not started | — |
 | 27. Tenant #1 Cutover | CUTOVER-01..03 | Not started | — |
