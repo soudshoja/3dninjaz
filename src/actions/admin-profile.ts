@@ -41,7 +41,7 @@ export async function changeAdminPassword(input: unknown) {
     return { ok: false as const, error: parsed.error.issues[0].message };
   }
   try {
-    const { auth } = await getTenantContext(); // React.cache-memoized — free after requireAdmin()
+    const { auth } = await getTenantContext(); // React.cache-memoized — free, guard already resolved it above
     await auth.api.changePassword({
       body: {
         currentPassword: parsed.data.currentPassword,
