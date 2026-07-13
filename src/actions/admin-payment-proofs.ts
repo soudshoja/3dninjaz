@@ -1,6 +1,5 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { paymentProofs, orders, paymentLinks } from "@/lib/db/schema";
 import { eq, isNull, count, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
@@ -53,7 +52,7 @@ export type AdminUploadPaymentProofResult =
  * Admin-only (CVE-2025-29927 mitigation).
  */
 export async function getPaymentProofsAwaitingReviewCount(): Promise<number> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [row] = await db
     .select({ cnt: count() })
@@ -81,7 +80,7 @@ export async function getPaymentProofsAwaitingReviewCount(): Promise<number> {
 export async function confirmPaymentProof(
   proofId: string,
 ): Promise<ConfirmPaymentProofResult> {
-  const session = await requireAdmin();
+  const { db, tenant, ...session } = await requireAdmin();
 
   // SELECT proof
   const proof = await db.query.paymentProofs.findFirst({
@@ -143,7 +142,7 @@ export async function confirmPaymentProof(
   void sendWhatsAppNotification("order_confirmation", order.shippingPhone, {
     customerName: order.shippingName,
     orderNumber: formatOrderNumber(order.id),
-    orderUrl: publicUrl(`/orders/${order.id}`),
+    orderUrl: publicUrl(`/orders/${order.id}`, tenant),
   }).catch(() => {});
   void sendWhatsAppInvoicePdf(order.id, order.shippingPhone).catch(() => {});
 
@@ -174,7 +173,7 @@ export async function rejectPaymentProof(
   proofId: string,
   adminNote: string,
 ): Promise<RejectPaymentProofResult> {
-  const session = await requireAdmin();
+  const { db, ...session } = await requireAdmin();
 
   // Server-side validation — not just client-side (T-07 pattern)
   if (!adminNote || adminNote.trim().length < 8) {
@@ -251,7 +250,7 @@ export async function adminUploadPaymentProof(
   orderId: string,
   formData: FormData,
 ): Promise<AdminUploadPaymentProofResult> {
-  const session = await requireAdmin();
+  const { db, ...session } = await requireAdmin();
 
   // Validate order exists (no status restriction per D-08 — admin can attach
   // a slip at any pre-paid status)

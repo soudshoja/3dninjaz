@@ -1,6 +1,5 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { orders } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -43,7 +42,7 @@ export type IssueRefundActionResult =
 export async function issueRefund(
   input: IssueRefundActionInput,
 ): Promise<IssueRefundActionResult> {
-  const session = await requireAdmin();
+  const { db, ...session } = await requireAdmin();
 
   const limit = checkRateLimit(`refund:${session.user.id}`, 5, 60_000);
   if (!limit.ok) {

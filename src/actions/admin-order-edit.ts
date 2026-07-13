@@ -24,7 +24,6 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { db } from "@/lib/db";
 import { orders, orderItems, products, productVariants } from "@/lib/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -32,6 +31,7 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import { assertEditable, assertCanAddItems } from "@/lib/order-editable";
 import { refreshOrderShipping } from "@/actions/shipping";
 import { MALAYSIAN_STATES } from "@/lib/validators";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -46,7 +46,7 @@ type ActionResult = { ok: true } | { ok: false; error: string };
  * free-shipping rules). If re-quote fails (courier no longer offered), fall
  * back to a local total calculation using the stored shippingCost.
  */
-async function recomputeOrderTotals(orderId: string): Promise<void> {
+async function recomputeOrderTotals(db: TenantDb, orderId: string): Promise<void> {
   // 1. Sum all line totals from DB rows.
   const itemRows = await db
     .select({ lineTotal: orderItems.lineTotal })
@@ -117,7 +117,7 @@ export type OrderEditVariant = {
 export async function getOrderEditVariants(
   productId: string,
 ): Promise<OrderEditVariant[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const rows = await db
     .select({
@@ -157,7 +157,7 @@ export async function addCatalogLineItem(
   orderId: string,
   input: { productId: string; variantId: string; quantity: number },
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   // Re-read order and assert editability.
   const [orderRow] = await db
@@ -273,7 +273,7 @@ export async function addCatalogLineItem(
     lineTotal,
   });
 
-  await recomputeOrderTotals(orderId);
+  await recomputeOrderTotals(db, orderId);
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath(`/admin/orders`);
   revalidatePath(`/orders/${orderId}`);
@@ -289,7 +289,7 @@ export async function addManualLineItem(
   orderId: string,
   input: { name: string; quantity: number; unitPrice: number | string },
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [orderRow] = await db
     .select({ id: orders.id, status: orders.status, paypalCaptureId: orders.paypalCaptureId })
@@ -347,7 +347,7 @@ export async function addManualLineItem(
     lineTotal,
   });
 
-  await recomputeOrderTotals(orderId);
+  await recomputeOrderTotals(db, orderId);
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath(`/admin/orders`);
   revalidatePath(`/orders/${orderId}`);
@@ -364,7 +364,7 @@ export async function removeLineItem(
   orderId: string,
   itemId: string,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [orderRow] = await db
     .select({ id: orders.id, status: orders.status, paypalCaptureId: orders.paypalCaptureId })
@@ -405,7 +405,7 @@ export async function removeLineItem(
       ),
     );
 
-  await recomputeOrderTotals(orderId);
+  await recomputeOrderTotals(db, orderId);
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath(`/admin/orders`);
   revalidatePath(`/orders/${orderId}`);
@@ -430,7 +430,7 @@ export async function updateOrderCustomer(
     shippingPostcode: string;
   },
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [orderRow] = await db
     .select({
@@ -504,7 +504,7 @@ export async function updateOrderCustomer(
     .where(eq(orders.id, orderId));
 
   // Address changed — re-quote shipping for the new destination.
-  await recomputeOrderTotals(orderId);
+  await recomputeOrderTotals(db, orderId);
 
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath(`/admin/orders`);
@@ -542,7 +542,7 @@ export async function addPosLineToOrder(
   orderId: string,
   line: AddPosLineInput,
 ): Promise<ActionResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   // Re-read order — assert add is allowed (includes paid orders, blocks shipped/cancelled).
   const [orderRow] = await db
@@ -718,7 +718,7 @@ export async function addPosLineToOrder(
     return { ok: false, error: "Failed to add item. Please try again." };
   }
 
-  await recomputeOrderTotals(orderId);
+  await recomputeOrderTotals(db, orderId);
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath(`/admin/orders`);
   revalidatePath(`/orders/${orderId}`);
@@ -733,7 +733,7 @@ export async function addPosLineToOrder(
  * balance was paid (admin's judgement, like the manual "mark paid" flows).
  */
 export async function markBalancePaid(orderId: string): Promise<ActionResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [orderRow] = await db
     .select({ id: orders.id, totalAmount: orders.totalAmount })

@@ -1,6 +1,5 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { orders, orderItems, user } from "@/lib/db/schema";
 import {
   and,
@@ -94,7 +93,7 @@ export type ListAdminPaymentsResult = {
 export async function listAdminPayments(
   input: ListAdminPaymentsInput = {},
 ): Promise<ListAdminPaymentsResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const status = isPaymentStatus(input.status) ? input.status : "all";
   const fromDate = parseDateOrNull(input.from);
@@ -237,7 +236,7 @@ export type PaymentDetail = {
 export async function getPaymentDetail(
   orderId: string,
 ): Promise<PaymentDetail | null> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const row = await db.query.orders.findFirst({
     where: eq(orders.id, orderId),
   });

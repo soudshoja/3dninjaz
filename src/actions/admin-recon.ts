@@ -1,6 +1,5 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { reconRuns } from "@/lib/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { requireAdmin } from "@/lib/auth-helpers";
@@ -25,7 +24,7 @@ export type ReconRow = {
 };
 
 export async function latestReconRun(): Promise<ReconRow | null> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const rows = await db
     .select()
     .from(reconRuns)
@@ -36,7 +35,7 @@ export async function latestReconRun(): Promise<ReconRow | null> {
 }
 
 export async function listReconRuns(limit = 30): Promise<ReconRow[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const rows = await db
     .select()
     .from(reconRuns)
@@ -46,7 +45,7 @@ export async function listReconRuns(limit = 30): Promise<ReconRow[]> {
 }
 
 export async function getReconRun(runId: string): Promise<ReconRow | null> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const row = await db.query.reconRuns.findFirst({
     where: eq(reconRuns.id, runId),
   });

@@ -1,6 +1,5 @@
 "use server";
 
-import { db } from "@/lib/db";
 import {
   orders,
   orderItems,
@@ -27,6 +26,7 @@ import { ensureImagesV2, ensureConfigJson } from "@/lib/config-fields";
 import { sanitizeCustomText, customKey, buildConfigSummaryServer } from "@/lib/custom-text";
 import type { PictureData } from "@/lib/image-manifest";
 import type { PublicConfigField } from "@/lib/configurable-product-data";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 
 /**
  * Phase 20 (20-05 / 20-09b) — Admin POS multi-line order builder server actions.
@@ -169,7 +169,7 @@ const SENTINEL_EMAIL_DOMAIN = "@3dninjaz.local";
  * was against the admin's own email row), throw a descriptive error.
  */
 async function resolvePosCustomerId(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  tx: Parameters<Parameters<TenantDb["transaction"]>[0]>[0],
   args: {
     customerEmail: string;
     name: string;
@@ -252,8 +252,7 @@ async function resolvePosCustomerId(
 export async function getPosProductSearch(
   query: string,
 ): Promise<PosProductResult[]> {
-  const session = await requireAdmin();
-  void session;
+  const { db } = await requireAdmin();
 
   const trimmed = (query ?? "").trim();
   if (!trimmed) return [];
@@ -339,7 +338,7 @@ export async function getPosProductSearch(
  * MariaDB-safe: manual multi-query hydration (no LATERAL).
  */
 export async function getPosRecentProducts(): Promise<PosProductResult[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const productRows = await db
     .select({
@@ -421,8 +420,7 @@ export async function getPosRecentProducts(): Promise<PosProductResult[]> {
 export async function getPosProductHydration(
   productId: string,
 ): Promise<PosProductHydration | null> {
-  const session = await requireAdmin();
-  void session;
+  const { db } = await requireAdmin();
 
   // Fetch the base product row (active OR inactive — admin sees all)
   const [row] = await db
@@ -526,7 +524,7 @@ export async function getPosProductHydration(
 export async function createPosOrder(
   input: PosOrderInput,
 ): Promise<CreatePosOrderResult> {
-  const session = await requireAdmin();
+  const { db, ...session } = await requireAdmin();
 
   const { lines, customer, shippingOverride, couponCode, shippingCourier } = input;
 
@@ -1030,7 +1028,7 @@ export type PosCustomerResult = {
 export async function getPosCustomerSearch(
   query: string,
 ): Promise<PosCustomerResult[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const trimmed = (query ?? "").trim();
   if (!trimmed) return [];
@@ -1157,8 +1155,8 @@ export async function getPosCustomerSearch(
  * importing server-only store-settings.ts directly.
  */
 export async function getDraftLinkTemplate(): Promise<string | null> {
-  const session = await requireAdmin();
-  void session;
+  const { db } = await requireAdmin();
+  void db;
 
   const { getStoreSettingsCached } = await import("@/lib/store-settings");
   const settings = await getStoreSettingsCached();
@@ -1177,8 +1175,7 @@ export async function getDraftLinkTemplate(): Promise<string | null> {
 export async function setOrderAwaitingCustomer(
   orderId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const session = await requireAdmin();
-  void session;
+  const { db } = await requireAdmin();
 
   const order = await db.query.orders.findFirst({
     where: eq(orders.id, orderId),

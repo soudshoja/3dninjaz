@@ -1,6 +1,5 @@
 "use server";
 
-import { db } from "@/lib/db";
 import {
   orders,
   orderItems,
@@ -28,6 +27,7 @@ import { sendMedia } from "@/lib/whatsapp/client";
 import { normalizeMsisdn } from "@/lib/whatsapp/events";
 import { getWhatsappStateFresh } from "@/lib/whatsapp/settings";
 import { publicUrl } from "@/lib/public-url";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 // formatOrderNumber already imported on line 9
 
 // ============================================================================
@@ -84,7 +84,7 @@ function isOrderStatus(v: string | undefined): v is OrderStatus {
 export async function listAdminOrders(
   filter: StatusFilter = "all",
 ): Promise<AdminOrderListRow[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const effective: OrderStatus | undefined =
     filter && filter !== "all" && isOrderStatus(filter) ? filter : undefined;
@@ -246,7 +246,7 @@ function ensureImagesArrayLocal(raw: unknown): string[] {
  * Returns null if the order id does not exist. Admin-only.
  */
 export async function getAdminOrder(orderId: string): Promise<AdminOrderDetail | null> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [head] = await db
     .select({
@@ -343,7 +343,7 @@ export async function updateOrderStatus(
   orderId: string,
   newStatus: OrderStatus,
 ): Promise<UpdateStatusResult> {
-  await requireAdmin();
+  const { db, tenant } = await requireAdmin();
 
   if (!isOrderStatus(newStatus)) {
     return { ok: false, error: "Invalid status value." };
@@ -394,7 +394,7 @@ export async function updateOrderStatus(
     void sendWhatsAppNotification("order_processing", row.shippingPhone, {
       customerName: row.shippingName,
       orderNumber: formatOrderNumber(orderId),
-      orderUrl: publicUrl(`/orders/${orderId}`),
+      orderUrl: publicUrl(`/orders/${orderId}`, tenant),
     }).catch(() => {});
   }
 
@@ -413,7 +413,7 @@ export async function updateOrderStatus(
     void sendWhatsAppNotification("order_approved", row.shippingPhone, {
       customerName: row.shippingName,
       orderNumber: formatOrderNumber(orderId),
-      orderUrl: publicUrl(`/orders/${orderId}`),
+      orderUrl: publicUrl(`/orders/${orderId}`, tenant),
     }).catch(() => {});
     void sendWhatsAppInvoicePdf(orderId, row.shippingPhone).catch(() => {});
   }
@@ -434,7 +434,7 @@ export async function updateOrderStatus(
 export async function approveWhatsAppOrder(
   orderId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  await requireAdmin();
+  const { db, tenant } = await requireAdmin();
 
   const [row] = await db
     .select({
@@ -475,7 +475,7 @@ export async function approveWhatsAppOrder(
   void sendWhatsAppNotification("order_approved", row.shippingPhone, {
     customerName: row.shippingName,
     orderNumber: formatOrderNumber(orderId),
-    orderUrl: publicUrl(`/orders/${orderId}`),
+    orderUrl: publicUrl(`/orders/${orderId}`, tenant),
   }).catch(() => {});
   void sendWhatsAppInvoicePdf(orderId, row.shippingPhone).catch(() => {});
 
@@ -499,7 +499,7 @@ export async function approveWhatsAppOrder(
 export async function bulkDeleteOrders(
   orderIds: string[],
 ): Promise<{ ok: true; deleted: number } | { ok: false; error: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const ids = Array.isArray(orderIds)
     ? [...new Set(orderIds.filter((id) => typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id)))]
@@ -558,7 +558,7 @@ export async function updateOrderNotes(
   orderId: string,
   notes: string,
 ): Promise<UpdateNotesResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   if (typeof notes !== "string") {
     return { ok: false, error: "Notes must be text." };
@@ -605,7 +605,7 @@ export async function updateOrderShipTo(
     shippingPostcode: string;
   },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const name = (input.shippingName ?? "").trim();
   const phone = (input.shippingPhone ?? "").trim();
@@ -679,7 +679,7 @@ type CostUpdateResult =
  * every cost mutation so the client sees fresh numbers without a full
  * refresh + server-rendered too. Cheap: two indexed selects.
  */
-async function recomputeOrderProfit(orderId: string): Promise<OrderProfitSummary> {
+async function recomputeOrderProfit(db: TenantDb, orderId: string): Promise<OrderProfitSummary> {
   const [orderRow] = await db
     .select({ extraCost: orders.extraCost })
     .from(orders)
@@ -709,14 +709,14 @@ async function recomputeOrderProfit(orderId: string): Promise<OrderProfitSummary
 export async function getOrderProfitSummary(
   orderId: string,
 ): Promise<OrderProfitSummary | null> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const [row] = await db
     .select({ id: orders.id })
     .from(orders)
     .where(eq(orders.id, orderId))
     .limit(1);
   if (!row) return null;
-  return recomputeOrderProfit(orderId);
+  return recomputeOrderProfit(db, orderId);
 }
 
 /**
@@ -728,7 +728,7 @@ export async function updateOrderItemCost(
   itemId: string,
   unitCostRaw: string | null,
 ): Promise<CostUpdateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   let valueToStore: string | null = null;
   if (unitCostRaw != null && unitCostRaw.trim() !== "") {
@@ -758,7 +758,7 @@ export async function updateOrderItemCost(
     .set({ unitCost: valueToStore })
     .where(eq(orderItems.id, itemId));
 
-  const summary = await recomputeOrderProfit(orderId);
+  const summary = await recomputeOrderProfit(db, orderId);
   revalidatePath(`/admin/orders/${orderId}`);
   return { ok: true, summary };
 }
@@ -771,7 +771,7 @@ export async function updateOrderExtraCost(
   extraCostRaw: string | null,
   note: string | null,
 ): Promise<CostUpdateResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   // Empty / null → persist 0.00 (NOT NULL column, default 0).
   let storedCost = "0.00";
@@ -812,7 +812,7 @@ export async function updateOrderExtraCost(
     .set({ extraCost: storedCost, extraCostNote: storedNote })
     .where(eq(orders.id, orderId));
 
-  const summary = await recomputeOrderProfit(orderId);
+  const summary = await recomputeOrderProfit(db, orderId);
   revalidatePath(`/admin/orders/${orderId}`);
   return { ok: true, summary };
 }
@@ -836,7 +836,7 @@ export async function applyOrderDiscount(
   orderId: string,
   input: { code?: string | null; amount?: number | null },
 ): Promise<ApplyDiscountResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [row] = await db
     .select({
@@ -906,7 +906,7 @@ type DeleteOrderResult = { ok: true } | { ok: false; error: string };
  * explicit confirmation. Admin-only.
  */
 export async function deleteOrder(orderId: string): Promise<DeleteOrderResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [row] = await db
     .select({ id: orders.id, status: orders.status })
@@ -948,7 +948,7 @@ type SendInvoiceViaWhatsAppResult = { ok: true } | { ok: false; error: string };
 export async function sendInvoiceViaWhatsApp(
   orderId: string,
 ): Promise<SendInvoiceViaWhatsAppResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   const [row] = await db
     .select({

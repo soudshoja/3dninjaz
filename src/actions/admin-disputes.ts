@@ -1,6 +1,5 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { disputeCache, orders } from "@/lib/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
@@ -14,6 +13,7 @@ import {
 } from "@/lib/paypal-disputes";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { revalidatePath } from "next/cache";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 
 /**
  * Phase 7 (07-06) — disputes server actions.
@@ -37,6 +37,7 @@ type RawDispute = {
 };
 
 async function resolveOrderIdForDispute(
+  db: TenantDb,
   raw: unknown,
 ): Promise<string | null> {
   const r = raw as RawDispute;
@@ -55,7 +56,7 @@ export type SyncDisputesResult = {
 };
 
 export async function syncDisputes(): Promise<SyncDisputesResult> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   let synced = 0;
   let errors = 0;
   try {
@@ -66,7 +67,7 @@ export async function syncDisputes(): Promise<SyncDisputesResult> {
       try {
         const full = await getDispute(item.disputeId);
         rawJson = full;
-        orderId = await resolveOrderIdForDispute(full);
+        orderId = await resolveOrderIdForDispute(db, full);
       } catch (e) {
         errors++;
         console.error("[disputes] fetch failed", item.disputeId, e);
@@ -123,7 +124,7 @@ export type DisputeRow = {
 export async function listDisputes(
   input: { status?: string } = {},
 ): Promise<DisputeRow[]> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
 
   // Auto-sync on stale cache (Q-07-07 default).
   const newest = await db
@@ -183,7 +184,7 @@ export type DisputeDetail = {
 export async function getDisputeWithOrder(
   disputeId: string,
 ): Promise<DisputeDetail | null> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const cached = await db.query.disputeCache.findFirst({
     where: eq(disputeCache.disputeId, disputeId),
   });
@@ -273,7 +274,7 @@ export async function acceptClaimAction(
     refundAmount?: { value: string; currencyCode: string };
   },
 ): Promise<DisputeActionResult> {
-  const session = await requireAdmin();
+  const { db, ...session } = await requireAdmin();
   const cached = await db.query.disputeCache.findFirst({
     where: eq(disputeCache.disputeId, disputeId),
   });
@@ -301,7 +302,7 @@ export async function provideEvidenceAction(
   disputeId: string,
   formData: FormData,
 ): Promise<DisputeActionResult> {
-  const session = await requireAdmin();
+  const { db, ...session } = await requireAdmin();
   const cached = await db.query.disputeCache.findFirst({
     where: eq(disputeCache.disputeId, disputeId),
   });
@@ -358,7 +359,7 @@ export async function escalateAction(
   disputeId: string,
   input: { note: string },
 ): Promise<DisputeActionResult> {
-  const session = await requireAdmin();
+  const { db, ...session } = await requireAdmin();
   const cached = await db.query.disputeCache.findFirst({
     where: eq(disputeCache.disputeId, disputeId),
   });

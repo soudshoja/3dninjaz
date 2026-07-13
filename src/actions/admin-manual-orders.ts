@@ -1,6 +1,5 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { orders, paymentLinks, user as userTable } from "@/lib/db/schema";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { randomUUID, randomBytes } from "node:crypto";
@@ -27,8 +26,6 @@ import { publicOrigin } from "@/lib/public-url";
  */
 
 const PAYMENT_LINK_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-const PUBLIC_LINK_BASE =
-  process.env.NEXT_PUBLIC_BASE_URL ?? publicOrigin();
 const SENTINEL_EMAIL_DOMAIN = "@3dninjaz.local";
 
 export type CreateManualOrderResult =
@@ -38,7 +35,7 @@ export type CreateManualOrderResult =
 export async function createManualOrder(
   input: ManualOrderInput,
 ): Promise<CreateManualOrderResult> {
-  const session = await requireAdmin();
+  const { db, ...session } = await requireAdmin();
 
   const parsed = manualOrderSchema.safeParse(input);
   if (!parsed.success) {
@@ -120,7 +117,11 @@ export async function generatePaymentLink({
 }: {
   orderId: string;
 }): Promise<GeneratePaymentLinkResult> {
-  const session = await requireAdmin();
+  const { db, tenant, ...session } = await requireAdmin();
+  // Rule 8 (B1/SC5) — resolve INSIDE the guarded function using the guard's
+  // tenant; never a module-scope env-origin const (evaluated at module load,
+  // before any tenant exists).
+  const base = process.env.NEXT_PUBLIC_BASE_URL ?? publicOrigin(tenant);
 
   const order = await db.query.orders.findFirst({
     where: eq(orders.id, orderId),
@@ -181,7 +182,7 @@ export async function generatePaymentLink({
           customerName: orderRow.shippingName,
           orderNumber: formatOrderNumber(orderId),
           orderTotal: orderRow.totalAmount,
-          paymentLink: `${PUBLIC_LINK_BASE}/payment-links/${token}`,
+          paymentLink: `${base}/payment-links/${token}`,
         });
       }
     } catch {
@@ -193,7 +194,7 @@ export async function generatePaymentLink({
     ok: true,
     linkId,
     token,
-    url: `${PUBLIC_LINK_BASE}/payment-links/${token}`,
+    url: `${base}/payment-links/${token}`,
     expiresAt,
   };
 }
@@ -210,7 +211,8 @@ export type PaymentLinkRow = {
 export async function listOrderPaymentLinks(
   orderId: string,
 ): Promise<PaymentLinkRow[]> {
-  await requireAdmin();
+  const { db, tenant } = await requireAdmin();
+  const base = process.env.NEXT_PUBLIC_BASE_URL ?? publicOrigin(tenant);
   const rows = await db
     .select({
       id: paymentLinks.id,
@@ -225,7 +227,7 @@ export async function listOrderPaymentLinks(
   return rows.map((r) => ({
     id: r.id,
     token: r.token,
-    url: `${PUBLIC_LINK_BASE}/payment-links/${r.token}`,
+    url: `${base}/payment-links/${r.token}`,
     expiresAt: r.expiresAt,
     usedAt: r.usedAt,
     createdAt: r.createdAt,
@@ -235,7 +237,7 @@ export async function listOrderPaymentLinks(
 export async function revokePaymentLink(
   linkId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const row = await db.query.paymentLinks.findFirst({
     where: eq(paymentLinks.id, linkId),
   });
@@ -259,7 +261,8 @@ export async function revokePaymentLink(
 export async function getActivePaymentLink(
   orderId: string,
 ): Promise<PaymentLinkRow | null> {
-  await requireAdmin();
+  const { db, tenant } = await requireAdmin();
+  const base = process.env.NEXT_PUBLIC_BASE_URL ?? publicOrigin(tenant);
   const now = new Date();
   const rows = await db
     .select({
@@ -279,7 +282,7 @@ export async function getActivePaymentLink(
   return {
     id: r.id,
     token: r.token,
-    url: `${PUBLIC_LINK_BASE}/payment-links/${r.token}`,
+    url: `${base}/payment-links/${r.token}`,
     expiresAt: r.expiresAt,
     usedAt: r.usedAt,
     createdAt: r.createdAt,
