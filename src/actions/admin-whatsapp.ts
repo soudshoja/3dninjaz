@@ -29,9 +29,6 @@ import type {
 } from "@/lib/whatsapp/types";
 import { publicOrigin } from "@/lib/public-url";
 
-const APP_BASE_URL =
-  process.env.APP_BASE_URL ?? publicOrigin();
-
 // ---------------------------------------------------------------------------
 // getWhatsappAdminState
 // ---------------------------------------------------------------------------
@@ -59,7 +56,8 @@ export async function getWhatsappAdminState(): Promise<WhatsappSettingsView> {
 // ---------------------------------------------------------------------------
 
 export async function connectWhatsapp(): Promise<ConnectResult> {
-  await requireAdmin();
+  const { tenant } = await requireAdmin();
+  const APP_BASE_URL = process.env.APP_BASE_URL ?? publicOrigin(tenant);
 
   try {
     await createInstance();

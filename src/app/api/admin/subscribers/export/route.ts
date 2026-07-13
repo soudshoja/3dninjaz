@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { desc, eq } from "drizzle-orm";
 import { requireAdmin } from "@/lib/auth-helpers";
-import { db } from "@/lib/db";
 import { emailSubscribers } from "@/lib/db/schema";
 import { publicOrigin } from "@/lib/public-url";
 
@@ -40,14 +39,16 @@ function fmtIso(d: Date | null | undefined): string {
 }
 
 export async function GET(req: NextRequest) {
-  try {
-    await requireAdmin();
-  } catch {
+  const guard = await requireAdmin().catch(() => null);
+  if (!guard) {
     // Non-admin / not logged in — redirect to /login (307 preserves method,
     // but GET redirect is what a download button user would expect).
     // Use BETTER_AUTH_URL from env to construct the absolute URL, since req.url
     // may be the proxied local address (http://127.0.0.1:3100) instead of the
     // public origin.
+    // DEFERRED (24-09 decisions_for_review #2): publicOrigin() here has no
+    // tenant in scope — the guard already threw. Internal same-origin /login
+    // redirect only; byte-identical in single mode.
     const baseUrl =
       process.env.BETTER_AUTH_URL ??
       process.env.NEXT_PUBLIC_SITE_URL ??
@@ -56,6 +57,7 @@ export async function GET(req: NextRequest) {
     url.searchParams.set("next", "/admin/subscribers");
     return NextResponse.redirect(url, { status: 307 });
   }
+  const { db } = guard;
 
   const statusParam = req.nextUrl.searchParams.get("status") ?? "all";
   const status: StatusFilter = (VALID as string[]).includes(statusParam)

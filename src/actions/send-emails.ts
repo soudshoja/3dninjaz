@@ -10,6 +10,8 @@ import "server-only";
 import { renderTemplate } from "@/lib/email/templates";
 import { sendMail } from "@/lib/mailer";
 import { publicUrl, publicOrigin } from "@/lib/public-url";
+import { getTenantContext } from "@/lib/tenant/context";
+import type { Tenant } from "@/lib/tenant/platform-schema";
 
 // ============================================================================
 // Welcome Email (after signup)
@@ -17,15 +19,16 @@ import { publicUrl, publicOrigin } from "@/lib/public-url";
 
 export async function sendWelcomeEmail(
   customerEmail: string,
-  customerName: string
+  customerName: string,
+  tenant?: Tenant
 ): Promise<void> {
   try {
     const { subject, html, text } = await renderTemplate("welcome", {
       customer_name: customerName,
       store_name: "3D Ninjaz",
-      store_url: publicOrigin(),
+      store_url: publicOrigin(tenant),
       current_year: new Date().getFullYear(),
-      shop_link: publicUrl("/shop"),
+      shop_link: publicUrl("/shop", tenant),
     });
 
     await sendMail({
@@ -33,6 +36,7 @@ export async function sendWelcomeEmail(
       subject,
       html,
       text,
+      tenant,
     });
   } catch (err) {
     console.error(
@@ -50,7 +54,8 @@ export async function sendWelcomeEmail(
 
 export async function sendPasswordChangedEmail(
   customerEmail: string,
-  customerName: string
+  customerName: string,
+  tenant?: Tenant
 ): Promise<void> {
   try {
     const { subject, html, text } = await renderTemplate(
@@ -58,7 +63,7 @@ export async function sendPasswordChangedEmail(
       {
         customer_name: customerName,
         store_name: "3D Ninjaz",
-        store_url: publicOrigin(),
+        store_url: publicOrigin(tenant),
         current_year: new Date().getFullYear(),
         support_email: "support@3dninjaz.com",
       }
@@ -69,6 +74,7 @@ export async function sendPasswordChangedEmail(
       subject,
       html,
       text,
+      tenant,
     });
   } catch (err) {
     console.error(
@@ -85,17 +91,18 @@ export async function sendPasswordChangedEmail(
 
 export async function sendNewsletterWelcomeEmail(
   subscriberEmail: string,
-  unsubscribeToken: string
+  unsubscribeToken: string,
+  tenant?: Tenant
 ): Promise<void> {
   try {
-    const unsubscribeLink = publicUrl(`/api/unsubscribe?token=${unsubscribeToken}`);
+    const unsubscribeLink = publicUrl(`/api/unsubscribe?token=${unsubscribeToken}`, tenant);
 
     const { subject, html, text } = await renderTemplate(
       "newsletter_welcome",
       {
         subscriber_email: subscriberEmail,
         store_name: "3D Ninjaz",
-        store_url: publicOrigin(),
+        store_url: publicOrigin(tenant),
         current_year: new Date().getFullYear(),
         unsubscribe_link: unsubscribeLink,
       }
@@ -106,6 +113,7 @@ export async function sendNewsletterWelcomeEmail(
       subject,
       html,
       text,
+      tenant,
     });
   } catch (err) {
     console.error(
@@ -121,7 +129,8 @@ export async function sendNewsletterWelcomeEmail(
 // ============================================================================
 
 export async function sendNewsletterUnsubscribedEmail(
-  subscriberEmail: string
+  subscriberEmail: string,
+  tenant?: Tenant
 ): Promise<void> {
   try {
     const { subject, html, text } = await renderTemplate(
@@ -129,7 +138,7 @@ export async function sendNewsletterUnsubscribedEmail(
       {
         subscriber_email: subscriberEmail,
         store_name: "3D Ninjaz",
-        store_url: publicOrigin(),
+        store_url: publicOrigin(tenant),
         current_year: new Date().getFullYear(),
       }
     );
@@ -139,6 +148,7 @@ export async function sendNewsletterUnsubscribedEmail(
       subject,
       html,
       text,
+      tenant,
     });
   } catch (err) {
     console.error(
@@ -158,12 +168,12 @@ export async function sendOrderProcessingEmail(opts: {
   customerName: string;
   orderNumber: string;
   orderId: string;
-}): Promise<void> {
+}, tenant?: Tenant): Promise<void> {
   // Skip internal/sentinel addresses used during development/seeding.
   if (opts.customerEmail.endsWith("@3dninjaz.local")) return;
 
   try {
-    const orderUrl = publicUrl(`/orders/${opts.orderId}`);
+    const orderUrl = publicUrl(`/orders/${opts.orderId}`, tenant);
 
     const { subject, html, text } = await renderTemplate("order_processing", {
       customer_name: opts.customerName,
@@ -176,6 +186,7 @@ export async function sendOrderProcessingEmail(opts: {
       subject,
       html,
       text,
+      tenant,
     });
   } catch (err) {
     console.error(
@@ -198,13 +209,13 @@ export async function sendOrderShippedEmail(opts: {
   trackingNo: string;
   consignmentNo: string;
   orderId: string;
-}): Promise<void> {
+}, tenant?: Tenant): Promise<void> {
   // Skip internal/sentinel addresses (manual/POS orders without a real email).
   if (opts.customerEmail.endsWith("@3dninjaz.local")) return;
 
   try {
-    const trackingLink = publicUrl(`/orders/${opts.orderId}`);
-    const orderLink = publicUrl(`/orders/${opts.orderId}`);
+    const trackingLink = publicUrl(`/orders/${opts.orderId}`, tenant);
+    const orderLink = publicUrl(`/orders/${opts.orderId}`, tenant);
 
     const { subject, html, text } = await renderTemplate("order_shipped", {
       customer_name: opts.customerName,
@@ -215,7 +226,7 @@ export async function sendOrderShippedEmail(opts: {
       tracking_link: trackingLink,
       order_link: orderLink,
       store_name: "3D Ninjaz",
-      store_url: publicOrigin(),
+      store_url: publicOrigin(tenant),
       current_year: new Date().getFullYear(),
     });
 
@@ -224,6 +235,7 @@ export async function sendOrderShippedEmail(opts: {
       subject,
       html,
       text,
+      tenant,
     });
   } catch (err) {
     console.error(
@@ -243,19 +255,19 @@ export async function sendOrderDeliveredEmail(opts: {
   customerName: string;
   orderNumber: string;
   orderId: string;
-}): Promise<void> {
+}, tenant?: Tenant): Promise<void> {
   // Skip internal/sentinel addresses (manual/POS orders without a real email).
   if (opts.customerEmail.endsWith("@3dninjaz.local")) return;
 
   try {
-    const orderLink = publicUrl(`/orders/${opts.orderId}`);
+    const orderLink = publicUrl(`/orders/${opts.orderId}`, tenant);
 
     const { subject, html, text } = await renderTemplate("order_delivered", {
       customer_name: opts.customerName,
       order_number: opts.orderNumber,
       order_link: orderLink,
       store_name: "3D Ninjaz",
-      store_url: publicOrigin(),
+      store_url: publicOrigin(tenant),
       current_year: new Date().getFullYear(),
     });
 
@@ -264,6 +276,7 @@ export async function sendOrderDeliveredEmail(opts: {
       subject,
       html,
       text,
+      tenant,
     });
   } catch (err) {
     console.error(
@@ -284,12 +297,12 @@ export async function sendOrderRefundedEmail(opts: {
   orderNumber: string;
   refundAmount: string;
   orderId: string;
-}): Promise<void> {
+}, tenant?: Tenant): Promise<void> {
   // Skip internal/sentinel addresses (manual/POS orders without a real email).
   if (opts.customerEmail.endsWith("@3dninjaz.local")) return;
 
   try {
-    const orderLink = publicUrl(`/orders/${opts.orderId}`);
+    const orderLink = publicUrl(`/orders/${opts.orderId}`, tenant);
 
     const { subject, html, text } = await renderTemplate("order_refunded", {
       customer_name: opts.customerName,
@@ -298,7 +311,7 @@ export async function sendOrderRefundedEmail(opts: {
       order_link: orderLink,
       support_email: "support@3dninjaz.com",
       store_name: "3D Ninjaz",
-      store_url: publicOrigin(),
+      store_url: publicOrigin(tenant),
       current_year: new Date().getFullYear(),
     });
 
@@ -307,6 +320,7 @@ export async function sendOrderRefundedEmail(opts: {
       subject,
       html,
       text,
+      tenant,
     });
   } catch (err) {
     console.error(
@@ -327,12 +341,12 @@ export async function sendOrderCancelledEmail(opts: {
   orderNumber: string;
   cancellationReason: string;
   orderId: string;
-}): Promise<void> {
+}, tenant?: Tenant): Promise<void> {
   // Skip internal/sentinel addresses (manual/POS orders without a real email).
   if (opts.customerEmail.endsWith("@3dninjaz.local")) return;
 
   try {
-    const orderLink = publicUrl(`/orders/${opts.orderId}`);
+    const orderLink = publicUrl(`/orders/${opts.orderId}`, tenant);
 
     const { subject, html, text } = await renderTemplate("order_cancelled", {
       customer_name: opts.customerName,
@@ -341,7 +355,7 @@ export async function sendOrderCancelledEmail(opts: {
       order_link: orderLink,
       support_email: "support@3dninjaz.com",
       store_name: "3D Ninjaz",
-      store_url: publicOrigin(),
+      store_url: publicOrigin(tenant),
       current_year: new Date().getFullYear(),
     });
 
@@ -350,6 +364,7 @@ export async function sendOrderCancelledEmail(opts: {
       subject,
       html,
       text,
+      tenant,
     });
   } catch (err) {
     console.error(
@@ -378,9 +393,12 @@ async function fetchReturnEmailContext(opts: {
   customerName: string;
   orderNumber: string;
 } | null> {
-  // Inline import avoids circular dependency (send-emails.ts -> db is fine;
-  // db -> send-emails must never happen).
-  const { db } = await import("@/lib/db");
+  // B3 (24-09): resolve db via getTenantContext — the dynamic import of the
+  // db module singleton is NOT caught by tsc, so after 24-10 deletes the
+  // `db` export it would silently resolve to undefined.db at runtime.
+  // Runs in request context (admin server actions trigger the return-email
+  // senders), so headers() is available.
+  const { db } = await getTenantContext();
   const { orders, user } = await import("@/lib/db/schema");
   const { eq } = await import("drizzle-orm");
   const { formatOrderNumber } = await import("@/lib/orders");
@@ -424,19 +442,19 @@ function addDays(date: Date, days: number): Date {
 export async function sendReturnRequestedEmail(opts: {
   requestId: string;
   orderId: string;
-}): Promise<void> {
+}, tenant?: Tenant): Promise<void> {
   const ctx = await fetchReturnEmailContext(opts).catch(() => null);
   if (!ctx) return;
   if (ctx.customerEmail.endsWith("@3dninjaz.local")) return;
 
   try {
-    const orderLink = publicUrl(`/orders/${opts.orderId}`);
+    const orderLink = publicUrl(`/orders/${opts.orderId}`, tenant);
     const { subject, html, text } = await renderTemplate("return_requested", {
       customer_name: ctx.customerName,
       order_number: ctx.orderNumber,
       order_link: orderLink,
     });
-    await sendMail({ to: ctx.customerEmail, subject, html, text });
+    await sendMail({ to: ctx.customerEmail, subject, html, text, tenant });
   } catch (err) {
     console.error("[sendReturnRequestedEmail] failed", err);
   }
@@ -445,11 +463,13 @@ export async function sendReturnRequestedEmail(opts: {
 export async function sendReturnApprovedEmail(opts: {
   requestId: string;
   orderId: string;
-}): Promise<void> {
+}, tenant?: Tenant): Promise<void> {
   // Fetch approvedAt from the request row to compute ship-by date
   let approvedAt: Date | null = null;
   try {
-    const { db } = await import("@/lib/db");
+    // B3 (24-09): resolve db via getTenantContext — see fetchReturnEmailContext
+    // above for the rationale (dynamic @/lib/db import isn't tsc-caught).
+    const { db } = await getTenantContext();
     const { orderRequests } = await import("@/lib/db/schema");
     const { eq } = await import("drizzle-orm");
     const [req] = await db
@@ -467,7 +487,7 @@ export async function sendReturnApprovedEmail(opts: {
   if (ctx.customerEmail.endsWith("@3dninjaz.local")) return;
 
   try {
-    const orderLink = publicUrl(`/orders/${opts.orderId}`);
+    const orderLink = publicUrl(`/orders/${opts.orderId}`, tenant);
     const shipByDate = approvedAt
       ? addDays(approvedAt, 3).toLocaleDateString("en-MY", {
           weekday: "long",
@@ -484,7 +504,7 @@ export async function sendReturnApprovedEmail(opts: {
       return_address: RETURN_ADDRESS_FOR_EMAIL,
       order_link: orderLink,
     });
-    await sendMail({ to: ctx.customerEmail, subject, html, text });
+    await sendMail({ to: ctx.customerEmail, subject, html, text, tenant });
   } catch (err) {
     console.error("[sendReturnApprovedEmail] failed", err);
   }
@@ -494,20 +514,20 @@ export async function sendReturnRejectedEmail(opts: {
   requestId: string;
   orderId: string;
   reason: string;
-}): Promise<void> {
+}, tenant?: Tenant): Promise<void> {
   const ctx = await fetchReturnEmailContext(opts).catch(() => null);
   if (!ctx) return;
   if (ctx.customerEmail.endsWith("@3dninjaz.local")) return;
 
   try {
-    const orderLink = publicUrl(`/orders/${opts.orderId}`);
+    const orderLink = publicUrl(`/orders/${opts.orderId}`, tenant);
     const { subject, html, text } = await renderTemplate("return_rejected", {
       customer_name: ctx.customerName,
       order_number: ctx.orderNumber,
       reason: opts.reason,
       order_link: orderLink,
     });
-    await sendMail({ to: ctx.customerEmail, subject, html, text });
+    await sendMail({ to: ctx.customerEmail, subject, html, text, tenant });
   } catch (err) {
     console.error("[sendReturnRejectedEmail] failed", err);
   }
@@ -516,19 +536,19 @@ export async function sendReturnRejectedEmail(opts: {
 export async function sendReturnReceivedEmail(opts: {
   requestId: string;
   orderId: string;
-}): Promise<void> {
+}, tenant?: Tenant): Promise<void> {
   const ctx = await fetchReturnEmailContext(opts).catch(() => null);
   if (!ctx) return;
   if (ctx.customerEmail.endsWith("@3dninjaz.local")) return;
 
   try {
-    const orderLink = publicUrl(`/orders/${opts.orderId}`);
+    const orderLink = publicUrl(`/orders/${opts.orderId}`, tenant);
     const { subject, html, text } = await renderTemplate("return_received", {
       customer_name: ctx.customerName,
       order_number: ctx.orderNumber,
       order_link: orderLink,
     });
-    await sendMail({ to: ctx.customerEmail, subject, html, text });
+    await sendMail({ to: ctx.customerEmail, subject, html, text, tenant });
   } catch (err) {
     console.error("[sendReturnReceivedEmail] failed", err);
   }
@@ -537,20 +557,20 @@ export async function sendReturnReceivedEmail(opts: {
 export async function sendReturnExpiredEmail(opts: {
   requestId: string;
   orderId: string;
-}): Promise<void> {
+}, tenant?: Tenant): Promise<void> {
   if (!opts.orderId) return; // guard: expireStaleReturns may call with empty orderId
   const ctx = await fetchReturnEmailContext(opts).catch(() => null);
   if (!ctx) return;
   if (ctx.customerEmail.endsWith("@3dninjaz.local")) return;
 
   try {
-    const orderLink = publicUrl(`/orders/${opts.orderId}`);
+    const orderLink = publicUrl(`/orders/${opts.orderId}`, tenant);
     const { subject, html, text } = await renderTemplate("return_expired", {
       customer_name: ctx.customerName,
       order_number: ctx.orderNumber,
       order_link: orderLink,
     });
-    await sendMail({ to: ctx.customerEmail, subject, html, text });
+    await sendMail({ to: ctx.customerEmail, subject, html, text, tenant });
   } catch (err) {
     console.error("[sendReturnExpiredEmail] failed", err);
   }
@@ -566,9 +586,9 @@ export async function sendDisputeOpenedCustomerEmail(opts: {
   orderNumber: string;
   disputeReason: string;
   orderId: string;
-}): Promise<void> {
+}, tenant?: Tenant): Promise<void> {
   try {
-    const orderLink = publicUrl(`/orders/${opts.orderId}`);
+    const orderLink = publicUrl(`/orders/${opts.orderId}`, tenant);
 
     const { subject, html, text } = await renderTemplate(
       "dispute_opened_customer",
@@ -579,7 +599,7 @@ export async function sendDisputeOpenedCustomerEmail(opts: {
         order_link: orderLink,
         support_email: "support@3dninjaz.com",
         store_name: "3D Ninjaz",
-        store_url: publicOrigin(),
+        store_url: publicOrigin(tenant),
         current_year: new Date().getFullYear(),
       }
     );
@@ -589,6 +609,7 @@ export async function sendDisputeOpenedCustomerEmail(opts: {
       subject,
       html,
       text,
+      tenant,
     });
   } catch (err) {
     console.error(
@@ -606,9 +627,9 @@ export async function sendDisputeOpenedAdminEmail(opts: {
   disputeReason: string;
   disputeAmount: string;
   disputeId: string;
-}): Promise<void> {
+}, tenant?: Tenant): Promise<void> {
   try {
-    const adminLink = publicUrl(`/admin/disputes/${opts.disputeId}`);
+    const adminLink = publicUrl(`/admin/disputes/${opts.disputeId}`, tenant);
 
     const { subject, html, text } = await renderTemplate(
       "dispute_opened_admin",
@@ -628,6 +649,7 @@ export async function sendDisputeOpenedAdminEmail(opts: {
       subject,
       html,
       text,
+      tenant,
     });
   } catch (err) {
     console.error(

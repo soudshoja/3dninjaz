@@ -3,9 +3,9 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { requireAdmin } from "@/lib/auth-helpers";
-import { db } from "@/lib/db";
 import { customFonts } from "@/lib/db/schema";
 import { eq, count } from "drizzle-orm";
+import type { TenantDb } from "@/lib/tenant/pool-manager";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,7 +36,7 @@ function toFamilySlug(displayName: string): string {
 }
 
 /** Ensure familySlug is unique — append -2, -3, ... if needed. */
-async function uniqueSlug(base: string): Promise<string> {
+async function uniqueSlug(db: TenantDb, base: string): Promise<string> {
   let candidate = base.slice(0, 32);
   let suffix = 2;
   while (true) {
@@ -54,8 +54,9 @@ async function uniqueSlug(base: string): Promise<string> {
 
 export async function POST(req: NextRequest) {
   // CVE-2025-29927 — requireAdmin MUST be first await
+  let db: TenantDb;
   try {
-    await requireAdmin();
+    ({ db } = await requireAdmin());
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -135,7 +136,7 @@ export async function POST(req: NextRequest) {
   await fs.writeFile(filePath, buf);
 
   const fileUrl = `${PUBLIC_PREFIX}/fonts/${id}/${safeFilename}`;
-  const familySlug = await uniqueSlug(toFamilySlug(displayName));
+  const familySlug = await uniqueSlug(db, toFamilySlug(displayName));
 
   await db.insert(customFonts).values({
     id,

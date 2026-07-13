@@ -110,14 +110,11 @@ export function buildTenantAuth(tenant: Tenant, tenantDb: TenantDb) {
       user: {
         create: {
           after: async (user) => {
-            // Welcome email
+            // Welcome email — threads the closed-over `tenant` (this hook is
+            // a buildTenantAuth(tenant, db) parameter, so no new resolution
+            // is needed). Byte-identical in single mode (one transport).
             try {
-              // TODO(24-09): pass the closed-over `tenant` once send-emails.ts
-              // adds an optional `tenant?` param to sendWelcomeEmail — single
-              // mode is unaffected either way (one transport). auth.ts is
-              // already in 24-09's files_modified, so this TODO is closed
-              // in-phase, not left dangling.
-              await sendWelcomeEmail(user.email, user.name);
+              await sendWelcomeEmail(user.email, user.name, tenant);
             } catch (err) {
               console.error("[auth] welcome email dispatch failed:", err);
             }

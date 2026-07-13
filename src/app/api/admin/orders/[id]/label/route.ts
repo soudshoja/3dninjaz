@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { eq } from "drizzle-orm";
-import { db } from "@/lib/db";
 import { orderShipments } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth-helpers";
 
@@ -87,7 +86,7 @@ export async function GET(
   _req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  await requireAdmin();
+  const { db } = await requireAdmin();
   const { id } = await ctx.params;
 
   const s = await db
