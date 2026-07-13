@@ -36,7 +36,7 @@ vi.mock("drizzle-orm/mysql2", () => ({
 const { singletonSentinel } = vi.hoisted(() => ({
   singletonSentinel: { __singleton: true },
 }));
-vi.mock("@/lib/db", () => ({ db: singletonSentinel }));
+vi.mock("@/lib/db", () => ({ __singletonDb: singletonSentinel }));
 
 import {
   getTenantDb,
