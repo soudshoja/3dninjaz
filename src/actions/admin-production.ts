@@ -365,6 +365,9 @@ export type KeychainUnit = {
   productionDone: boolean;
   /** Base body shape — product-level attribute, drives BASE batch splitting. */
   shape: "square" | "round";
+  /** 0-based index of this physical keychain within its order line. Each unit
+   *  of a quantity-N line becomes its own item-wise row (all sharing itemId). */
+  unitIndex: number;
 };
 
 /** Aggregated base-colour printing batch. */
@@ -459,22 +462,33 @@ export async function getKeychainBatches(): Promise<KeychainBatches> {
     for (const r of shapeRows) shapeByProductId.set(r.id, r.keychainShape);
   }
 
-  const units: KeychainUnit[] = matched.map(({ it, parts }) => ({
-    itemId: it.id,
-    orderId: it.orderId,
-    invoiceNumber: formatOrderNumber(it.orderId),
-    clientName: clientNameById.get(it.orderId) ?? "",
-    name: parts.name,
-    letters: parts.letters,
-    base: parts.base,
-    clicker: parts.clicker,
-    letter: parts.letter,
-    quantity: it.quantity,
-    baseDone: it.baseDone,
-    clickerLetterDone: it.clickerLetterDone,
-    productionDone: it.productionDone,
-    shape: it.productId === "manual" ? "square" : (shapeByProductId.get(it.productId) ?? "square"),
-  }));
+  // Split each order line into its `quantity` physical keychains — one item-wise
+  // unit (quantity 1) per keychain — so the floor sees a qty-2 line as two rows
+  // of its per-name letter count, never a single flattened "letters × qty" total.
+  // Every split unit keeps the same order_item id, so marking a part printed (or
+  // assembled) still toggles the whole line's copies together.
+  const units: KeychainUnit[] = matched.flatMap(({ it, parts }) => {
+    const shape: "square" | "round" =
+      it.productId === "manual" ? "square" : (shapeByProductId.get(it.productId) ?? "square");
+    const copies = Math.max(1, it.quantity);
+    return Array.from({ length: copies }, (_, unitIndex) => ({
+      itemId: it.id,
+      orderId: it.orderId,
+      invoiceNumber: formatOrderNumber(it.orderId),
+      clientName: clientNameById.get(it.orderId) ?? "",
+      name: parts.name,
+      letters: parts.letters,
+      base: parts.base,
+      clicker: parts.clicker,
+      letter: parts.letter,
+      quantity: 1,
+      baseDone: it.baseDone,
+      clickerLetterDone: it.clickerLetterDone,
+      productionDone: it.productionDone,
+      shape,
+      unitIndex,
+    }));
+  });
 
   // 4) Group BASES — by shape + base colour composite key. Round and square
   // bodies of the SAME colour are physically different STLs and cannot be
