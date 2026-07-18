@@ -430,3 +430,13 @@ Plans:
 
 Plans:
 - [x] TBD (run /gsd-plan-phase 21 to break down) (completed 2026-07-07)
+
+### Phase 25: Mixed letter and icon keycaps for square keychain product
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 24
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 25 to break down)
