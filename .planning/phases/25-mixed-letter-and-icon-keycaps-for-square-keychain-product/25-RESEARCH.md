@@ -411,26 +411,28 @@ for (const u of units) {
 | A5 | `MODIFY COLUMN` appending an ENUM value is metadata-only (no rebuild) on the live table | Pattern 2 | If MariaDB rebuilds the table it could be slow/lock — mitigated by appending at END of ENUM list; verify on dev first |
 | A6 | A flat per-slot weight approximation is acceptable for v1 (icon vs letter volume difference) | Open Question 1 | Under/over-charging shipping — flagged for user decision |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Icon vs letter shipping weight (D-12).**
+All 4 questions below were pre-delegated to Claude's discretion by the user (see `25-DISCUSSION-LOG.md` "Claude's Discretion" list). Each was resolved with one concrete answer, adopted unambiguously by the plans (no TBD carried into execution) — recorded here for the audit trail.
+
+1. **Icon vs letter shipping weight (D-12).** RESOLVED: flat approximation for v1.
    - What we know: `option-weight.ts` (`resolveOptionWeightKg`, `resolveTierWeightKg`) already resolves per-line weight server-side; icon keycap = full 19.16×19.16×5.34mm white shell + accents vs the letter base+clicker+letter stack.
    - What's unclear: whether the physical weight difference is material enough to justify per-slot-type weight, or whether the existing tier/product weight (approximated by slot count) is close enough for v1.
-   - Recommendation: For v1, treat every slot (letter or icon) as one keycap of the same nominal weight and let the existing slot-count → tier/product weight ladder handle it (A6). Revisit with a real scale measurement post-launch if shipping quotes look off. Confirm with user.
+   - RESOLVED: For v1, treat every slot (letter or icon) as one keycap of the same nominal weight and let the existing slot-count → tier/product weight ladder handle it (A6). Revisit with a real scale measurement post-launch if shipping quotes look off. Implemented in 25-08.
 
-2. **Where does the `maxSlots` cap live for the migrated square product?**
+2. **Where does the `maxSlots` cap live for the migrated square product?** RESOLVED: tier table `maxUnitCount` stays authoritative.
    - What we know: today the square keychain's cap comes from the tier table `maxUnitCount` (which `configurable-product-view.tsx` treats as authoritative over `config.maxLength`).
    - What's unclear: whether the new `keycapseq` field should read `maxSlots` from its own config, from the tier table's `maxUnitCount`, or keep both in sync.
-   - Recommendation: Keep the tier table `maxUnitCount` as the single source of truth for the cap (as today), and mirror it into `KeycapSeqConfig.maxSlots` only as a fallback — matches the existing precedence in `configurable-product-view.tsx:323`.
+   - RESOLVED: Keep the tier table `maxUnitCount` as the single source of truth for the cap (as today), and mirror it into `KeycapSeqConfig.maxSlots` only as a fallback — matches the existing precedence in `configurable-product-view.tsx:323`. Implemented in 25-01/25-07.
 
-3. **Does the new field replace or coexist with the locked "Your name" text field on square products?**
+3. **Does the new field replace or coexist with the locked "Your name" text field on square products?** RESOLVED: replace.
    - What we know: D-05 leaves this to Claude's discretion; the 3 colour fields must stay.
-   - Recommendation: REPLACE the position-0 text field with the `keycapseq` field on square keychains (via a `seedKeychainSquareFields` variant or a branch in `seedKeychainFields` on `keychainShape`). Round keychains keep the plain text field untouched (D-01). This keeps ONE field owning the shared cap and avoids a dead text input. Existing square products need a one-time data migration (convert the locked text field → keycapseq) OR the change applies only to newly-created/edited square keychains — confirm the rollout scope with the user (see Open Question 4).
+   - RESOLVED: REPLACE the position-0 text field with the `keycapseq` field on square keychains (via a `seedKeychainSquareFields` variant or a branch in `seedKeychainFields` on `keychainShape`). Round keychains keep the plain text field untouched (D-01). This keeps ONE field owning the shared cap and avoids a dead text input. Implemented in 25-03; rollout for existing square products covered by Open Question 4/25-09.
 
-4. **Rollout to existing square keychain products.**
+4. **Rollout to existing square keychain products.** RESOLVED: dev-first idempotent backfill script, gated behind a human-verify checkpoint.
    - What we know: there is at least one live square keychain product plus DEVTEST orders on dev.
    - What's unclear: whether existing square products should be auto-migrated to the new field type, or whether only new/edited products get it.
-   - Recommendation: Provide a small idempotent backfill (swap the locked text field for a keycapseq field, preserving colour fields + tiers) run dev-first, so the existing live square keychain gains icons without a manual rebuild. Existing *orders* are unaffected (they snapshot their own configurationData). Confirm with user before touching the live product row.
+   - RESOLVED: Provide a small idempotent backfill (swap the locked text field for a keycapseq field, preserving colour fields + tiers) run dev-first, so the existing live square keychain gains icons without a manual rebuild. Existing *orders* are unaffected (they snapshot their own configurationData). Implemented in 25-09, wave 4, behind a human end-to-end smoke checkpoint before touching the live product row.
 
 ## Environment Availability
 
