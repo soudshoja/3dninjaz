@@ -12,15 +12,19 @@ import {
   Hammer,
   Circle,
   Square,
+  Shapes,
 } from "lucide-react";
 import {
   markKeychainPartPrinted,
+  markKeychainIconPrinted,
   setKeychainAssembled,
   type KeychainBatches as KeychainBatchesData,
   type KeychainBaseBatch,
   type KeychainClickerLetterBatch,
+  type KeychainIconBatch,
   type KeychainAssemblyUnit,
 } from "@/actions/admin-production";
+import { KEYCAP_ICON_BY_ID } from "@/lib/keycap-icons";
 import { BRAND } from "@/lib/brand";
 
 /**
@@ -40,7 +44,7 @@ const AMBER = "#b45309";
 const BLUE = BRAND.blue;
 const PURPLE = BRAND.purple;
 
-type View = "bases" | "clicker" | "assembly";
+type View = "bases" | "clicker" | "icons" | "assembly";
 type AssemblyFilter = "ready" | "waiting" | "done";
 
 const boxesOf = (items: { letters: number; quantity: number }[]) =>
@@ -257,6 +261,154 @@ function BatchCard({
   );
 }
 
+// ── Icon batch card (icons print as a fixed white shell + baked accents) ──────
+//
+// Mirrors the colour BatchCard shape but keyed by icon id (D-11): shows the
+// committed WebP render + label instead of a colour name, a total icon-print
+// count, a progress bar, and a per-unit printed tick. NO colour chips — icon
+// colours are fixed per design, not customer-chosen (D-04).
+
+function IconBatchCard({
+  batch,
+  onToggleOne,
+  onToggleAll,
+}: {
+  batch: KeychainIconBatch;
+  onToggleOne: (id: string, done: boolean) => void;
+  onToggleAll: (ids: string[], done: boolean) => void;
+}) {
+  const { iconId, iconLabel, totalQty, items, doneCount } = batch;
+  const total = items.length;
+  const allDone = doneCount === total && total > 0;
+  const [open, setOpen] = useState(!allDone);
+  const ids = items.map((u) => u.itemId);
+  const imageUrl = KEYCAP_ICON_BY_ID[iconId]?.imageUrl;
+
+  // Icon prints contributed by a single unit = count of THIS icon id in its
+  // sequence × its quantity.
+  const iconCountIn = (u: KeychainIconBatch["items"][number]) =>
+    u.slots.filter((s) => s.t === "I" && s.id === iconId).length * u.quantity;
+
+  return (
+    <div
+      className="overflow-hidden rounded-2xl border bg-white"
+      style={{
+        borderColor: allDone ? "rgba(31,163,0,0.30)" : "rgba(11,16,32,0.10)",
+        boxShadow: allDone ? "none" : "0 1px 2px rgba(11,16,32,0.04)",
+      }}
+    >
+      {/* Accent rail + header */}
+      <div className="flex items-stretch">
+        <span className="w-1 shrink-0" style={{ background: allDone ? GREEN : PURPLE }} />
+        <div className="min-w-0 flex-1 p-3">
+          <div className="flex items-start gap-2">
+            <button
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              className="min-w-0 flex-1 text-left"
+            >
+              <div className="flex items-center gap-1.5">
+                {imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={imageUrl}
+                    alt=""
+                    className="h-6 w-6 shrink-0 rounded-md object-contain"
+                    style={{ background: "#fff" }}
+                  />
+                ) : null}
+                <p
+                  className="truncate text-[15px] font-extrabold leading-tight"
+                  style={{ color: allDone ? GREEN : INK }}
+                >
+                  {iconLabel}
+                </p>
+                {allDone ? <CheckCheck className="h-4 w-4 shrink-0" style={{ color: GREEN }} /> : null}
+                <ChevronDown
+                  className="h-4 w-4 shrink-0 transition-transform"
+                  style={{ color: "rgba(11,16,32,0.4)", transform: open ? "rotate(180deg)" : "none" }}
+                />
+              </div>
+              <p className="truncate text-xs font-semibold" style={{ color: "#64748b" }}>
+                icon
+              </p>
+            </button>
+            <BoxPill n={totalQty} accent={PURPLE} muted={allDone} />
+          </div>
+
+          {/* progress */}
+          <div className="mt-2 flex items-center gap-2">
+            <ProgressBar done={doneCount} total={total} accent={PURPLE} />
+            <span className="shrink-0 text-[11px] font-bold tabular-nums" style={{ color: "rgba(11,16,32,0.5)" }}>
+              {doneCount}/{total}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* units */}
+      {open ? (
+        <div className="px-2 pb-2">
+          <ul className="space-y-0.5">
+            {items.map((u) => {
+              const done = u.iconDone;
+              return (
+                <li key={`${u.itemId}#${u.unitIndex}`}>
+                  <button
+                    type="button"
+                    onClick={() => onToggleOne(u.itemId, !done)}
+                    aria-pressed={done}
+                    aria-label={`Mark ${iconLabel} printed`}
+                    className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-black/[0.035]"
+                  >
+                    <TickBox done={done} accent={PURPLE} />
+                    <span
+                      className="truncate text-[13px] font-bold"
+                      style={{
+                        color: done ? "rgba(11,16,32,0.4)" : INK,
+                        textDecoration: done ? "line-through" : "none",
+                      }}
+                    >
+                      {u.name || u.clientName || "(no name)"}
+                    </span>
+                    <span className="shrink-0 font-mono text-[10px]" style={{ color: "#94a3b8" }}>
+                      #{u.invoiceNumber}
+                    </span>
+                    <span className="ml-auto">
+                      <BoxPill n={iconCountIn(u)} accent={PURPLE} muted={done} />
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+
+          {/* mark all */}
+          <button
+            type="button"
+            onClick={() => onToggleAll(ids, !allDone)}
+            className="mt-1.5 inline-flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-opacity hover:opacity-80"
+            style={
+              allDone
+                ? { background: "rgba(11,16,32,0.05)", color: "rgba(11,16,32,0.6)" }
+                : { background: PURPLE, color: "#fff" }
+            }
+          >
+            {allDone ? (
+              <>Undo all</>
+            ) : (
+              <>
+                <CheckCheck className="h-3.5 w-3.5" />
+                Mark all {total} printed
+              </>
+            )}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 // ── Assembly row ──────────────────────────────────────────────────────────────
 
 function AssemblyRow({
@@ -315,10 +467,11 @@ function AssemblyRow({
           <span className="font-semibold" style={{ color: BLUE }}>{unit.base}</span> base ·{" "}
           <span className="font-semibold" style={{ color: PURPLE }}>{unit.clicker} + {unit.letter}</span>
         </p>
-        {/* part dots */}
+        {/* part dots — icon dot only for mixed units that carry icons */}
         <div className="mt-1 flex items-center gap-1.5">
           <PartDot on={unit.baseDone} label="base" />
           <PartDot on={unit.clickerLetterDone} label="clicker+letter" />
+          {unit.iconCount > 0 ? <PartDot on={unit.iconDone} label="icons" /> : null}
         </div>
       </div>
     </div>
@@ -393,16 +546,19 @@ function Seg({
 function BatchBoard({
   bases: initialBases,
   clickerLetters: initialClickerLetters,
+  icons: initialIcons = [],
   assembly: initialAssembly,
   showShapeBadge = true,
 }: {
   bases: KeychainBaseBatch[];
   clickerLetters: KeychainClickerLetterBatch[];
+  icons?: KeychainIconBatch[];
   assembly: KeychainAssemblyUnit[];
   showShapeBadge?: boolean;
 }) {
   const [bases, setBases] = useState<KeychainBaseBatch[]>(initialBases);
   const [clickerLetters, setClickerLetters] = useState<KeychainClickerLetterBatch[]>(initialClickerLetters);
+  const [icons, setIcons] = useState<KeychainIconBatch[]>(initialIcons);
   const [assembly, setAssembly] = useState<KeychainAssemblyUnit[]>(initialAssembly);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -422,7 +578,15 @@ function BatchBoard({
       }),
     );
     setAssembly((prev) =>
-      prev.map((u) => (idSet.has(u.itemId) ? { ...u, baseDone: done, bothPartsDone: done && u.clickerLetterDone } : u)),
+      prev.map((u) =>
+        idSet.has(u.itemId)
+          ? {
+              ...u,
+              baseDone: done,
+              bothPartsDone: done && u.clickerLetterDone && (u.iconCount === 0 || u.iconDone),
+            }
+          : u,
+      ),
     );
     startTransition(async () => {
       const res = await markKeychainPartPrinted(ids, "base", done);
@@ -441,11 +605,47 @@ function BatchBoard({
       }),
     );
     setAssembly((prev) =>
-      prev.map((u) => (idSet.has(u.itemId) ? { ...u, clickerLetterDone: done, bothPartsDone: u.baseDone && done } : u)),
+      prev.map((u) =>
+        idSet.has(u.itemId)
+          ? {
+              ...u,
+              clickerLetterDone: done,
+              bothPartsDone: u.baseDone && done && (u.iconCount === 0 || u.iconDone),
+            }
+          : u,
+      ),
     );
     startTransition(async () => {
       const res = await markKeychainPartPrinted(ids, "clickerLetter", done);
       if (!res.ok) setError(res.error ?? "Could not update clicker+letter batch.");
+    });
+  }
+
+  function onToggleIcon(ids: string[], done: boolean) {
+    setError(null);
+    const idSet = new Set(ids);
+    setIcons((prev) =>
+      prev.map((b) => {
+        const items = b.items.map((u) => (idSet.has(u.itemId) ? { ...u, iconDone: done } : u));
+        const doneCount = items.filter((u) => u.iconDone).length;
+        return { ...b, items, doneCount, allDone: doneCount === items.length };
+      }),
+    );
+    setAssembly((prev) =>
+      prev.map((u) =>
+        idSet.has(u.itemId)
+          ? {
+              ...u,
+              iconDone: done,
+              bothPartsDone:
+                u.baseDone && u.clickerLetterDone && (u.iconCount === 0 || done),
+            }
+          : u,
+      ),
+    );
+    startTransition(async () => {
+      const res = await markKeychainIconPrinted(ids, done);
+      if (!res.ok) setError(res.error ?? "Could not update icon batch.");
     });
   }
 
@@ -543,6 +743,16 @@ function BatchBoard({
             count={clickerLetters.length}
             accent={PURPLE}
           />
+          {icons.length > 0 ? (
+            <Seg
+              active={view === "icons"}
+              onClick={() => setView("icons")}
+              icon={<Shapes className="h-4 w-4" />}
+              label="Icons"
+              count={icons.length}
+              accent={PURPLE}
+            />
+          ) : null}
           <Seg
             active={view === "assembly"}
             onClick={() => setView("assembly")}
@@ -595,6 +805,24 @@ function BatchBoard({
                 partDone={(u) => u.clickerLetterDone}
                 onToggleOne={(id, done) => onToggleClicker([id], done)}
                 onToggleAll={onToggleClicker}
+              />
+            ))}
+          </div>
+        )
+      ) : null}
+
+      {/* ── Icons (square-only; hidden when no icon batches) ── */}
+      {view === "icons" ? (
+        icons.length === 0 ? (
+          <Empty label="No icon batches." />
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {icons.map((b) => (
+              <IconBatchCard
+                key={b.iconId}
+                batch={b}
+                onToggleOne={(id, done) => onToggleIcon([id], done)}
+                onToggleAll={onToggleIcon}
               />
             ))}
           </div>
@@ -664,16 +892,25 @@ export function KeychainBatchesView({ data }: { data: KeychainBatchesData }) {
   const hasRound = data.assembly.some((u) => u.shape === "round");
   const hasSquare = data.assembly.some((u) => u.shape === "square");
 
-  // Single shape (or empty) → existing board, no top-level headers. Byte-identical to pre-change.
+  // Single shape (or empty) → existing board, no top-level headers. Byte-identical
+  // to pre-change for an all-letter store (icons is [], so the Icons segment and
+  // its guard render nothing).
   if (!(hasRound && hasSquare)) {
     return (
-      <BatchBoard bases={data.bases} clickerLetters={data.clickerLetters} assembly={data.assembly} />
+      <BatchBoard
+        bases={data.bases}
+        clickerLetters={data.clickerLetters}
+        icons={data.icons}
+        assembly={data.assembly}
+      />
     );
   }
 
   const pick = (shape: "round" | "square") => ({
     bases: data.bases.filter((b) => b.shape === shape),
     clickerLetters: data.clickerLetters.filter((c) => c.shape === shape),
+    // Icons are square-only (D-01) — the round board never shows an Icons segment.
+    icons: shape === "square" ? data.icons : [],
     assembly: data.assembly.filter((u) => u.shape === shape),
   });
 

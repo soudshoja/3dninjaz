@@ -22,7 +22,7 @@ import { z } from "zod";
 // Types
 // ============================================================================
 
-export type FieldType = "text" | "number" | "colour" | "select" | "textarea";
+export type FieldType = "text" | "number" | "colour" | "select" | "textarea" | "keycapseq";
 
 /** D-03 — text field config */
 export type TextFieldConfig = {
@@ -101,12 +101,41 @@ export type TextareaFieldConfig = {
   html: string;
 };
 
+/**
+ * Phase 25 (25-01) — a single slot in a mixed keycap sequence (square keychain).
+ *
+ * The customer's ordered sequence is stored as a JSON array of these slots in
+ * the single `ConfigurationData.values[fieldId]` string (D-06). Letters carry
+ * only their char — colours come from the 3 global colour fields (D-03).
+ * Icons carry only their catalog id — colours are fixed per icon design (D-04).
+ */
+export type KeycapSlot =
+  | { t: "L"; ch: string }   // letter — colours from the 3 global colour fields (D-03)
+  | { t: "I"; id: string };  // icon — fixed colours per icon (D-04)
+
+/**
+ * Phase 25 (25-01) — keycapseq field config (mixed letter+icon sequence).
+ *
+ * Replaces the locked position-0 "Your name" text field on square keychains
+ * only (round keeps its text field, D-01). The letter constraints mirror
+ * TextFieldConfig; `allowedIconIds` mirrors ColourFieldConfig.allowedColorIds
+ * (references the static keycap icon catalog module).
+ */
+export type KeycapSeqConfig = {
+  maxSlots: number;          // D-02 shared cap across letters + icons combined
+  allowedChars: string;      // e.g. "A-Z"
+  uppercase: boolean;
+  profanityCheck: boolean;
+  allowedIconIds: string[];  // references the keycap icon catalog, mirrors allowedColorIds
+};
+
 export type AnyFieldConfig =
   | TextFieldConfig
   | NumberFieldConfig
   | ColourFieldConfig
   | SelectFieldConfig
-  | TextareaFieldConfig;
+  | TextareaFieldConfig
+  | KeycapSeqConfig;
 
 /** D-05 — backwards-compat image entry (old shape = plain string, new = object) */
 export type ImageEntryV2 = {
@@ -184,6 +213,21 @@ export const TextareaFieldConfigSchema: z.ZodType<TextareaFieldConfig> = z.objec
   html: z.string().max(50_000),
 });
 
+/**
+ * Phase 25 (25-01) — keycapseq config Zod schema.
+ *
+ * `allowedIconIds` may be empty at save-time (admin picks icons later); the PDP
+ * validates a non-empty allow-list before showing the icon picker (mirrors
+ * ColourFieldConfigSchema's empty-palette allowance).
+ */
+export const KeycapSeqConfigSchema: z.ZodType<KeycapSeqConfig> = z.object({
+  maxSlots: z.number().int().min(1).max(200),
+  allowedChars: z.string().min(1),
+  uppercase: z.boolean(),
+  profanityCheck: z.boolean(),
+  allowedIconIds: z.array(z.string().min(1)),
+});
+
 // Internal map for dispatch
 const schemaByFieldType: Record<FieldType, z.ZodType<AnyFieldConfig>> = {
   text: TextFieldConfigSchema,
@@ -191,6 +235,7 @@ const schemaByFieldType: Record<FieldType, z.ZodType<AnyFieldConfig>> = {
   colour: ColourFieldConfigSchema,
   select: SelectFieldConfigSchema,
   textarea: TextareaFieldConfigSchema,
+  keycapseq: KeycapSeqConfigSchema,
 };
 
 // ============================================================================
@@ -301,6 +346,45 @@ export function ensureImagesV2(raw: unknown): ImageEntryV2[] {
 }
 
 // ============================================================================
+// ensureKeycapSequence
+// ============================================================================
+
+/**
+ * Phase 25 (25-01) — fail-soft decoder for a mixed keycap sequence (D-06).
+ *
+ * Accepts the raw `values[seqFieldId]` (a JSON string on MariaDB LONGTEXT) OR
+ * an already-parsed array (defensive, mirrors ensureImagesV2). Never throws:
+ * returns [] on null/empty/parse-failure and drops any malformed slot, keeping
+ * the valid ones. This is the single gate every capture/render/production path
+ * reuses (T-25-01-01) — hostile/corrupt JSON cannot crash callers.
+ */
+export function ensureKeycapSequence(raw: unknown): KeycapSlot[] {
+  if (raw == null) return [];
+  let arr: unknown = raw;
+  if (typeof raw === "string") {
+    if (raw.trim() === "") return [];
+    try {
+      arr = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(arr)) return [];
+  const out: KeycapSlot[] = [];
+  for (const s of arr) {
+    if (s && typeof s === "object") {
+      const o = s as Record<string, unknown>;
+      if (o.t === "L" && typeof o.ch === "string" && o.ch.length === 1) {
+        out.push({ t: "L", ch: o.ch });
+      } else if (o.t === "I" && typeof o.id === "string" && o.id) {
+        out.push({ t: "I", id: o.id });
+      }
+    }
+  }
+  return out;
+}
+
+// ============================================================================
 // ensureConfigurationData
 // ============================================================================
 
@@ -376,4 +460,72 @@ export function lookupTierPrice(
   if (!unitFieldValue) return null;
   const v = tiers[String(unitFieldValue.length)];
   return typeof v === "number" ? v : null;
+}
+
+// ============================================================================
+// lookupTierPriceBySlotCount (Phase 25 — keycapseq)
+// ============================================================================
+
+/**
+ * Phase 25 (25-01) — price a keycapseq line by its slot count (letters + icons
+ * combined, D-02), NOT by the JSON string length. The keycapseq value is a JSON
+ * blob so `lookupTierPrice`'s `.length` keying is meaningless for it — callers
+ * compute `slots.length` via `ensureKeycapSequence` and pass it here.
+ *
+ * Returns null when the count has no matching tier key (Add-to-bag disabled).
+ */
+export function lookupTierPriceBySlotCount(
+  tiers: Record<string, number>,
+  slotCount: number,
+): number | null {
+  const v = tiers[String(slotCount)];
+  return typeof v === "number" ? v : null;
+}
+
+// ============================================================================
+// buildKeycapSequenceSummary (Phase 25 — keycapseq)
+// ============================================================================
+
+/**
+ * Phase 25 (25-01) — human-readable summary for a keycap sequence, e.g.
+ *   '"SOUD" + [Alien] + [Skull] (6 keycaps: 4 letters, 2 icons)'
+ *
+ * Letter runs are quoted; icons are shown by label in brackets (unknown icon id
+ * → the id string). Takes an injected `iconLabelById` map so this module does
+ * NOT import the icon catalog module — both the client PDP and server capture
+ * pass a map derived from the catalog. This is the single source of truth for
+ * `computedSummary` on keycapseq lines. Does NOT include the colour tail
+ * ("· Magenta base · …") — callers append colour parts as today.
+ */
+export function buildKeycapSequenceSummary(
+  slots: KeycapSlot[],
+  iconLabelById: Record<string, string>,
+): string {
+  if (slots.length === 0) return "";
+  const parts: string[] = [];
+  let run = "";
+  const flush = () => {
+    if (run) {
+      parts.push(`"${run}"`);
+      run = "";
+    }
+  };
+  let letters = 0;
+  let icons = 0;
+  for (const s of slots) {
+    if (s.t === "L") {
+      run += s.ch;
+      letters++;
+    } else {
+      flush();
+      parts.push(`[${iconLabelById[s.id] ?? s.id}]`);
+      icons++;
+    }
+  }
+  flush();
+  const total = slots.length;
+  const breakdown = `${total} keycap${total === 1 ? "" : "s"}: ${letters} letter${
+    letters === 1 ? "" : "s"
+  }, ${icons} icon${icons === 1 ? "" : "s"}`;
+  return `${parts.join(" + ")} (${breakdown})`;
 }

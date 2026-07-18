@@ -23,7 +23,16 @@ import { pickImage } from "@/lib/image-manifest";
 import { hydrateProductVariants } from "@/lib/variants";
 import { getConfigurableProductData } from "@/lib/configurable-product-data";
 import { renderDescription } from "@/lib/render-description";
-import { ensureImagesV2, ensureConfigJson } from "@/lib/config-fields";
+import {
+  ensureImagesV2,
+  ensureConfigJson,
+  ensureTiers,
+  ensureKeycapSequence,
+  lookupTierPriceBySlotCount,
+  buildKeycapSequenceSummary,
+} from "@/lib/config-fields";
+import type { KeycapSeqConfig } from "@/lib/config-fields";
+import { KEYCAP_ICON_BY_ID } from "@/lib/keycap-icons";
 import { sanitizeCustomText, customKey, buildConfigSummaryServer } from "@/lib/custom-text";
 import type { PictureData } from "@/lib/image-manifest";
 import type { PublicConfigField } from "@/lib/configurable-product-data";
@@ -673,6 +682,7 @@ export async function createPosOrder(
           slug: products.slug,
           images: products.images,
           thumbnailIndex: products.thumbnailIndex,
+          priceTiers: products.priceTiers,
         })
         .from(products)
         .where(eq(products.id, line.productId))
@@ -682,7 +692,10 @@ export async function createPosOrder(
         return { ok: false, error: `Product ${line.productId} not found.` };
       }
 
-      const unitPrice =
+      // Base unit price. For keycapseq lines the client-computed price is NOT
+      // trusted — it is replaced below by a server re-derive from slot count
+      // (an explicit admin unitPriceOverride still wins, per POS design).
+      let unitPrice =
         typeof line.unitPriceOverride === "number"
           ? line.unitPriceOverride
           : line.computedUnitPrice;
@@ -757,6 +770,22 @@ export async function createPosOrder(
             }
           }
 
+          // Phase 25 (25-08) — keycapseq re-derive metadata (POS path).
+          type KeycapseqFieldMeta = { id: string; label: string; cfg: KeycapSeqConfig };
+          const keycapseqFields: KeycapseqFieldMeta[] = [];
+          for (const row of configFieldRows) {
+            if (row.fieldType !== "keycapseq") continue;
+            try {
+              const cfg = ensureConfigJson("keycapseq", row.configJson) as KeycapSeqConfig;
+              keycapseqFields.push({ id: row.id, label: row.label, cfg });
+            } catch {
+              // skip corrupt rows
+            }
+          }
+          const iconLabelById: Record<string, string> = Object.fromEntries(
+            Object.entries(KEYCAP_ICON_BY_ID).map(([id, i]) => [id, i.label]),
+          );
+
           const values = parsedCfg.values;
           for (const sf of selectFields) {
             const chosenValue = values[sf.id];
@@ -792,6 +821,39 @@ export async function createPosOrder(
               values,
               existingParts,
             );
+          }
+
+          // Phase 25 (25-08) — keycapseq server re-derive (POS). Even admin POS
+          // re-derives price from the validated slot count, filters icon ids to
+          // allowedIconIds, caps at maxSlots, and rebuilds the summary. An explicit
+          // admin unitPriceOverride still wins; the client computedPrice never does.
+          for (const kf of keycapseqFields) {
+            const cfg = kf.cfg;
+            const slots = ensureKeycapSequence(values[kf.id])
+              .filter((s) => s.t === "L" || cfg.allowedIconIds.includes(s.id)) // drop forged icon ids
+              .slice(0, cfg.maxSlots); // cap oversized sequences
+            const slotCount = slots.length;
+
+            const tiers = ensureTiers(productRow.priceTiers);
+            const serverPrice = lookupTierPriceBySlotCount(tiers, slotCount);
+            if (serverPrice === null) {
+              return {
+                ok: false,
+                error: `Invalid keychain configuration for "${kf.label}". Please adjust the number of keycaps and try again.`,
+              };
+            }
+            parsedCfg.computedPrice = serverPrice;
+            // Admin override wins; otherwise the order item uses the server price.
+            if (typeof line.unitPriceOverride !== "number") {
+              unitPrice = serverPrice;
+            }
+
+            values[kf.id] = slotCount > 0 ? JSON.stringify(slots) : "";
+
+            const seqSummary = buildKeycapSequenceSummary(slots, iconLabelById);
+            const parts = (parsedCfg.computedSummary ?? "").split(" · ");
+            parts[0] = seqSummary;
+            parsedCfg.computedSummary = parts.filter((p) => p.length > 0).join(" · ");
           }
 
           sanitizedConfigData = JSON.stringify(parsedCfg);

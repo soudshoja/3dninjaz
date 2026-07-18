@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: c118ae6 on dev. CI auto-deploying. Server-side log monitor LIVE (1-min cron WhatsApp alerts to +96599800027). Awaiting human smoke on app.3dninjaz.com
-stopped_at: Phase 20 SHIPPED — 13 plans + verifier PASS — pending push
-last_updated: "2026-05-17T15:47:06.976Z"
-last_activity: "2026-04-30 — Completed quick task 260430-icx: simple productType + textarea field type"
+status: executing
+stopped_at: Completed 25-04-PLAN.md
+last_updated: "2026-07-18T18:51:42.326Z"
+last_activity: 2026-07-18
 progress:
-  total_phases: 20
-  completed_phases: 9
-  total_plans: 86
-  completed_plans: 68
+  total_phases: 22
+  completed_phases: 10
+  total_plans: 103
+  completed_plans: 85
   percent: 45
 ---
 
@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-12)
 
 **Core value:** Customers can easily browse and buy unique 3D printed products with a simple, clean shopping experience.
-**Current focus:** Phase 18 — Colour Management
+**Current focus:** Phase 25 — Mixed letter and icon keycaps for square keychain product
 
 **Session 2026-04-21 closeout:**
 
@@ -41,11 +41,12 @@ See: .planning/PROJECT.md (updated 2026-04-12)
 
 ## Current Position
 
-Phase: 19 (Made-to-Order Product Type) — COMPLETE + post-shipment hotfix sweep
+Phase: 25 (Mixed letter and icon keycaps for square keychain product) — EXECUTING
+Plan: 9 of 9
 Plans: 11/11 shipped + 5 hotfix commits applied (e5b55bd → c118ae6) addressing pre-existing Phase 7 upload bug, 50MB cap lift, XHR progress UI, server log monitor
 Next Phase: 20 (User & Role Management) — backlog, awaiting /gsd-spec-phase 20
-Status: c118ae6 on dev. CI auto-deploying. Server-side log monitor LIVE (1-min cron WhatsApp alerts to +96599800027). Awaiting human smoke on app.3dninjaz.com
-Last activity: 2026-07-13 - Quick task 260713-fay COMPLETE (both phases): keychain production now FULLY separates round vs square — Phase 1 base-batch split MERGED to dev (PR #188); Phase 2 (clicker+letter split + shape-first assembly + top-level Round/Square board split, guarded so all-square store is byte-identical) on branch fix/keychain-production-shape-split, plan double-checked by Opus + Fable, verifier 5/5, follow-up PR to dev pending. Dev-first — needs a two-shape visual smoke on app.3dninjaz.com
+Status: Ready to execute
+Last activity: 2026-07-18
 
 Progress: [██████████] 100% (code) | Pre-launch admin actions pending
 
@@ -86,6 +87,14 @@ Progress: [██████████] 100% (code) | Pre-launch admin action
 | Phase 18 P06 | 5 | 4 tasks | 4 files |
 | Phase 18 P07 | 2 | 2 tasks | 1 files |
 | Phase 18 P08 | 5 | 4 tasks | 3 files |
+| Phase 25 P01 | 25min | 2 tasks | 6 files |
+| Phase 25 P02 | 15min | 3 tasks | 36 files |
+| Phase 25 P03 | 5min | 2 tasks | 5 files |
+| Phase 25 P05 | 15min | 3 tasks | 2 files |
+| Phase 25 P06 | 12min | 2 tasks | 2 files |
+| Phase 25 P07 | 15min | 2 tasks | 2 files |
+| Phase 25 P08 | 20min | 2 tasks | 4 files |
+| Phase 25 P04 | 8min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -157,6 +166,10 @@ Recent decisions affecting current work:
 - 2026-04-26 (Phase 18 Plan 06): variant-editor.tsx integration shipped. Module-scoped isColourOption helper (case-insensitive `name === "color" || === "colour"`) gates 4 sites: input placeholder relabel ("Add custom (not in library)..."), section header caption ("Custom (not in library)"), Pick from library button (with lucide:Palette icon), helper-text paragraph below the row. ColourPickerDialog mounts as a sibling to the existing delete-option/delete-value dialogs at the JSX bottom; pickerOptionId state (string | null) supports multiple Colour-named options on the same product without ambiguity. alreadyAttachedColourIds computed inline at mount via options.find().values.map(v => v.colorId).filter(Boolean) into Set<string>. onConfirmed wired to `await refresh()` — Phase 17 AD-06 Pattern B refetch contract preserved (no router.refresh() anywhere). HydratedOptionValue.colorId field added (was missing from public type even though Plan 18-01 schema had the column); both hydration mappers (variants.ts, catalog.ts) updated to surface it. REQ-6 6-axis cap verified by inspection: addProductOption guard at existing.length >= 6 is name-agnostic; picker dialog has zero references to addProductOption. Stale Plan 18-04 reference on /admin/colours/[id]/edit page intro updated to current cascade-rename behaviour.
 - 2026-04-26 (Phase 18 Plan 08): /shop sidebar Colour chip filter shipped. Two new manual-hydration helpers in src/lib/catalog.ts: `getActiveProductColourChips()` (4-step DISTINCT JOIN — fetch active colours → fetch pov rows with non-null colorId → six parallel slot queries with `innerJoin(products)` + `eq(products.isActive, true)` + `eq(productVariants.inStock, true)` guards → project to {slug, name, hex} via `buildColourSlugMap` for D-14 cross-brand collision suffix) and `getProductIdsByColourSlugs(slugs)` (mirror shape returning Set<productId>). Both strip code/previous_hex/family_* at the SELECT clause boundary; only id/name/hex/brand ever leave the DB. New `src/components/store/colour-filter-section.tsx` client component — collapsible accordion (default open via useState(true)), first 12 chips visible with Show all (N) / Show less toggle, hex-tinted active state with `getReadableTextOn(hex)` for WCAG 2.2 SC 1.4.11 contrast, active count badge (16x16 ink-fill circle) beside accordion title, focus-visible 2px purple outline + 2px offset, min-h 36px desktop sidebar density, hide-when-empty via `chips.length === 0` early return null. URL grammar `?colour=galaxy-black,jade-white` — multi-select via `URLSearchParams` (preserves `?category=`/`?subcategory=`, sorts alphabetically for deterministic href). /shop `page.tsx` extended: SearchParams adds `colour?: string`; `resolveProducts` refactored from return-per-branch to assign-to-`base` so colour intersection runs uniformly after the existing 3-branch switch — `getProductIdsByColourSlugs(colourSlugs)` returns allowedIds Set, then `base.products.filter(p => allowedIds.has(p.id))`. ColourFilterSection mounted twice: inside `<aside className="hidden md:block">` AND inside `<div className="md:hidden">` above the grid for mobile parity. Customer-side admin-field audit grep clean: 0 matches for `previous_hex`, `family_type`, `family_subtype` anywhere in `src/app/(store)/` or `src/components/store/`. Manual-hydration discipline preserved: 0 new `db.query.X.findMany({with})` introduced; 2 new `innerJoin(products)` blocks (one per helper). `npx tsc --noEmit` clean. `npm run build` skipped per plan-level constraint (pre-existing CSS issue unrelated to this plan). 3 atomic commits (9f3a21f catalog helpers + 0208806 component + ad2c714 page wiring).
 - 2026-04-26 (Phase 18 Plan 07): PDP swatch grid refactor shipped. variant-selector.tsx `{isColorOption ? (...)}` branch (formerly lines 201-267) now uses a vertical-flex wrapper (`flex flex-col items-center gap-1`, fixed `width: 80px`) holding the existing 48x48 button (with the 32x32 hex circle child) on top and a sibling `<span>` below as the always-visible 12px Chakra_Petch name caption. Caption typography per UI-SPEC §Surface 4: `var(--font-body)` 12px, weight 500 default / 700 + `var(--color-brand-ink)` selected, line-through + `#A1A1AA` OOS, `max-w-[80px] truncate` so long names ellipsis-truncate without breaking layout. Outer container gap tightened from `gap-2` (8px) to `gap-3` (12px) to compensate for the extra caption row height. Caption is `aria-hidden` because the button's `aria-label` already names the colour for AT (avoids double-announcement). Phase 17 contracts preserved verbatim: hover-image-preview (`onMouseEnter`/`Leave` + `findPreviewVariant` + `hoverCapable` matchMedia gate), OOS hardening (disabled + aria-disabled + tabIndex=-1 + title="Out of stock" + diagonal-line gradient overlay), Phase 17 AD-06 reactivity contract (zero mutations on PDP, so contract preserved by inaction). Pill render branch for non-Colour options (Size, Material, Part, etc.) untouched. Customer-side audit grep on `src/app/(store)/` + `src/components/store/` returns zero matches for `previous_hex`, `previousHex`, `family_type`, `familyType`, `family_subtype`, `familySubtype`, `colors.code`, `color.code`, `colour.code` — REQ-7 admin-only field hygiene verified. Plan 18-01 public/admin query split (`getColourPublic` vs `getColourAdmin`) holds end-to-end. `npx tsc --noEmit` clean. Plan-level constraint applied: skipped `npm run build` due to pre-existing CSS issue.
+- [Phase ?]: Phase 25 keycap icons: plate order matched catalog 1:1; render #7 is green-ball (not Yoshi egg); neutral labels only per D-08
+- [Phase 25]: 2026-07-19 (Phase 25 Plan 03): seedKeychainFields gains a required shape arg — square seeds a locked keycapseq pos-0 field (Your keycaps, maxSlots 8, allowedIconIds []), round keeps today's text field (D-01); colour fields (Base/Clicker/Letter) identical for both shapes (D-03). products.ts unitField finder branches keycapseq-vs-text so square keychains still wire unitField/maxUnitCount 8/priceTiers. New additive parseKeycapSequence reads mixed sequence from configurationData.values with explicit slotCount/letterCount/iconCount; legacy PARTS_RE/parseKeychainParts + 6 tests untouched (D-06). tsc clean, 13/13 vitest.
+- [Phase 25]: Phase 25 Plan 07: mixed letter/icon keycap preview (optional slots prop keeps all-letters pixel-identical) + slot-count price/over-cap/summary on the square-keychain PDP
+- [Phase 25]: Phase 25 Plan 08: server re-derives keycapseq price/icons/slot-cap/summary on all 3 capture paths (paypal/pos/whatsapp), client computedPrice discarded; resolveTierWeightKg keys keycapseq weight off slot count not JSON length
 
 ### Pending Todos
 
@@ -215,6 +228,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-05-17T15:47:06.966Z
-Stopped at: Phase 20 SHIPPED — 13 plans + verifier PASS — pending push
-Resume file: .planning/phases/20-admin-pos-draft-order-flow/20-VERIFICATION.md
+Last session: 2026-07-18T18:51:42.320Z
+Stopped at: Completed 25-04-PLAN.md
+Resume file: None

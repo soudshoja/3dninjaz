@@ -28,7 +28,21 @@
  *   shape       — "square" (default, pixel-identical to legacy behavior) or
  *                 "round" (circular body + circular inset face + rounded
  *                 ring/loop tab). Quick task 260705-azw.
+ *   slots       — Phase 25 (25-07). Optional ordered mixed sequence of letter
+ *                 and icon keycaps. When UNDEFINED the component behaves EXACTLY
+ *                 as today (text-derived chars — byte-for-byte identical). When
+ *                 provided, one cube is rendered per slot in order: letter slots
+ *                 reuse the identical 3-layer CSS cube (chosen colours); icon
+ *                 slots render the icon's WebP image on a fixed white shell
+ *                 (#FFFFFF, D-04). All-letter sequences stay pixel-identical to
+ *                 the legacy text path.
  */
+
+import type { KeycapSlot } from "@/lib/config-fields";
+import { KEYCAP_ICON_BY_ID } from "@/lib/keycap-icons";
+
+/** Fixed white keycap base for icon slots — icons never use customer colours (D-04). */
+const ICON_SHELL_WHITE = "#FFFFFF";
 
 type Props = {
   text: string;
@@ -47,11 +61,29 @@ type Props = {
    * pixel-identical. "round" renders a circular body/inset/ring.
    */
   shape?: "square" | "round";
+  /**
+   * Phase 25 (25-07) — optional ordered mixed sequence. When omitted the legacy
+   * text path renders (byte-identical). When provided, one cube per slot in
+   * order: letter glyph cube (chosen colours) OR icon WebP on a fixed white
+   * shell (D-04).
+   */
+  slots?: KeycapSlot[];
 };
 
-export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLength, placeholder = "", shape = "square" }: Props) {
+/** Internal per-cube render model derived from either `slots` or the text `chars`. */
+type RenderSlot = { kind: "letter"; ch: string } | { kind: "icon"; id: string };
+
+export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLength, placeholder = "", shape = "square", slots }: Props) {
   const display = text || placeholder;
   const chars = display.slice(0, maxLength).split("").filter(Boolean);
+
+  // Ordered render model. When `slots` is provided (mixed sequence) each slot is
+  // a letter glyph or an icon image; when undefined, fall back to the legacy
+  // text-derived chars (letter-only) — this branch is BYTE-IDENTICAL to today.
+  const renderSlots: RenderSlot[] =
+    slots !== undefined
+      ? slots.map((s) => (s.t === "L" ? { kind: "letter", ch: s.ch } : { kind: "icon", id: s.id }))
+      : chars.map((ch) => ({ kind: "letter", ch }));
 
   // Shape-dependent geometry — only these three values differ between the
   // square (legacy, pixel-identical) and round paths. Everything else
@@ -61,9 +93,25 @@ export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLengt
   const insetRadius = shape === "round" ? "50%" : 10;
   const ringRadius = shape === "round" ? "50%" : "14px 0 0 14px";
 
-  // When display is empty: show one swatch cube (no letter). Otherwise show chars.
-  const isSwatch = chars.length === 0;
-  const cubeCount = isSwatch ? 1 : chars.length;
+  // When the sequence/text is empty: show one swatch cube (no letter). Otherwise
+  // one cube per render slot. Driven off renderSlots so the mixed and legacy
+  // paths share identical count/sizing logic.
+  const isSwatch = renderSlots.length === 0;
+  const cubeCount = isSwatch ? 1 : renderSlots.length;
+
+  // Container aria-label: summarise the mixed sequence when slots are provided
+  // (e.g. "Preview: S, O, Alien, Skull"); otherwise keep the legacy text label
+  // (byte-identical for the undefined-slots path).
+  const containerAriaLabel =
+    slots !== undefined
+      ? slots.length > 0
+        ? `Preview: ${slots
+            .map((s) => (s.t === "L" ? s.ch : (KEYCAP_ICON_BY_ID[s.id]?.label ?? s.id)))
+            .join(", ")}`
+        : "Colour swatch preview"
+      : display
+        ? `Preview shows: ${display}`
+        : "Colour swatch preview";
 
   // Fluid cube size: fits maxLength+1 cubes across the actual container width.
   // Uses CSS container queries (100cqw) so sizing tracks the card, not the viewport.
@@ -87,7 +135,7 @@ export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLengt
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
       <div
         data-keychain-preview
-        aria-label={display ? `Preview shows: ${display}` : "Colour swatch preview"}
+        aria-label={containerAriaLabel}
         role="img"
         style={{
           display: "flex",
@@ -101,7 +149,10 @@ export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLengt
         }}
       >
         {Array.from({ length: cubeCount }, (_, i) => {
-          const ch = isSwatch ? "" : (chars[i] ?? "");
+          const slot = isSwatch ? undefined : renderSlots[i];
+          const isIcon = slot?.kind === "icon";
+          const ch = slot?.kind === "letter" ? slot.ch : "";
+          const iconUrl = slot?.kind === "icon" ? (KEYCAP_ICON_BY_ID[slot.id]?.imageUrl ?? "") : "";
           const isFirst = i === 0;
 
           return (
@@ -113,7 +164,10 @@ export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLengt
                 height: cubeSizeExpr,
                 flexShrink: 0,
                 borderRadius: bodyRadius,
-                background: baseHex,
+                // Icon slots sit on a FIXED WHITE shell (D-04); letter slots keep
+                // the customer-chosen base colour. All-letter → always baseHex →
+                // byte-identical to today.
+                background: isIcon ? ICON_SHELL_WHITE : baseHex,
                 border: "none",
                 // Body bevel — top highlight, side shadow, bottom drop
                 boxShadow: `inset 3px 3px 5px rgba(255,255,255,0.45),
@@ -156,47 +210,77 @@ export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLengt
                 </div>
               )}
 
-              {/* Inset clicker face */}
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 5,
-                  borderRadius: insetRadius,
-                  background: clickerHex,
-                  boxShadow: `inset 2px 2px 4px rgba(255,255,255,0.38),
-                               inset -2px -2px 4px rgba(0,0,0,0.14)`,
-                  border: shape === "round" ? `2px solid ${letterHex}` : "none",
-                  boxSizing: "border-box",
-                }}
-              />
-
-              {/* Raised letter glyph — only when there is a character */}
-              {ch && (
+              {isIcon ? (
+                /* Icon keycap — WebP image centred within the inset face area on
+                   the fixed white shell (D-04). No clicker/letter customer
+                   colours. Decorative alt="" — the container role="img" +
+                   aria-label already names the sequence. */
                 <div
                   style={{
                     position: "absolute",
-                    inset: 0,
+                    inset: 5,
+                    borderRadius: insetRadius,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    color: letterHex,
-                    fontSize: fontSizeExpr,
-                    fontWeight: 900,
-                    lineHeight: 1,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.01em",
+                    overflow: "hidden",
+                    padding: 3,
+                    boxSizing: "border-box",
                     zIndex: 2,
-                    userSelect: "none",
-                    textShadow: `0 1px 0 rgba(0,0,0,0.08),
-                                 0 2px 0 rgba(0,0,0,0.06),
-                                 0 3px 0 rgba(0,0,0,0.04),
-                                 0 4px 8px rgba(0,0,0,0.18)`,
-                    fontFamily: "Chakra Petch, ui-sans-serif, system-ui, sans-serif",
                   }}
-                  aria-hidden="true"
                 >
-                  {ch}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={iconUrl}
+                    alt=""
+                    style={{ objectFit: "contain", maxWidth: "100%", maxHeight: "100%" }}
+                  />
                 </div>
+              ) : (
+                <>
+                  {/* Inset clicker face */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 5,
+                      borderRadius: insetRadius,
+                      background: clickerHex,
+                      boxShadow: `inset 2px 2px 4px rgba(255,255,255,0.38),
+                                 inset -2px -2px 4px rgba(0,0,0,0.14)`,
+                      border: shape === "round" ? `2px solid ${letterHex}` : "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+
+                  {/* Raised letter glyph — only when there is a character */}
+                  {ch && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: letterHex,
+                        fontSize: fontSizeExpr,
+                        fontWeight: 900,
+                        lineHeight: 1,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.01em",
+                        zIndex: 2,
+                        userSelect: "none",
+                        textShadow: `0 1px 0 rgba(0,0,0,0.08),
+                                     0 2px 0 rgba(0,0,0,0.06),
+                                     0 3px 0 rgba(0,0,0,0.04),
+                                     0 4px 8px rgba(0,0,0,0.18)`,
+                        fontFamily: "Chakra Petch, ui-sans-serif, system-ui, sans-serif",
+                      }}
+                      aria-hidden="true"
+                    >
+                      {ch}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           );

@@ -70,6 +70,7 @@ import type {
   ColourFieldConfig,
   SelectFieldConfig,
   TextareaFieldConfig,
+  KeycapSeqConfig,
 } from "@/lib/config-fields";
 
 // ============================================================================
@@ -122,6 +123,11 @@ const TYPE_ICONS: Record<FieldType, typeof Type> = {
   colour: Palette,
   select: ListChecks,
   textarea: FileText,
+  // Phase 25 — keycapseq is a locked, seeded field (square keychains only); it
+  // is not offered by the generic add-field dropdown. Entry present for
+  // FieldType exhaustiveness; icon reuses Type as a neutral placeholder until
+  // the dedicated keycapseq admin UI lands (Plan 25-07).
+  keycapseq: Type,
 };
 
 // ============================================================================
@@ -146,6 +152,17 @@ function defaultConfigFor(fieldType: FieldType): AnyFieldConfig {
       return { options: [{ label: "", value: "" }] } satisfies SelectFieldConfig;
     case "textarea":
       return { html: "" } satisfies TextareaFieldConfig;
+    case "keycapseq":
+      // Phase 25 — locked/seeded field (square keychains); not created via the
+      // inline dropdown. Sensible defaults present for FieldType exhaustiveness;
+      // real seeding lives in keychain-fields.ts (Plan 25-03).
+      return {
+        maxSlots: 8,
+        allowedChars: "A-Z",
+        uppercase: true,
+        profanityCheck: true,
+        allowedIconIds: [],
+      } satisfies KeycapSeqConfig;
   }
 }
 

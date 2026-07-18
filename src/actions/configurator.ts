@@ -19,6 +19,7 @@ import {
   ColourFieldConfigSchema,
   SelectFieldConfigSchema,
   TextareaFieldConfigSchema,
+  KeycapSeqConfigSchema,
   type FieldType,
   type AnyFieldConfig,
   type TextareaFieldConfig,
@@ -63,6 +64,8 @@ function pickSchemaByFieldType(t: FieldType) {
       return SelectFieldConfigSchema;
     case "textarea":
       return TextareaFieldConfigSchema;
+    case "keycapseq":
+      return KeycapSeqConfigSchema;
   }
 }
 

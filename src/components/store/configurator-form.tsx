@@ -16,17 +16,22 @@
  *   - Field label and helpText used directly (no overrides).
  */
 
-import { useRef } from "react";
-import { Check } from "lucide-react";
+import { useRef, useState } from "react";
+import { Check, X } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import { VariantOptionPicker } from "@/components/store/variant-option-picker";
+import { KeycapIconPicker } from "@/components/store/keycap-icon-picker";
 import { customKey } from "@/lib/custom-text";
+import { ensureKeycapSequence } from "@/lib/config-fields";
+import { KEYCAP_ICON_BY_ID } from "@/lib/keycap-icons";
 import type { PublicConfigField } from "@/lib/configurable-product-data";
 import type {
   TextFieldConfig,
   NumberFieldConfig,
   ColourFieldConfig,
   SelectFieldConfig,
+  KeycapSeqConfig,
+  KeycapSlot,
 } from "@/lib/config-fields";
 
 type Props = {
@@ -474,6 +479,334 @@ function SelectField({
 }
 
 // ============================================================================
+// KeycapSeqField — mixed letter + icon slot-rail builder (Phase 25, S1)
+// ============================================================================
+
+/**
+ * The customer-facing sequence builder for square keychains (D-02/D-04/D-06).
+ *
+ * Renders an ordered, wrapping rail of 56×56 slot tiles (letters = blue accent,
+ * icons = purple accent) followed by `+ Letter` (blue) and `+ Icon` (purple)
+ * add affordances. A single shared counter enforces `maxSlots` across letters +
+ * icons combined; at the cap both add buttons disable. Icon slots carry NO
+ * colour controls (those live only on the 3 global colour fields, D-04).
+ *
+ * The sequence is written back through the existing `onChange` contract as a
+ * JSON string in `values[fieldId]` (empty string when zero slots so a required
+ * field still reads as unfilled). Reordering is out of scope for v1 — slots
+ * append in tap order.
+ */
+function KeycapSeqField({
+  field,
+  value,
+  onChange,
+  onTouch,
+  touched,
+  textMaxLength,
+}: {
+  field: PublicConfigField;
+  value: string;
+  onChange: (v: string) => void;
+  onTouch: () => void;
+  touched: React.MutableRefObject<boolean>;
+  textMaxLength?: number;
+}) {
+  const cfg = field.config as KeycapSeqConfig;
+  const slots = ensureKeycapSequence(value);
+  const maxSlots = textMaxLength ?? cfg.maxSlots;
+  const atCap = slots.length >= maxSlots;
+  const hasIcons = cfg.allowedIconIds.length > 0;
+  const allowedPattern = cfg.allowedChars ? new RegExp(`[^${cfg.allowedChars}]`, "g") : null;
+
+  // When a letter tile is tapped, the next typed char replaces THAT slot.
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const bufferRef = useRef<HTMLInputElement>(null);
+
+  function touchOnce() {
+    if (!touched.current) {
+      touched.current = true;
+      onTouch();
+    }
+  }
+  function commit(next: KeycapSlot[]) {
+    // Empty sequence writes "" so a required field still reads as unfilled.
+    onChange(next.length === 0 ? "" : JSON.stringify(next));
+  }
+
+  function handleLetterInput(e: React.ChangeEvent<HTMLInputElement>) {
+    // The buffer input is kept empty; read the typed delta, filter, then clear.
+    let v = e.currentTarget.value;
+    if (cfg.uppercase) v = v.toUpperCase();
+    if (allowedPattern) v = v.replace(allowedPattern, "");
+    e.currentTarget.value = "";
+    if (!v) return;
+    const next = [...slots];
+    for (const ch of v) {
+      if (editingIndex != null && next[editingIndex] && next[editingIndex].t === "L") {
+        next[editingIndex] = { t: "L", ch };
+        setEditingIndex(null);
+      } else {
+        if (next.length >= maxSlots) break;
+        next.push({ t: "L", ch });
+      }
+    }
+    commit(next);
+    touchOnce();
+  }
+
+  function handleLetterKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    // Buffer is always empty → Backspace removes the editing slot, else the last.
+    if (e.key === "Backspace" && slots.length > 0) {
+      e.preventDefault();
+      const idx = editingIndex ?? slots.length - 1;
+      setEditingIndex(null);
+      commit(slots.filter((_, i) => i !== idx));
+      touchOnce();
+    }
+  }
+
+  function startEditLetter(i: number) {
+    setEditingIndex(i);
+    bufferRef.current?.focus();
+  }
+  function removeSlot(i: number) {
+    if (editingIndex === i) setEditingIndex(null);
+    commit(slots.filter((_, idx) => idx !== i));
+    touchOnce();
+  }
+  function replaceIcon(i: number, id: string) {
+    commit(slots.map((s, idx) => (idx === i ? ({ t: "I", id } as KeycapSlot) : s)));
+    touchOnce();
+  }
+  function addIcon(id: string) {
+    if (slots.length >= maxSlots) return;
+    commit([...slots, { t: "I", id }]);
+    touchOnce();
+  }
+
+  const removeBtnClass =
+    "absolute -top-2 -right-2 z-10 flex items-center justify-center rounded-full text-white " +
+    "before:content-[''] before:absolute before:-inset-2.5";
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* Slot rail */}
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Your keycaps">
+        {slots.length === 0 ? (
+          <div
+            className="flex items-center justify-center rounded-xl shrink-0"
+            style={{
+              width: 56,
+              height: 56,
+              border: "2.5px dashed #cbd5e1",
+              color: "#cbd5e1",
+              fontSize: 24,
+              fontWeight: 900,
+            }}
+            aria-hidden="true"
+          >
+            +
+          </div>
+        ) : (
+          slots.map((slot, i) => {
+            if (slot.t === "L") {
+              const isEditing = editingIndex === i;
+              return (
+                <div key={i} className="relative shrink-0" style={{ width: 56, height: 56 }}>
+                  <button
+                    type="button"
+                    onClick={() => startEditLetter(i)}
+                    aria-label={`Letter ${slot.ch}`}
+                    className="relative w-full h-full flex items-center justify-center rounded-xl font-black"
+                    style={{
+                      minWidth: 56,
+                      minHeight: 56,
+                      background: "#fff",
+                      border: `2.5px solid ${BRAND.blue}`,
+                      color: BRAND.ink,
+                      fontSize: 24,
+                      boxShadow: isEditing
+                        ? `0 0 0 3px ${BRAND.blue}35, 0 2px 0 ${BRAND.blueDark}30`
+                        : `0 2px 0 ${BRAND.blueDark}30`,
+                    }}
+                  >
+                    <span
+                      className="absolute left-1.5 top-1.5 rounded-full"
+                      style={{ width: 6, height: 6, background: BRAND.blue }}
+                      aria-hidden="true"
+                    />
+                    {slot.ch}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeSlot(i)}
+                    aria-label="Remove keycap"
+                    className={removeBtnClass}
+                    style={{ width: 22, height: 22, background: "#be123c" }}
+                  >
+                    <X size={12} strokeWidth={3} aria-hidden="true" />
+                  </button>
+                </div>
+              );
+            }
+            // Icon slot — NO colour controls (D-04)
+            const icon = KEYCAP_ICON_BY_ID[slot.id];
+            const label = icon?.label ?? slot.id;
+            const tile = (
+              <button
+                type="button"
+                aria-label={`Icon: ${label}`}
+                className="relative w-full h-full flex items-center justify-center rounded-xl"
+                style={{
+                  minWidth: 56,
+                  minHeight: 56,
+                  background: "#fff",
+                  border: `2.5px solid ${BRAND.purple}`,
+                  boxShadow: `0 2px 0 ${BRAND.purple}30`,
+                }}
+              >
+                <span
+                  className="absolute left-1.5 top-1.5 rounded-full"
+                  style={{ width: 6, height: 6, background: BRAND.purple }}
+                  aria-hidden="true"
+                />
+                {icon ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={icon.imageUrl}
+                    alt=""
+                    style={{ width: 40, height: 40, objectFit: "contain" }}
+                  />
+                ) : (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: BRAND.ink }}>{label}</span>
+                )}
+              </button>
+            );
+            return (
+              <div key={i} className="relative shrink-0" style={{ width: 56, height: 56 }}>
+                {hasIcons ? (
+                  <KeycapIconPicker
+                    allowedIconIds={cfg.allowedIconIds}
+                    selectedId={slot.id}
+                    onPick={(id) => replaceIcon(i, id)}
+                    trigger={tile}
+                  />
+                ) : (
+                  tile
+                )}
+                <button
+                  type="button"
+                  onClick={() => removeSlot(i)}
+                  aria-label="Remove keycap"
+                  className={removeBtnClass}
+                  style={{ width: 22, height: 22, background: "#be123c" }}
+                >
+                  <X size={12} strokeWidth={3} aria-hidden="true" />
+                </button>
+              </div>
+            );
+          })
+        )}
+
+        {/* + Letter (blue) — a transparent buffer input overlays the button so a
+            tap focuses it directly; typing appends letter tiles (D-02 cap). */}
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => bufferRef.current?.focus()}
+            disabled={atCap}
+            aria-label="Add letter"
+            className="flex items-center justify-center rounded-xl font-bold text-sm disabled:opacity-40"
+            style={{
+              minWidth: 56,
+              minHeight: 56,
+              padding: "0 14px",
+              background: "#fff",
+              border: `2.5px dashed ${BRAND.blue}`,
+              color: BRAND.blue,
+            }}
+          >
+            + Letter
+          </button>
+          <input
+            ref={bufferRef}
+            type="text"
+            value=""
+            onChange={handleLetterInput}
+            onKeyDown={handleLetterKeyDown}
+            disabled={atCap}
+            inputMode="text"
+            autoCapitalize={cfg.uppercase ? "characters" : "off"}
+            aria-label="Type a letter to add a keycap"
+            className="absolute inset-0 w-full h-full opacity-0 disabled:pointer-events-none"
+            style={{ cursor: "text" }}
+          />
+        </div>
+
+        {/* + Icon (purple) — hidden entirely when no icons are allowed (degrade) */}
+        {hasIcons && (
+          <KeycapIconPicker
+            allowedIconIds={cfg.allowedIconIds}
+            onPick={addIcon}
+            trigger={
+              <button
+                type="button"
+                disabled={atCap}
+                aria-label="Add icon"
+                className="flex items-center justify-center rounded-xl font-bold text-sm shrink-0 disabled:opacity-40"
+                style={{
+                  minWidth: 56,
+                  minHeight: 56,
+                  padding: "0 14px",
+                  background: "#fff",
+                  border: `2.5px dashed ${BRAND.purple}`,
+                  color: BRAND.purple,
+                }}
+              >
+                + Icon
+              </button>
+            }
+          />
+        )}
+      </div>
+
+      {/* Empty-state heading */}
+      {slots.length === 0 && (
+        <p className="text-sm font-bold px-1" style={{ color: BRAND.ink }}>
+          Start your keychain
+        </p>
+      )}
+
+      {/* Shared counter + hint + Maximum-reached chip */}
+      <div className="flex items-center justify-between gap-3 px-1">
+        <p className="text-xs" style={{ color: "#6b7280" }}>
+          {slots.length === 0
+            ? `Tap + Letter to spell a name, or + Icon to pick a design. Up to ${maxSlots} keycaps.`
+            : `Add up to ${maxSlots} keycaps — mix letters and icons in any order.`}
+        </p>
+        <div className="flex items-center gap-2 shrink-0">
+          {atCap && (
+            <span
+              className="text-xs font-semibold rounded-full px-2 py-0.5"
+              style={{ color: "#be123c", background: "#fff1f2", border: "1px solid #fecdd3" }}
+            >
+              Maximum reached
+            </span>
+          )}
+          <span
+            className="text-xs font-bold tabular-nums"
+            style={{ color: atCap ? "#be123c" : "#94a3b8" }}
+            aria-hidden="true"
+          >
+            {slots.length}/{maxSlots}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
 // ConfiguratorForm — main export
 // ============================================================================
 
@@ -563,6 +896,16 @@ export function ConfiguratorForm({ fields, values, onChange, onTouch, basePrice,
                 onTouch={onTouch}
                 touched={touchedRef}
                 basePrice={basePrice}
+              />
+            )}
+            {field.fieldType === "keycapseq" && (
+              <KeycapSeqField
+                field={field}
+                value={value}
+                onChange={handleFieldChange}
+                onTouch={onTouch}
+                touched={touchedRef}
+                textMaxLength={textMaxLength}
               />
             )}
 
