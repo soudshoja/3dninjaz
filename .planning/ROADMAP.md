@@ -437,7 +437,7 @@ Plans:
 **Goal:** Square-keychain customers can build a keycap sequence that mixes letters and icons (from a 34-icon fixed-colour catalog), with icons rendered fixed-colour, priced by total keycap count, and split into their own production batch. Round keychains stay letter-only and unchanged.
 **Requirements**: D-01..D-12 (see 25-CONTEXT.md; no formal REQ-IDs mapped)
 **Depends on:** Phase 24
-**Plans:** 4/9 plans executed
+**Plans:** 5/9 plans executed
 
 Plans:
 - [x] 25-01-PLAN.md — Schema migration (fieldType ENUM + icon_done) + keycapseq config-fields contract
@@ -445,7 +445,7 @@ Plans:
 - [x] 25-03-PLAN.md — Square keychain seeding (keycapseq) + structured sequence parser + tests
 - [ ] 25-04-PLAN.md — Production icon batch group (by icon id) + icon tick + assembly guard
 - [x] 25-05-PLAN.md — Admin config: pickSchema case + IconPickerDialog + KeycapSeqConfigForm
-- [ ] 25-06-PLAN.md — Storefront slot-rail builder + customer icon picker
+- [x] 25-06-PLAN.md — Storefront slot-rail builder + customer icon picker
 - [ ] 25-07-PLAN.md — Mixed live preview + PDP slot-count price/over-cap/summary wiring
 - [ ] 25-08-PLAN.md — Server-side capture re-derive (price/icons/summary) x3 paths + slot-count weight
 - [ ] 25-09-PLAN.md — Existing square-keychain backfill (dev-first) + human end-to-end smoke
