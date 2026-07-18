@@ -281,7 +281,7 @@ export const productConfigFields = mysqlTable(
       .notNull()
       .references(() => products.id, { onDelete: "cascade" }),
     position: int("position").notNull().default(0),
-    fieldType: mysqlEnum("fieldType", ["text", "number", "colour", "select", "textarea"]).notNull(),
+    fieldType: mysqlEnum("fieldType", ["text", "number", "colour", "select", "textarea", "keycapseq"]).notNull(),
     label: varchar("label", { length: 80 }).notNull(),
     helpText: varchar("helpText", { length: 200 }),
     required: boolean("required").notNull().default(true),
@@ -647,6 +647,11 @@ export const orderItems = mysqlTable("order_items", {
   // assembly/packed tick once both parts are done.
   baseDone: boolean("base_done").notNull().default(false),
   clickerLetterDone: boolean("clicker_letter_done").notNull().default(false),
+  // Phase 25 (25-01) — icon-print tick for mixed keycap sequences. A square
+  // keychain slot can be a LETTER (base_done + clicker_letter_done) or an ICON
+  // (icon_done). Mixed units are assemblable only when all three relevant parts
+  // are done. Mirrors base_done / clicker_letter_done.
+  iconDone: boolean("icon_done").notNull().default(false),
 });
 
 export const ordersRelations = relations(orders, ({ one, many }) => ({
