@@ -399,14 +399,18 @@ export async function createProduct(
   // just-inserted product row and return a form-level error.
   if (productData.productType === "keychain") {
     try {
-      await seedKeychainFields(id, { silent: true });
-      // Locate the text+locked row from the seeded fields (avoids AND on
-      // boolean column which can be dialect-sensitive in MariaDB).
+      const keychainShape = productData.keychainShape ?? "square";
+      await seedKeychainFields(id, keychainShape, { silent: true });
+      // Locate the position-0 locked personalisation field from the seeded
+      // fields (avoids AND on a boolean column which can be dialect-sensitive
+      // in MariaDB). Square keychains seed a `keycapseq` field; round keeps the
+      // legacy `text` field (Phase 25 25-03).
       const allFields = await db
         .select({ id: productConfigFields.id, fieldType: productConfigFields.fieldType, locked: productConfigFields.locked })
         .from(productConfigFields)
         .where(eq(productConfigFields.productId, id));
-      const nameField = allFields.find((f) => f.fieldType === "text" && f.locked);
+      const unitFieldType = keychainShape === "square" ? "keycapseq" : "text";
+      const nameField = allFields.find((f) => f.fieldType === unitFieldType && f.locked);
       if (nameField) {
         await db
           .update(products)
@@ -614,13 +618,17 @@ export async function updateProduct(
       .where(eq(productConfigFields.productId, id));
     if (fieldCount === 0) {
       try {
-        await seedKeychainFields(id, { silent: true });
-        // Find the locked text field that was just inserted.
+        const keychainShape = productData.keychainShape ?? "square";
+        await seedKeychainFields(id, keychainShape, { silent: true });
+        // Find the locked position-0 personalisation field that was just
+        // inserted. Square keychains seed a `keycapseq` field; round keeps the
+        // legacy `text` field (Phase 25 25-03).
         const allFields = await db
           .select({ id: productConfigFields.id, fieldType: productConfigFields.fieldType, locked: productConfigFields.locked })
           .from(productConfigFields)
           .where(eq(productConfigFields.productId, id));
-        const nameField = allFields.find((f) => f.fieldType === "text" && f.locked);
+        const unitFieldType = keychainShape === "square" ? "keycapseq" : "text";
+        const nameField = allFields.find((f) => f.fieldType === unitFieldType && f.locked);
         if (nameField) {
           await db
             .update(products)

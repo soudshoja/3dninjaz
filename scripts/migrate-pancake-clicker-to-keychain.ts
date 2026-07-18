@@ -162,7 +162,10 @@ async function run() {
     } else {
       // None of the 3 core fields exist — seed fresh (no existing fields to preserve)
       console.log("[migrate-clicker] core colour fields not found — seeding fresh...");
-      await seedKeychainFields(product.id);
+      // Phase 25 (25-03): seedKeychainFields now requires a shape. This
+      // historical pancake→keychain migration produced the original SQUARE
+      // keychains, so default to "square".
+      await seedKeychainFields(product.id, "square");
     }
   }
 
