@@ -17,8 +17,15 @@ import { publicUrl } from "@/lib/public-url";
 import { getShippingRate } from "@/actions/admin-shipping";
 import { quoteForCart } from "@/actions/shipping-quote";
 import { revalidatePath } from "next/cache";
-import type { ConfigurationData } from "@/lib/config-fields";
-import { ensureConfigJson } from "@/lib/config-fields";
+import type { ConfigurationData, KeycapSeqConfig } from "@/lib/config-fields";
+import {
+  ensureConfigJson,
+  ensureTiers,
+  ensureKeycapSequence,
+  lookupTierPriceBySlotCount,
+  buildKeycapSequenceSummary,
+} from "@/lib/config-fields";
+import { KEYCAP_ICON_BY_ID } from "@/lib/keycap-icons";
 import { productConfigFields } from "@/lib/db/schema";
 import { sanitizeCustomText, customKey, buildConfigSummaryServer } from "@/lib/custom-text";
 import { dedupeUnpaidOrders } from "@/lib/order-dedupe";
@@ -299,7 +306,12 @@ export async function createPayPalOrder(
   const configurableProductRows =
     configurableProductIds.length > 0
       ? await db
-          .select({ id: products.id, slug: products.slug, name: products.name })
+          .select({
+            id: products.id,
+            slug: products.slug,
+            name: products.name,
+            priceTiers: products.priceTiers,
+          })
           .from(products)
           .where(inArray(products.id, configurableProductIds))
       : [];
@@ -341,6 +353,25 @@ export async function createPayPalOrder(
         // Corrupt configJson — skip; don't block checkout for unrelated fields.
       }
     }
+
+    // Phase 25 (25-08) — keycapseq re-derive metadata. Unlike select, the client
+    // computedPrice is NEVER trusted for keycapseq lines (T-25-08-01).
+    type KeycapseqFieldMeta = { id: string; label: string; cfg: KeycapSeqConfig };
+    const keycapseqFieldsByProduct = new Map<string, KeycapseqFieldMeta[]>();
+    for (const row of configFieldRows) {
+      if (row.fieldType !== "keycapseq") continue;
+      try {
+        const cfg = ensureConfigJson("keycapseq", row.configJson) as KeycapSeqConfig;
+        const existing = keycapseqFieldsByProduct.get(row.productId) ?? [];
+        existing.push({ id: row.id, label: row.label, cfg });
+        keycapseqFieldsByProduct.set(row.productId, existing);
+      } catch {
+        // Corrupt configJson — skip.
+      }
+    }
+    const iconLabelById: Record<string, string> = Object.fromEntries(
+      Object.entries(KEYCAP_ICON_BY_ID).map(([id, i]) => [id, i.label]),
+    );
 
     // Mutate each configurable line's values in-place.
     for (const line of configurableInputLines) {
@@ -391,6 +422,42 @@ export async function createPayPalOrder(
           values,
           existingParts,
         );
+      }
+
+      // Phase 25 (25-08) — keycapseq server re-derive. The client snapshots
+      // computedPrice/computedSummary; a hostile client could forge icon ids
+      // (T-25-08-02), inflate/oversend slots for a cheaper tier (T-25-08-01/03),
+      // or tamper the summary. Re-derive everything from the encoded sequence.
+      const keycapseqFields = keycapseqFieldsByProduct.get(pid) ?? [];
+      for (const kf of keycapseqFields) {
+        const cfg = kf.cfg;
+        const slots = ensureKeycapSequence(values[kf.id])
+          .filter((s) => s.t === "L" || cfg.allowedIconIds.includes(s.id)) // drop forged icon ids
+          .slice(0, cfg.maxSlots); // cap oversized sequences (DoS)
+        const slotCount = slots.length;
+
+        // Server-authoritative price from the validated slot count — client
+        // computedPrice is discarded for keycapseq (unlike select).
+        const tiers = ensureTiers(productById.get(pid)?.priceTiers);
+        const serverPrice = lookupTierPriceBySlotCount(tiers, slotCount);
+        if (serverPrice === null) {
+          return {
+            ok: false,
+            error: `Invalid keychain configuration for "${kf.label}". Please adjust the number of keycaps and try again.`,
+          };
+        }
+        line.configurationData.computedPrice = serverPrice;
+
+        // Re-persist the sanitized (filtered/capped) sequence, not the raw blob.
+        values[kf.id] = slotCount > 0 ? JSON.stringify(slots) : "";
+
+        // Rebuild the summary: server sequence portion + existing colour tail.
+        const seqSummary = buildKeycapSequenceSummary(slots, iconLabelById);
+        const parts = (line.configurationData.computedSummary ?? "").split(" · ");
+        parts[0] = seqSummary;
+        line.configurationData.computedSummary = parts
+          .filter((p) => p.length > 0)
+          .join(" · ");
       }
     }
   }
