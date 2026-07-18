@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: c118ae6 on dev. CI auto-deploying. Server-side log monitor LIVE (1-min cron WhatsApp alerts to +96599800027). Awaiting human smoke on app.3dninjaz.com
-stopped_at: Phase 25 context gathered
-last_updated: "2026-07-18T16:31:58.213Z"
+stopped_at: Phase 25 UI-SPEC approved
+last_updated: "2026-07-18T16:48:19.888Z"
 last_activity: "2026-07-13 - Quick task 260713-fay COMPLETE (both phases): keychain production now FULLY separates round vs square — Phase 1 base-batch split MERGED to dev (PR #188); Phase 2 (clicker+letter split + shape-first assembly + top-level Round/Square board split, guarded so all-square store is byte-identical) on branch fix/keychain-production-shape-split, plan double-checked by Opus + Fable, verifier 5/5, follow-up PR to dev pending. Dev-first — needs a two-shape visual smoke on app.3dninjaz.com"
 progress:
   total_phases: 22
@@ -215,6 +215,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-18T16:31:58.199Z
-Stopped at: Phase 25 context gathered
-Resume file: .planning/phases/25-mixed-letter-and-icon-keycaps-for-square-keychain-product/25-CONTEXT.md
+Last session: 2026-07-18T16:48:19.879Z
+Stopped at: Phase 25 UI-SPEC approved
+Resume file: .planning/phases/25-mixed-letter-and-icon-keycaps-for-square-keychain-product/25-UI-SPEC.md
