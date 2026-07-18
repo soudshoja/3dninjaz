@@ -66,6 +66,12 @@ async function main() {
 
   // 2. Convert each top_N.png → top_<N>.webp, logging source metadata (proves
   //    the 512×512 RGBA top_N source was used, NOT plate_N).
+  //    CROP FIX (25-GAP-01): the raw top_N render is a 512×512 canvas whose
+  //    visible icon content only occupies a tiny (~38×38) centred region, so at
+  //    the 40–56px display sizes the icon shrinks to a few unreadable pixels.
+  //    We trim to the real content bbox and re-pad to a square with a small
+  //    transparent margin (~16% of content per side ⇒ content fills ~76% of the
+  //    final frame) so `object-fit: contain` renders it large and legible.
   const webpNames: string[] = [];
   for (const png of pngs) {
     const n = numOf(png);
@@ -81,7 +87,11 @@ async function main() {
       );
     }
     const outName = `top_${n}.webp`;
-    await sharp(srcPath).webp({ quality: 82 }).toFile(path.join(STAGING_DIR, outName));
+    const { width: cw, height: ch } = await cropIconToWebp(
+      srcPath,
+      path.join(STAGING_DIR, outName),
+    );
+    console.info(`[extract]   → ${outName} cropped to ${cw}×${ch} (content ~76% of frame)`);
     webpNames.push(outName);
   }
 
@@ -135,6 +145,44 @@ ${cells}
     `[extract] done — ${webpNames.length} staged WebP renders + contact sheet at ` +
       `${path.join(STAGING_DIR, "_contact-sheet.html")}`,
   );
+}
+
+/**
+ * Trim a raw top_N render to its real content bounding box, then re-pad to a
+ * centred square with a small transparent margin so the icon reads large at
+ * 40–56px display sizes. Returns the final (square) canvas dimensions.
+ *
+ * Padding maths: margin = ~16% of the trimmed content's longest side per side,
+ * so content occupies content / (content + 2·margin) ≈ 1 / 1.32 ≈ 76% of the
+ * final frame (comfortably inside the 70–80% target).
+ */
+export async function cropIconToWebp(
+  srcPath: string,
+  outPath: string,
+): Promise<{ width: number; height: number }> {
+  // trim() auto-detects the background from the corner pixels (transparent alpha
+  // for these RGBA renders) and crops it away.
+  const trimmed = await sharp(srcPath)
+    .trim({ threshold: 10 })
+    .toBuffer({ resolveWithObject: true });
+  const tw = trimmed.info.width;
+  const th = trimmed.info.height;
+
+  const longest = Math.max(tw, th);
+  const margin = Math.round(longest * 0.16);
+  const target = longest + margin * 2;
+
+  const left = Math.round((target - tw) / 2);
+  const right = target - tw - left;
+  const top = Math.round((target - th) / 2);
+  const bottom = target - th - top;
+
+  await sharp(trimmed.data)
+    .extend({ top, bottom, left, right, background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .webp({ quality: 82 })
+    .toFile(outPath);
+
+  return { width: target, height: target };
 }
 
 function numOf(name: string): number {
