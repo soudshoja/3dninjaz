@@ -180,7 +180,7 @@ export const productSchema = z.object({
     .array(
       z.object({
         id: z.string().optional(),
-        fieldType: z.enum(["text", "number", "colour", "select", "textarea"]),
+        fieldType: z.enum(["text", "number", "colour", "select", "textarea", "keycapseq"]),
         label: z.string().min(1).max(80),
         helpText: z.string().max(200).nullable().optional(),
         required: z.boolean(),
