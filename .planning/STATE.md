@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 25-03-PLAN.md
-last_updated: "2026-07-18T18:18:31.707Z"
+stopped_at: Completed 25-07-PLAN.md
+last_updated: "2026-07-18T18:28:38.435Z"
 last_activity: 2026-07-18
 progress:
   total_phases: 22
   completed_phases: 10
   total_plans: 103
-  completed_plans: 82
+  completed_plans: 83
   percent: 45
 ---
 
@@ -42,7 +42,7 @@ See: .planning/PROJECT.md (updated 2026-04-12)
 ## Current Position
 
 Phase: 25 (Mixed letter and icon keycaps for square keychain product) — EXECUTING
-Plan: 6 of 9
+Plan: 7 of 9
 Plans: 11/11 shipped + 5 hotfix commits applied (e5b55bd → c118ae6) addressing pre-existing Phase 7 upload bug, 50MB cap lift, XHR progress UI, server log monitor
 Next Phase: 20 (User & Role Management) — backlog, awaiting /gsd-spec-phase 20
 Status: Ready to execute
@@ -92,6 +92,7 @@ Progress: [██████████] 100% (code) | Pre-launch admin action
 | Phase 25 P03 | 5min | 2 tasks | 5 files |
 | Phase 25 P05 | 15min | 3 tasks | 2 files |
 | Phase 25 P06 | 12min | 2 tasks | 2 files |
+| Phase 25 P07 | 15min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -165,6 +166,7 @@ Recent decisions affecting current work:
 - 2026-04-26 (Phase 18 Plan 07): PDP swatch grid refactor shipped. variant-selector.tsx `{isColorOption ? (...)}` branch (formerly lines 201-267) now uses a vertical-flex wrapper (`flex flex-col items-center gap-1`, fixed `width: 80px`) holding the existing 48x48 button (with the 32x32 hex circle child) on top and a sibling `<span>` below as the always-visible 12px Chakra_Petch name caption. Caption typography per UI-SPEC §Surface 4: `var(--font-body)` 12px, weight 500 default / 700 + `var(--color-brand-ink)` selected, line-through + `#A1A1AA` OOS, `max-w-[80px] truncate` so long names ellipsis-truncate without breaking layout. Outer container gap tightened from `gap-2` (8px) to `gap-3` (12px) to compensate for the extra caption row height. Caption is `aria-hidden` because the button's `aria-label` already names the colour for AT (avoids double-announcement). Phase 17 contracts preserved verbatim: hover-image-preview (`onMouseEnter`/`Leave` + `findPreviewVariant` + `hoverCapable` matchMedia gate), OOS hardening (disabled + aria-disabled + tabIndex=-1 + title="Out of stock" + diagonal-line gradient overlay), Phase 17 AD-06 reactivity contract (zero mutations on PDP, so contract preserved by inaction). Pill render branch for non-Colour options (Size, Material, Part, etc.) untouched. Customer-side audit grep on `src/app/(store)/` + `src/components/store/` returns zero matches for `previous_hex`, `previousHex`, `family_type`, `familyType`, `family_subtype`, `familySubtype`, `colors.code`, `color.code`, `colour.code` — REQ-7 admin-only field hygiene verified. Plan 18-01 public/admin query split (`getColourPublic` vs `getColourAdmin`) holds end-to-end. `npx tsc --noEmit` clean. Plan-level constraint applied: skipped `npm run build` due to pre-existing CSS issue.
 - [Phase ?]: Phase 25 keycap icons: plate order matched catalog 1:1; render #7 is green-ball (not Yoshi egg); neutral labels only per D-08
 - [Phase 25]: 2026-07-19 (Phase 25 Plan 03): seedKeychainFields gains a required shape arg — square seeds a locked keycapseq pos-0 field (Your keycaps, maxSlots 8, allowedIconIds []), round keeps today's text field (D-01); colour fields (Base/Clicker/Letter) identical for both shapes (D-03). products.ts unitField finder branches keycapseq-vs-text so square keychains still wire unitField/maxUnitCount 8/priceTiers. New additive parseKeycapSequence reads mixed sequence from configurationData.values with explicit slotCount/letterCount/iconCount; legacy PARTS_RE/parseKeychainParts + 6 tests untouched (D-06). tsc clean, 13/13 vitest.
+- [Phase 25]: Phase 25 Plan 07: mixed letter/icon keycap preview (optional slots prop keeps all-letters pixel-identical) + slot-count price/over-cap/summary on the square-keychain PDP
 
 ### Pending Todos
 
@@ -223,6 +225,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-18T18:18:20.880Z
-Stopped at: Completed 25-03-PLAN.md
+Last session: 2026-07-18T18:28:24.405Z
+Stopped at: Completed 25-07-PLAN.md
 Resume file: None
