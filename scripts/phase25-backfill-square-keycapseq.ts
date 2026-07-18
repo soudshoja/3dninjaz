@@ -87,9 +87,9 @@ async function main() {
 
   // 1. Select existing SQUARE keychain products (round untouched via this filter).
   const [prodRows] = await conn.query(
-    "SELECT id, title FROM products WHERE productType = 'keychain' AND keychainShape = 'square'",
+    "SELECT id, name FROM products WHERE productType = 'keychain' AND keychainShape = 'square'",
   );
-  const products = prodRows as { id: string; title: string }[];
+  const products = prodRows as { id: string; name: string }[];
   console.info(
     `[phase25-backfill] found ${products.length} square keychain product(s)`,
   );
@@ -110,7 +110,7 @@ async function main() {
 
     if (!pos0) {
       console.warn(
-        `[phase25-backfill]   product ${p.id} (${p.title}) has NO position-0 field — skipping`,
+        `[phase25-backfill]   product ${p.id} (${p.name}) has NO position-0 field — skipping`,
       );
       continue;
     }
@@ -119,7 +119,7 @@ async function main() {
     if (pos0.fieldType === "keycapseq") {
       alreadyKeycapseq += 1;
       console.info(
-        `[phase25-backfill]   product ${p.id} (${p.title}) pos-0 already keycapseq — no-op`,
+        `[phase25-backfill]   product ${p.id} (${p.name}) pos-0 already keycapseq — no-op`,
       );
       continue;
     }
@@ -129,7 +129,7 @@ async function main() {
     if (pos0.fieldType !== "text" || !isLocked) {
       skippedNonText += 1;
       console.warn(
-        `[phase25-backfill]   product ${p.id} (${p.title}) pos-0 is fieldType='${pos0.fieldType}' locked=${pos0.locked} — not a seeded locked text field, skipping`,
+        `[phase25-backfill]   product ${p.id} (${p.name}) pos-0 is fieldType='${pos0.fieldType}' locked=${pos0.locked} — not a seeded locked text field, skipping`,
       );
       continue;
     }
@@ -168,7 +168,7 @@ async function main() {
     );
     converted += 1;
     console.info(
-      `[phase25-backfill]   CONVERTED product ${p.id} (${p.title}) field ${pos0.id}: text→keycapseq (maxSlots=${maxSlots}, allowedChars=${allowedChars})`,
+      `[phase25-backfill]   CONVERTED product ${p.id} (${p.name}) field ${pos0.id}: text→keycapseq (maxSlots=${maxSlots}, allowedChars=${allowedChars})`,
     );
   }
 
