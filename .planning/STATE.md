@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 25-07-PLAN.md
-last_updated: "2026-07-18T18:28:38.435Z"
+stopped_at: Completed 25-08-PLAN.md
+last_updated: "2026-07-18T18:39:36.217Z"
 last_activity: 2026-07-18
 progress:
   total_phases: 22
   completed_phases: 10
   total_plans: 103
-  completed_plans: 83
+  completed_plans: 84
   percent: 45
 ---
 
@@ -42,7 +42,7 @@ See: .planning/PROJECT.md (updated 2026-04-12)
 ## Current Position
 
 Phase: 25 (Mixed letter and icon keycaps for square keychain product) — EXECUTING
-Plan: 7 of 9
+Plan: 8 of 9
 Plans: 11/11 shipped + 5 hotfix commits applied (e5b55bd → c118ae6) addressing pre-existing Phase 7 upload bug, 50MB cap lift, XHR progress UI, server log monitor
 Next Phase: 20 (User & Role Management) — backlog, awaiting /gsd-spec-phase 20
 Status: Ready to execute
@@ -93,6 +93,7 @@ Progress: [██████████] 100% (code) | Pre-launch admin action
 | Phase 25 P05 | 15min | 3 tasks | 2 files |
 | Phase 25 P06 | 12min | 2 tasks | 2 files |
 | Phase 25 P07 | 15min | 2 tasks | 2 files |
+| Phase 25 P08 | 20min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -167,6 +168,7 @@ Recent decisions affecting current work:
 - [Phase ?]: Phase 25 keycap icons: plate order matched catalog 1:1; render #7 is green-ball (not Yoshi egg); neutral labels only per D-08
 - [Phase 25]: 2026-07-19 (Phase 25 Plan 03): seedKeychainFields gains a required shape arg — square seeds a locked keycapseq pos-0 field (Your keycaps, maxSlots 8, allowedIconIds []), round keeps today's text field (D-01); colour fields (Base/Clicker/Letter) identical for both shapes (D-03). products.ts unitField finder branches keycapseq-vs-text so square keychains still wire unitField/maxUnitCount 8/priceTiers. New additive parseKeycapSequence reads mixed sequence from configurationData.values with explicit slotCount/letterCount/iconCount; legacy PARTS_RE/parseKeychainParts + 6 tests untouched (D-06). tsc clean, 13/13 vitest.
 - [Phase 25]: Phase 25 Plan 07: mixed letter/icon keycap preview (optional slots prop keeps all-letters pixel-identical) + slot-count price/over-cap/summary on the square-keychain PDP
+- [Phase 25]: Phase 25 Plan 08: server re-derives keycapseq price/icons/slot-cap/summary on all 3 capture paths (paypal/pos/whatsapp), client computedPrice discarded; resolveTierWeightKg keys keycapseq weight off slot count not JSON length
 
 ### Pending Todos
 
@@ -225,6 +227,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-18T18:28:24.405Z
-Stopped at: Completed 25-07-PLAN.md
+Last session: 2026-07-18T18:39:23.639Z
+Stopped at: Completed 25-08-PLAN.md
 Resume file: None
