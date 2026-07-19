@@ -33,16 +33,16 @@
  *                 as today (text-derived chars — byte-for-byte identical). When
  *                 provided, one cube is rendered per slot in order: letter slots
  *                 reuse the identical 3-layer CSS cube (chosen colours); icon
- *                 slots render the icon's WebP image on a fixed white shell
- *                 (#FFFFFF, D-04). All-letter sequences stay pixel-identical to
- *                 the legacy text path.
+ *                 slots render the icon's WebP image on a shell that shares the
+ *                 customer's chosen Base colour (`baseHex`) — the same shell
+ *                 colour as the letter keycaps, so the whole keychain reads as
+ *                 one consistent colour. Only the icon's own baked-in artwork
+ *                 colours stay fixed. All-letter sequences stay pixel-identical
+ *                 to the legacy text path (this branch is untouched).
  */
 
 import type { KeycapSlot } from "@/lib/config-fields";
 import { KEYCAP_ICON_BY_ID } from "@/lib/keycap-icons";
-
-/** Fixed white keycap base for icon slots — icons never use customer colours (D-04). */
-const ICON_SHELL_WHITE = "#FFFFFF";
 
 type Props = {
   text: string;
@@ -64,8 +64,10 @@ type Props = {
   /**
    * Phase 25 (25-07) — optional ordered mixed sequence. When omitted the legacy
    * text path renders (byte-identical). When provided, one cube per slot in
-   * order: letter glyph cube (chosen colours) OR icon WebP on a fixed white
-   * shell (D-04).
+   * order: letter glyph cube (chosen colours) OR icon WebP on a shell that uses
+   * the customer's chosen Base colour (`baseHex`) — matching the letter keycaps
+   * so the keychain shares one shell colour. Only the icon's baked artwork
+   * colours are fixed.
    */
   slots?: KeycapSlot[];
 };
@@ -164,10 +166,11 @@ export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLengt
                 height: cubeSizeExpr,
                 flexShrink: 0,
                 borderRadius: bodyRadius,
-                // Icon slots sit on a FIXED WHITE shell (D-04); letter slots keep
-                // the customer-chosen base colour. All-letter → always baseHex →
-                // byte-identical to today.
-                background: isIcon ? ICON_SHELL_WHITE : baseHex,
+                // Both icon and letter slots sit on the customer-chosen Base
+                // colour shell — the whole keychain shares one shell colour.
+                // (Only the icon's own baked artwork colours stay fixed.)
+                // All-letter → always baseHex → byte-identical to today.
+                background: baseHex,
                 border: "none",
                 // Body bevel — top highlight, side shadow, bottom drop
                 boxShadow: `inset 3px 3px 5px rgba(255,255,255,0.45),
@@ -212,8 +215,9 @@ export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLengt
 
               {isIcon ? (
                 /* Icon keycap — WebP image centred within the inset face area on
-                   the fixed white shell (D-04). No clicker/letter customer
-                   colours. Decorative alt="" — the container role="img" +
+                   the Base-colour shell (matches the letter keycaps). The icon's
+                   own baked artwork colours are fixed; no clicker/letter customer
+                   colours apply. Decorative alt="" — the container role="img" +
                    aria-label already names the sequence. */
                 <div
                   style={{
