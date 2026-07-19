@@ -415,17 +415,25 @@ export type KeychainClickerLetterBatch = {
 };
 
 /**
- * Aggregated icon printing batch (D-11). Icon keycaps print as a fixed WHITE
- * shell + baked accent parts — colours are FIXED per icon design, not chosen by
- * the customer — so they do NOT share the letter's Base/Clicker/Letter
- * colour-driven grouping. They batch by icon id only (icons are square-only per
- * D-01, so no shape in the key). One icon-print entry per icon slot.
+ * Aggregated icon printing batch. Icon keycaps print on a shell that shares the
+ * customer's chosen Base colour (matching the letter keycaps) — only the icon's
+ * own baked accent/graphic parts stay FIXED per icon design. So icon batches are
+ * keyed by icon id AND base colour (`${iconId}::${base}`): two orders with the
+ * same icon but different Base colours are SEPARATE batches (different filament
+ * for the shell). Icons are square-only per D-01, so no shape in the key.
+ * One icon-print entry per icon slot.
  */
 export type KeychainIconBatch = {
   /** Catalog icon id, e.g. "alien". */
   iconId: string;
   /** Human label from the catalog, e.g. "Alien" (falls back to the id). */
   iconLabel: string;
+  /**
+   * Customer's chosen Base colour NAME for this batch's shell, e.g. "Magenta".
+   * Icons of the same design but different Base colours split into separate
+   * batches. Mirrors KeychainBaseBatch.base.
+   */
+  baseColour: string;
   /** Total icon prints = Σ (count of this icon id in a unit × unit qty). */
   totalQty: number;
   /** Distinct units that include this icon (deduped — one entry per unit). */
@@ -447,7 +455,7 @@ export type KeychainAssemblyUnit = KeychainUnit & {
 export type KeychainBatches = {
   bases: KeychainBaseBatch[];
   clickerLetters: KeychainClickerLetterBatch[];
-  /** Icon print batches, keyed by icon id (D-11). Empty for all-letter stores. */
+  /** Icon print batches, keyed by icon id + base colour. Empty for all-letter stores. */
   icons: KeychainIconBatch[];
   assembly: KeychainAssemblyUnit[];
 };
@@ -626,26 +634,34 @@ export async function getKeychainBatches(): Promise<KeychainBatches> {
     })
     .sort((a, b) => b.totalQty - a.totalQty);
 
-  // 5b) Group ICONS — by icon id ONLY (D-11). Icon keycaps print as a fixed
-  // white shell + baked accent parts (colours fixed per icon), so they do NOT
-  // share the letter colour grouping; and icons are square-only (D-01), so no
-  // shape is folded into the key. A unit is pushed at most once per distinct
-  // icon id (so doneCount/allDone track units, not slot instances); the
-  // per-icon slot instances are counted separately into totalQty.
+  // 5b) Group ICONS — by icon id + base colour (`${iconId}::${base}`). The icon
+  // keycap shell now takes the customer's chosen Base colour (matching the
+  // letter keycaps), so two orders with the same icon but different Base colours
+  // need different filament and are SEPARATE batches. Only the icon's own baked
+  // accent parts stay fixed per design. Icons are square-only (D-01), so no
+  // shape is folded into the key (base colour resolution mirrors the BASE
+  // grouping above via `u.base`). A unit is pushed at most once per distinct
+  // (icon id, base) key (so doneCount/allDone track units, not slot instances);
+  // the per-icon slot instances are counted separately into totalQty.
+  const ICON_KEY_SEP = "::";
   const iconMap = new Map<string, KeychainUnit[]>();
   for (const u of units) {
     const seen = new Set<string>();
     for (const s of u.slots) {
       if (s.t !== "I") continue;
-      if (seen.has(s.id)) continue;
-      seen.add(s.id);
-      const list = iconMap.get(s.id) ?? [];
+      const key = `${s.id}${ICON_KEY_SEP}${u.base}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const list = iconMap.get(key) ?? [];
       list.push(u);
-      iconMap.set(s.id, list);
+      iconMap.set(key, list);
     }
   }
   const icons: KeychainIconBatch[] = Array.from(iconMap.entries())
-    .map(([iconId, items]) => {
+    .map(([key, items]) => {
+      const sepAt = key.lastIndexOf(ICON_KEY_SEP);
+      const iconId = key.slice(0, sepAt);
+      const baseColour = key.slice(sepAt + ICON_KEY_SEP.length);
       const iconLabel = KEYCAP_ICON_BY_ID[iconId]?.label ?? iconId;
       const totalQty = items.reduce((sum, u) => {
         const n = u.slots.filter((s) => s.t === "I" && s.id === iconId).length;
@@ -655,13 +671,18 @@ export async function getKeychainBatches(): Promise<KeychainBatches> {
       return {
         iconId,
         iconLabel,
+        baseColour,
         totalQty,
         items,
         doneCount,
         allDone: doneCount === items.length,
       };
     })
-    .sort((a, b) => a.iconLabel.localeCompare(b.iconLabel));
+    .sort(
+      (a, b) =>
+        a.iconLabel.localeCompare(b.iconLabel) ||
+        a.baseColour.localeCompare(b.baseColour),
+    );
 
   // 6) Assembly — flat list sorted shape-first (so same-shape units stay
   // contiguous), then clientName, then name. For a single-shape store every

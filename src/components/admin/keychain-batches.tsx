@@ -261,12 +261,14 @@ function BatchCard({
   );
 }
 
-// ── Icon batch card (icons print as a fixed white shell + baked accents) ──────
+// ── Icon batch card (icon shell = customer Base colour + fixed baked accents) ──
 //
-// Mirrors the colour BatchCard shape but keyed by icon id (D-11): shows the
-// committed WebP render + label instead of a colour name, a total icon-print
-// count, a progress bar, and a per-unit printed tick. NO colour chips — icon
-// colours are fixed per design, not customer-chosen (D-04).
+// Mirrors the colour BatchCard shape but keyed by icon id + base colour: shows
+// the committed WebP render + label, the Base colour to load the shell in, a
+// total icon-print count, a progress bar, and a per-unit printed tick. The
+// shell now follows the customer's chosen Base colour (matching the letters), so
+// the card shows a colour label; only the icon's own baked accent parts stay
+// fixed per design.
 
 function IconBatchCard({
   batch,
@@ -277,7 +279,7 @@ function IconBatchCard({
   onToggleOne: (id: string, done: boolean) => void;
   onToggleAll: (ids: string[], done: boolean) => void;
 }) {
-  const { iconId, iconLabel, totalQty, items, doneCount } = batch;
+  const { iconId, iconLabel, baseColour, totalQty, items, doneCount } = batch;
   const total = items.length;
   const allDone = doneCount === total && total > 0;
   const [open, setOpen] = useState(!allDone);
@@ -330,7 +332,7 @@ function IconBatchCard({
                 />
               </div>
               <p className="truncate text-xs font-semibold" style={{ color: "#64748b" }}>
-                icon
+                icon · <span style={{ color: BLUE }}>{baseColour}</span> base shell
               </p>
             </button>
             <BoxPill n={totalQty} accent={PURPLE} muted={allDone} />
@@ -819,7 +821,7 @@ function BatchBoard({
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {icons.map((b) => (
               <IconBatchCard
-                key={b.iconId}
+                key={`${b.iconId}::${b.baseColour}`}
                 batch={b}
                 onToggleOne={(id, done) => onToggleIcon([id], done)}
                 onToggleAll={onToggleIcon}
