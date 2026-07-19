@@ -214,10 +214,12 @@ export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLengt
               )}
 
               {isIcon ? (
-                /* Icon keycap — WebP image centred within the inset face area on
-                   the Base-colour shell (matches the letter keycaps). The icon's
-                   own baked artwork colours are fixed; no clicker/letter customer
-                   colours apply. Decorative alt="" — the container role="img" +
+                /* Icon keycap — WebP image filling the exact same inset face area
+                   as the letter keycaps' clicker face (identical inset, radius,
+                   box-sizing, and inset shadow — no extra padding) so icon and
+                   letter slots match in size and fit. The icon's own baked
+                   artwork colours are fixed; no clicker/letter customer colours
+                   apply. Decorative alt="" — the container role="img" +
                    aria-label already names the sequence. */
                 <div
                   style={{
@@ -228,7 +230,8 @@ export function KeychainPreview({ text, baseHex, clickerHex, letterHex, maxLengt
                     alignItems: "center",
                     justifyContent: "center",
                     overflow: "hidden",
-                    padding: 3,
+                    boxShadow: `inset 2px 2px 4px rgba(255,255,255,0.38),
+                               inset -2px -2px 4px rgba(0,0,0,0.14)`,
                     boxSizing: "border-box",
                     zIndex: 2,
                   }}
