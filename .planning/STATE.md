@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 25-04-PLAN.md
-last_updated: "2026-07-18T18:51:42.326Z"
+stopped_at: "Phase 25: all 9 plans + 4 gap-closure PRs (#193-#196) shipped and deployed to dev. Human smoke checklist items 1-3 verified live, items 4-7 still pending. Prod promotion not started."
+last_updated: "2026-07-20T04:45:57.842Z"
 last_activity: 2026-07-18
 progress:
   total_phases: 22
-  completed_phases: 10
+  completed_phases: 11
   total_plans: 103
-  completed_plans: 85
-  percent: 45
+  completed_plans: 89
+  percent: 50
 ---
 
 # Project State
@@ -228,6 +228,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-07-18T18:51:42.320Z
-Stopped at: Completed 25-04-PLAN.md
-Resume file: None
+Last session: 2026-07-20T04:45:57.835Z
+Stopped at: Phase 25: all 9 plans + 4 gap-closure PRs (#193-#196) shipped and deployed to dev. Human smoke checklist items 1-3 verified live, items 4-7 still pending. Prod promotion not started.
+Resume file: .planning/phases/25-mixed-letter-and-icon-keycaps-for-square-keychain-product/25-09-SUMMARY.md
