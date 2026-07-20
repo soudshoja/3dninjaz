@@ -279,7 +279,7 @@ function IconBatchCard({
   onToggleOne: (id: string, done: boolean) => void;
   onToggleAll: (ids: string[], done: boolean) => void;
 }) {
-  const { iconId, iconLabel, baseColour, totalQty, items, doneCount } = batch;
+  const { iconId, iconLabel, totalQty, items, doneCount } = batch;
   const total = items.length;
   const allDone = doneCount === total && total > 0;
   const [open, setOpen] = useState(!allDone);
@@ -332,7 +332,7 @@ function IconBatchCard({
                 />
               </div>
               <p className="truncate text-xs font-semibold" style={{ color: "#64748b" }}>
-                icon · <span style={{ color: BLUE }}>{baseColour}</span> base shell
+                icon · fixed colour
               </p>
             </button>
             <BoxPill n={totalQty} accent={PURPLE} muted={allDone} />
@@ -821,7 +821,7 @@ function BatchBoard({
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {icons.map((b) => (
               <IconBatchCard
-                key={`${b.iconId}::${b.baseColour}`}
+                key={b.iconId}
                 batch={b}
                 onToggleOne={(id, done) => onToggleIcon([id], done)}
                 onToggleAll={onToggleIcon}
