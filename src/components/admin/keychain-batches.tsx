@@ -202,7 +202,7 @@ function BatchCard({
             {items.map((u) => {
               const done = partDone(u);
               return (
-                <li key={u.itemId}>
+                <li key={`${u.itemId}#${u.unitIndex}`}>
                   <button
                     type="button"
                     onClick={() => onToggleOne(u.itemId, !done)}
@@ -624,7 +624,7 @@ function BatchBoard({
           ) : (
             <div className="flex flex-col gap-2">
               {aList.map((u) => (
-                <AssemblyRow key={u.itemId} unit={u} onAssemble={onAssemble} />
+                <AssemblyRow key={`${u.itemId}#${u.unitIndex}`} unit={u} onAssemble={onAssemble} />
               ))}
             </div>
           )}
