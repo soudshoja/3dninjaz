@@ -79,6 +79,25 @@ export default async function AdminSettingsPage() {
 
           {/* WhatsApp QR connect panel + master toggle */}
           <WhatsappConnectPanel initial={whatsapp} />
+
+          {/*
+            Evolution API attribution — required by the Evolution API license
+            (Apache-2.0 + additional conditions, clause 1b): a closed-source
+            system using Evolution API must show a notice visible to system
+            administrators. Keep this rendered on the admin settings page.
+          */}
+          <p className="pt-2 text-xs text-slate-500">
+            WhatsApp notifications powered by{" "}
+            <a
+              href="https://github.com/evolution-foundation/evolution-api"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2 hover:text-slate-700"
+            >
+              Evolution API
+            </a>{" "}
+            (Apache-2.0).
+          </p>
         </div>
       </div>
     </main>
