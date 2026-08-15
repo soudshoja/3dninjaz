@@ -201,10 +201,18 @@ jobs:
         # server.js + .next/ + public/ + package.json + package-lock.json are
         # the minimum set the Node server needs at runtime. node_modules is
         # re-installed on the target with `npm ci --omit=dev`.
+        #
+        # scripts/ is included because the server-side crons run FROM the app
+        # directory (see `crontab -u ninjaz -l`) — e.g.
+        # scripts/cron/reconcile-paypal.cjs and scripts/cron/draft-stale-digest.cjs.
+        # Before this was added the box kept whatever copy an old deploy left
+        # behind, so cron code silently went stale and newly added crons never
+        # arrived at all. ~600 KB, no build step, keeps them deploy-managed
+        # instead of hand-copied.
         run: |
           tar --exclude='.next/cache' \
               -czf deploy.tar.gz \
-              .next public server.js package.json package-lock.json next.config.ts
+              .next public scripts server.js package.json package-lock.json next.config.ts
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
