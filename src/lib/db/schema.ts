@@ -1555,6 +1555,12 @@ export const checkoutDrafts = mysqlTable(
     status: mysqlEnum("status", ["open", "converted", "dismissed"])
       .notNull()
       .default("open"),
+    // Stale-draft digest bookkeeping (260815-rsk). Set once the daily 09:00 MYT
+    // WhatsApp digest has reported this row; NULL = never reported. Deliberately
+    // a timestamp and NOT a 4th status value — a reported draft is still "open",
+    // so the admin filter, the open count and markDraftsConverted must keep
+    // matching it.
+    notifiedAt: timestamp("notified_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
   },
