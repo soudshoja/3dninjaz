@@ -1,33 +1,47 @@
 /* eslint-disable no-console */
 /**
- * Stale checkout-draft WhatsApp digest (260815-rsk).
+ * Stale checkout-draft cron (260815-rsk, extended 260816).
  *
- * Runs ONCE daily at 09:00 MYT and sends the admin a single WhatsApp message
- * listing every checkout draft that is still `open` and older than 24h, then
- * stamps those rows so they are never reported again.
+ * Runs ONCE daily at 09:00 MYT and does two independent passes:
+ *
+ *   PASS 1 — admin digest
+ *     One WhatsApp message to the admin listing every draft still `open` and
+ *     older than 24h. Bookkeeping column: notified_at.
+ *
+ *   PASS 2 — customer reminder  (OFF by default)
+ *     One WhatsApp message to EACH customer whose draft is still `open` and
+ *     older than 24h. Bookkeeping column: customer_notified_at.
+ *     Gated by the master notifications toggle AND the
+ *     `draft_abandoned_reminder` row in whatsapp_notifications, which seeds
+ *     disabled — see DEFAULT_ENABLED in src/lib/whatsapp/events.ts.
+ *
+ * The two columns are separate so one pass can never suppress the other.
  *
  * Plain Node CommonJS — does NOT bootstrap Next.js (same pattern as
- * scripts/cron/reconcile-paypal.cjs). Reads .env.local via a tiny inline parser.
+ * scripts/cron/reconcile-paypal.cjs). Reads .env.local via an inline parser.
+ * Because it cannot import the TS helpers, it reads the template straight from
+ * whatsapp_notifications and mirrors renderWhatsappTemplate / normalizeMsisdn
+ * from src/lib/whatsapp/events.ts. Keep them in sync.
  *
- * Timezone: the box and MariaDB both run GMT (@@time_zone = SYSTEM), and
+ * Timezone: the box and MariaDB both run GMT (@@time_zone = SYSTEM) and
  * created_at is stored UTC. MYT is UTC+8, so:
  *   - crontab line is `0 1 * * *`  (01:00 UTC = 09:00 MYT)
  *   - digest lines group on DATE(created_at + INTERVAL 8 HOUR), because
- *     /admin/drafts renders timestamps with toLocaleString("en-MY") and raw-UTC
- *     grouping would label rows a day off from what the admin sees on screen.
+ *     /admin/drafts renders timestamps with toLocaleString("en-MY") and
+ *     raw-UTC grouping would label rows a day off from what the admin sees.
  *
  * Eligibility is exact-24h from created_at, NOT "yesterday's calendar date".
- * Combined with the daily cadence that means a draft is reported 24-47h after
- * it was created. That is intended.
+ * Combined with the daily cadence a draft is actioned 24-47h after creation.
  *
  * Safety properties:
- *   - Zero eligible drafts  -> sends nothing, exits 0 (no "0 drafts" spam).
+ *   - Nothing eligible -> sends nothing, exits 0 (no "0 drafts" spam).
  *   - Instance not connected -> sends nothing, stamps nothing, exits 0, so the
- *     same drafts are retried on the next run instead of being silently burned.
- *   - Stamps notified_at ONLY after the send returns HTTP 2xx, and only for the
- *     exact ids that went into the message.
- *   - --dry-run prints the composed message and the ids it would stamp, and
- *     touches nothing.
+ *     same drafts are retried next run instead of being silently burned.
+ *   - Stamps only after the send returns HTTP 2xx, and only for ids that were
+ *     actually in a message.
+ *   - Customer pass additionally refuses to run outside 09:00-20:00 MYT, skips
+ *     unusable phone numbers, spaces sends apart, and caps per run.
+ *   - --dry-run prints what it would do and touches nothing.
  *
  * Run:
  *   node scripts/cron/draft-stale-digest.cjs --dry-run
@@ -40,11 +54,20 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const DRY_RUN = process.argv.includes("--dry-run");
+/** Bypass the business-hours guard on the customer pass (manual testing). */
+const FORCE_WINDOW = process.argv.includes("--force-window");
 
 /** Hard cap so one bad day cannot produce a 500-line WhatsApp message. */
 const MAX_ROWS = 50;
+/** Customer sends per run — deliberately smaller; these go to real strangers. */
+const MAX_CUSTOMER_SENDS = 20;
+/** Gap between customer sends, ms. Bulk-rate pacing for a Baileys account. */
+const CUSTOMER_SEND_GAP_MS = 4000;
 /** MYT is UTC+8. */
 const MYT_OFFSET_HOURS = 8;
+/** Customer reminders only inside these MYT hours (inclusive start, exclusive end). */
+const CUSTOMER_WINDOW = { startHour: 9, endHour: 20 };
+const REMINDER_EVENT_KEY = "draft_abandoned_reminder";
 
 function loadEnv() {
   const envPath = path.resolve(__dirname, "..", "..", ".env.local");
@@ -73,10 +96,41 @@ const INSTANCE = () => process.env.WHATSAPP_INSTANCE_NAME || "3dninjaz";
 /** Admin recipient. Store number by default (self-message). */
 const RECIPIENT = () => process.env.ADMIN_NOTIFY_PHONE || "601125434730";
 
-/**
- * True only when Evolution reports the instance as "open". Any error, timeout
- * or non-2xx is treated as not-connected so we defer rather than burn drafts.
- */
+/** Mirrors publicOrigin() in src/lib/public-url.ts so dev links to dev. */
+function publicOrigin() {
+  const raw =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.NEXT_PUBLIC_BASE_URL ||
+    "https://3dninjaz.com";
+  return raw.trim().replace(/\/+$/, "");
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Mirrors normalizeMsisdn() in src/lib/whatsapp/events.ts. */
+function normalizeMsisdn(raw) {
+  if (!raw) return null;
+  let d = String(raw).replace(/\D/g, "");
+  if (!d) return null;
+  if (d.startsWith("0")) d = "60" + d.slice(1);
+  if (!d.startsWith("60") && d.length <= 10) d = "60" + d;
+  return d.length >= 10 ? d : null;
+}
+
+/** Mirrors renderWhatsappTemplate() in src/lib/whatsapp/events.ts. */
+function renderTemplate(template, vars) {
+  return String(template).replace(/\{\{(\w+)\}\}/g, (_, name) => {
+    const v = vars[name];
+    return v === undefined || v === null ? "" : String(v);
+  });
+}
+
+/** Current hour in MYT, derived from UTC (the box runs GMT). */
+function mytHourNow() {
+  const now = new Date();
+  return (now.getUTCHours() + MYT_OFFSET_HOURS) % 24;
+}
+
 async function instanceIsConnected() {
   try {
     const res = await fetch(
@@ -125,20 +179,34 @@ function parseItems(raw) {
   }
 }
 
-function describeItems(items) {
-  if (items.length === 0) return "bag unavailable";
-  const names = items
+function itemNames(items, limit) {
+  return items
     .map((it) => {
-      const name = typeof it.name === "string" && it.name.trim() ? it.name.trim() : "item";
+      const name =
+        typeof it.name === "string" && it.name.trim() ? it.name.trim() : "item";
       const qty = Number(it.quantity) || 1;
       return qty > 1 ? `${name} ×${qty}` : name;
     })
-    .slice(0, 3);
-  const extra = items.length > names.length ? ` +${items.length - names.length} more` : "";
+    .slice(0, limit);
+}
+
+function describeItems(items) {
+  if (items.length === 0) return "bag unavailable";
+  const names = itemNames(items, 3);
+  const extra =
+    items.length > names.length ? ` +${items.length - names.length} more` : "";
   return `${items.length} item(s): ${names.join(", ")}${extra}`;
 }
 
-/** Format a MYT date key (YYYY-MM-DD as returned by MySQL) as "15 Aug 2026". */
+/** Customer-facing phrasing — no counts, just what they picked. */
+function describeItemsForCustomer(items) {
+  if (items.length === 0) return "your items";
+  const names = itemNames(items, 2);
+  const extra =
+    items.length > names.length ? ` and ${items.length - names.length} more` : "";
+  return `${names.join(", ")}${extra}`;
+}
+
 function formatMytDate(key) {
   const [y, m, d] = String(key).split("-").map(Number);
   if (!y || !m || !d) return String(key);
@@ -146,15 +214,16 @@ function formatMytDate(key) {
   return `${d} ${months[m - 1]} ${y}`;
 }
 
-function buildMessage(rows, truncatedCount) {
+function normaliseMytDateKey(value) {
+  return value instanceof Date
+    ? value.toISOString().slice(0, 10)
+    : String(value).slice(0, 10);
+}
+
+function buildDigest(rows, truncatedCount) {
   const byDate = new Map();
   for (const r of rows) {
-    // mysql2 returns DATE as a JS Date or a string depending on driver config —
-    // normalise to YYYY-MM-DD either way.
-    const key =
-      r.mytDate instanceof Date
-        ? r.mytDate.toISOString().slice(0, 10)
-        : String(r.mytDate).slice(0, 10);
+    const key = normaliseMytDateKey(r.mytDate);
     if (!byDate.has(key)) byDate.set(key, []);
     byDate.get(key).push(r);
   }
@@ -183,8 +252,194 @@ function buildMessage(rows, truncatedCount) {
     lines.push("");
   }
 
-  lines.push("Follow up: https://3dninjaz.com/admin/drafts");
+  lines.push(`Follow up: ${publicOrigin()}/admin/drafts`);
   return lines.join("\n");
+}
+
+const ELIGIBLE_SELECT = `
+  SELECT id,
+         recipient_name AS recipientName,
+         phone,
+         subtotal,
+         items_json    AS itemsJson,
+         created_at    AS createdAt,
+         TIMESTAMPDIFF(HOUR, created_at, UTC_TIMESTAMP()) AS ageHours,
+         DATE(created_at + INTERVAL ? HOUR)               AS mytDate
+    FROM checkout_drafts
+   WHERE status = 'open'
+     AND {{COLUMN}} IS NULL
+     AND created_at <= UTC_TIMESTAMP() - INTERVAL 24 HOUR
+   ORDER BY created_at ASC`;
+
+// ---------------------------------------------------------------------------
+// PASS 1 — admin digest
+// ---------------------------------------------------------------------------
+async function runAdminDigest(conn) {
+  const [eligible] = await conn.query(
+    ELIGIBLE_SELECT.replace("{{COLUMN}}", "notified_at"),
+    [MYT_OFFSET_HOURS],
+  );
+
+  if (eligible.length === 0) {
+    console.log("[draft-digest] admin: 0 stale drafts — nothing sent");
+    return 0;
+  }
+
+  const rows = eligible.slice(0, MAX_ROWS);
+  const truncatedCount = eligible.length - rows.length;
+  const ids = rows.map((r) => r.id);
+  const text = buildDigest(rows, truncatedCount);
+
+  if (DRY_RUN) {
+    console.log("[draft-digest] admin: --dry-run — not sent, nothing stamped");
+    console.log(`[draft-digest] admin: recipient ${RECIPIENT()}`);
+    console.log(`[draft-digest] admin: would stamp ${ids.length} id(s)`);
+    console.log("---8<--- admin digest ---8<---");
+    console.log(text);
+    console.log("---8<--- end ---8<---");
+    return 0;
+  }
+
+  if (!(await instanceIsConnected())) {
+    console.log(
+      `[draft-digest] admin: instance ${INSTANCE()} not connected — deferring ${eligible.length} draft(s)`,
+    );
+    return 0;
+  }
+
+  if (!(await sendText(RECIPIENT(), text))) {
+    console.error(
+      `[draft-digest] admin: send FAILED — ${eligible.length} draft(s) left unstamped`,
+    );
+    return 1;
+  }
+
+  const placeholders = ids.map(() => "?").join(",");
+  const [res] = await conn.query(
+    `UPDATE checkout_drafts SET notified_at = UTC_TIMESTAMP() WHERE id IN (${placeholders})`,
+    ids,
+  );
+  console.log(
+    `[draft-digest] admin: sent=1 reported=${rows.length} stamped=${res.affectedRows} deferred=${truncatedCount}`,
+  );
+  return 0;
+}
+
+// ---------------------------------------------------------------------------
+// PASS 2 — customer reminder (opt-in, off by default)
+// ---------------------------------------------------------------------------
+async function runCustomerReminders(conn) {
+  // Master toggle — same gate every customer-facing WhatsApp respects.
+  const [settings] = await conn.query(
+    "SELECT notifications_enabled AS enabled FROM whatsapp_settings LIMIT 1",
+  );
+  if (settings.length === 0 || !Number(settings[0].enabled)) {
+    console.log("[draft-digest] customer: master notifications OFF — skipped");
+    return 0;
+  }
+
+  // Per-event toggle + admin-editable template.
+  const [notif] = await conn.query(
+    "SELECT enabled, template FROM whatsapp_notifications WHERE event_key = ? LIMIT 1",
+    [REMINDER_EVENT_KEY],
+  );
+  if (notif.length === 0) {
+    console.log(
+      `[draft-digest] customer: ${REMINDER_EVENT_KEY} not seeded yet — skipped`,
+    );
+    return 0;
+  }
+  if (!Number(notif[0].enabled)) {
+    console.log(
+      `[draft-digest] customer: ${REMINDER_EVENT_KEY} disabled in Notification Center — skipped`,
+    );
+    return 0;
+  }
+  const template = notif[0].template;
+  if (!template || !String(template).trim()) {
+    console.log("[draft-digest] customer: template empty — skipped");
+    return 0;
+  }
+
+  // Never message strangers outside business hours, even on a manual run.
+  const hour = mytHourNow();
+  const inWindow =
+    hour >= CUSTOMER_WINDOW.startHour && hour < CUSTOMER_WINDOW.endHour;
+  if (!inWindow && !FORCE_WINDOW) {
+    console.log(
+      `[draft-digest] customer: ${hour}:00 MYT is outside ${CUSTOMER_WINDOW.startHour}-${CUSTOMER_WINDOW.endHour} — skipped`,
+    );
+    return 0;
+  }
+
+  const [eligible] = await conn.query(
+    ELIGIBLE_SELECT.replace("{{COLUMN}}", "customer_notified_at"),
+    [MYT_OFFSET_HOURS],
+  );
+  if (eligible.length === 0) {
+    console.log("[draft-digest] customer: 0 eligible — nothing sent");
+    return 0;
+  }
+
+  const batch = eligible.slice(0, MAX_CUSTOMER_SENDS);
+  const deferred = eligible.length - batch.length;
+
+  if (!DRY_RUN && !(await instanceIsConnected())) {
+    console.log(
+      `[draft-digest] customer: instance ${INSTANCE()} not connected — deferring ${eligible.length}`,
+    );
+    return 0;
+  }
+
+  const origin = publicOrigin();
+  let sent = 0;
+  let skippedPhone = 0;
+  let failed = 0;
+
+  for (const r of batch) {
+    const number = normalizeMsisdn(r.phone);
+    if (!number) {
+      // Matches the isDeliverablePhone behaviour elsewhere: bad MSISDN is a
+      // silent skip, but we log it here so it is not invisible. Left unstamped
+      // on purpose — a corrected number could still be reachable later.
+      console.log(`[draft-digest] customer: unusable phone "${r.phone}" — skipped`);
+      skippedPhone += 1;
+      continue;
+    }
+
+    const text = renderTemplate(template, {
+      customerName: r.recipientName,
+      itemsSummary: describeItemsForCustomer(parseItems(r.itemsJson)),
+      subtotal: Number(r.subtotal || 0).toFixed(2),
+      bagUrl: `${origin}/bag`,
+    });
+
+    if (DRY_RUN) {
+      console.log(`---8<--- customer ${number} ---8<---`);
+      console.log(text);
+      console.log("---8<--- end ---8<---");
+      sent += 1;
+      continue;
+    }
+
+    if (await sendText(number, text)) {
+      await conn.query(
+        "UPDATE checkout_drafts SET customer_notified_at = UTC_TIMESTAMP() WHERE id = ?",
+        [r.id],
+      );
+      sent += 1;
+    } else {
+      // Not stamped — retried on the next run.
+      failed += 1;
+    }
+
+    if (CUSTOMER_SEND_GAP_MS > 0) await sleep(CUSTOMER_SEND_GAP_MS);
+  }
+
+  console.log(
+    `[draft-digest] customer: ${DRY_RUN ? "would send" : "sent"}=${sent} failed=${failed} badPhone=${skippedPhone} deferred=${deferred}`,
+  );
+  return 0;
 }
 
 async function main() {
@@ -194,74 +449,10 @@ async function main() {
   if (!url) throw new Error("DATABASE_URL missing");
 
   const conn = await mysql.createConnection(url);
-
   try {
-    const [eligible] = await conn.query(
-      `SELECT id,
-              recipient_name AS recipientName,
-              phone,
-              subtotal,
-              items_json    AS itemsJson,
-              created_at    AS createdAt,
-              TIMESTAMPDIFF(HOUR, created_at, UTC_TIMESTAMP()) AS ageHours,
-              DATE(created_at + INTERVAL ? HOUR)               AS mytDate
-         FROM checkout_drafts
-        WHERE status = 'open'
-          AND notified_at IS NULL
-          AND created_at <= UTC_TIMESTAMP() - INTERVAL 24 HOUR
-        ORDER BY created_at ASC`,
-      [MYT_OFFSET_HOURS],
-    );
-
-    if (eligible.length === 0) {
-      console.log("[draft-digest] 0 stale drafts — nothing sent");
-      return 0;
-    }
-
-    const rows = eligible.slice(0, MAX_ROWS);
-    const truncatedCount = eligible.length - rows.length;
-    const ids = rows.map((r) => r.id);
-    const text = buildMessage(rows, truncatedCount);
-
-    if (DRY_RUN) {
-      console.log("[draft-digest] --dry-run — message NOT sent, nothing stamped");
-      console.log(`[draft-digest] recipient: ${RECIPIENT()}`);
-      console.log(`[draft-digest] would stamp ${ids.length} id(s): ${ids.join(", ")}`);
-      console.log("---8<--- message ---8<---");
-      console.log(text);
-      console.log("---8<--- end ---8<---");
-      return 0;
-    }
-
-    if (!(await instanceIsConnected())) {
-      console.log(
-        `[draft-digest] instance ${INSTANCE()} not connected — deferring ${eligible.length} draft(s), nothing stamped`,
-      );
-      return 0;
-    }
-
-    const sent = await sendText(RECIPIENT(), text);
-    if (!sent) {
-      console.error(
-        `[draft-digest] send FAILED — ${eligible.length} draft(s) left unstamped for the next run`,
-      );
-      return 1;
-    }
-
-    // Stamp exactly what we reported. Parameterised placeholders, never a
-    // string-built IN list.
-    const placeholders = ids.map(() => "?").join(",");
-    const [res] = await conn.query(
-      `UPDATE checkout_drafts
-          SET notified_at = UTC_TIMESTAMP()
-        WHERE id IN (${placeholders})`,
-      ids,
-    );
-
-    console.log(
-      `[draft-digest] sent=1 reported=${rows.length} stamped=${res.affectedRows} deferred=${truncatedCount}`,
-    );
-    return 0;
+    const adminCode = await runAdminDigest(conn);
+    const customerCode = await runCustomerReminders(conn);
+    return adminCode || customerCode;
   } finally {
     await conn.end();
   }
