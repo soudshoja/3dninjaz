@@ -28,6 +28,7 @@ export const WHATSAPP_EVENT_KEYS = [
   "return_rejected",
   "return_received",
   "return_expired",
+  "draft_abandoned_reminder",
 ] as const;
 
 export type WhatsappEventKey = (typeof WHATSAPP_EVENT_KEYS)[number];
@@ -48,6 +49,8 @@ export const WHATSAPP_EVENT_LABELS: Record<WhatsappEventKey, string> = {
   return_rejected: "Return rejected",
   return_received: "Return received",
   return_expired: "Return window expired",
+  draft_abandoned_reminder:
+    "Abandoned checkout — 24h reminder to the customer (OFF by default)",
 };
 
 // Variables each event template may use (surfaced in the editor sidebar).
@@ -69,6 +72,7 @@ export const WHATSAPP_EVENT_VARIABLES: Record<WhatsappEventKey, string[]> = {
   return_rejected:    ["customerName", "orderNumber", "reason"],
   return_received:    ["customerName", "orderNumber"],
   return_expired:     ["customerName", "orderNumber"],
+  draft_abandoned_reminder: ["customerName", "itemsSummary", "subtotal", "bagUrl"],
 };
 
 const DEFAULT_TEMPLATES: Record<WhatsappEventKey, string> = {
@@ -102,12 +106,35 @@ const DEFAULT_TEMPLATES: Record<WhatsappEventKey, string> = {
     "Hi {{customerName}}, we've received your returned item for order {{orderNumber}}. Thank you!",
   return_expired:
     "Hi {{customerName}}, your return window for order {{orderNumber}} has expired as the item was not shipped within the required timeframe. Please contact support if you need help.",
+  // Sent to the CUSTOMER (not the admin) ~24h after they reached checkout and
+  // never paid. Deliberately closes by stating it is one-off: exactly one
+  // reminder is ever sent per draft (enforced by checkout_drafts
+  // .customer_notified_at), so there is no opt-out list to honour and we should
+  // not imply one exists.
+  draft_abandoned_reminder:
+    "Hi {{customerName}}, you left {{itemsSummary}} (RM{{subtotal}}) in your 3D Ninjaz bag 🥷\n\nStill want it? Pick up where you left off: {{bagUrl}}\n\nThis is a one-off reminder — we won't message you about this again.",
+};
+
+/**
+ * Per-event default for the `enabled` column at seed time. Anything not listed
+ * defaults to true, matching the original behaviour for the order/return events.
+ *
+ * draft_abandoned_reminder is false ON PURPOSE. It messages customers who never
+ * messaged us first, over an Evolution/Baileys personal-account gateway, so
+ * enabling it is a deliberate business decision the admin makes in
+ * /admin/notifications — not something a lazy seed switches on during an
+ * unrelated deploy. Note that getWhatsappNotificationsAll() backfills newly
+ * added keys automatically, so without this map the reminder would have gone
+ * live by itself.
+ */
+const DEFAULT_ENABLED: Partial<Record<WhatsappEventKey, boolean>> = {
+  draft_abandoned_reminder: false,
 };
 
 export function seedWhatsappNotifications(): WhatsappNotificationSeed[] {
   return WHATSAPP_EVENT_KEYS.map((eventKey) => ({
     eventKey,
-    enabled: true,
+    enabled: DEFAULT_ENABLED[eventKey] ?? true,
     template: DEFAULT_TEMPLATES[eventKey],
   }));
 }
