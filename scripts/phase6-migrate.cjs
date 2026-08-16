@@ -53,7 +53,7 @@ async function run() {
   const conn = await mysql.createConnection(url);
 
   // Detect DB name from URL or env so the column-existence check is precise.
-  const dbName = process.env.DB_NAME || new URL(url).pathname.replace(/^\//, "");
+  const dbName = new URL(url).pathname.replace(/^\//, "") || process.env.DB_NAME;
   console.log(`Connected to ${dbName}`);
 
   try {
