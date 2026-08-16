@@ -1398,6 +1398,12 @@ export const checkoutDrafts = mysqlTable(
     // so the admin filter, the open count and markDraftsConverted must keep
     // matching it.
     notifiedAt: timestamp("notified_at"),
+    // Customer-facing 24h abandoned-checkout reminder (260816). Separate from
+    // notifiedAt on purpose — that one tracks the ADMIN digest, and sharing a
+    // single column would make sending one suppress the other. NULL = this
+    // customer has never been reminded; set once, so exactly one reminder is
+    // ever sent per draft.
+    customerNotifiedAt: timestamp("customer_notified_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
   },
