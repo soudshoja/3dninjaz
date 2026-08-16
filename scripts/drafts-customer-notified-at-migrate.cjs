@@ -60,7 +60,20 @@ async function run() {
   if (!url) throw new Error("[drafts-customer-notified-at] DATABASE_URL not set");
 
   const conn = await mysql.createConnection(url);
-  const dbName = process.env.DB_NAME || new URL(url).pathname.replace(/^\//, "");
+
+  // Ask the CONNECTION which schema it is on. Do NOT trust process.env.DB_NAME:
+  // prod's .env.local carries a stale DB_NAME=ninjaz_3dn (the dev database,
+  // which also happens to match the DB *user* name) while DATABASE_URL points
+  // at ninjaz_3dnp. Deriving the name from env made every INFORMATION_SCHEMA
+  // guard below inspect the WRONG schema — the column was found on dev, the
+  // ALTER was skipped, and prod silently stayed unmigrated.
+  const [dbRows] = await conn.query("SELECT DATABASE() AS db");
+  const dbName = dbRows[0] && dbRows[0].db;
+  if (!dbName) {
+    throw new Error(
+      "[drafts-customer-notified-at] connection has no database selected",
+    );
+  }
   console.log(`[drafts-customer-notified-at] connected to ${dbName}`);
 
   try {
