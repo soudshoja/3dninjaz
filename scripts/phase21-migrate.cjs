@@ -76,7 +76,7 @@ async function run() {
   if (!url) throw new Error("[phase21-migrate] DATABASE_URL not set");
 
   const conn = await mysql.createConnection(url);
-  const dbName = process.env.DB_NAME || new URL(url).pathname.replace(/^\//, "");
+  const dbName = new URL(url).pathname.replace(/^\//, "") || process.env.DB_NAME;
   console.log(`[phase21-migrate] connected to ${dbName}`);
 
   const applied = [];
