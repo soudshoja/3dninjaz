@@ -61,7 +61,7 @@ async function run() {
   const conn = await mysql.createConnection(url);
 
   const dbName =
-    process.env.DB_NAME || new URL(url).pathname.replace(/^\//, "");
+    new URL(url).pathname.replace(/^\//, "") || process.env.DB_NAME;
   console.log(`Connected to ${dbName}`);
 
   try {

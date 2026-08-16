@@ -58,7 +58,7 @@ async function run() {
   if (!url) throw new Error("DATABASE_URL missing");
   const conn = await mysql.createConnection(url);
   const dbName =
-    process.env.DB_NAME || new URL(url).pathname.replace(/^\//, "");
+    new URL(url).pathname.replace(/^\//, "") || process.env.DB_NAME;
   console.log(`Connected to ${dbName}`);
 
   try {
