@@ -1,0 +1,7 @@
+{
+  "//": "Standalone runner config for scripts/preview-quotation.tsx. The root tsconfig sets jsx=preserve, which Next compiles with React's automatic runtime; the tsx CLI instead falls back to classic React.createElement and then fails with 'React is not defined' inside the PDF components (which, correctly, do not import React). Forcing the automatic runtime here keeps the app files untouched.",
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx"
+  }
+}
