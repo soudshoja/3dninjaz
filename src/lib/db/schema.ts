@@ -2401,3 +2401,102 @@ export const payouts = mysqlTable(
 export type Expense = typeof expenses.$inferSelect;
 export type Asset = typeof assets.$inferSelect;
 export type Payout = typeof payouts.$inferSelect;
+
+/**
+ * Quotations (2026-08-18). The quotation is the FIRST document sent to a
+ * client and carries the payment terms. When the client pays, the admin marks
+ * it and a linked `orders` row is created, from which the EXISTING invoice
+ * pipeline runs unchanged — nothing in `orders` / `order_items` changes for
+ * this feature.
+ *
+ * Deliberately its own table rather than a flag on `orders`: a quotation is
+ * not yet a sale, has its own number series, expires, and its client block is
+ * free text (B2B contacts like "Khai Wong / Jo Malone London" are not
+ * storefront accounts).
+ *
+ * See .planning/QUOTATION-SYSTEM-PLAN.md for the full rationale.
+ */
+export const quotationStatusValues = [
+  "draft",
+  "sent",
+  "deposit_paid",
+  "completed",
+  "cancelled",
+] as const;
+
+export const quotations = mysqlTable(
+  "quotations",
+  {
+    id: char("id", { length: 36 }).primaryKey(),
+    // Own series, independent of order numbers. AUTO_INCREMENT so two admins
+    // cannot mint the same number; rendered as "#0024".
+    quoteNo: int("quote_no").autoincrement().notNull(),
+    status: mysqlEnum("status", quotationStatusValues).notNull().default("draft"),
+
+    // Client block — all free text, no FK to `user`.
+    contactName: varchar("contact_name", { length: 200 }).notNull(),
+    companyName: varchar("company_name", { length: 200 }),
+    contactEmail: varchar("contact_email", { length: 255 }),
+    contactPhone: varchar("contact_phone", { length: 32 }),
+    contactAddress: text("contact_address"),
+    // Optional soft link to a storefront account. No cascade.
+    userId: varchar("user_id", { length: 36 }),
+
+    // Document body
+    projectDescription: text("project_description"),
+    productionLeadTime: varchar("production_lead_time", { length: 120 }),
+    // YYYY-MM-DD, matching the expenses.expenseDate convention (schema.ts:2190).
+    validUntil: varchar("valid_until", { length: 10 }).notNull(),
+    // JSON string[] stored as LONGTEXT — mysql2 does NOT auto-parse it.
+    // Always read through ensureTermsArray() in src/lib/quotations.ts.
+    terms: longtext("terms"),
+
+    // Money (MYR), mirroring the precision used on `orders`.
+    subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull().default("0.00"),
+    totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull().default("0.00"),
+    currency: varchar("currency", { length: 3 }).notNull().default("MYR"),
+    // 100.00 means payment in full up front, no deposit stage.
+    depositPercent: decimal("deposit_percent", { precision: 5, scale: 2 }).notNull().default("50.00"),
+    // Snapshot taken when the quote is sent, so later edits cannot move the
+    // figure the client already agreed to.
+    depositAmount: decimal("deposit_amount", { precision: 10, scale: 2 }).notNull().default("0.00"),
+
+    sentAt: timestamp("sent_at"),
+    depositPaidAt: timestamp("deposit_paid_at"),
+    completedAt: timestamp("completed_at"),
+
+    // Conversion link. UNIQUE is the idempotency backstop: a double-click
+    // cannot attach two orders to one quotation.
+    orderId: char("order_id", { length: 36 }),
+    notes: text("notes"),
+
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({
+    quoteNoUnique: unique("uq_quotations_quote_no").on(t.quoteNo),
+    orderIdUnique: unique("uq_quotations_order_id").on(t.orderId),
+    statusCreatedIdx: index("idx_quotations_status_created").on(t.status, t.createdAt),
+  }),
+);
+
+export const quotationItems = mysqlTable(
+  "quotation_items",
+  {
+    id: char("id", { length: 36 }).primaryKey(),
+    quotationId: char("quotation_id", { length: 36 }).notNull(),
+    position: int("position").notNull().default(0),
+    // The "Package Inclusion" column on the printed document.
+    description: varchar("description", { length: 500 }).notNull(),
+    quantity: int("quantity").notNull().default(1),
+    unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
+    lineTotal: decimal("line_total", { precision: 10, scale: 2 }).notNull(),
+  },
+  (t) => ({
+    quotationIdx: index("idx_qi_quotation").on(t.quotationId, t.position),
+  }),
+);
+
+export type Quotation = typeof quotations.$inferSelect;
+export type QuotationItem = typeof quotationItems.$inferSelect;
+export type QuotationStatus = (typeof quotationStatusValues)[number];
