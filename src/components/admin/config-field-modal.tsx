@@ -92,6 +92,18 @@ const FIELD_TYPES: FieldTypeMeta[] = [
 // Type-specific config forms
 // ---------------------------------------------------------------------------
 
+/**
+ * Default allowed-character set for a NEW free-text field.
+ *
+ * Was "A-Z", which is correct for keycap sequences (every character becomes a
+ * printed part) but wrong for ordinary text. Because configurator-form.tsx
+ * strips disallowed characters on each keystroke, that default silently made
+ * spaces and digits untypable: a "First day of school date" field accepted no
+ * numbers at all, and names ran together. Existing fields keep whatever is
+ * stored; this only changes what a new field starts with.
+ */
+export const DEFAULT_TEXT_ALLOWED_CHARS = "A-Za-z0-9 .,'-";
+
 export function TextConfigForm({
   value,
   onChange,
@@ -132,12 +144,18 @@ export function TextConfigForm({
         <Label htmlFor="allowedChars">Allowed characters (regex char class)</Label>
         <Input
           id="allowedChars"
-          value={value.allowedChars ?? "A-Z"}
+          value={value.allowedChars ?? DEFAULT_TEXT_ALLOWED_CHARS}
           onChange={(e) => onChange({ ...value, allowedChars: e.target.value })}
-          placeholder="e.g. A-Z or A-Za-z0-9"
+          placeholder="e.g. A-Za-z0-9 .,'-"
           className="h-9"
         />
-        <p className="text-xs text-muted-foreground">Used to validate customer input</p>
+        <p className="text-xs text-muted-foreground">
+          Anything outside this set is <strong>silently deleted as the customer
+          types</strong> — they get no error. Keep the space if the field takes
+          more than one word, and add <code>0-9</code> for dates or numbers.
+          Use <code>A-Z</code> only when every character becomes a separate
+          printed part, such as keychain letters.
+        </p>
       </div>
       <div className="flex items-center gap-3">
         <Switch
@@ -357,10 +375,13 @@ export function KeycapSeqConfigForm({
           id="keycapAllowedChars"
           value={value.allowedChars ?? "A-Z"}
           onChange={(e) => onChange({ ...value, allowedChars: e.target.value })}
-          placeholder="e.g. A-Z or A-Za-z0-9"
+          placeholder="e.g. A-Z"
           className="h-9"
         />
-        <p className="text-xs text-muted-foreground">Used to validate customer letter input</p>
+        <p className="text-xs text-muted-foreground">
+          Each character becomes a physical keycap, so <code>A-Z</code> is
+          correct here. Do not add a space: there is no blank keycap part.
+        </p>
       </div>
       <div className="flex items-center gap-3">
         <Switch
