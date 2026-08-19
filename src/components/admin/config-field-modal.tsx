@@ -981,7 +981,16 @@ export function ConfigFieldFormBody({
   const [textConfig, setTextConfig] = useState<Partial<TextFieldConfig>>(
     initialField?.fieldType === "text"
       ? (initialField.config as TextFieldConfig)
-      : { maxLength: 8, allowedChars: "A-Z", uppercase: true, profanityCheck: false },
+      : {
+          maxLength: 8,
+          // Seeded default for a NEW text field. This is the line that
+          // actually gets SAVED, so while it said "A-Z" the widened
+          // fallback above was dead code and new fields still rejected
+          // spaces and digits. Keep the two in step.
+          allowedChars: DEFAULT_TEXT_ALLOWED_CHARS,
+          uppercase: true,
+          profanityCheck: false,
+        },
   );
   const [numberConfig, setNumberConfig] = useState<Partial<NumberFieldConfig>>(
     initialField?.fieldType === "number"
