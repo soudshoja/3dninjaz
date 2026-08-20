@@ -29,12 +29,15 @@ type Props = {
    * the admin surface. Defaults to "admin" so the admin panel keeps full detail.
    */
   audience?: "customer" | "admin";
+  /** Suppress the top status banner (used when the caller renders its own summary row). */
+  hideBanner?: boolean;
 };
 
 export function OrderTrackingTimeline({
   view,
   dense,
   audience = "admin",
+  hideBanner = false,
 }: Props) {
   const isAdmin = audience === "admin";
   // Empty state — no shipment booked yet. The customer page uses this
@@ -75,32 +78,34 @@ export function OrderTrackingTimeline({
 
   return (
     <div className={dense ? "space-y-4" : "space-y-6"}>
-      {/* Status banner */}
-      <div
-        className={`rounded-2xl p-4 md:p-5 flex items-center gap-4 flex-wrap border-2`}
-        style={{
-          backgroundColor: banner.bg,
-          borderColor: banner.border,
-          color: BRAND.ink,
-        }}
-        role="status"
-      >
-        <Image
-          src={banner.icon}
-          alt=""
-          width={56}
-          height={56}
-          className="h-14 w-14 object-contain shrink-0"
-        />
-        <div className="flex-1 min-w-0">
-          <p className="font-bold text-base md:text-lg">
-            {view.statusMessage || bucketLabel(bucket)}
-          </p>
-          <p className="text-sm text-slate-700 mt-0.5">
-            {banner.subline}
-          </p>
+      {/* Status banner — suppressed when parent renders its own summary row */}
+      {!hideBanner && (
+        <div
+          className={`rounded-2xl p-4 md:p-5 flex items-center gap-4 flex-wrap border-2`}
+          style={{
+            backgroundColor: banner.bg,
+            borderColor: banner.border,
+            color: BRAND.ink,
+          }}
+          role="status"
+        >
+          <Image
+            src={banner.icon}
+            alt=""
+            width={56}
+            height={56}
+            className="h-14 w-14 object-contain shrink-0"
+          />
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-base md:text-lg">
+              {view.statusMessage || bucketLabel(bucket)}
+            </p>
+            <p className="text-sm text-slate-700 mt-0.5">
+              {banner.subline}
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Estimated delivery — shown to everyone when the courier gave an ETA. */}
       {view.estimatedDelivery ? (
@@ -340,7 +345,7 @@ function bannerFor(b: TrackingBucket): {
   }
 }
 
-function dotColorFor(b: TrackingBucket): string {
+export function dotColorFor(b: TrackingBucket): string {
   switch (b) {
     case "delivered":
       return BRAND.green;
