@@ -14,8 +14,7 @@ import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
 import { sendWhatsAppNotification, sendWhatsAppInvoicePdf } from "@/lib/whatsapp/sender";
 import { validateCoupon, redeemCoupon } from "@/actions/coupons";
 import { publicUrl } from "@/lib/public-url";
-import { getShippingRate } from "@/actions/admin-shipping";
-import { quoteForCart } from "@/actions/shipping-quote";
+import { autoQuoteShipping } from "@/lib/shipping-auto";
 import { revalidatePath } from "next/cache";
 import type { ConfigurationData } from "@/lib/config-fields";
 import { ensureConfigJson } from "@/lib/config-fields";
@@ -422,77 +421,50 @@ export async function createPayPalOrder(
   const subtotal = allSnapshots.reduce((sum, s) => sum + Number(s.lineTotal), 0);
   const subtotalStr = subtotal.toFixed(2);
 
-  // Phase 9b — prefer Delyva live quote if the customer picked a courier.
-  // Fall back to the Phase 5 per-state flat rate when no serviceCode is set.
-  // The server never trusts client-supplied shipping prices — we re-quote
+  // The server never trusts a client-supplied shipping price — it re-quotes
   // against Delyva here (T-09-01-tampering).
-  let shippingNum: number;
-  let shippingServiceCode: string | null = null;
-  let shippingServiceName: string | null = null;
-  if (input.shippingServiceCode) {
-    try {
-      const quote = await quoteForCart(
-        input.items.map((i) => {
-          const row = variantRows.find((v) => v.id === i.variantId);
-          // Use the server-snapshot unitPrice (already sale-resolved) so the
-          // Delyva free-shipping threshold check matches what we actually
-          // charge the customer.
-          const snap = allSnapshots.find((s) => s.variantId === i.variantId);
-          return {
-            productId: row?.productId ?? "",
-            variantId: i.variantId,
-            quantity: qtyByVariant.get(i.variantId) ?? i.quantity,
-            unitPrice: snap ? Number(snap.unitPrice) : 0,
-          };
-        }),
-        {
-          address1: addr.data.addressLine1,
-          address2: addr.data.addressLine2 ?? null,
-          city: addr.data.city,
-          state: addr.data.state,
-          postcode: addr.data.postcode,
-          country: "MY",
-        },
-      );
-      if (quote.ok) {
-        const match = quote.options.find(
-          (o) => o.serviceCode === input.shippingServiceCode,
-        );
-        if (match) {
-          shippingNum = match.finalPrice;
-          shippingServiceCode = match.serviceCode;
-          shippingServiceName = match.serviceName;
-        } else {
-          // Requested service no longer available — fall back to cheapest.
-          const cheapest = [...quote.options].sort(
-            (a, b) => a.finalPrice - b.finalPrice,
-          )[0];
-          if (cheapest) {
-            shippingNum = cheapest.finalPrice;
-            shippingServiceCode = cheapest.serviceCode;
-            shippingServiceName = cheapest.serviceName;
-          } else {
-            const flat = await getShippingRate(addr.data.state, subtotal);
-            shippingNum = Number(flat.cost.toFixed(2));
-          }
-        }
-      } else {
-        // Delyva quote failed — fall back to flat-rate table so checkout
-        // doesn't hard-fail. The admin still sees which state shipped to.
-        const flat = await getShippingRate(addr.data.state, subtotal);
-        shippingNum = Number(flat.cost.toFixed(2));
-      }
-    } catch (err) {
-      console.error("[paypal] Delyva re-quote failed:", err);
-      const flat = await getShippingRate(addr.data.state, subtotal);
-      shippingNum = Number(flat.cost.toFixed(2));
-    }
-  } else {
-    // Plan 05-04 — shipping cost from per-state DB rate + free-ship threshold.
-    const shippingResult = await getShippingRate(addr.data.state, subtotal);
-    shippingNum = Number(shippingResult.cost.toFixed(2));
+  //
+  // 260906 — one shipping engine for every order path. Always quotes Delyva
+  // from the destination address (previously a customer who never touched the
+  // courier picker skipped the quote entirely and got the flat table, which
+  // was 0.00 for all 16 states). autoQuoteShipping honours the courier the
+  // customer chose when it is still offered, else takes the cheapest, else
+  // falls back to the weight-bracketed table. It never returns a silent zero.
+  const autoShip = await autoQuoteShipping(
+    input.items.map((i) => {
+      const row = variantRows.find((v) => v.id === i.variantId);
+      // Use the server-snapshot unitPrice (already sale-resolved) so the
+      // free-shipping threshold check matches what we actually charge.
+      const snap = allSnapshots.find((s) => s.variantId === i.variantId);
+      return {
+        productId: row?.productId ?? "",
+        variantId: i.variantId,
+        quantity: qtyByVariant.get(i.variantId) ?? i.quantity,
+        unitPrice: snap ? Number(snap.unitPrice) : 0,
+      };
+    }),
+    {
+      address1: addr.data.addressLine1,
+      address2: addr.data.addressLine2 ?? null,
+      city: addr.data.city,
+      state: addr.data.state,
+      postcode: addr.data.postcode,
+      country: "MY",
+    },
+    input.shippingServiceCode ?? null,
+  );
+
+  if (!autoShip.ok) {
+    return {
+      ok: false,
+      error:
+        "We could not calculate shipping to that address right now. Please check your postcode and try again, or contact us.",
+    };
   }
-  shippingNum = Number(shippingNum.toFixed(2));
+
+  const shippingNum = Number(autoShip.quote.cost.toFixed(2));
+  const shippingServiceCode = autoShip.quote.serviceCode;
+  const shippingServiceName = autoShip.quote.serviceName;
   const shippingStr = shippingNum.toFixed(2);
 
   // Plan 05-03 — server-side coupon application. Even if the client never

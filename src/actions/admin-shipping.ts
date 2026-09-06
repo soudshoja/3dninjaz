@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { shippingRates } from "@/lib/db/schema";
+import { shippingRates, shippingFallbackRates } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
@@ -11,6 +11,7 @@ import {
   MALAYSIAN_STATES,
 } from "@/lib/validators";
 import { getStoreSettingsCached } from "@/lib/store-settings";
+import { getFallbackShippingRate } from "@/lib/shipping-fallback";
 
 // ============================================================================
 // Plan 05-04 admin shipping rates + customer-side getShippingRate.
@@ -102,6 +103,7 @@ export async function updateShippingRates(
 export async function getShippingRate(
   state: string,
   subtotalMYR: number,
+  weightKg = 1,
 ): Promise<{ cost: number; freeShipApplied: boolean }> {
   const settings = await getStoreSettingsCached();
   const threshold = settings.freeShipThreshold
@@ -114,15 +116,88 @@ export async function getShippingRate(
   ) {
     return { cost: 0, freeShipApplied: true };
   }
-  const [row] = await db
-    .select()
-    .from(shippingRates)
-    .where(eq(shippingRates.state, state))
-    .limit(1);
-  if (!row) {
-    // Defensive: state not in our table (data drift). Return 0 — operator
-    // sees the issue when reconciling orders.
-    return { cost: 0, freeShipApplied: false };
+
+  // 260906: this used to read shipping_rates.flat_rate and return whatever it
+  // found — including 0.00, which is what every one of the 16 MY state rows
+  // held since the 2026-04-19 seed. Callers took that as "shipping is free"
+  // and it silently zeroed real orders. A zero here now means "no rate
+  // configured" and routes to the weight-bracketed fallback table instead.
+  const fallback = await getFallbackShippingRate(state, weightKg);
+  if (fallback) {
+    return { cost: fallback.cost, freeShipApplied: false };
   }
-  return { cost: parseFloat(row.flatRate), freeShipApplied: false };
+
+  // Nothing configured anywhere. Return 0 so a UI estimate still renders, but
+  // make the gap loud — order-creating paths use autoQuoteShipping, which
+  // refuses to write a silent zero.
+  console.warn(
+    "[admin-shipping] no shipping rate configured for state=%s (weight %skg) — returning 0; seed brackets via scripts/shipping-fallback-rates-migrate.cjs",
+    state,
+    weightKg,
+  );
+  return { cost: 0, freeShipApplied: false };
+}
+
+// ── Weight-bracketed fallback rates (260906) ──────────────────────────────────
+
+export type FallbackRateRow = {
+  id: string;
+  state: string;
+  maxWeightKg: string;
+  rate: string;
+  source: "seed" | "learned" | "manual";
+  updatedAt: Date;
+};
+
+/**
+ * Every fallback bracket, ordered by the MY state tuple then ascending weight,
+ * so the admin grid renders in a stable order.
+ */
+export async function listFallbackRates(): Promise<FallbackRateRow[]> {
+  await requireAdmin();
+
+  const rows = await db.select().from(shippingFallbackRates);
+  const order = new Map<string, number>(MALAYSIAN_STATES.map((s, i) => [s, i]));
+  rows.sort((a, b) => {
+    const byState = (order.get(a.state) ?? 99) - (order.get(b.state) ?? 99);
+    if (byState !== 0) return byState;
+    return Number(a.maxWeightKg) - Number(b.maxWeightKg);
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    state: r.state,
+    maxWeightKg: r.maxWeightKg,
+    rate: r.rate,
+    source: r.source,
+    updatedAt: r.updatedAt,
+  }));
+}
+
+/**
+ * Persist admin edits. Every touched row is marked source='manual' so the
+ * runtime learner (which writes 'learned' rows from real Delyva quotes) never
+ * overwrites an operator's number.
+ */
+export async function updateFallbackRates(
+  entries: Array<{ id: string; rate: string }>,
+): Promise<UpdateResult> {
+  await requireAdmin();
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return { ok: false, error: "No rates supplied" };
+  }
+  for (const e of entries) {
+    if (!/^\d+(\.\d{1,2})?$/.test(String(e.rate).trim())) {
+      return { ok: false, error: `Invalid rate "${e.rate}" — use e.g. 10.90` };
+    }
+  }
+  await db.transaction(async (tx) => {
+    for (const e of entries) {
+      await tx
+        .update(shippingFallbackRates)
+        .set({ rate: String(e.rate).trim(), source: "manual" })
+        .where(eq(shippingFallbackRates.id, e.id));
+    }
+  });
+  revalidatePath("/admin/shipping");
+  return { ok: true };
 }

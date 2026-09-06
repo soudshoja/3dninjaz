@@ -6,7 +6,8 @@ import { desc, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { getSessionUser, requireAdmin } from "@/lib/auth-helpers";
 import { normalizeMsisdn } from "@/lib/order-dedupe";
-import { getShippingRate } from "@/actions/admin-shipping";
+import { autoQuoteShipping } from "@/lib/shipping-auto";
+import type { CartItemForQuote } from "@/lib/shipping-quote-types";
 import { MALAYSIAN_STATES } from "@/lib/validators";
 import { revalidatePath } from "next/cache";
 
@@ -276,15 +277,55 @@ export async function convertDraftToOrder(
     0,
   );
 
-  // Flat shipping estimate from the destination state — best-effort.
-  let shippingCost = 0;
-  try {
-    const rate = await getShippingRate(addr.state, subtotal);
-    shippingCost = Number(rate.cost) || 0;
-  } catch {
-    shippingCost = 0;
+  // Live Delyva quote from the draft's own address (260906). This used to be
+  // a flat per-state lookup against shipping_rates, whose flat_rate was 0.00
+  // for every state — so every converted draft shipped free (all 6 of the
+  // zero-shipping orders on prod came from this path). Draft lines carry a
+  // real productId + configJson but no variantId, which is why the weight
+  // ladder in the quote core treats variantId as optional.
+  const quoteItems: CartItemForQuote[] = items.map((it) => {
+    let configValues: Record<string, string> | undefined;
+    if (it.configJson) {
+      try {
+        const parsed = JSON.parse(it.configJson) as {
+          values?: Record<string, string>;
+        };
+        if (parsed?.values && typeof parsed.values === "object") {
+          configValues = parsed.values;
+        }
+      } catch {
+        // Corrupt snapshot — quote on product/default weight instead.
+      }
+    }
+    return {
+      productId: it.productId ?? "",
+      variantId: it.variantId ?? null,
+      quantity: Number(it.quantity) || 1,
+      unitPrice: Number(it.unitPrice) || 0,
+      configValues,
+    };
+  });
+
+  const auto = await autoQuoteShipping(quoteItems, {
+    address1: addr.line1!.trim(),
+    address2: addr.line2?.trim() || null,
+    city: addr.city!.trim(),
+    state: addr.state,
+    postcode: addr.postcode!.trim(),
+    country: "MY",
+  });
+
+  if (!auto.ok) {
+    // Never fall through to RM0.00 — a missing rate is a data problem, not a
+    // free shipment. The admin can still convert after fixing the address or
+    // seeding a fallback bracket.
+    return {
+      ok: false,
+      error: `Could not price shipping for this draft (${auto.error}). Check the address, or set a fallback rate in /admin/shipping.`,
+    };
   }
 
+  const shippingCost = auto.quote.cost;
   const total = subtotal + shippingCost;
   const orderId = randomUUID();
   const guestAccessToken = randomUUID();
@@ -303,6 +344,13 @@ export async function convertDraftToOrder(
       sourceType: "manual",
       subtotal: subtotal.toFixed(2),
       shippingCost: shippingCost.toFixed(2),
+      // Null service code marks an estimated (fallback-table) price so the
+      // admin can see it was not a live courier quote.
+      shippingServiceCode: auto.quote.serviceCode,
+      shippingServiceName: auto.quote.serviceName,
+      shippingQuotedPrice: auto.quote.serviceCode
+        ? shippingCost.toFixed(2)
+        : null,
       totalAmount: total.toFixed(2),
       currency: "MYR",
       customerEmail,

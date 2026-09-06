@@ -8,8 +8,7 @@ import { randomUUID } from "node:crypto";
 import { getSessionUser } from "@/lib/auth-helpers";
 import { orderAddressSchema, type OrderAddressInput } from "@/lib/validators";
 import { validateCoupon, redeemCoupon } from "@/actions/coupons";
-import { getShippingRate } from "@/actions/admin-shipping";
-import { quoteForCart } from "@/actions/shipping-quote";
+import { autoQuoteShipping } from "@/lib/shipping-auto";
 import { revalidatePath } from "next/cache";
 import type { ConfigurationData } from "@/lib/config-fields";
 import { ensureConfigJson } from "@/lib/config-fields";
@@ -341,67 +340,50 @@ export async function createWhatsAppOrder(
   const subtotal = allSnapshots.reduce((sum, s) => sum + Number(s.lineTotal), 0);
   const subtotalStr = subtotal.toFixed(2);
 
-  // Shipping re-quote — same logic as createPayPalOrder.
-  let shippingNum: number;
-  let shippingServiceCode: string | null = null;
-  let shippingServiceName: string | null = null;
-  if (input.shippingServiceCode) {
-    try {
-      const quote = await quoteForCart(
-        input.items.map((i) => {
-          const row = variantRows.find((v) => v.id === i.variantId);
-          const snap = allSnapshots.find((s) => s.variantId === i.variantId);
-          return {
-            productId: row?.productId ?? "",
-            variantId: i.variantId,
-            quantity: qtyByVariant.get(i.variantId) ?? i.quantity,
-            unitPrice: snap ? Number(snap.unitPrice) : 0,
-          };
-        }),
-        {
-          address1: addr.data.addressLine1,
-          address2: addr.data.addressLine2 ?? null,
-          city: addr.data.city,
-          state: addr.data.state,
-          postcode: addr.data.postcode,
-          country: "MY",
-        },
-      );
-      if (quote.ok) {
-        const match = quote.options.find(
-          (o) => o.serviceCode === input.shippingServiceCode,
-        );
-        if (match) {
-          shippingNum = match.finalPrice;
-          shippingServiceCode = match.serviceCode;
-          shippingServiceName = match.serviceName;
-        } else {
-          const cheapest = [...quote.options].sort(
-            (a, b) => a.finalPrice - b.finalPrice,
-          )[0];
-          if (cheapest) {
-            shippingNum = cheapest.finalPrice;
-            shippingServiceCode = cheapest.serviceCode;
-            shippingServiceName = cheapest.serviceName;
-          } else {
-            const flat = await getShippingRate(addr.data.state, subtotal);
-            shippingNum = Number(flat.cost.toFixed(2));
-          }
-        }
-      } else {
-        const flat = await getShippingRate(addr.data.state, subtotal);
-        shippingNum = Number(flat.cost.toFixed(2));
-      }
-    } catch (err) {
-      console.error("[whatsapp-order] Delyva re-quote failed:", err);
-      const flat = await getShippingRate(addr.data.state, subtotal);
-      shippingNum = Number(flat.cost.toFixed(2));
-    }
-  } else {
-    const shippingResult = await getShippingRate(addr.data.state, subtotal);
-    shippingNum = Number(shippingResult.cost.toFixed(2));
+  // Shipping re-quote — same engine as createPayPalOrder; the server never
+  // trusts a client-supplied shipping price.
+  //
+  // 260906 — one shipping engine for every order path. Always quotes Delyva
+  // from the destination address (previously a customer who never touched the
+  // courier picker skipped the quote entirely and got the flat table, which
+  // was 0.00 for all 16 states). autoQuoteShipping honours the courier the
+  // customer chose when it is still offered, else takes the cheapest, else
+  // falls back to the weight-bracketed table. It never returns a silent zero.
+  const autoShip = await autoQuoteShipping(
+    input.items.map((i) => {
+      const row = variantRows.find((v) => v.id === i.variantId);
+      // Use the server-snapshot unitPrice (already sale-resolved) so the
+      // free-shipping threshold check matches what we actually charge.
+      const snap = allSnapshots.find((s) => s.variantId === i.variantId);
+      return {
+        productId: row?.productId ?? "",
+        variantId: i.variantId,
+        quantity: qtyByVariant.get(i.variantId) ?? i.quantity,
+        unitPrice: snap ? Number(snap.unitPrice) : 0,
+      };
+    }),
+    {
+      address1: addr.data.addressLine1,
+      address2: addr.data.addressLine2 ?? null,
+      city: addr.data.city,
+      state: addr.data.state,
+      postcode: addr.data.postcode,
+      country: "MY",
+    },
+    input.shippingServiceCode ?? null,
+  );
+
+  if (!autoShip.ok) {
+    return {
+      ok: false,
+      error:
+        "We could not calculate shipping to that address right now. Please check your postcode and try again, or contact us.",
+    };
   }
-  shippingNum = Number(shippingNum.toFixed(2));
+
+  const shippingNum = Number(autoShip.quote.cost.toFixed(2));
+  const shippingServiceCode = autoShip.quote.serviceCode;
+  const shippingServiceName = autoShip.quote.serviceName;
   const shippingStr = shippingNum.toFixed(2);
 
   // Coupon validation.
