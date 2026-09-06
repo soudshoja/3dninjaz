@@ -2,8 +2,9 @@
  * keychain-fields.ts
  *
  * Helper that inserts the 4 fixed (locked) config fields for a keychain
- * product:
- *   position 0 — text   "Your name" (locked: true, maxLength 8, A-Z letters only, uppercase, profanityCheck)
+ * product. Position 0 branches on the keychain `shape` (Phase 25 25-03):
+ *   position 0 — SQUARE: keycapseq "Your keycaps" (locked, maxSlots 8, A-Z, uppercase, profanityCheck, allowedIconIds)
+ *                ROUND : text      "Your name"    (locked, maxLength 8, A-Z letters only, uppercase, profanityCheck) — D-01, untouched
  *   position 1 — colour "Base"      (locked: true)
  *   position 2 — colour "Clicker"   (locked: true)
  *   position 3 — colour "Letter"    (locked: true)
@@ -31,6 +32,7 @@ const LETTER_COLOUR_NAMES  = ["White", "Gold", "Black"];
 
 export async function seedKeychainFields(
   productId: string,
+  shape: "square" | "round",
   options?: { silent?: boolean },
 ): Promise<void> {
   const log = options?.silent
@@ -63,27 +65,53 @@ export async function seedKeychainFields(
 
   // ── Insert 4 locked fields ────────────────────────────────────────────────
 
-  // Field 0 — text: "Your name" (locked)
+  // Field 0 — position-0 personalisation field. Phase 25 (25-03): SQUARE
+  // keychains get a `keycapseq` mixed letter+icon sequence field; ROUND
+  // keychains keep TODAY'S plain text "Your name" field byte-for-byte (D-01 —
+  // the round path is untouched).
   const nameFieldId = randomUUID();
-  await db.insert(productConfigFields).values({
-    id: nameFieldId,
-    productId,
-    position: 0,
-    fieldType: "text",
-    label: "Your name",
-    // Helper text is generated dynamically on the storefront from the config
-    // (allowed chars + max length); this stored value is just an admin hint.
-    helpText: "Letters only (uppercase).",
-    required: true,
-    locked: true,
-    configJson: JSON.stringify({
-      maxLength: 8,
-      allowedChars: "A-Z",
-      uppercase: true,
-      profanityCheck: true,
-    }),
-  });
-  log(`  text field "${nameFieldId}" (Your name, locked)`);
+  if (shape === "square") {
+    await db.insert(productConfigFields).values({
+      id: nameFieldId,
+      productId,
+      position: 0,
+      fieldType: "keycapseq",
+      label: "Your keycaps",
+      // Helper text is generated dynamically on the storefront from the config
+      // (allowed chars + max slots); this stored value is just an admin hint.
+      helpText: "Letters and icons (uppercase).",
+      required: true,
+      locked: true,
+      configJson: JSON.stringify({
+        maxSlots: 8,
+        allowedChars: "A-Z",
+        uppercase: true,
+        profanityCheck: true,
+        allowedIconIds: [], // admin picks allowed icons later (Plan 25-05/07)
+      }),
+    });
+    log(`  keycapseq field "${nameFieldId}" (Your keycaps, locked)`);
+  } else {
+    await db.insert(productConfigFields).values({
+      id: nameFieldId,
+      productId,
+      position: 0,
+      fieldType: "text",
+      label: "Your name",
+      // Helper text is generated dynamically on the storefront from the config
+      // (allowed chars + max length); this stored value is just an admin hint.
+      helpText: "Letters only (uppercase).",
+      required: true,
+      locked: true,
+      configJson: JSON.stringify({
+        maxLength: 8,
+        allowedChars: "A-Z",
+        uppercase: true,
+        profanityCheck: true,
+      }),
+    });
+    log(`  text field "${nameFieldId}" (Your name, locked)`);
+  }
 
   // Field 1 — colour: "Base" (locked)
   const baseFieldId = randomUUID();

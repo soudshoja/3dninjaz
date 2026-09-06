@@ -10,8 +10,15 @@ import { orderAddressSchema, type OrderAddressInput } from "@/lib/validators";
 import { validateCoupon, redeemCoupon } from "@/actions/coupons";
 import { autoQuoteShipping } from "@/lib/shipping-auto";
 import { revalidatePath } from "next/cache";
-import type { ConfigurationData } from "@/lib/config-fields";
-import { ensureConfigJson } from "@/lib/config-fields";
+import type { ConfigurationData, KeycapSeqConfig } from "@/lib/config-fields";
+import {
+  ensureConfigJson,
+  ensureTiers,
+  ensureKeycapSequence,
+  lookupTierPriceBySlotCount,
+  buildKeycapSequenceSummary,
+} from "@/lib/config-fields";
+import { KEYCAP_ICON_BY_ID } from "@/lib/keycap-icons";
 import { productConfigFields } from "@/lib/db/schema";
 import { sanitizeCustomText, customKey, buildConfigSummaryServer } from "@/lib/custom-text";
 import { dedupeUnpaidOrders, itemSignature } from "@/lib/order-dedupe";
@@ -229,7 +236,12 @@ export async function createWhatsAppOrder(
   const configurableProductRows =
     configurableProductIds.length > 0
       ? await db
-          .select({ id: products.id, slug: products.slug, name: products.name })
+          .select({
+            id: products.id,
+            slug: products.slug,
+            name: products.name,
+            priceTiers: products.priceTiers,
+          })
           .from(products)
           .where(inArray(products.id, configurableProductIds))
       : [];
@@ -268,6 +280,25 @@ export async function createWhatsAppOrder(
         // Corrupt configJson — skip.
       }
     }
+
+    // Phase 25 (25-08) — keycapseq re-derive metadata. WhatsApp/manual orders
+    // MUST NOT trust the client computedPrice for keycapseq lines (T-25-08-01).
+    type KeycapseqFieldMeta = { id: string; label: string; cfg: KeycapSeqConfig };
+    const keycapseqFieldsByProduct = new Map<string, KeycapseqFieldMeta[]>();
+    for (const row of configFieldRows) {
+      if (row.fieldType !== "keycapseq") continue;
+      try {
+        const cfg = ensureConfigJson("keycapseq", row.configJson) as KeycapSeqConfig;
+        const existing = keycapseqFieldsByProduct.get(row.productId) ?? [];
+        existing.push({ id: row.id, label: row.label, cfg });
+        keycapseqFieldsByProduct.set(row.productId, existing);
+      } catch {
+        // Corrupt configJson — skip.
+      }
+    }
+    const iconLabelById: Record<string, string> = Object.fromEntries(
+      Object.entries(KEYCAP_ICON_BY_ID).map(([id, i]) => [id, i.label]),
+    );
 
     for (const line of configurableInputLines) {
       if (!line.configurationData) continue;
@@ -309,6 +340,36 @@ export async function createWhatsAppOrder(
           values,
           existingParts,
         );
+      }
+
+      // Phase 25 (25-08) — keycapseq server re-derive (price + icon-id filter +
+      // slot cap + summary rebuild). Client computedPrice discarded for keycapseq.
+      const keycapseqFields = keycapseqFieldsByProduct.get(pid) ?? [];
+      for (const kf of keycapseqFields) {
+        const cfg = kf.cfg;
+        const slots = ensureKeycapSequence(values[kf.id])
+          .filter((s) => s.t === "L" || cfg.allowedIconIds.includes(s.id)) // drop forged icon ids
+          .slice(0, cfg.maxSlots); // cap oversized sequences (DoS)
+        const slotCount = slots.length;
+
+        const tiers = ensureTiers(productById.get(pid)?.priceTiers);
+        const serverPrice = lookupTierPriceBySlotCount(tiers, slotCount);
+        if (serverPrice === null) {
+          return {
+            ok: false,
+            error: `Invalid keychain configuration for "${kf.label}". Please adjust the number of keycaps and try again.`,
+          };
+        }
+        line.configurationData.computedPrice = serverPrice;
+
+        values[kf.id] = slotCount > 0 ? JSON.stringify(slots) : "";
+
+        const seqSummary = buildKeycapSequenceSummary(slots, iconLabelById);
+        const parts = (line.configurationData.computedSummary ?? "").split(" · ");
+        parts[0] = seqSummary;
+        line.configurationData.computedSummary = parts
+          .filter((p) => p.length > 0)
+          .join(" · ");
       }
     }
   }

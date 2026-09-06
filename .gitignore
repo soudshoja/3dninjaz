@@ -76,3 +76,10 @@ next-env.d.ts
 .claude/
 backups/
 public/logo-original-backup.png
+
+# Meshy private model storage (Phase 21)
+/storage/
+
+# Phase 25-02 — transient keycap-icon extraction staging (renamed to catalog
+# ids + deleted in Task 3; never committed). See scripts/extract-keycap-icons.ts
+/public/icons/keycaps/_staging/

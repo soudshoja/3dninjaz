@@ -189,6 +189,11 @@ export async function POST(req: NextRequest) {
               .limit(1);
 
             if (order.length > 0) {
+              await db
+                .update(orders)
+                .set({ status: "delivered" })
+                .where(eq(orders.id, order[0].id));
+
               void sendOrderDeliveredEmail({
                 customerEmail: order[0].customerEmail,
                 customerName: order[0].shippingName,

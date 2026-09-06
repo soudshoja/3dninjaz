@@ -281,7 +281,7 @@ export const productConfigFields = mysqlTable(
       .notNull()
       .references(() => products.id, { onDelete: "cascade" }),
     position: int("position").notNull().default(0),
-    fieldType: mysqlEnum("fieldType", ["text", "number", "colour", "select", "textarea"]).notNull(),
+    fieldType: mysqlEnum("fieldType", ["text", "number", "colour", "select", "textarea", "keycapseq"]).notNull(),
     label: varchar("label", { length: 80 }).notNull(),
     helpText: varchar("helpText", { length: 200 }),
     required: boolean("required").notNull().default(true),
@@ -647,6 +647,11 @@ export const orderItems = mysqlTable("order_items", {
   // assembly/packed tick once both parts are done.
   baseDone: boolean("base_done").notNull().default(false),
   clickerLetterDone: boolean("clicker_letter_done").notNull().default(false),
+  // Phase 25 (25-01) — icon-print tick for mixed keycap sequences. A square
+  // keychain slot can be a LETTER (base_done + clicker_letter_done) or an ICON
+  // (icon_done). Mixed units are assemblable only when all three relevant parts
+  // are done. Mirrors base_done / clicker_letter_done.
+  iconDone: boolean("icon_done").notNull().default(false),
 });
 
 export const ordersRelations = relations(orders, ({ one, many }) => ({
@@ -715,6 +720,164 @@ export const paymentProofsRelations = relations(paymentProofs, ({ one }) => ({
   order: one(orders, {
     fields: [paymentProofs.orderId],
     references: [orders.id],
+  }),
+}));
+
+// ============================================================================
+// Phase 21: Meshy AI 3D generation (21-01)
+//
+// Admin-only Meshy Image-to-3D generation workflow. Parent table tracks one
+// admin-uploaded reference photo through the full pipeline (generate ->
+// review -> revise/approve -> analyze/repair -> optional multicolor). Child
+// table tracks retexture/regenerate revision history — revisionNumber is a
+// real COUNT(*) at insert time, never a stored counter (21-CONTEXT decision).
+//
+// UUIDs are app-generated (randomUUID) per CLAUDE.md MariaDB quirk.
+// printabilityReport + localModelFiles are JSON columns stored as LONGTEXT by
+// MariaDB — mysql2 does not auto-parse; every read MUST go through a parse
+// helper in src/lib/meshy/ (never re-declare an ensureXxx per call site).
+// Live tables created via scripts/phase21-migrate.cjs; DEFAULT CHARSET matches
+// the live-probed `user` table charset (never hardcoded — see migration script).
+// product_id and approved_by carry NO FK constraint (app-layer only) per the
+// resolved open question #2 in 21-CONTEXT.md — no v1 admin UI links a
+// generation to a catalog product.
+//
+// DDL shape — meshy_generations:
+//   id                       CHAR(36) PK
+//   adminUserId              CHAR(36) NOT NULL (FK -> user.id)
+//   productId                CHAR(36) NULL (no FK, no v1 UI)
+//   sourceImagePath          VARCHAR(1024) NOT NULL
+//   texturePrompt            VARCHAR(600) NULL
+//   aiModel                  VARCHAR(32) NOT NULL DEFAULT 'meshy-6'
+//   status                   ENUM(9 values) NOT NULL DEFAULT 'generating'
+//   meshyTaskId              VARCHAR(64) NULL
+//   meshyAnalyzeTaskId       VARCHAR(64) NULL
+//   meshyRepairTaskId        VARCHAR(64) NULL
+//   meshyMulticolorTaskId    VARCHAR(64) NULL
+//   printabilityStatus       ENUM('healthy','warning','error','unknown') NULL
+//   printabilityReport       LONGTEXT NULL (JSON)
+//   isMultiColor             TINYINT(1) NOT NULL DEFAULT 0
+//   localThumbnailPath       VARCHAR(1024) NULL
+//   localModelFiles          LONGTEXT NULL (JSON)
+//   creditsUsed              INT NOT NULL DEFAULT 0
+//   taskErrorType            VARCHAR(64) NULL
+//   taskErrorMessage         VARCHAR(512) NULL
+//   modelReadyAt             DATETIME NULL
+//   approvedAt               DATETIME NULL
+//   approvedBy               CHAR(36) NULL (no FK)
+//   createdAt                DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+//   updatedAt                DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+//   KEY idx_mg_status_updated(status, updated_at)
+//   KEY idx_mg_created(created_at)
+//   KEY idx_mg_product(product_id)
+//
+// DDL shape — meshy_revisions:
+//   id                       CHAR(36) PK
+//   generationId             CHAR(36) NOT NULL (FK -> meshy_generations.id ON DELETE CASCADE)
+//   revisionNumber           INT NOT NULL
+//   endpointUsed             ENUM('retexture','regenerate','remesh') NOT NULL
+//   changeNote               VARCHAR(1000) NULL
+//   newTexturePrompt         VARCHAR(600) NULL
+//   meshyTaskId              VARCHAR(64) NULL
+//   creditsUsed              INT NOT NULL DEFAULT 0
+//   createdAt                DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+//   KEY idx_mr_generation_created(generation_id, created_at)
+// ============================================================================
+
+export const meshyGenerations = mysqlTable(
+  "meshy_generations",
+  {
+    id: char("id", { length: 36 }).notNull().primaryKey(),
+    adminUserId: char("admin_user_id", { length: 36 }).notNull(),
+    productId: char("product_id", { length: 36 }),
+    sourceImagePath: varchar("source_image_path", { length: 1024 }).notNull(),
+    texturePrompt: varchar("texture_prompt", { length: 600 }),
+    aiModel: varchar("ai_model", { length: 32 }).notNull().default("meshy-6"),
+    status: mysqlEnum("status", ["generating","awaiting_review","revising","analyzing","repairing","processing_multicolor","ready","failed","canceled"])
+      .notNull()
+      .default("generating"),
+    meshyTaskId: varchar("meshy_task_id", { length: 64 }),
+    meshyAnalyzeTaskId: varchar("meshy_analyze_task_id", { length: 64 }),
+    meshyRepairTaskId: varchar("meshy_repair_task_id", { length: 64 }),
+    meshyMulticolorTaskId: varchar("meshy_multicolor_task_id", { length: 64 }),
+    printabilityStatus: mysqlEnum("printability_status", [
+      "healthy",
+      "warning",
+      "error",
+      "unknown",
+    ]),
+    printabilityReport: json("printability_report").$type<Record<string, unknown> | null>(),
+    isMultiColor: boolean("is_multi_color").notNull().default(false),
+    localThumbnailPath: varchar("local_thumbnail_path", { length: 1024 }),
+    localModelFiles: json("local_model_files").$type<{
+      glb?: string;
+      stl?: string;
+      threeMf?: string;
+    } | null>(),
+    creditsUsed: int("credits_used").notNull().default(0),
+    taskErrorType: varchar("task_error_type", { length: 64 }),
+    taskErrorMessage: varchar("task_error_message", { length: 512 }),
+    modelReadyAt: datetime("model_ready_at"),
+    approvedAt: datetime("approved_at"),
+    approvedBy: char("approved_by", { length: 36 }),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    // NOTE: MySqlDateTimeBuilder (the `datetime()` column type) does not
+    // expose `.onUpdateNow()` in the installed drizzle-orm 0.45.2 (that
+    // helper only exists on `timestamp()` columns — MySqlDateColumnBaseBuilder).
+    // `$onUpdateFn` is the documented ORM-level equivalent for any column
+    // type. The live DDL (scripts/phase21-migrate.cjs) still declares the
+    // authoritative `ON UPDATE CURRENT_TIMESTAMP` at the database level —
+    // this is a client-side mirror so Drizzle-issued UPDATEs that omit
+    // updatedAt still populate the correct SQL default.
+    updatedAt: datetime("updated_at")
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`)
+      .$onUpdateFn(() => sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => ({
+    statusUpdatedIdx: index("idx_mg_status_updated").on(t.status, t.updatedAt),
+    createdIdx: index("idx_mg_created").on(t.createdAt),
+    productIdx: index("idx_mg_product").on(t.productId),
+  }),
+);
+
+export const meshyRevisions = mysqlTable(
+  "meshy_revisions",
+  {
+    id: char("id", { length: 36 }).notNull().primaryKey(),
+    generationId: char("generation_id", { length: 36 }).notNull(),
+    revisionNumber: int("revision_number").notNull(),
+    endpointUsed: mysqlEnum("endpoint_used", [
+      "retexture",
+      "regenerate",
+      "remesh",
+    ]).notNull(),
+    changeNote: varchar("change_note", { length: 1000 }),
+    newTexturePrompt: varchar("new_texture_prompt", { length: 600 }),
+    meshyTaskId: varchar("meshy_task_id", { length: 64 }),
+    creditsUsed: int("credits_used").notNull().default(0),
+    createdAt: datetime("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => ({
+    generationCreatedIdx: index("idx_mr_generation_created").on(
+      t.generationId,
+      t.createdAt,
+    ),
+  }),
+);
+
+// NOTE: relations below are declared for completeness (Drizzle Studio, type
+// inference) but reads MUST use manual multi-query hydration (MariaDB has no
+// LATERAL join support) — never call
+// db.query.meshyGenerations.findMany({ with: { revisions: true } }).
+export const meshyGenerationsRelations = relations(meshyGenerations, ({ many }) => ({
+  revisions: many(meshyRevisions),
+}));
+
+export const meshyRevisionsRelations = relations(meshyRevisions, ({ one }) => ({
+  generation: one(meshyGenerations, {
+    fields: [meshyRevisions.generationId],
+    references: [meshyGenerations.id],
   }),
 }));
 
@@ -2273,3 +2436,102 @@ export const payouts = mysqlTable(
 export type Expense = typeof expenses.$inferSelect;
 export type Asset = typeof assets.$inferSelect;
 export type Payout = typeof payouts.$inferSelect;
+
+/**
+ * Quotations (2026-08-18). The quotation is the FIRST document sent to a
+ * client and carries the payment terms. When the client pays, the admin marks
+ * it and a linked `orders` row is created, from which the EXISTING invoice
+ * pipeline runs unchanged — nothing in `orders` / `order_items` changes for
+ * this feature.
+ *
+ * Deliberately its own table rather than a flag on `orders`: a quotation is
+ * not yet a sale, has its own number series, expires, and its client block is
+ * free text (B2B contacts like "Khai Wong / Jo Malone London" are not
+ * storefront accounts).
+ *
+ * See .planning/QUOTATION-SYSTEM-PLAN.md for the full rationale.
+ */
+export const quotationStatusValues = [
+  "draft",
+  "sent",
+  "deposit_paid",
+  "completed",
+  "cancelled",
+] as const;
+
+export const quotations = mysqlTable(
+  "quotations",
+  {
+    id: char("id", { length: 36 }).primaryKey(),
+    // Own series, independent of order numbers. AUTO_INCREMENT so two admins
+    // cannot mint the same number; rendered as "#0024".
+    quoteNo: int("quote_no").autoincrement().notNull(),
+    status: mysqlEnum("status", quotationStatusValues).notNull().default("draft"),
+
+    // Client block — all free text, no FK to `user`.
+    contactName: varchar("contact_name", { length: 200 }).notNull(),
+    companyName: varchar("company_name", { length: 200 }),
+    contactEmail: varchar("contact_email", { length: 255 }),
+    contactPhone: varchar("contact_phone", { length: 32 }),
+    contactAddress: text("contact_address"),
+    // Optional soft link to a storefront account. No cascade.
+    userId: varchar("user_id", { length: 36 }),
+
+    // Document body
+    projectDescription: text("project_description"),
+    productionLeadTime: varchar("production_lead_time", { length: 120 }),
+    // YYYY-MM-DD, matching the expenses.expenseDate convention (schema.ts:2190).
+    validUntil: varchar("valid_until", { length: 10 }).notNull(),
+    // JSON string[] stored as LONGTEXT — mysql2 does NOT auto-parse it.
+    // Always read through ensureTermsArray() in src/lib/quotations.ts.
+    terms: longtext("terms"),
+
+    // Money (MYR), mirroring the precision used on `orders`.
+    subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull().default("0.00"),
+    totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull().default("0.00"),
+    currency: varchar("currency", { length: 3 }).notNull().default("MYR"),
+    // 100.00 means payment in full up front, no deposit stage.
+    depositPercent: decimal("deposit_percent", { precision: 5, scale: 2 }).notNull().default("50.00"),
+    // Snapshot taken when the quote is sent, so later edits cannot move the
+    // figure the client already agreed to.
+    depositAmount: decimal("deposit_amount", { precision: 10, scale: 2 }).notNull().default("0.00"),
+
+    sentAt: timestamp("sent_at"),
+    depositPaidAt: timestamp("deposit_paid_at"),
+    completedAt: timestamp("completed_at"),
+
+    // Conversion link. UNIQUE is the idempotency backstop: a double-click
+    // cannot attach two orders to one quotation.
+    orderId: char("order_id", { length: 36 }),
+    notes: text("notes"),
+
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({
+    quoteNoUnique: unique("uq_quotations_quote_no").on(t.quoteNo),
+    orderIdUnique: unique("uq_quotations_order_id").on(t.orderId),
+    statusCreatedIdx: index("idx_quotations_status_created").on(t.status, t.createdAt),
+  }),
+);
+
+export const quotationItems = mysqlTable(
+  "quotation_items",
+  {
+    id: char("id", { length: 36 }).primaryKey(),
+    quotationId: char("quotation_id", { length: 36 }).notNull(),
+    position: int("position").notNull().default(0),
+    // The "Package Inclusion" column on the printed document.
+    description: varchar("description", { length: 500 }).notNull(),
+    quantity: int("quantity").notNull().default(1),
+    unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
+    lineTotal: decimal("line_total", { precision: 10, scale: 2 }).notNull(),
+  },
+  (t) => ({
+    quotationIdx: index("idx_qi_quotation").on(t.quotationId, t.position),
+  }),
+);
+
+export type Quotation = typeof quotations.$inferSelect;
+export type QuotationItem = typeof quotationItems.$inferSelect;
+export type QuotationStatus = (typeof quotationStatusValues)[number];

@@ -11,7 +11,7 @@ import {
   categories,
   subcategories,
 } from "@/lib/db/schema";
-import { eq, desc, inArray, count } from "drizzle-orm";
+import { eq, desc, inArray, count, like } from "drizzle-orm";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { CATEGORY_TREE_TAG } from "@/lib/catalog";
 import { productSchema, type ProductInput } from "@/lib/validators";
@@ -47,30 +47,28 @@ function slugify(name: string): string {
     .replace(/^-|-$/g, "");
 }
 
-// Generate a clean, title-derived slug that follows the product name.
-// products.slug is UNIQUE (schema length 220) — so when the bare title slug is
-// already taken we append -2, -3, … until free. On rename (updateProduct) the
-// product's own row is excluded so a no-op resave keeps the same slug.
-async function uniqueProductSlug(
-  name: string,
-  excludeId?: string,
-): Promise<string> {
-  // Reserve room for a "-NN" collision suffix within the 220-char column.
-  const base = (slugify(name) || "product").slice(0, 200).replace(/-$/, "");
-  let candidate = base;
-  let n = 1;
-  // Bounded loop: each iteration probes one candidate; suffix grows until free.
-  for (;;) {
-    const rows = await db
-      .select({ id: products.id })
-      .from(products)
-      .where(eq(products.slug, candidate))
-      .limit(1);
-    const clash = rows.find((r) => r.id !== excludeId);
-    if (!clash) return candidate;
+/**
+ * Quick task 260705-dw2 — guarantee a unique slug for a duplicated product.
+ * Reuses the existing slugify() base logic, then appends the documented
+ * "-2/-3 on clash" suffix (matching the product-slug-from-title convention)
+ * until a free slug is found. products.slug UNIQUE constraint is the
+ * backstop (T-dw2-04).
+ */
+async function generateUniqueProductSlug(name: string): Promise<string> {
+  const base = slugify(name) || "product";
+  const existing = await db
+    .select({ slug: products.slug })
+    .from(products)
+    .where(like(products.slug, `${base}%`));
+  const taken = new Set(existing.map((r) => r.slug));
+  if (!taken.has(base)) return base;
+  let n = 2;
+  let candidate = `${base}-${n}`;
+  while (taken.has(candidate)) {
     n += 1;
     candidate = `${base}-${n}`;
   }
+  return candidate;
 }
 
 function toDecimalOrNull(v: string | undefined | null): string | null {
@@ -261,8 +259,8 @@ export async function createProduct(
     ? rawId.replace(/[^a-zA-Z0-9-]/g, "")
     : randomUUID();
 
-  // Slug follows the product title; collision suffix only when the title clashes.
-  const slug = await uniqueProductSlug(productData.name);
+  const baseSlug = slugify(productData.name);
+  const slug = `${baseSlug || "product"}-${Date.now().toString(36)}`;
 
   // When a pre-generated ID was supplied the images were already uploaded
   // directly to /uploads/products/<id>/<imageUuid>/ — no migration needed.
@@ -401,14 +399,18 @@ export async function createProduct(
   // just-inserted product row and return a form-level error.
   if (productData.productType === "keychain") {
     try {
-      await seedKeychainFields(id, { silent: true });
-      // Locate the text+locked row from the seeded fields (avoids AND on
-      // boolean column which can be dialect-sensitive in MariaDB).
+      const keychainShape = productData.keychainShape ?? "square";
+      await seedKeychainFields(id, keychainShape, { silent: true });
+      // Locate the position-0 locked personalisation field from the seeded
+      // fields (avoids AND on a boolean column which can be dialect-sensitive
+      // in MariaDB). Square keychains seed a `keycapseq` field; round keeps the
+      // legacy `text` field (Phase 25 25-03).
       const allFields = await db
         .select({ id: productConfigFields.id, fieldType: productConfigFields.fieldType, locked: productConfigFields.locked })
         .from(productConfigFields)
         .where(eq(productConfigFields.productId, id));
-      const nameField = allFields.find((f) => f.fieldType === "text" && f.locked);
+      const unitFieldType = keychainShape === "square" ? "keycapseq" : "text";
+      const nameField = allFields.find((f) => f.fieldType === unitFieldType && f.locked);
       if (nameField) {
         await db
           .update(products)
@@ -531,15 +533,10 @@ export async function updateProduct(
     ? productData.imagesV2
     : productData.images;
 
-  // Regenerate slug from the (possibly renamed) title; exclude this row so a
-  // resave without a title change keeps the existing slug.
-  const slug = await uniqueProductSlug(productData.name, id);
-
   await db
     .update(products)
     .set({
       name: productData.name,
-      slug,
       description: productData.description,
       images: imagesToPersist,
       thumbnailIndex: safeThumb,
@@ -621,13 +618,17 @@ export async function updateProduct(
       .where(eq(productConfigFields.productId, id));
     if (fieldCount === 0) {
       try {
-        await seedKeychainFields(id, { silent: true });
-        // Find the locked text field that was just inserted.
+        const keychainShape = productData.keychainShape ?? "square";
+        await seedKeychainFields(id, keychainShape, { silent: true });
+        // Find the locked position-0 personalisation field that was just
+        // inserted. Square keychains seed a `keycapseq` field; round keeps the
+        // legacy `text` field (Phase 25 25-03).
         const allFields = await db
           .select({ id: productConfigFields.id, fieldType: productConfigFields.fieldType, locked: productConfigFields.locked })
           .from(productConfigFields)
           .where(eq(productConfigFields.productId, id));
-        const nameField = allFields.find((f) => f.fieldType === "text" && f.locked);
+        const unitFieldType = keychainShape === "square" ? "keycapseq" : "text";
+        const nameField = allFields.find((f) => f.fieldType === unitFieldType && f.locked);
         if (nameField) {
           await db
             .update(products)
@@ -927,7 +928,7 @@ async function cloneConfigFields(
  * Only meaningfully populated for stocked products, but safe to run for any
  * productType — it no-ops when there are no options/variants.
  *
- * Every cloned variant gets a FRESH, batch-unique SKU (never the source
+ * Every cloned variant gets a FRESH, batch-unique SKU (never the source's
  * SKU string) derived from the remapped option-value labels + destSlug.
  * Variant-level imageUrl is physically copied via copyProductImages.
  */
@@ -969,7 +970,7 @@ async function cloneVariantTree(
   for (const val of values) {
     const newValueId = randomUUID();
     const newOptionId = optionIdMap.get(val.optionId);
-    if (!newOptionId) continue; // defensive — should not happen
+    if (!newOptionId) continue; // defensive — shouldn't happen
     await db.insert(productOptionValues).values({
       id: newValueId,
       optionId: newOptionId,
@@ -1057,13 +1058,9 @@ async function cloneVariantTree(
  * Deep-clones a product (any productType) into a new draft. Handler-level
  * requireAdmin() is the FIRST await (T-dw2-01, CVE-2025-29927 convention).
  *
- * The duplicate is ALWAYS isActive=false regardless of the source active
+ * The duplicate is ALWAYS isActive=false regardless of the source's active
  * state. Order history, reviews, and wishlists are never touched — the
  * clone is restricted to product-owned tables (T-dw2-05, accepted).
- *
- * Slug: reuses this file existing uniqueProductSlug() (title-based,
- * -2/-3-on-clash) rather than a separate helper, matching the convention
- * createProduct/updateProduct already use on this branch (#165).
  */
 export async function duplicateProduct(productId: string): Promise<ProductActionResult> {
   await requireAdmin();
@@ -1093,7 +1090,7 @@ export async function duplicateProduct(productId: string): Promise<ProductAction
   }));
 
   const newName = `${src.name} (Copy)`;
-  const newSlug = await uniqueProductSlug(newName);
+  const newSlug = await generateUniqueProductSlug(newName);
 
   await db.insert(products).values({
     id: newId,

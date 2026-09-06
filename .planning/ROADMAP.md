@@ -420,3 +420,32 @@ Plans:
 - [x] 20-11-PLAN.md — Admin order-detail payment-proof review surface + Download Invoice button (Wave 5)
 - [x] 20-12-PLAN.md — /admin/settings bank-details + draft-template fieldsets (Wave 6)
 - [x] 20-13-PLAN.md — isManualLine render guards on invoice + order details + email (Wave 6)
+
+### Phase 21: Admin Meshy AI 3D Generation Tool — admin uploads a reference photo, generates a textured 3D model via Meshy's Image-to-3D API, reviews/requests changes, approves, runs printability analyze/repair, and downloads STL/3MF for Bambu Studio slicing/printing
+
+**Goal:** Admin can upload a product reference photo, generate a textured 3D model via Meshy's Image-to-3D API, review/retexture/regenerate until satisfied, approve (running free printability analyze + explicit-click paid repair), optionally run multi-color 3MF conversion, and download print-ready STL/3MF files for Bambu Studio — all server-side, admin-only, polling-driven with a cron reconciliation sweep, files persisted to private storage before Meshy's 3-day asset expiry.
+**Requirements**: REQ-21-1..9 (schema+migration, private storage w/ 3-day-expiry download-before-advance, createGeneration guardrails, advanceGeneration state machine + poll/cron, retexture/regenerate revision workflow, explicit-click repair, multi-color 3MF, authed download route, admin UI) — see `.planning/REQUIREMENTS.md`
+**Depends on:** Phase 20
+**Plans:** 8/8 plans complete
+
+Plans:
+- [x] TBD (run /gsd-plan-phase 21 to break down)
+ (completed 2026-07-07)
+
+### Phase 25: Mixed letter and icon keycaps for square keychain product
+
+**Goal:** Square-keychain customers can build a keycap sequence that mixes letters and icons (from a 34-icon fixed-colour catalog), with icons rendered fixed-colour, priced by total keycap count, and split into their own production batch. Round keychains stay letter-only and unchanged.
+**Requirements**: D-01..D-12 (see 25-CONTEXT.md; no formal REQ-IDs mapped)
+**Depends on:** Phase 24
+**Plans:** 8/9 plans executed
+
+Plans:
+- [x] 25-01-PLAN.md — Schema migration (fieldType ENUM + icon_done) + keycapseq config-fields contract
+- [x] 25-02-PLAN.md — Icon asset pipeline: extract 34 renders (human-verified) + keycap-icons catalog
+- [x] 25-03-PLAN.md — Square keychain seeding (keycapseq) + structured sequence parser + tests
+- [x] 25-04-PLAN.md — Production icon batch group (by icon id) + icon tick + assembly guard
+- [x] 25-05-PLAN.md — Admin config: pickSchema case + IconPickerDialog + KeycapSeqConfigForm
+- [x] 25-06-PLAN.md — Storefront slot-rail builder + customer icon picker
+- [x] 25-07-PLAN.md — Mixed live preview + PDP slot-count price/over-cap/summary wiring
+- [x] 25-08-PLAN.md — Server-side capture re-derive (price/icons/summary) x3 paths + slot-count weight
+- [ ] 25-09-PLAN.md — Existing square-keychain backfill (dev-first) + human end-to-end smoke

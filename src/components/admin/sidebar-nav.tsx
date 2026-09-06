@@ -49,6 +49,7 @@ const GROUPS: NavGroup[] = [
         ninjaIcon: "download",
         badge: "paymentProofsAwaitingReview" as const,
       },
+      { href: "/admin/quotations", label: "Quotations", ninjaIcon: "contact" },
       { href: "/admin/drafts", label: "Checkout drafts", ninjaIcon: "download" },
       { href: "/admin/production", label: "Production", ninjaIcon: "services" },
       { href: "/admin/disputes", label: "Disputes", ninjaIcon: "warning" },
@@ -84,6 +85,7 @@ const GROUPS: NavGroup[] = [
       { href: "/admin/subscribers", label: "Subscribers", ninjaIcon: "contact" },
       { href: "/admin/coupons", label: "Coupons", ninjaIcon: "tip" },
       { href: "/admin/colours", label: "Colours", ninjaIcon: "portfolio" },
+      { href: "/admin/meshy", label: "3D Generation", ninjaIcon: "services" },
       { href: "/admin/fonts", label: "Fonts", ninjaIcon: "portfolio" },
       {
         href: "/admin/reviews",

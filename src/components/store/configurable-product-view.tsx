@@ -22,7 +22,15 @@ import Image from "next/image";
 import { ShoppingBag, Heart } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
-import { lookupTierPrice, type SelectFieldConfig } from "@/lib/config-fields";
+import {
+  lookupTierPrice,
+  lookupTierPriceBySlotCount,
+  ensureKeycapSequence,
+  buildKeycapSequenceSummary,
+  type SelectFieldConfig,
+  type KeycapSeqConfig,
+} from "@/lib/config-fields";
+import { KEYCAP_ICON_BY_ID } from "@/lib/keycap-icons";
 import { customKey, CUSTOM_TEXT_SUFFIX } from "@/lib/custom-text";
 import { useCartStore } from "@/stores/cart-store";
 import { ConfiguratorForm } from "@/components/store/configurator-form";
@@ -76,8 +84,13 @@ type Props = {
 };
 
 // ============================================================================
-// Summary builder (unchanged)
+// Summary builder
 // ============================================================================
+
+/** id → human label for keycap icons; injected into buildKeycapSequenceSummary. */
+const ICON_LABEL_BY_ID: Record<string, string> = Object.fromEntries(
+  Object.entries(KEYCAP_ICON_BY_ID).map(([id, i]) => [id, i.label]),
+);
 
 function buildSummary(
   fields: PublicConfigField[],
@@ -94,6 +107,15 @@ function buildSummary(
     if (!v) continue;
     if (f.fieldType === "text") {
       parts.push(`"${v}" (${v.length} ${f.label.toLowerCase()})`);
+    } else if (f.fieldType === "keycapseq") {
+      // Phase 25 (25-07) — mixed letter/icon sequence. Emit the mixed format
+      // (e.g. '"SOUD" + [Alien] + [Skull] (6 keycaps: 4 letters, 2 icons)').
+      // The Base/Clicker/Letter colour tail is appended automatically by the
+      // colour-field branches below (they follow this field by position).
+      const slots = ensureKeycapSequence(v);
+      if (slots.length > 0) {
+        parts.push(buildKeycapSequenceSummary(slots, ICON_LABEL_BY_ID));
+      }
     } else if (f.fieldType === "colour") {
       const c = f.resolvedColours?.find((x) => x.id === v);
       if (c) {
@@ -128,6 +150,7 @@ function PricePill({
   currentPrice,
   hideBasePrice = false,
   selectPriceOverride,
+  isKeycapseq = false,
 }: {
   outOfTable: boolean;
   maxUnitCount: number | null;
@@ -135,6 +158,8 @@ function PricePill({
   /** Bug 3 — suppress base price until a select option resolves it. */
   hideBasePrice?: boolean;
   selectPriceOverride: number | null;
+  /** Phase 25 — over-cap label becomes "Too many keycaps" for keycapseq fields. */
+  isKeycapseq?: boolean;
 }) {
   if (outOfTable) {
     return (
@@ -142,7 +167,7 @@ function PricePill({
         className="inline-flex self-start items-center rounded-full px-4 py-1.5 text-sm font-bold"
         style={{ backgroundColor: "#fff1f2", color: "#be123c", border: "2px solid #fecdd3" }}
       >
-        Max {maxUnitCount} characters
+        {isKeycapseq ? "Too many keycaps" : `Max ${maxUnitCount} characters`}
       </span>
     );
   }
@@ -225,6 +250,22 @@ export function ConfigurableProductView({
 
   const unitFieldValue = unitFieldId ? (values[unitFieldId] ?? "") : "";
 
+  // ── Phase 25 — keycapseq (mixed letter+icon) unit field ──────────────────
+  // The square-keychain keycapseq field is the position-0 field with fieldType
+  // "keycapseq". It replaces the text unit field: price / over-cap / summary /
+  // preview all key off the TOTAL slot count (letters + icons combined, D-12),
+  // never the JSON blob's string length. Round keychains keep the text field
+  // and this stays null (legacy path untouched).
+  const keycapseqField = useMemo(
+    () => fields.find((f) => f.fieldType === "keycapseq") ?? null,
+    [fields],
+  );
+  const keycapseqFieldId = keycapseqField?.id ?? null;
+  const keycapSlots = useMemo(
+    () => (keycapseqFieldId ? ensureKeycapSequence(values[keycapseqFieldId]) : []),
+    [keycapseqFieldId, values],
+  );
+
   // If any select field has a selected option with a `price` override, use it
   // as the effective price (last one wins if multiple selects have overrides).
   const selectPriceOverride: number | null = useMemo(() => {
@@ -245,6 +286,12 @@ export function ConfigurableProductView({
   // Base price before any per-option select override — used as the reference
   // price for VariantOptionPicker's diff pill (so customers see "+RM X / -RM X").
   const basePriceBeforeOverride: number | null = useMemo(() => {
+    // Phase 25 (D-12) — keycapseq square keychains price by TOTAL slot count
+    // (letters + icons combined), NOT the JSON blob's string length.
+    if (keycapseqFieldId) {
+      const slots = keycapSlots;
+      return lookupTierPriceBySlotCount(priceTiers, slots.length);
+    }
     if (unitField && unitFieldId) {
       return lookupTierPrice(priceTiers, unitFieldValue);
     }
@@ -253,7 +300,7 @@ export function ConfigurableProductView({
       return priceTiers[String(minKey)];
     }
     return null;
-  }, [priceTiers, unitField, unitFieldId, unitFieldValue]);
+  }, [priceTiers, unitField, unitFieldId, unitFieldValue, keycapseqFieldId, keycapSlots]);
 
   const currentPrice: number | null = useMemo(() => {
     // Per-option price override takes precedence over tier pricing.
@@ -261,12 +308,20 @@ export function ConfigurableProductView({
     return basePriceBeforeOverride;
   }, [basePriceBeforeOverride, selectPriceOverride]);
 
-  const outOfTable =
-    unitField !== null &&
-    unitFieldId !== null &&
+  // Phase 25 — keycapseq over-cap keys off TOTAL slot count vs maxUnitCount.
+  const keycapOverCap =
+    keycapseqFieldId !== null &&
     currentPrice === null &&
-    unitFieldValue.length > 0 &&
-    unitFieldValue.length > (maxUnitCount ?? 0);
+    keycapSlots.length > 0 &&
+    keycapSlots.length > (maxUnitCount ?? 0);
+
+  const outOfTable =
+    keycapOverCap ||
+    (unitField !== null &&
+      unitFieldId !== null &&
+      currentPrice === null &&
+      unitFieldValue.length > 0 &&
+      unitFieldValue.length > (maxUnitCount ?? 0));
 
   const requiredFilled = useMemo(
     () => fields.filter((f) => f.required).every((f) => (values[f.id] ?? "").length > 0),
@@ -320,7 +375,12 @@ export function ConfigurableProductView({
   // takes precedence over the field's stored config.maxLength so the name
   // length always matches the configured tier range. Falls back to the field
   // config (then 8) for configurables that have no tier table.
-  const maxLength = textFields.length > 0
+  // Phase 25 — for keycapseq, maxUnitCount stays authoritative (RESEARCH Open
+  // Q2), falling back to config.maxSlots (not config.maxLength) for the cube-
+  // sizing denominator + the builder's shared cap.
+  const maxLength = keycapseqField
+    ? (maxUnitCount ?? (keycapseqField.config as KeycapSeqConfig).maxSlots ?? 8)
+    : textFields.length > 0
     ? (maxUnitCount ?? (textFields[0].config as { maxLength?: number }).maxLength ?? 8)
     : (maxUnitCount ?? 8);
 
@@ -414,6 +474,7 @@ export function ConfigurableProductView({
               : ""
           }
           shape={product.keychainShape ?? "square"}
+          slots={keycapseqFieldId ? keycapSlots : undefined}
         />
       )}
     </div>
@@ -424,7 +485,7 @@ export function ConfigurableProductView({
   const ctaLabel = canAdd
     ? `${addLabel} · ${formatMYR(currentPrice!)}`
     : outOfTable
-    ? "Too many characters"
+    ? (keycapseqFieldId ? "Too many keycaps" : "Too many characters")
     : !requiredFilled || !customInputsSatisfied
     ? "Fill in all fields first"
     : "Enter your details";
@@ -567,6 +628,7 @@ export function ConfigurableProductView({
                           : ""
                       }
                       shape={product.keychainShape ?? "square"}
+                      slots={keycapseqFieldId ? keycapSlots : undefined}
                     />
                   </div>
                 </div>
@@ -603,6 +665,7 @@ export function ConfigurableProductView({
                   currentPrice={currentPrice}
                   hideBasePrice={hideBasePrice}
                   selectPriceOverride={selectPriceOverride}
+                  isKeycapseq={keycapseqFieldId !== null}
                 />
               </div>
 

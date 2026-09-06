@@ -14,8 +14,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, Plus, Trash2, Type, Hash, Palette, ListChecks, FileText, ImagePlus, Camera, X, Loader2, Images } from "lucide-react";
+import { AlertCircle, Plus, Trash2, Type, Hash, Palette, ListChecks, FileText, ImagePlus, Camera, X, Loader2, Images, Keyboard } from "lucide-react";
 import { ColourPickerDialog, type ColourPickerRow, type MyColoursPrompt } from "@/components/admin/colour-picker-dialog";
+import { IconPickerDialog } from "@/components/admin/icon-picker-dialog";
+import { KEYCAP_ICON_BY_ID } from "@/lib/keycap-icons";
 import { ProductImageGalleryPicker } from "@/components/admin/product-image-gallery-picker";
 import { getActiveColoursForPicker, getMyColoursForPicker } from "@/actions/admin-colours";
 import {
@@ -32,6 +34,7 @@ import {
   ColourFieldConfigSchema,
   SelectFieldConfigSchema,
   TextareaFieldConfigSchema,
+  KeycapSeqConfigSchema,
   type FieldType,
   type AnyFieldConfig,
   type TextFieldConfig,
@@ -39,6 +42,7 @@ import {
   type ColourFieldConfig,
   type SelectFieldConfig,
   type TextareaFieldConfig,
+  type KeycapSeqConfig,
 } from "@/lib/config-fields";
 // Quick task 260430-icx — Novel rich-text editor for `textarea` field config.
 import { NovelRichTextEditor } from "@/components/admin/novel-rich-text-editor";
@@ -80,6 +84,8 @@ const FIELD_TYPES: FieldTypeMeta[] = [
   { value: "select",   label: "Select",    description: "Choose from a list",      Icon: ListChecks },
   // Quick task 260430-icx — admin-authored content block (read-only on PDP).
   { value: "textarea", label: "Rich Text", description: "Admin description block", Icon: FileText },
+  // Phase 25 (25-05) — mixed letter+icon keycap sequence (square keychain).
+  { value: "keycapseq", label: "Keycaps", description: "Letters + icons sequence", Icon: Keyboard },
 ];
 
 // ---------------------------------------------------------------------------
@@ -89,9 +95,9 @@ const FIELD_TYPES: FieldTypeMeta[] = [
 /**
  * Default allowed-character set for a NEW free-text field.
  *
- * Was "A-Z", which is correct for keycap sequences (each character becomes a
- * printed part) but wrong for ordinary text. configurator-form.tsx strips
- * disallowed characters on every keystroke, so that default silently made
+ * Was "A-Z", which is correct for keycap sequences (every character becomes a
+ * printed part) but wrong for ordinary text. Because configurator-form.tsx
+ * strips disallowed characters on each keystroke, that default silently made
  * spaces and digits untypable: a "First day of school date" field accepted no
  * numbers at all, and names ran together. Existing fields keep whatever is
  * stored; this only changes what a new field starts with.
@@ -322,6 +328,134 @@ export function ColourConfigForm({
         }}
         onConfirmed={() => {}}
         myColoursPrompt={myColoursPrompt || undefined}
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Phase 25 (25-05) — keycapseq field config form.
+// Combines TextConfigForm's letter constraints (maxSlots/allowedChars/
+// uppercase/profanity) with a ColourConfigForm-style "Select icons" button
+// that opens IconPickerDialog to stage `allowedIconIds` (mirrors allowedColorIds,
+// D-09). Selected icons render back as a thumbnail strip resolved via
+// KEYCAP_ICON_BY_ID with a count Badge.
+// ---------------------------------------------------------------------------
+export function KeycapSeqConfigForm({
+  value,
+  onChange,
+}: {
+  value: Partial<KeycapSeqConfig>;
+  onChange: (v: Partial<KeycapSeqConfig>) => void;
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const iconIds = value.allowedIconIds ?? [];
+
+  return (
+    <div className="space-y-3">
+      {/* Letter constraints (mirrors TextConfigForm) */}
+      <div className="space-y-1">
+        <Label htmlFor="maxSlots">Max keycaps</Label>
+        <Input
+          id="maxSlots"
+          type="number"
+          min={1}
+          max={200}
+          value={value.maxSlots ?? 8}
+          onChange={(e) => onChange({ ...value, maxSlots: Number(e.target.value) })}
+          className="h-9 w-28"
+        />
+        <p className="text-xs text-muted-foreground">
+          1–200 keycaps (letters + icons combined)
+        </p>
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="keycapAllowedChars">Allowed characters (regex char class)</Label>
+        <Input
+          id="keycapAllowedChars"
+          value={value.allowedChars ?? "A-Z"}
+          onChange={(e) => onChange({ ...value, allowedChars: e.target.value })}
+          placeholder="e.g. A-Z"
+          className="h-9"
+        />
+        <p className="text-xs text-muted-foreground">
+          Each character becomes a physical keycap, so <code>A-Z</code> is
+          correct here. Do not add a space: there is no blank keycap part.
+        </p>
+      </div>
+      <div className="flex items-center gap-3">
+        <Switch
+          id="keycapUppercase"
+          checked={value.uppercase ?? true}
+          onCheckedChange={(v) => onChange({ ...value, uppercase: v })}
+        />
+        <Label htmlFor="keycapUppercase" className="cursor-pointer">Force uppercase</Label>
+      </div>
+      <div className="flex items-center gap-3">
+        <Switch
+          id="keycapProfanityCheck"
+          checked={value.profanityCheck ?? true}
+          onCheckedChange={(v) => onChange({ ...value, profanityCheck: v })}
+        />
+        <Label htmlFor="keycapProfanityCheck" className="cursor-pointer">Profanity check</Label>
+      </div>
+
+      {/* Allowed icons (mirrors ColourConfigForm swatch strip) */}
+      <div className="space-y-2 pt-1">
+        <Label className="text-xs uppercase tracking-wide text-slate-500">Allowed icons</Label>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-slate-50 transition-colors min-h-[36px]"
+            style={{ borderColor: BRAND.purple, color: BRAND.purple }}
+          >
+            Select icons
+          </button>
+          <span className="text-xs text-muted-foreground">
+            {iconIds.length === 0
+              ? "No icons selected"
+              : `${iconIds.length} icon${iconIds.length === 1 ? "" : "s"} selected`}
+          </span>
+        </div>
+
+        {iconIds.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary" className="text-xs">
+              {iconIds.length}
+            </Badge>
+            {iconIds.map((id) => {
+              const icon = KEYCAP_ICON_BY_ID[id];
+              if (!icon) return null;
+              return (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={id}
+                  src={icon.imageUrl}
+                  alt=""
+                  title={icon.label}
+                  aria-label={icon.label}
+                  className="rounded-md object-contain shrink-0"
+                  style={{ width: 32, height: 32, border: "1px solid rgba(0,0,0,0.12)" }}
+                />
+              );
+            })}
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground">
+          Icons the customer can pick for icon keycaps. Leave empty to offer letters only.
+        </p>
+      </div>
+
+      {/* IconPickerDialog — stages allowedIconIds (D-09) */}
+      <IconPickerDialog
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        initialSelectedIds={iconIds}
+        onConfirm={(ids) => {
+          onChange({ ...value, allowedIconIds: ids });
+          setPickerOpen(false);
+        }}
       />
     </div>
   );
@@ -849,9 +983,10 @@ export function ConfigFieldFormBody({
       ? (initialField.config as TextFieldConfig)
       : {
           maxLength: 8,
-          // This is the line that actually gets SAVED for a new field,
-          // so it must match DEFAULT_TEXT_ALLOWED_CHARS — otherwise the
-          // fallback above is dead code.
+          // Seeded default for a NEW text field. This is the line that
+          // actually gets SAVED, so while it said "A-Z" the widened
+          // fallback above was dead code and new fields still rejected
+          // spaces and digits. Keep the two in step.
           allowedChars: DEFAULT_TEXT_ALLOWED_CHARS,
           uppercase: true,
           profanityCheck: false,
@@ -878,6 +1013,12 @@ export function ConfigFieldFormBody({
       ? (initialField.config as TextareaFieldConfig)
       : { html: "" },
   );
+  // Phase 25 (25-05) — keycapseq (mixed letter+icon sequence) state.
+  const [keycapSeqConfig, setKeycapSeqConfig] = useState<Partial<KeycapSeqConfig>>(
+    initialField?.fieldType === "keycapseq"
+      ? (initialField.config as KeycapSeqConfig)
+      : { maxSlots: 8, allowedChars: "A-Z", uppercase: true, profanityCheck: true, allowedIconIds: [] },
+  );
 
   const getConfig = (): AnyFieldConfig | null => {
     if (fieldType === "text") return textConfig as AnyFieldConfig;
@@ -885,6 +1026,7 @@ export function ConfigFieldFormBody({
     if (fieldType === "colour") return colourConfig as AnyFieldConfig;
     if (fieldType === "select") return selectConfig as AnyFieldConfig;
     if (fieldType === "textarea") return textareaConfig as AnyFieldConfig;
+    if (fieldType === "keycapseq") return keycapSeqConfig as AnyFieldConfig;
     return null;
   };
 
@@ -898,6 +1040,7 @@ export function ConfigFieldFormBody({
       : fieldType === "colour" ? ColourFieldConfigSchema
       : fieldType === "select" ? SelectFieldConfigSchema
       : fieldType === "textarea" ? TextareaFieldConfigSchema
+      : fieldType === "keycapseq" ? KeycapSeqConfigSchema
       : null;
     if (!schema) return "Unknown field type";
     const result = schema.safeParse(config);
@@ -1123,6 +1266,8 @@ export function ConfigFieldFormBody({
                 ? "Colour"
                 : fieldType === "select"
                 ? "Select"
+                : fieldType === "keycapseq"
+                ? "Keycaps"
                 : "Rich Text"}{" "}
               settings
             </Label>
@@ -1155,6 +1300,13 @@ export function ConfigFieldFormBody({
             <NovelRichTextEditor
               value={textareaConfig.html ?? ""}
               onChange={(html) => setTextareaConfig({ html })}
+            />
+          )}
+          {/* Phase 25 (25-05) — keycapseq letter constraints + icon allow-list. */}
+          {fieldType === "keycapseq" && (
+            <KeycapSeqConfigForm
+              value={keycapSeqConfig}
+              onChange={setKeycapSeqConfig}
             />
           )}
           </div>

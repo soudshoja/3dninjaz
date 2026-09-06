@@ -10,6 +10,20 @@
  *   - src/lib/__tests__/option-weight-resolution.test.ts (unit tests)
  */
 
+import { ensureKeycapSequence } from "@/lib/config-fields";
+
+/**
+ * Phase 25 (25-08) — a keycapseq unit field stores its value as a JSON array of
+ * keycap slots (e.g. `[{"t":"L","ch":"J"},{"t":"I","id":"alien"}]`), NOT a plain
+ * string. Detect that shape so the weight tier keys off SLOT COUNT rather than
+ * the JSON blob's raw string length. Text / number unit fields never serialise
+ * to a bracketed JSON array, so they keep the length-based key.
+ */
+function isKeycapSequenceValue(v: string): boolean {
+  const t = v.trim();
+  return t.startsWith("[") && t.endsWith("]");
+}
+
 /** Shape stored in the fieldsByProduct map built by quoteForCart / sumOrderWeight. */
 export type FieldWeightEntry = {
   fieldId: string;
@@ -64,6 +78,11 @@ export function resolveOptionWeightKg(
  * Server re-reads weightTiers from the products row; a client-supplied weight
  * is NEVER accepted (T-17-09 guard). configValues carries only string field
  * values — the grams live exclusively in the DB-fetched weightTiers map.
+ *
+ * Phase 25 (25-08, D-12): for a keycapseq unit field the value is a JSON slot
+ * array, so the tier key is the decoded SLOT COUNT (letters + icons combined,
+ * flat-per-slot for v1), NOT the raw JSON string length. Text / number unit
+ * fields are unchanged — they still key off the value's character length.
  */
 export function resolveTierWeightKg(
   unitFieldId: string | null,
@@ -73,7 +92,12 @@ export function resolveTierWeightKg(
   if (!unitFieldId) return null;
   const v = configValues[unitFieldId];
   if (typeof v !== "string" || v.length === 0) return null;
-  const grams = weightTiers[String(v.length)];
+  // keycapseq → slot count; text/number → character length (T-17-09: server
+  // always re-reads weightTiers; the client gram value is never trusted).
+  const count = isKeycapSequenceValue(v)
+    ? ensureKeycapSequence(v).length
+    : v.length;
+  const grams = weightTiers[String(count)];
   if (typeof grams !== "number" || !Number.isFinite(grams) || grams < 0) {
     return null;
   }
