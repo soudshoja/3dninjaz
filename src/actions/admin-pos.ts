@@ -16,7 +16,7 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import { revalidatePath } from "next/cache";
 import { formatOrderNumber } from "@/lib/orders";
 import { assertValidTransition } from "@/lib/orders";
-import { getShippingRate } from "@/actions/admin-shipping";
+import { autoQuoteShipping } from "@/lib/shipping-auto";
 import { applyCouponToSubtotal, type CouponSnapshot } from "@/lib/pricing";
 import { redeemCoupon } from "@/actions/coupons";
 import { pickImage } from "@/lib/image-manifest";
@@ -526,6 +526,25 @@ export async function getPosProductHydration(
 // ============================================================================
 
 /**
+ * Pull the `values` map out of a stored configurationData snapshot so the
+ * shipping quote can resolve per-option and per-tier weights. Returns
+ * undefined for free-text lines and unparseable snapshots — the weight ladder
+ * then falls back to product weight / defaultWeightKg.
+ */
+function parseConfigValues(
+  raw: string | null | undefined,
+): Record<string, string> | undefined {
+  if (!raw) return undefined;
+  try {
+    const parsed = JSON.parse(raw) as { values?: Record<string, string> };
+    if (parsed?.values && typeof parsed.values === "object") return parsed.values;
+  } catch {
+    // Corrupt snapshot — quote on product/default weight instead.
+  }
+  return undefined;
+}
+
+/**
  * Create a POS order with N order_items rows in a single transaction.
  * Handles stocked + configurable + free-text lines.
  * Atomic coupon redemption inside the transaction.
@@ -941,18 +960,50 @@ export async function createPosOrder(
 
   // ── Step 4: Compute shipping ─────────────────────────────────────────────
 
+  // 260906: an explicit admin override still wins, and a courier the admin
+  // already picked in the POS shipping step is honoured by service code.
+  // Otherwise quote Delyva live from the customer's address. This used to be
+  // a flat shipping_rates lookup wrapped in `catch { shippingCost = 0 }` —
+  // and since flat_rate was 0.00 for all 16 states, a POS order with no
+  // courier selected shipped free with no error and no log line.
   let shippingCost: number;
+  let quotedServiceCode = shippingCourier?.serviceCode ?? null;
+  let quotedServiceName = shippingCourier?.serviceName ?? null;
+
   if (typeof shippingOverride === "number") {
     shippingCost = shippingOverride;
   } else {
-    try {
-      const shippingResult = await getShippingRate(
-        customer.state,
-        subtotal - discountAmount,
-      );
-      shippingCost = shippingResult.cost;
-    } catch {
-      shippingCost = 0;
+    const auto = await autoQuoteShipping(
+      resolvedLines.map((l) => ({
+        productId: l.productId,
+        // Free-text POS lines carry the 'manual' sentinel, not a real variant;
+        // the quote core falls back to product/default weight for those.
+        variantId: l.variantId === "manual" ? null : l.variantId,
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+        configValues: parseConfigValues(l.configurationData),
+      })),
+      {
+        address1: customer.addressLine1,
+        address2: customer.addressLine2 ?? null,
+        city: customer.city,
+        state: customer.state,
+        postcode: customer.postcode,
+        country: "MY",
+      },
+      quotedServiceCode,
+    );
+
+    if (!auto.ok) {
+      return {
+        ok: false,
+        error: `Could not price shipping (${auto.error}). Enter a shipping amount manually, or set a fallback rate in /admin/shipping.`,
+      };
+    }
+    shippingCost = auto.quote.cost;
+    if (auto.quote.serviceCode) {
+      quotedServiceCode = auto.quote.serviceCode;
+      quotedServiceName = auto.quote.serviceName;
     }
   }
 
@@ -1003,9 +1054,9 @@ export async function createPosOrder(
         shippingState: customer.state,
         shippingPostcode: customer.postcode,
         shippingCountry: customer.country ?? "Malaysia",
-        shippingServiceCode: shippingCourier?.serviceCode ?? null,
-        shippingServiceName: shippingCourier?.serviceName ?? null,
-        shippingQuotedPrice: shippingCourier ? shippingCost.toFixed(2) : null,
+        shippingServiceCode: quotedServiceCode,
+        shippingServiceName: quotedServiceName,
+        shippingQuotedPrice: quotedServiceCode ? shippingCost.toFixed(2) : null,
         sourceType: "manual",
         // customItem* columns stay null for new POS orders (D-06 / REQ-20-2)
         customItemName: null,

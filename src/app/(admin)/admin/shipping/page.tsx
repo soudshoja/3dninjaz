@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth-helpers";
-import { listShippingRates } from "@/actions/admin-shipping";
+import { listShippingRates, listFallbackRates } from "@/actions/admin-shipping";
 import { getStoreSettingsCached } from "@/lib/store-settings";
 import { BRAND } from "@/lib/brand";
 import { ShippingRatesForm } from "@/components/admin/shipping-rates-form";
+import { ShippingFallbackForm } from "@/components/admin/shipping-fallback-form";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -14,9 +15,10 @@ export const metadata: Metadata = {
 
 export default async function AdminShippingPage() {
   await requireAdmin();
-  const [rates, settings] = await Promise.all([
+  const [rates, settings, fallbackRows] = await Promise.all([
     listShippingRates(),
     getStoreSettingsCached(),
+    listFallbackRates(),
   ]);
 
   return (
@@ -58,6 +60,15 @@ export default async function AdminShippingPage() {
             sstEnabled: !!settings.sstEnabled,
             sstRate: settings.sstRate,
           }}
+        />
+        <ShippingFallbackForm
+          rows={fallbackRows.map((r) => ({
+            id: r.id,
+            state: r.state,
+            maxWeightKg: r.maxWeightKg,
+            rate: r.rate,
+            source: r.source,
+          }))}
         />
       </div>
     </main>

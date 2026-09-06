@@ -1279,6 +1279,41 @@ export const shippingRates = mysqlTable("shipping_rates", {
   updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
 });
 
+/**
+ * Weight-bracketed shipping fallback used when a live Delyva quote is
+ * unavailable (API down, no courier returned, or a code path that has no
+ * cart context). One row per (state, maxWeightKg) bracket; lookup rounds the
+ * parcel weight UP to the first bracket whose maxWeightKg >= weight.
+ *
+ * `source` distinguishes the shipped seed values from rates learned at
+ * runtime: every successful Delyva quote upserts its cheapest price into the
+ * matching bracket with source='learned', so the fallback tracks real courier
+ * pricing instead of freezing at a single flat per-state rate. Admin edits
+ * write source='manual' and are never overwritten by the learner.
+ */
+export const shippingFallbackRates = mysqlTable(
+  "shipping_fallback_rates",
+  {
+    id: varchar("id", { length: 36 })
+      .primaryKey()
+      .default(sql`(UUID())`),
+    state: varchar("state", { length: 64 }).notNull(),
+    // Inclusive upper bound of the bracket, in kg.
+    maxWeightKg: decimal("max_weight_kg", { precision: 6, scale: 3 }).notNull(),
+    rate: decimal("rate", { precision: 10, scale: 2 }).notNull(),
+    source: mysqlEnum("source", ["seed", "learned", "manual"])
+      .notNull()
+      .default("seed"),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({
+    stateBracketUnique: unique("shipping_fallback_state_bracket").on(
+      t.state,
+      t.maxWeightKg,
+    ),
+  }),
+);
+
 export const eventTypeValues = [
   "page_view",
   "add_to_bag",

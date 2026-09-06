@@ -10,6 +10,7 @@ import { revalidatePath } from "next/cache";
 import { sendWhatsAppNotification } from "@/lib/whatsapp/sender";
 import { formatOrderNumber } from "@/lib/orders";
 import { publicOrigin } from "@/lib/public-url";
+import { autoQuoteShipping } from "@/lib/shipping-auto";
 
 /**
  * Phase 7 (07-03) — manual orders + payment links server actions.
@@ -64,6 +65,34 @@ export async function createManualOrder(
 
   const orderId = randomUUID();
   const amountStr = data.amount.toFixed(2);
+
+  // 260906: manual orders used to hardcode shippingCost "0.00" and set
+  // totalAmount = subtotal, so every one of them shipped free unless an admin
+  // remembered to book a courier on the order page afterwards. The address is
+  // mandatory on this form, so quote it. A manual order has no catalog line —
+  // one synthetic unit resolves to defaultWeightKg in the weight ladder,
+  // which is exactly what the store would post for a custom print anyway.
+  const auto = await autoQuoteShipping(
+    [{ productId: "", variantId: null, quantity: 1, unitPrice: data.amount }],
+    {
+      address1: data.shipping.addressLine1,
+      address2: data.shipping.addressLine2 || null,
+      city: data.shipping.city,
+      state: data.shipping.state,
+      postcode: data.shipping.postcode,
+      country: "MY",
+    },
+  );
+
+  if (!auto.ok) {
+    return {
+      ok: false,
+      error: `Could not price shipping (${auto.error}). Check the address, or set a fallback rate in /admin/shipping.`,
+    };
+  }
+
+  const shippingCost = auto.quote.cost;
+  const totalStr = (data.amount + shippingCost).toFixed(2);
   // Sentinel email when admin doesn't supply one — prevents NULL constraint
   // violation and signals "no customer email" to /admin/orders rendering.
   const customerEmail =
@@ -78,8 +107,13 @@ export async function createManualOrder(
       status: "pending",
       // No paypalOrderId/CaptureId — link generation is the next step.
       subtotal: amountStr,
-      shippingCost: "0.00",
-      totalAmount: amountStr,
+      shippingCost: shippingCost.toFixed(2),
+      totalAmount: totalStr,
+      // Null service code marks an estimated (fallback-table) price so the
+      // admin can see it was not a live courier quote.
+      shippingServiceCode: auto.quote.serviceCode,
+      shippingServiceName: auto.quote.serviceName,
+      shippingQuotedPrice: auto.quote.serviceCode ? shippingCost.toFixed(2) : null,
       currency: "MYR",
       customerEmail,
       shippingName: data.shipping.recipientName,
