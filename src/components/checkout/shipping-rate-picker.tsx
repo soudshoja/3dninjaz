@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
-import { quoteForCart, type QuoteOption } from "@/actions/shipping-quote";
+import { quoteForCart } from "@/actions/shipping-quote";
+import type { QuoteOption } from "@/lib/shipping-quote-types";
 import type { AddressFormValues } from "./address-form";
 import type { HydratedCartItem } from "@/actions/cart";
 

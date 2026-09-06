@@ -42,7 +42,7 @@ import { PosSendDraftModal } from "@/components/admin/pos-send-draft-modal";
 import { PosProductModal } from "@/components/admin/pos-product-modal";
 import { PosCustomerStep, type CustomerForm, type PosCustomerStepHandle } from "@/components/admin/pos-customer-step";
 import type { PosAddToOrderLine } from "@/components/store/product-detail";
-import type { CartItemForQuote } from "@/actions/shipping-quote";
+import type { CartItemForQuote } from "@/lib/shipping-quote-types";
 import { ensureConfigurationData } from "@/lib/config-fields";
 
 // ─── Types ────────────────────────────────────────────────────────────────────

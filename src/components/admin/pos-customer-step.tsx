@@ -32,7 +32,8 @@ import { BRAND } from "@/lib/brand";
 import { MALAYSIAN_STATES } from "@/lib/validators";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { getPosCustomerSearch, type PosCustomerResult } from "@/actions/admin-pos";
-import { quoteForCart, type QuoteOption, type CartItemForQuote } from "@/actions/shipping-quote";
+import { quoteForCart } from "@/actions/shipping-quote";
+import type { QuoteOption, CartItemForQuote } from "@/lib/shipping-quote-types";
 import { getShippingRate } from "@/actions/admin-shipping";
 import { formatMYR } from "@/lib/format";
 
