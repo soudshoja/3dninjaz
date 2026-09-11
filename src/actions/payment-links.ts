@@ -455,6 +455,26 @@ export async function capturePaymentLinkPayment({
     };
   }
 
+  // B-4 (payment integrity) — the client supplies paypalOrderId, but nothing
+  // upstream of this point proves it belongs to THIS order. Without this
+  // check, a caller holding a valid link token could approve a cheap PayPal
+  // order elsewhere and pass its id here to mark an expensive order paid.
+  // Require it to match the id we ourselves recorded when the PayPal order
+  // was created for this link (createPaymentLinkPayPalOrder). If the row has
+  // no paypalOrderId at all, do NOT silently accept the client's value.
+  if (!orderRow.paypalOrderId) {
+    return {
+      ok: false,
+      error: "No PayPal order was started for this link. Please refresh and try again.",
+    };
+  }
+  if (orderRow.paypalOrderId !== paypalOrderId) {
+    return {
+      ok: false,
+      error: "This PayPal order does not match this payment link. Please refresh and try again.",
+    };
+  }
+
   // Capture via PayPal SDK.
   let captureId: string | null = null;
   try {
