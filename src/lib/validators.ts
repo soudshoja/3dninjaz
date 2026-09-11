@@ -906,6 +906,18 @@ export const bulkImportRowSchema = z.object({
     .positive()
     .optional()
     .nullable(),
+  // Quick task 260911-mpw — mandatory shipping weight, same rule as the
+  // admin form's productSchema.shippingWeightG. Required — leaving the CSV
+  // importer able to create weightless products would defeat the point of
+  // making the field mandatory on the form.
+  shipping_weight_g: z.coerce
+    .number({
+      required_error: SHIPPING_WEIGHT_ERROR,
+      invalid_type_error: SHIPPING_WEIGHT_ERROR,
+    })
+    .int(SHIPPING_WEIGHT_ERROR)
+    .min(SHIPPING_WEIGHT_MIN_G, SHIPPING_WEIGHT_ERROR)
+    .max(SHIPPING_WEIGHT_MAX_G, SHIPPING_WEIGHT_ERROR),
   // Generic option columns (phase 16)
   option1_name: z.string().max(50).optional().nullable(),
   option1_values: z.string().optional().nullable(),  // pipe-separated
