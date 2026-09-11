@@ -21,7 +21,7 @@ import { useState, useMemo, useRef } from "react";
 import Image from "next/image";
 import { ShoppingBag, Heart } from "lucide-react";
 import { BRAND } from "@/lib/brand";
-import { formatMYR } from "@/lib/format";
+import { formatMYR, formatFromTier } from "@/lib/format";
 import {
   lookupTierPrice,
   lookupTierPriceBySlotCount,
@@ -153,6 +153,7 @@ function PricePill({
   hideBasePrice = false,
   selectPriceOverride,
   isKeycapseq = false,
+  fromLabel = null,
 }: {
   outOfTable: boolean;
   maxUnitCount: number | null;
@@ -162,6 +163,9 @@ function PricePill({
   selectPriceOverride: number | null;
   /** Phase 25 — over-cap label becomes "Too many keycaps" for keycapseq fields. */
   isKeycapseq?: boolean;
+  /** Task 16 (Finding A) — "From RM 7.00" shown before the tier lookup has
+   * anything to key on (e.g. a text-keyed unit field with no input yet). */
+  fromLabel?: string | null;
 }) {
   if (outOfTable) {
     return (
@@ -183,6 +187,25 @@ function PricePill({
       >
         Select an option to see price
       </span>
+    );
+  }
+  // Task 16 (Finding A) — the tier lookup has nothing to key on yet (e.g. a
+  // text-keyed unit field before the customer types anything), but the
+  // product still has a real cheapest tier. Show "From RM X.00" instead of
+  // the flat "Enter your details to see price" dead end.
+  if (currentPrice === null && fromLabel) {
+    return (
+      <div className="flex flex-col gap-1">
+        <span
+          className="inline-flex self-start items-center rounded-full px-5 py-2 text-base font-semibold"
+          style={{ backgroundColor: "#f1f5f9", color: "#64748b", border: "2px solid #e2e8f0" }}
+        >
+          {fromLabel}
+        </span>
+        <span className="text-xs text-slate-500">
+          Final price depends on length — type your text below.
+        </span>
+      </div>
     );
   }
   if (currentPrice !== null) {
@@ -309,6 +332,11 @@ export function ConfigurableProductView({
     if (selectPriceOverride !== null) return selectPriceOverride;
     return basePriceBeforeOverride;
   }, [basePriceBeforeOverride, selectPriceOverride]);
+
+  // Task 16 (Finding A) — "From RM 7.00", reusing the same tested helper the
+  // shop card already uses. Computed once from priceTiers (not per-keystroke
+  // state), so it stays stable while currentPrice resolves.
+  const fromLabel = useMemo(() => formatFromTier(priceTiers), [priceTiers]);
 
   // Phase 25 — keycapseq over-cap keys off TOTAL slot count vs maxUnitCount.
   const keycapOverCap =
@@ -492,8 +520,8 @@ export function ConfigurableProductView({
     : outOfTable
     ? (keycapseqFieldId ? "Too many keycaps" : "Too many characters")
     : !requiredFilled || !customInputsSatisfied
-    ? "Fill in all fields first"
-    : "Enter your details";
+    ? (fromLabel ? `Personalise · ${fromLabel}` : "Fill in all fields first")
+    : (fromLabel ? `Personalise · ${fromLabel}` : "Enter your details");
 
   // ============================================================================
   // Render
@@ -671,6 +699,7 @@ export function ConfigurableProductView({
                   hideBasePrice={hideBasePrice}
                   selectPriceOverride={selectPriceOverride}
                   isKeycapseq={keycapseqFieldId !== null}
+                  fromLabel={fromLabel}
                 />
               </div>
 
