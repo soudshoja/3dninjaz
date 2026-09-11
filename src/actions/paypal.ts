@@ -15,6 +15,7 @@ import { sendWhatsAppNotification, sendWhatsAppInvoicePdf } from "@/lib/whatsapp
 import { validateCoupon, redeemCoupon } from "@/actions/coupons";
 import { publicUrl } from "@/lib/public-url";
 import { autoQuoteShipping } from "@/lib/shipping-auto";
+import { snapshotsToQuoteItems } from "@/lib/shipping-quote-items";
 import { revalidatePath } from "next/cache";
 import type { ConfigurationData, KeycapSeqConfig } from "@/lib/config-fields";
 import {
@@ -497,19 +498,12 @@ export async function createPayPalOrder(
   // was 0.00 for all 16 states). autoQuoteShipping honours the courier the
   // customer chose when it is still offered, else takes the cheapest, else
   // falls back to the weight-bracketed table. It never returns a silent zero.
+  // Quote items come from allSnapshots, not input.items: it is the only
+  // structure that carries both stocked and configurable lines with a real
+  // productId, the coalesced quantity, and the server-derived price. See
+  // .planning/quick/260911-oln-fix-configurable-line-shipping-weight/PLAN.md.
   const autoShip = await autoQuoteShipping(
-    input.items.map((i) => {
-      const row = variantRows.find((v) => v.id === i.variantId);
-      // Use the server-snapshot unitPrice (already sale-resolved) so the
-      // free-shipping threshold check matches what we actually charge.
-      const snap = allSnapshots.find((s) => s.variantId === i.variantId);
-      return {
-        productId: row?.productId ?? "",
-        variantId: i.variantId,
-        quantity: qtyByVariant.get(i.variantId) ?? i.quantity,
-        unitPrice: snap ? Number(snap.unitPrice) : 0,
-      };
-    }),
+    snapshotsToQuoteItems(allSnapshots),
     {
       address1: addr.data.addressLine1,
       address2: addr.data.addressLine2 ?? null,
