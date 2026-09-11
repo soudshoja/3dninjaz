@@ -3,6 +3,13 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Safe-area padding for fixed/sticky bottom elements (drawer footer, mobile
+   dock, PDP sticky bars) — inert (evaluates to 0px) unless the `viewport`
+   export in layout.tsx sets viewportFit: "cover". See Task 7. */
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

@@ -866,13 +866,13 @@ export function ConfigurableProductView({
 
       {/* ── Sticky mobile CTA bar ────────────────────────────────────────── */}
       <div
-        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 px-4 pb-safe-area-inset-bottom"
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 px-4"
         style={{
           backgroundColor: "rgba(247,250,244,0.96)",
           backdropFilter: "blur(12px)",
           borderTop: `2px solid ${BRAND.ink}10`,
           paddingTop: 12,
-          paddingBottom: 16,
+          paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
         }}
       >
         <button
