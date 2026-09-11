@@ -190,11 +190,16 @@ export async function computeCartQuote(
           // Tier 2: product-level shippingWeightKg
           w = productWeightKg;
         } else {
-          // Tier 3: final fallback — emit warn so admin knows weight data is missing
-            console.warn(
-            "[shipping] no weight data for variantId=%s productId=%s — using defaultWeightKg=%s",
-            it.variantId ?? "(none)",
-            it.productId,
+          // Tier 3: final fallback — emit warn so admin knows weight data is missing.
+          // `?? "(none)"` alone only catches null/undefined — an empty-string
+          // variantId/productId (configurable lines before this fix) printed
+          // as nothing, which is why this read as `variantId= productId=` in
+          // prod for months. Coerce any falsy/blank value to "(none)".
+          console.warn(
+            "[shipping] no weight data for variantId=%s productId=%s quantity=%s — using defaultWeightKg=%s",
+            it.variantId || "(none)",
+            it.productId || "(none)",
+            it.quantity,
             fallbackWeight,
           );
           w = fallbackWeight;

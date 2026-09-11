@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { reportClientError } from "@/actions/client-error-reporter";
+import {
+  consumeAutoRecoveryAttempt,
+  hardRecover,
+  isStaleBundleError,
+} from "@/lib/is-stale-bundle-error";
 
 /**
  * Phase 7 (07-09) — root-layout error fallback.
@@ -11,6 +16,12 @@ import { reportClientError } from "@/actions/client-error-reporter";
  *
  * Same contract as error.tsx: NEVER renders error.message/stack to the
  * client (T-07-09-error-page-leak).
+ *
+ * Quick task 260911-skew-checkout-selfheal: this is the boundary scope
+ * ('global-error') that production logs actually recorded for the
+ * stale-bundle incident, so it gets the identical self-heal logic as
+ * src/app/error.tsx — see src/lib/is-stale-bundle-error.ts for the
+ * detection/recovery contract.
  */
 function makeId(): string {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -27,14 +38,45 @@ export default function GlobalError({
   reset: () => void;
 }) {
   const [requestId] = useState(() => makeId());
+  const [recoverable] = useState(() => isStaleBundleError(error));
+  const [mayAutoRecover] = useState(() =>
+    recoverable ? consumeAutoRecoveryAttempt() : false,
+  );
+
   useEffect(() => {
-    void reportClientError({
+    const autoRecover = recoverable && mayAutoRecover;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const reportPromise = reportClientError({
       requestId,
       message: error.message,
       stack: error.stack,
-      context: { digest: error.digest, scope: "global-error" },
+      context: {
+        digest: error.digest,
+        scope: "global-error",
+        staleBundle: recoverable,
+        autoRecover,
+      },
     }).catch(() => {});
-  }, [requestId, error]);
+
+    if (!autoRecover) {
+      return;
+    }
+
+    // D-03: await the report (raced against a ~1000ms timeout) before
+    // navigating — location.replace() aborts in-flight requests.
+    const timeoutPromise = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, 1000);
+    });
+
+    void Promise.race([reportPromise, timeoutPromise]).then(() => {
+      hardRecover();
+    });
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [requestId, error, recoverable, mayAutoRecover]);
 
   return (
     <html>
@@ -76,7 +118,7 @@ export default function GlobalError({
           </p>
           <button
             type="button"
-            onClick={reset}
+            onClick={recoverable ? hardRecover : reset}
             style={{
               minHeight: "48px",
               padding: "0.75rem 1.25rem",
