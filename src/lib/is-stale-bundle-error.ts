@@ -6,8 +6,9 @@
  * content-derived server action id unresolvable server-side. React's
  * `reset()` re-renders the boundary against the SAME stale bundle, so it can
  * never recover on its own — only a fresh document fetch pulls the new
- * bundle (F-02). This module is a plain lib — NOT `"use server"` — so it can
- * freely export a type alongside the detector function.
+ * bundle (F-02). This module is a plain client-safe lib — it carries no
+ * server-action directive — so it can freely export a type alongside the
+ * detector function.
  *
  * F-04 — why `"load failed"` / `"failed to fetch"` are EXACT-MATCH, not
  * substring: `"Upload failed"` contains the substring `"load failed"`.
