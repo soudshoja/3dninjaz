@@ -22,6 +22,7 @@ import Image from "next/image";
 import { ShoppingBag, Heart } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import { formatMYR, formatFromTier } from "@/lib/format";
+import { scrollToFirstEmpty } from "@/lib/scroll-to-first-empty";
 import {
   lookupTierPrice,
   lookupTierPriceBySlotCount,
@@ -257,6 +258,9 @@ export function ConfigurableProductView({
     product.productType === "keychain" || product.productType === "vending",
   );
   const previewRef = useRef<HTMLDivElement>(null);
+  // Task 17 (Finding B1) — scroll target for the sticky CTA when the form
+  // isn't ready yet.
+  const personaliseRef = useRef<HTMLDivElement>(null);
 
   // ── Derived state ──────────────────────────────────────────────────────────
 
@@ -709,6 +713,8 @@ export function ConfigurableProductView({
 
             {/* ── Personalise section card ────────────────────────────── */}
             <div
+              id="personalise"
+              ref={personaliseRef}
               className="rounded-3xl p-5 sm:p-6"
               style={{
                 background: "#ffffff",
@@ -906,17 +912,43 @@ export function ConfigurableProductView({
       >
         <button
           type="button"
-          disabled={!canAdd}
-          onClick={handleAddToBag}
-          className="w-full flex items-center justify-center gap-2 rounded-2xl px-6 py-4 text-base font-extrabold uppercase tracking-wide transition-all duration-200"
-          style={{
-            backgroundColor: canAdd ? BRAND.green : "#e2e8f0",
-            color: canAdd ? BRAND.ink : "#94a3b8",
-            cursor: canAdd ? "pointer" : "not-allowed",
-            minHeight: 54,
-            boxShadow: canAdd ? `0 4px 0 ${BRAND.greenDark}` : "none",
-          }}
-          aria-disabled={!canAdd}
+          onClick={
+            canAdd
+              ? handleAddToBag
+              : () => scrollToFirstEmpty(personaliseRef.current)
+          }
+          className="w-full flex items-center justify-center gap-2 rounded-2xl border-2 px-6 py-4 text-base font-extrabold uppercase tracking-wide transition-all duration-200"
+          style={
+            canAdd
+              ? {
+                  backgroundColor: BRAND.green,
+                  borderColor: BRAND.green,
+                  color: BRAND.ink,
+                  cursor: "pointer",
+                  minHeight: 54,
+                  boxShadow: `0 4px 0 ${BRAND.greenDark}`,
+                }
+              : outOfTable
+              ? {
+                  backgroundColor: "#e2e8f0",
+                  borderColor: "#e2e8f0",
+                  color: "#94a3b8",
+                  cursor: "not-allowed",
+                  minHeight: 54,
+                  boxShadow: "none",
+                }
+              : {
+                  // Task 17 (Finding B1) — no longer inert: taps scroll to
+                  // the first unfilled field. Ink outline (no fill) signals
+                  // "not ready yet" without the old dead-grey disabled look.
+                  backgroundColor: "transparent",
+                  borderColor: BRAND.ink,
+                  color: BRAND.ink,
+                  cursor: "pointer",
+                  minHeight: 54,
+                  boxShadow: "none",
+                }
+          }
           aria-label={ctaLabel}
         >
           <ShoppingBag size={20} strokeWidth={2.5} aria-hidden="true" />
