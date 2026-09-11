@@ -286,7 +286,7 @@ export default async function PaymentLinkPage({
 
   return (
     <main
-      className="min-h-screen"
+      className="no-ios-zoom min-h-screen"
       style={{ backgroundColor: BRAND.cream, color: BRAND.ink }}
     >
       <div className="mx-auto max-w-2xl px-4 py-8">

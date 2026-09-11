@@ -252,6 +252,16 @@
 .stagger-parent.is-visible .stagger-item:nth-child(5) { transition-delay: 320ms; }
 .stagger-parent.is-visible .stagger-item:nth-child(6) { transition-delay: 400ms; }
 
+/* iOS WebKit auto-zooms the page on focus when a control's font-size is
+   below 16px, and inside an in-app WebView (Instagram, etc.) that zoom
+   sticks. Bump mobile form control font-size to 16px wherever this class is
+   applied on an ancestor. See Task 8. */
+@media (max-width: 767px) {
+  .no-ios-zoom :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+    font-size: 16px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-spin-slow { animation: none; }
   .animate-marquee { animation: none; }
