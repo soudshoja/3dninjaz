@@ -8,6 +8,11 @@ import { formatOrderNumber } from "@/lib/orders";
 import { getDelyvaWebhookSecret } from "@/lib/delyva";
 import { sendWhatsAppNotification } from "@/lib/whatsapp/sender";
 import { publicUrl } from "@/lib/public-url";
+import {
+  isCancelledStatusCode,
+  isDeliveredStatusCode,
+  shouldNotifyDelivered,
+} from "@/lib/delyva-delivery-status";
 
 // ============================================================================
 // Phase 9 (09-01) — Delyva webhook receiver.
@@ -156,16 +161,22 @@ export async function POST(req: NextRequest) {
         })
         .where(eq(orderShipments.delyvaOrderId, delyvaOrderId));
 
-      // Delivered detection — text-first because Delyva codes vary by
-      // courier (SPX uses 500 for in-transit, not 400 as docs claimed).
-      // Trigger the delivered email only when the rich text explicitly
-      // confirms delivery. Numeric fallback only if no text was given
-      // and the code is 700+ (well above the 400-699 in-transit band).
-      const textLower = (data.description ?? data.statusText ?? data.statusMessage ?? "").toLowerCase();
-      const looksDelivered =
-        /delivered|delivery successful|signed|received by recipient/.test(textLower) ||
-        (textLower === "" && typeof data.statusCode === "number" && data.statusCode >= 700);
-      if (looksDelivered) {
+      // Cancelled shipment (statusCode 900) — log only. Cancelling a
+      // customer order is a business decision, not something a courier
+      // tracking event should do automatically. The shipment row's
+      // statusCode/message above already reflects the cancellation.
+      if (isCancelledStatusCode(data.statusCode)) {
+        console.warn("[delyva-webhook] shipment cancelled at Delyva (statusCode 900) — orders.status left untouched", {
+          delyvaOrderId,
+        });
+      }
+
+      // Delivered detection is numeric-only (statusCode >= 700, excluding
+      // 900/cancelled) — see src/lib/delyva-delivery-status.ts. Delyva's
+      // status/statusText/statusMessage text fields are the literal string
+      // "ready" at every stage and carry no delivered signal; do not
+      // resurrect a text-regex fallback here.
+      if (isDeliveredStatusCode(data.statusCode)) {
         try {
           // Find the order associated with this shipment to get customer info
           const shipment = await db
@@ -180,6 +191,7 @@ export async function POST(req: NextRequest) {
             const order = await db
               .select({
                 id: orders.id,
+                status: orders.status,
                 customerEmail: orders.customerEmail,
                 shippingName: orders.shippingName,
                 shippingPhone: orders.shippingPhone,
@@ -188,7 +200,17 @@ export async function POST(req: NextRequest) {
               .where(eq(orders.id, shipment[0].orderId))
               .limit(1);
 
-            if (order.length > 0) {
+            // Idempotency: order_tracking.update fires on every scan, so a
+            // parcel already at statusCode 700 will keep re-arriving here.
+            // Only update + notify the FIRST time — a repeat delivered
+            // event on an already-delivered order must be a silent no-op.
+            if (
+              order.length > 0 &&
+              shouldNotifyDelivered({
+                statusCode: data.statusCode,
+                currentOrderStatus: order[0].status,
+              })
+            ) {
               await db
                 .update(orders)
                 .set({ status: "delivered" })
