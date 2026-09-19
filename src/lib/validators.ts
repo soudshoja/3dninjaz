@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  SHIPPING_WEIGHT_MIN_G,
+  SHIPPING_WEIGHT_MAX_G,
+  SHIPPING_WEIGHT_ERROR,
+} from "@/lib/shipping-weight";
 
 // Phase 8 (08-01) — slug is optional on input; action layer derives from
 // name when omitted. When present, it is re-slugified defensively before
@@ -142,6 +147,21 @@ export const productSchema = z.object({
     .int("Production days must be a whole number")
     .positive("Production days must be positive")
     .optional(),
+  // Quick task 260911-mpw — mandatory shipping weight. Grams on the wire
+  // (matches the existing variant-editor "Weight (g)" convention), kg in
+  // the DB (src/lib/db/schema.ts:193). No .optional()/.default() — an
+  // absent key must fail parse so the server enforces this independently
+  // of the form. Bounds: SHIPPING_WEIGHT_MIN_G..SHIPPING_WEIGHT_MAX_G
+  // (1-30000g), the upper bound mirroring MAX_PARCEL_WEIGHT_KG = 30 at
+  // src/lib/shipping-quote-core.ts:217.
+  shippingWeightG: z.coerce
+    .number({
+      required_error: SHIPPING_WEIGHT_ERROR,
+      invalid_type_error: SHIPPING_WEIGHT_ERROR,
+    })
+    .int(SHIPPING_WEIGHT_ERROR)
+    .min(SHIPPING_WEIGHT_MIN_G, SHIPPING_WEIGHT_ERROR)
+    .max(SHIPPING_WEIGHT_MAX_G, SHIPPING_WEIGHT_ERROR),
   isActive: z.boolean().default(true),
   isFeatured: z.boolean().default(false),
   categoryId: z.string().uuid().optional().nullable(),
@@ -886,6 +906,18 @@ export const bulkImportRowSchema = z.object({
     .positive()
     .optional()
     .nullable(),
+  // Quick task 260911-mpw — mandatory shipping weight, same rule as the
+  // admin form's productSchema.shippingWeightG. Required — leaving the CSV
+  // importer able to create weightless products would defeat the point of
+  // making the field mandatory on the form.
+  shipping_weight_g: z.coerce
+    .number({
+      required_error: SHIPPING_WEIGHT_ERROR,
+      invalid_type_error: SHIPPING_WEIGHT_ERROR,
+    })
+    .int(SHIPPING_WEIGHT_ERROR)
+    .min(SHIPPING_WEIGHT_MIN_G, SHIPPING_WEIGHT_ERROR)
+    .max(SHIPPING_WEIGHT_MAX_G, SHIPPING_WEIGHT_ERROR),
   // Generic option columns (phase 16)
   option1_name: z.string().max(50).optional().nullable(),
   option1_values: z.string().optional().nullable(),  // pipe-separated

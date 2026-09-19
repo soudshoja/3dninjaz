@@ -15,6 +15,10 @@ const TEMPLATE_HEADER = [
   "option2_values",
   "option2_prices",
   "material_type",
+  // Quick task 260911-mpw — mandatory shipping weight, grams. Positioned
+  // right after material_type; the two TEMPLATE_ arrays are positional so
+  // an index mismatch here silently shifts every column.
+  "shipping_weight_g",
   "estimated_production_days",
   "image_url_1",
   "image_url_2",
@@ -33,6 +37,7 @@ const TEMPLATE_EXAMPLE = [
   "",
   "",
   "PLA",
+  "300",
   "7",
   "/uploads/products/sample-dragon-01.jpg",
   "",
