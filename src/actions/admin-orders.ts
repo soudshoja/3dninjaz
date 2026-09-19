@@ -17,8 +17,13 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { MALAYSIAN_STATES } from "@/lib/validators";
 import { validateCoupon } from "@/actions/coupons";
-import { assertValidTransition, formatOrderNumber, type OrderStatus } from "@/lib/orders";
-import { sendOrderProcessingEmail } from "@/actions/send-emails";
+import {
+  assertValidTransition,
+  formatOrderNumber,
+  shouldNotifyShipped,
+  type OrderStatus,
+} from "@/lib/orders";
+import { sendOrderProcessingEmail, sendOrderShippedEmail } from "@/actions/send-emails";
 import { orderStatusValues } from "@/lib/db/schema";
 import { computeOrderCost, toNum, toNumOrNull } from "@/lib/profit";
 import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
@@ -356,6 +361,7 @@ export async function updateOrderStatus(
       customerEmail: orders.customerEmail,
       shippingName: orders.shippingName,
       shippingPhone: orders.shippingPhone,
+      shippingServiceName: orders.shippingServiceName,
     })
     .from(orders)
     .where(eq(orders.id, orderId))
@@ -416,6 +422,60 @@ export async function updateOrderStatus(
       orderUrl: publicUrl(`/orders/${orderId}`),
     }).catch(() => {});
     void sendWhatsAppInvoicePdf(orderId, row.shippingPhone).catch(() => {});
+  }
+
+  // Status → shipped via the generic control, i.e. the admin flipped the
+  // status WITHOUT going through bookShipment() in shipping.ts (which
+  // notifies at booking time on its own). Without this block, an order
+  // shipped this way notified nobody — found via 6 prod orders sitting at
+  // "shipped" with no orderShipments row at all.
+  //
+  // Double-notify guard (shouldNotifyShipped): skip when a shipment row
+  // already exists (bookShipment already sent its own "order_shipped"
+  // notification at booking time) or when the order was already "shipped"
+  // (idempotency on resubmission/race — assertValidTransition above also
+  // rejects a shipped->shipped transition, but this check does not rely on
+  // that unrelated state-machine rule).
+  if (newStatus === "shipped") {
+    const [shipmentRow] = await db
+      .select({ id: orderShipments.id })
+      .from(orderShipments)
+      .where(eq(orderShipments.orderId, orderId))
+      .limit(1);
+
+    if (
+      shouldNotifyShipped({
+        newStatus,
+        previousStatus: row.status,
+        hasShipmentRow: Boolean(shipmentRow),
+      })
+    ) {
+      // No Delyva booking exists for this order, so there is no real
+      // courier/tracking info yet — fall back gracefully instead of
+      // rendering "undefined" into the customer-facing message. Mirrors the
+      // `details?.trackingNo || "pending"` fallback bookShipment() uses.
+      const courierName = row.shippingServiceName || "Your courier";
+      void sendOrderShippedEmail({
+        customerEmail: row.customerEmail,
+        customerName: row.shippingName,
+        orderNumber: formatOrderNumber(orderId),
+        courierName,
+        trackingNo: "pending",
+        consignmentNo: "pending",
+        orderId,
+      }).catch((err) =>
+        console.error("[admin-orders] shipped email dispatch failed:", err),
+      );
+      void sendWhatsAppNotification("order_shipped", row.shippingPhone, {
+        customerName: row.shippingName,
+        orderNumber: formatOrderNumber(orderId),
+        courierName,
+        trackingNo: "pending",
+        trackingUrl: publicUrl(`/orders/${orderId}`),
+      }).catch((err) =>
+        console.error("[admin-orders] shipped WhatsApp dispatch failed:", err),
+      );
+    }
   }
 
   revalidatePath(`/admin/orders`);
