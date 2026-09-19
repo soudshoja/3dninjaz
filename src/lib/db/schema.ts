@@ -7,6 +7,7 @@ import {
   longtext,
   boolean,
   int,
+  tinyint,
   decimal,
   timestamp,
   datetime,
@@ -1268,6 +1269,82 @@ export function seedWhatsappSettings(): WhatsappSettingsSeed {
     notificationsEnabled: false,
   };
 }
+
+// ----------------------------------------------------------------------------
+// WhatsApp outbox — 260920-whatsapp-outbox
+//
+// Durable queue replacing the one-shot fire-and-forget sender. Enqueued
+// synchronously by src/lib/whatsapp/outbox.ts, drained by the in-process
+// dispatcher (src/lib/whatsapp/dispatcher.ts).
+//
+// No JSON columns — deliberately avoided so no call site needs
+// ensureImagesArray-style manual parsing (MariaDB returns JSON as LONGTEXT
+// strings, mysql2 does not auto-parse).
+// No FK to `orders` — an outbox row is an audit record; it must survive
+// order deletion (orders are deletable while status='pending').
+// ----------------------------------------------------------------------------
+
+export const whatsappOutboxStatusValues = [
+  "queued",
+  "sending",
+  "accepted",
+  "server_ack",
+  "delivered",
+  "read",
+  "failed_retryable",
+  "failed_final",
+  "undelivered",
+  "cancelled",
+] as const;
+
+export const whatsappOutboxPayloadKindValues = ["text", "invoice_pdf"] as const;
+
+export const whatsappOutbox = mysqlTable(
+  "whatsapp_outbox",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    // D-4 — single pre-computed unique key, "<eventKey>:<orderId ?? '-'>:<recipient>[:<suffix>]".
+    idempotencyKey: varchar("idempotency_key", { length: 190 }).notNull(),
+    eventKey: varchar("event_key", { length: 64 }).notNull(),
+    orderId: varchar("order_id", { length: 36 }),
+    recipient: varchar("recipient", { length: 32 }).notNull(),
+    payloadKind: mysqlEnum("payload_kind", whatsappOutboxPayloadKindValues)
+      .notNull()
+      .default("text"),
+    payloadText: text("payload_text"),
+    payloadRef: varchar("payload_ref", { length: 36 }),
+    status: mysqlEnum("status", whatsappOutboxStatusValues)
+      .notNull()
+      .default("queued"),
+    attempts: int("attempts").notNull().default(0),
+    nextAttemptAt: timestamp("next_attempt_at").notNull().defaultNow(),
+    claimedAt: timestamp("claimed_at"),
+    claimedBy: varchar("claimed_by", { length: 64 }),
+    // Truncate before storing — never a full HTML error body.
+    lastError: varchar("last_error", { length: 500 }),
+    lastHttpStatus: int("last_http_status"),
+    providerKeyId: varchar("provider_key_id", { length: 128 }),
+    ackStatus: varchar("ack_status", { length: 16 }),
+    // Monotonic guard (D-1 of Task 8) — stored, not derived at read time, so
+    // the `ack_rank < ?` SQL comparison is race-free across concurrent
+    // webhook deliveries.
+    ackRank: tinyint("ack_rank").notNull().default(-1),
+    ackedAt: timestamp("acked_at"),
+    sentAt: timestamp("sent_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({
+    uqIdem: unique("uq_outbox_idem").on(t.idempotencyKey),
+    uqProviderKey: unique("uq_outbox_provider_key").on(t.providerKeyId),
+    drainIdx: index("idx_outbox_drain").on(t.status, t.nextAttemptAt),
+    orderIdx: index("idx_outbox_order").on(t.orderId),
+    createdIdx: index("idx_outbox_created").on(t.createdAt),
+  }),
+);
+
+export type WhatsappOutboxRow = typeof whatsappOutbox.$inferSelect;
+export type WhatsappOutboxInsert = typeof whatsappOutbox.$inferInsert;
 
 export const shippingRates = mysqlTable("shipping_rates", {
   id: varchar("id", { length: 36 })
