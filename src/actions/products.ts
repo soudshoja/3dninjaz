@@ -332,6 +332,10 @@ export async function createProduct(
     thumbnailIndex: safeThumb,
     materialType: productData.materialType?.trim() || null,
     estimatedProductionDays: productData.estimatedProductionDays ?? null,
+    // Quick task 260911-mpw — mandatory shipping weight. productSchema
+    // guarantees an integer 1-30000g here, so no re-validation — derived
+    // from the parsed productData, never the raw `data` argument.
+    shippingWeightKg: (productData.shippingWeightG / 1000).toFixed(3),
     isActive: productData.isActive,
     isFeatured: productData.isFeatured,
     soldOut: productData.soldOut ?? false,
@@ -543,6 +547,10 @@ export async function updateProduct(
       thumbnailIndex: safeThumb,
       materialType: productData.materialType?.trim() || null,
       estimatedProductionDays: productData.estimatedProductionDays ?? null,
+      // Quick task 260911-mpw — mandatory shipping weight. productSchema
+      // guarantees an integer 1-30000g here, so no re-validation — derived
+      // from the parsed productData, never the raw `data` argument.
+      shippingWeightKg: (productData.shippingWeightG / 1000).toFixed(3),
       isActive: productData.isActive,
       isFeatured: productData.isFeatured,
       ...(productData.soldOut !== undefined ? { soldOut: productData.soldOut } : {}),
