@@ -13,6 +13,10 @@ import {
 } from "@/actions/shipping";
 import type { ShipmentTrackingView } from "@/lib/shipment-tracking";
 import { OrderTrackingTimeline } from "@/components/orders/order-tracking-timeline";
+import {
+  isDeliveredStatusCode,
+  isCancelledStatusCode,
+} from "@/lib/delyva-delivery-status";
 
 type Service = {
   serviceCode: string;
@@ -260,9 +264,12 @@ export function OrderShipmentPanel({ orderId, shipment, tracking }: Props) {
   // -------- existing shipment view --------
 
   const status = shipment.statusCode;
-  // Treat "delivered" as statusCode >= 400, "cancelled" as 90.
-  const delivered = typeof status === "number" && status >= 400 && status !== 500;
-  const cancelled = status === 90;
+  // Numeric-only, verified thresholds — see delyva-delivery-status.ts.
+  // (Previously a THIRD independent copy of the now-debunked >=400/===90
+  // banding lived here, separate from shipment-tracking.ts; fixed alongside
+  // that file's fix since it gated the same "Cancel booking" action.)
+  const delivered = isDeliveredStatusCode(status);
+  const cancelled = isCancelledStatusCode(status);
   // External courier customer-tracking page — works for every courier
   // (including drop couriers with no live GPS) since it keys on the public
   // consignment number. Admin-only affordance.
