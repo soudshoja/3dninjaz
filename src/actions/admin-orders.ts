@@ -1042,10 +1042,10 @@ export async function sendInvoiceViaWhatsApp(
     }
 
     const fileName = `invoice-${formatOrderNumber(orderId)}.pdf`;
-    const sent = await sendMedia({ number, base64, fileName });
+    const r = await sendMedia({ number, base64, fileName });
 
-    if (!sent) {
-      return { ok: false, error: "Failed to send message via Evolution API." };
+    if (!r.ok) {
+      return { ok: false, error: r.error ?? "Failed to send message via Evolution API." };
     }
 
     return { ok: true };
