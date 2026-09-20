@@ -6,14 +6,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("server-only", () => ({}));
-vi.mock("@/lib/db", () => ({ db: {} }));
+vi.mock("@/lib/db", () => ({ db: { execute: vi.fn().mockResolvedValue([{ affectedRows: 0 }]) } }));
 vi.mock("@/lib/whatsapp/settings", () => ({ getWhatsappStateFresh: vi.fn() }));
 vi.mock("@/lib/whatsapp/client", () => ({ sendText: vi.fn(), sendMedia: vi.fn() }));
 vi.mock("@/lib/pdf/render-invoice", () => ({ renderInvoicePdfBase64: vi.fn() }));
 vi.mock("@/lib/orders", () => ({ formatOrderNumber: (id: string) => `ORD-${id}` }));
 vi.mock("@/lib/whatsapp/reconciler", () => ({ runOutboxReconcile: vi.fn() }));
 
+import { MySqlDialect } from "drizzle-orm/mysql-core";
+import { db } from "@/lib/db";
 import {
+  defaultDeps,
+  REAP_STUCK_MINUTES,
   runOutboxTick,
   type DispatcherDeps,
   type OutboxCandidate,
@@ -44,7 +48,7 @@ function makeDeps(candidates: OutboxCandidate[], enabled = true) {
   });
   const sendMedia = vi.fn();
   const deps = {
-    config: { maxPerTick: 10, sendGapMs: 0, maxAgeMin: 30 },
+    config: { renderTimeoutMs: 20, maxPerTick: 10, sendGapMs: 0, maxAgeMin: 30 },
     reapStuck: vi.fn().mockResolvedValue(0),
     selectCandidates: vi.fn().mockResolvedValue(candidates),
     claim: vi.fn().mockResolvedValue(true),
@@ -95,6 +99,31 @@ describe("cold-start age guard", () => {
     const { deps, sendText } = makeDeps([cand({ attempts: 3, ageSeconds: 5 * 3600 })]);
     await runOutboxTick(deps);
     expect(sendText).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("stuck-row reaper (H2)", () => {
+  it("parks stuck 'sending' rows as failed_final/unconfirmed and never re-queues them", async () => {
+    await defaultDeps().reapStuck();
+    const q = (db.execute as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0];
+    const { sql: text, params } = new MySqlDialect().sqlToQuery(q);
+    expect(text).toMatch(/status = 'failed_final'/);
+    expect(text).toMatch(/attempts = attempts \+ 1/);
+    expect(text).toMatch(/stuck-sending-unknown/);
+    expect(text).not.toMatch(/failed_retryable/);
+    expect(text).not.toMatch(/queued/);
+    expect(params).toContain(REAP_STUCK_MINUTES);
+    expect(REAP_STUCK_MINUTES).toBe(10);
+  });
+
+  it("a hung PDF render fails retryably instead of holding the row", async () => {
+    const { deps, sendMedia } = makeDeps([cand({ payloadKind: "invoice_pdf", payloadRef: "o1" })]);
+    (deps.renderPdf as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}));
+    await runOutboxTick(deps);
+    expect(sendMedia).not.toHaveBeenCalled();
+    const f = deps.markFailure.mock.calls[0][1];
+    expect(f.status).toBe("failed_retryable");
+    expect(f.error).toBe("pdf-render-failed");
   });
 });
 

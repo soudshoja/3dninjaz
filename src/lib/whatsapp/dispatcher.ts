@@ -49,7 +49,11 @@ export type OutboxCandidate = {
   ageSeconds: number;
 };
 
+/** How long a row may sit in 'sending' before being parked as unconfirmed. */
+export const REAP_STUCK_MINUTES = 10;
+
 export type DispatcherConfig = {
+  renderTimeoutMs: number;
   maxPerTick: number;
   sendGapMs: number;
   maxAgeMin: number;
@@ -111,15 +115,23 @@ function rowsOf(result: unknown): Record<string, unknown>[] {
 export function defaultDeps(): DispatcherDeps {
   return {
     config: {
+      renderTimeoutMs: 60_000,
       maxPerTick: envInt("WHATSAPP_OUTBOX_MAX_PER_TICK", 10),
       sendGapMs: envInt("WHATSAPP_OUTBOX_SEND_GAP_MS", 3000),
       maxAgeMin: envInt("WHATSAPP_OUTBOX_MAX_AGE_MIN", 30),
     },
     async reapStuck() {
+      // A row stuck in 'sending' means the process died somewhere between
+      // claim and markAccepted - possibly AFTER the gateway returned 201. It
+      // must NEVER be auto-resent (duplicate customer message): park it as
+      // failed_final so an admin can decide. The 10 minute window comfortably
+      // exceeds PDF render (60s cap) + the 30s media timeout.
       const r = await db.execute(sql`
         UPDATE whatsapp_outbox
-        SET status = 'failed_retryable', next_attempt_at = NOW()
-        WHERE status = 'sending' AND claimed_at < NOW() - INTERVAL 2 MINUTE`);
+        SET status = 'failed_final', attempts = attempts + 1,
+            last_error = 'stuck-sending-unknown'
+        WHERE status = 'sending'
+          AND claimed_at < NOW() - INTERVAL ${REAP_STUCK_MINUTES} MINUTE`);
       return affected(r);
     },
     async selectCandidates(limit) {
@@ -244,7 +256,12 @@ export async function runOutboxTick(
       const attempts = c.attempts + 1;
       if (c.payloadKind === "invoice_pdf") {
         const ref = c.payloadRef;
-        const base64 = ref ? await deps.renderPdf(ref) : null;
+        // A hung PDF render must not eat the reaper window while the row sits
+        // in 'sending'. Nothing has been sent yet, so timing out is a safe,
+        // retryable failure.
+        const base64 = ref
+          ? await withTimeout(deps.renderPdf(ref), deps.config.renderTimeoutMs)
+          : null;
         if (!ref || !base64) {
           await failRow(deps, c.id, attempts, "pdf-render-failed", null, "retryable");
           result.failed++;
@@ -287,6 +304,22 @@ export async function runOutboxTick(
     g.__waOutboxTickRunning = false;
   }
   return result;
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return new Promise((resolve) => {
+    const t = setTimeout(() => resolve(null), ms);
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      () => {
+        clearTimeout(t);
+        resolve(null);
+      },
+    );
+  });
 }
 
 async function failRow(
