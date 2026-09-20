@@ -944,6 +944,7 @@ export async function capturePayPalOrder({
   }
   void sendWhatsAppNotification("order_confirmation", existing.shippingPhone, {
     customerName: existing.shippingName,
+    orderId: existing.id,
     orderNumber: formatOrderNumber(existing.id),
     orderUrl: publicUrl(`/orders/${existing.id}`),
   }).catch(() => {});

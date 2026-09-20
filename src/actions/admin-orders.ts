@@ -399,6 +399,7 @@ export async function updateOrderStatus(
     );
     void sendWhatsAppNotification("order_processing", row.shippingPhone, {
       customerName: row.shippingName,
+      orderId: orderId,
       orderNumber: formatOrderNumber(orderId),
       orderUrl: publicUrl(`/orders/${orderId}`),
     }).catch(() => {});
@@ -418,6 +419,7 @@ export async function updateOrderStatus(
     }
     void sendWhatsAppNotification("order_approved", row.shippingPhone, {
       customerName: row.shippingName,
+      orderId: orderId,
       orderNumber: formatOrderNumber(orderId),
       orderUrl: publicUrl(`/orders/${orderId}`),
     }).catch(() => {});
@@ -468,6 +470,7 @@ export async function updateOrderStatus(
       );
       void sendWhatsAppNotification("order_shipped", row.shippingPhone, {
         customerName: row.shippingName,
+        orderId: orderId,
         orderNumber: formatOrderNumber(orderId),
         courierName,
         trackingNo: "pending",
@@ -534,6 +537,7 @@ export async function approveWhatsAppOrder(
   // whichever template the admin has customised.
   void sendWhatsAppNotification("order_approved", row.shippingPhone, {
     customerName: row.shippingName,
+    orderId: orderId,
     orderNumber: formatOrderNumber(orderId),
     orderUrl: publicUrl(`/orders/${orderId}`),
   }).catch(() => {});

@@ -893,6 +893,7 @@ async function _bookShipmentInternal(
       );
       void sendWhatsAppNotification("order_shipped", order.shippingPhone, {
         customerName: order.shippingName,
+        orderId: order.id,
         orderNumber: formatOrderNumber(order.id),
         courierName,
         trackingNo: details?.trackingNo || "pending",
