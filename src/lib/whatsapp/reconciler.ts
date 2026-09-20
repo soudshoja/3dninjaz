@@ -22,6 +22,8 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 
+let loggedSkip = false;
+
 export type ReconcileResult = {
   requeued: number;
   undelivered: number;
@@ -38,7 +40,11 @@ function affected(result: unknown): number {
 export async function runOutboxReconcile(): Promise<ReconcileResult> {
   // MUST stay the first statement: no DB access of any kind before this.
   if (process.env.WHATSAPP_ACK_WEBHOOKS_LIVE !== "1") {
-    console.log("[whatsapp-outbox] reconcile skipped: ack-webhooks-off");
+    // Log once per process, not on every ~60s tick.
+    if (!loggedSkip) {
+      loggedSkip = true;
+      console.log("[whatsapp-outbox] reconcile skipped: ack-webhooks-off");
+    }
     return { requeued: 0, undelivered: 0, skipped: "ack-webhooks-off" };
   }
 
