@@ -3,10 +3,14 @@ import fs from "node:fs";
 import path from "node:path";
 
 // Static checks on the migration script. It is NEVER executed here.
-const src = fs.readFileSync(
-  path.resolve(__dirname, "../../../../scripts/whatsapp-outbox-migrate.cjs"),
-  "utf8",
-);
+// The DDL lives in a JS template literal, so backticks are escaped in source.
+const src = fs
+  .readFileSync(
+    path.resolve(__dirname, "../../../../scripts/whatsapp-outbox-migrate.cjs"),
+    "utf8",
+  )
+  .split("\\`")
+  .join("`");
 
 describe("whatsapp-outbox-migrate.cjs", () => {
   it("hardcodes utf8mb4 and does not inherit a sibling table's charset", () => {
