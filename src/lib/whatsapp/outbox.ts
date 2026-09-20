@@ -15,6 +15,11 @@ import { db } from "@/lib/db";
 import { whatsappOutbox } from "@/lib/db/schema";
 import { buildIdempotencyKey, ackRank, ackToStatus } from "@/lib/whatsapp/outbox-types";
 
+/** Never write a customer's full phone number to app.log. */
+export function maskPhone(p: string): string {
+  return p.length <= 4 ? "****" : `${"*".repeat(p.length - 4)}${p.slice(-4)}`;
+}
+
 function unwrapAffectedRows(result: unknown): number {
   // Drizzle's mysql2 driver sometimes returns the raw [ResultSetHeader,
   // FieldPacket[]] tuple and sometimes the already-unwrapped ResultSetHeader
@@ -224,7 +229,11 @@ export async function backfillProviderKeyId(input: {
     );
     return { applied: unwrapAffectedRows(result) > 0 };
   } catch (err) {
-    console.error("[whatsapp-outbox] backfillProviderKeyId failed", input.recipient, err);
+    console.error(
+      "[whatsapp-outbox] backfillProviderKeyId failed",
+      maskPhone(input.recipient),
+      err instanceof Error ? err.message : err,
+    );
     return { applied: false };
   }
 }

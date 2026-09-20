@@ -30,7 +30,7 @@ vi.mock("@/lib/whatsapp/client", () => ({
 vi.mock("@/lib/pdf/render-invoice", () => ({ renderInvoicePdfBase64: vi.fn().mockResolvedValue("b64") }));
 vi.mock("@/lib/orders", () => ({ formatOrderNumber: (id: string) => `ORD-${id}` }));
 
-import { enqueueOutbox, isMissingTableError } from "@/lib/whatsapp/outbox";
+import { enqueueOutbox, isMissingTableError, maskPhone } from "@/lib/whatsapp/outbox";
 import { sendWhatsAppNotification, sendWhatsAppInvoicePdf } from "@/lib/whatsapp/sender";
 import { sendText, sendMedia } from "@/lib/whatsapp/client";
 import { checkOutboxHealth } from "@/lib/whatsapp/dispatcher";
@@ -84,6 +84,13 @@ describe("enqueue failure alerting", () => {
   it("recognises a missing table wrapped in a cause chain", () => {
     expect(isMissingTableError({ message: "Failed query", cause: missingTable })).toBe(true);
     expect(isMissingTableError(new Error("nope"))).toBe(false);
+  });
+});
+
+describe("phone masking (L1)", () => {
+  it("keeps only the last 4 digits", () => {
+    expect(maskPhone("60123450550")).toBe("*******0550");
+    expect(maskPhone("123")).toBe("****");
   });
 });
 
