@@ -29,9 +29,12 @@
  *      in this plan may ship (dispatcher flag, etc.) until this assertion
  *      passes on prod.
  *
- * Charset handling: DEFAULT CHARSET is NEVER hardcoded. Probed live from
- * `SHOW CREATE TABLE whatsapp_notifications` (an existing, already-migrated
- * table in the same schema).
+ * Charset handling: utf8mb4 / utf8mb4_unicode_ci is HARDCODED on purpose.
+ * payload_text stores customer messages containing emoji, and the older
+ * tables in this schema are not reliably utf8mb4 (prod's whatsapp templates
+ * already store "?" where an emoji should be), so copying a sibling table's
+ * charset would mangle every emoji. The VARCHAR(190) unique key is 760 bytes
+ * under utf8mb4, within the InnoDB index limit.
  *
  * Does NOT use drizzle-kit push (documented hang against this remote —
  * CLAUDE.md "MariaDB 10.11 gotchas").
@@ -105,7 +108,7 @@ async function indexExists(conn, dbName, tableName, indexName) {
   return rows.length > 0;
 }
 
-function buildDdl(charset) {
+function buildDdl() {
   return `
     CREATE TABLE \`whatsapp_outbox\` (
       \`id\`                 VARCHAR(36)   NOT NULL,
@@ -136,7 +139,7 @@ function buildDdl(charset) {
       KEY \`idx_outbox_drain\` (\`status\`, \`next_attempt_at\`),
       KEY \`idx_outbox_order\` (\`order_id\`),
       KEY \`idx_outbox_created\` (\`created_at\`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=${charset}
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `;
 }
 
@@ -193,21 +196,7 @@ async function run() {
 
     const dbName = liveDbName;
 
-    // Charset probe — REQUIRED before CREATE TABLE. Read live from an
-    // existing table in the same schema (never assume latin1/utf8mb4).
-    console.log("[outbox-migrate] Probing whatsapp_notifications charset...");
-    const [wnCreateRows] = await conn.query("SHOW CREATE TABLE `whatsapp_notifications`");
-    const wnCreateSql = wnCreateRows[0]["Create Table"];
-    const charsetMatch = wnCreateSql.match(/DEFAULT CHARSET=(\w+)/);
-    if (!charsetMatch) {
-      throw new Error(
-        "[outbox-migrate] Could not determine charset from SHOW CREATE TABLE whatsapp_notifications",
-      );
-    }
-    const charset = charsetMatch[1];
-    console.log(`[outbox-migrate] charset (whatsapp_notifications): ${charset}`);
-
-    const ddl = buildDdl(charset);
+    const ddl = buildDdl();
 
     if (args.dryRun) {
       console.log("[outbox-migrate] --dry-run: would execute the following DDL:");
