@@ -124,6 +124,26 @@ describe("other safety behaviour", () => {
     expect(calls[1][1].status).toBe("failed_final");
   });
 
+  it("a timeout is NOT auto-retried: failed_final / timeout-unknown", async () => {
+    const { deps, sendText } = makeDeps([cand()]);
+    sendText.mockResolvedValue({ ok: false, httpStatus: null, keyId: null, providerStatus: null, error: "timeout" });
+    await runOutboxTick(deps);
+    expect(sendText).toHaveBeenCalledTimes(1);
+    const f = deps.markFailure.mock.calls[0][1];
+    expect(f.status).toBe("failed_final");
+    expect(f.error).toBe("timeout-unknown");
+  });
+
+  it("a 428 and a refused connection still retry", async () => {
+    const { deps, sendText } = makeDeps([cand({ id: "a" }), cand({ id: "b" })]);
+    sendText
+      .mockResolvedValueOnce({ ok: false, httpStatus: 428, keyId: null, providerStatus: null, error: "precondition" })
+      .mockResolvedValueOnce({ ok: false, httpStatus: null, keyId: null, providerStatus: null, error: "connect ECONNREFUSED" });
+    await runOutboxTick(deps);
+    expect(deps.markFailure.mock.calls[0][1].status).toBe("failed_retryable");
+    expect(deps.markFailure.mock.calls[1][1].status).toBe("failed_retryable");
+  });
+
   it("is single-flight", async () => {
     (globalThis as { __waOutboxTickRunning?: boolean }).__waOutboxTickRunning = true;
     const { deps } = makeDeps([cand()]);

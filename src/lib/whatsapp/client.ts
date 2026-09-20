@@ -72,14 +72,31 @@ async function parseSendResponse(res: Response): Promise<EvoSendResult> {
   };
 }
 
+// AbortSignal.timeout() rejects with a DOMException named "TimeoutError"
+// (a manual abort is "AbortError"). Both mean: we gave up waiting, and the
+// gateway MAY still have accepted and delivered the message.
+export const SEND_TIMEOUT_ERROR = "timeout";
+
+function isTimeoutError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    (err.name === "TimeoutError" ||
+      err.name === "AbortError" ||
+      /aborted due to timeout/i.test(err.message))
+  );
+}
+
 function errorResult(err: unknown): EvoSendResult {
-  const isAbort = err instanceof Error && err.name === "AbortError";
   return {
     ok: false,
     httpStatus: null,
     keyId: null,
     providerStatus: null,
-    error: isAbort ? "timeout" : err instanceof Error ? err.message : String(err),
+    error: isTimeoutError(err)
+      ? SEND_TIMEOUT_ERROR
+      : err instanceof Error
+        ? err.message
+        : String(err),
   };
 }
 

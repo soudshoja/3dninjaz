@@ -130,7 +130,17 @@ function simpleHash(s: string): string {
 // Failure classification
 // ---------------------------------------------------------------------------
 
-export type FailureClass = "retryable" | "final";
+// "unconfirmed": the request timed out, so the gateway may have accepted and
+// delivered the message. Auto-retrying would risk a duplicate customer
+// message, so it is never retried automatically (admin can resend).
+export type FailureClass = "retryable" | "final" | "unconfirmed";
+
+/** last_error values meaning "may have been delivered" (admin label). */
+export const UNCONFIRMED_ERRORS = ["timeout-unknown", "stuck-sending-unknown"] as const;
+
+export function isUnconfirmedError(lastError: string | null | undefined): boolean {
+  return !!lastError && (UNCONFIRMED_ERRORS as readonly string[]).includes(lastError);
+}
 
 const FINAL_400_PATTERN =
   /not.*(on|registered).*whatsapp|exists.*false|number.*invalid/i;
@@ -139,7 +149,10 @@ export function classifyFailure(
   httpStatus: number | null,
   errorBody: string | null,
 ): FailureClass {
-  // Network error / timeout / no status at all → retryable.
+  // Client timeout: outcome unknown, never auto-retry (duplicate-send risk).
+  if (httpStatus === null && errorBody === "timeout") return "unconfirmed";
+
+  // Other network errors (refused, DNS, reset) / no status at all → retryable.
   if (httpStatus === null) return "retryable";
 
   if ([408, 425, 428, 429].includes(httpStatus)) return "retryable";

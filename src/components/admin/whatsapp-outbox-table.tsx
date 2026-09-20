@@ -7,6 +7,7 @@ import { BRAND } from "@/lib/brand";
 import { resendOutboxRow, cancelOutboxRow } from "@/actions/admin-whatsapp-outbox";
 import {
   RESENDABLE_STATUSES,
+  isUnconfirmedError,
   type OutboxListRow,
   type OutboxStatus,
 } from "@/lib/whatsapp/outbox-types";
@@ -119,7 +120,13 @@ export function WhatsappOutboxTable({ rows }: { rows: OutboxListRow[] }) {
                     className="px-3 py-2 max-w-[220px] truncate"
                     title={r.lastError ?? ""}
                   >
-                    {r.lastError ?? "-"}
+                    {isUnconfirmedError(r.lastError) ? (
+                      <span className="font-semibold" style={{ color: "#9a3412" }}>
+                        Unconfirmed — may have been delivered
+                      </span>
+                    ) : (
+                      (r.lastError ?? "-")
+                    )}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     {RESENDABLE_STATUSES.includes(r.status) && (

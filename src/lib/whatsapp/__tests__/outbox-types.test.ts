@@ -73,8 +73,12 @@ describe("ackToStatus", () => {
 });
 
 describe("classifyFailure", () => {
-  it("null status (network/timeout) is retryable", () => {
-    expect(classifyFailure(null, "timeout")).toBe("retryable");
+  it("null status with a non-timeout network error is retryable", () => {
+    expect(classifyFailure(null, "connect ECONNREFUSED 127.0.0.1:8080")).toBe("retryable");
+    expect(classifyFailure(null, null)).toBe("retryable");
+  });
+  it("a client timeout is unconfirmed, never auto-retried", () => {
+    expect(classifyFailure(null, "timeout")).toBe("unconfirmed");
   });
   it("428/429/500/503 are retryable", () => {
     for (const s of [428, 429, 500, 503]) expect(classifyFailure(s, "")).toBe("retryable");

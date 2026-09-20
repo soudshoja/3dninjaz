@@ -34,6 +34,7 @@ import {
   ackRank,
   classifyFailure,
   nextBackoffMs,
+  type FailureClass,
 } from "@/lib/whatsapp/outbox-types";
 
 export type OutboxCandidate = {
@@ -245,7 +246,7 @@ export async function runOutboxTick(
         const ref = c.payloadRef;
         const base64 = ref ? await deps.renderPdf(ref) : null;
         if (!ref || !base64) {
-          await failRow(deps, c.id, attempts, "pdf-render-failed", null, true);
+          await failRow(deps, c.id, attempts, "pdf-render-failed", null, "retryable");
           result.failed++;
           continue;
         }
@@ -274,7 +275,7 @@ export async function runOutboxTick(
           attempts,
           send.error ?? "send-failed",
           send.httpStatus,
-          classifyFailure(send.httpStatus, send.error) === "retryable",
+          classifyFailure(send.httpStatus, send.error),
         );
         result.failed++;
       }
@@ -294,8 +295,20 @@ async function failRow(
   attempts: number,
   error: string,
   httpStatus: number | null,
-  retryable: boolean,
+  klass: FailureClass,
 ): Promise<void> {
+  if (klass === "unconfirmed") {
+    // Timed out: the gateway may have delivered it. Never auto-resend.
+    await deps.markFailure(id, {
+      status: "failed_final",
+      attempts,
+      error: "timeout-unknown",
+      httpStatus,
+      delayMs: 0,
+    });
+    return;
+  }
+  const retryable = klass === "retryable";
   if (retryable && attempts < MAX_ATTEMPTS) {
     await deps.markFailure(id, {
       status: "failed_retryable",
