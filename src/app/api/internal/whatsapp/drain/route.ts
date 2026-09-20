@@ -3,33 +3,21 @@
  *
  * The in-process interval is the primary drain mechanism; this route exists so
  * a cron can prove the queue is moving and kick it if the interval died.
- * Guarded by a constant-time compare against WHATSAPP_OUTBOX_DRAIN_SECRET.
+ * Guarded by the x-drain-secret header (see drain-auth.ts; never a query string).
  * Unauthenticated (or secret unset) => 200 with no effect, like the Evolution
  * webhook. Never sends anything itself beyond what runOutboxTick would.
  */
 export const dynamic = "force-dynamic";
 
-import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { runOutboxTick } from "@/lib/whatsapp/dispatcher";
 import { runOutboxReconcile } from "@/lib/whatsapp/reconciler";
-
-function isAuthenticated(req: Request): boolean {
-  const expected = process.env.WHATSAPP_OUTBOX_DRAIN_SECRET;
-  if (!expected) return false;
-  const provided =
-    new URL(req.url).searchParams.get("secret") ??
-    req.headers.get("x-drain-secret") ??
-    "";
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
-}
+import { isDrainAuthenticated } from "@/lib/whatsapp/drain-auth";
 
 export async function POST(req: Request): Promise<NextResponse> {
-  if (!isAuthenticated(req)) return NextResponse.json({ ok: true });
+  if (!isDrainAuthenticated(req)) return NextResponse.json({ ok: true });
 
   try {
     if (new URL(req.url).searchParams.get("wedged") === "1") {

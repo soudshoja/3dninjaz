@@ -38,8 +38,8 @@ async function main() {
   let stalls = 0;
   try { stalls = JSON.parse(fs.readFileSync(statePath, "utf8")).stalls || 0; } catch {}
 
-  const wedged = stalls >= 2 ? "&wedged=1" : "";
-  const res = await fetch(`http://127.0.0.1:${port}/api/internal/whatsapp/drain?secret=${encodeURIComponent(secret)}${wedged}`, { method: "POST" });
+  const wedged = stalls >= 2 ? "?wedged=1" : "";
+  const res = await fetch(`http://127.0.0.1:${port}/api/internal/whatsapp/drain${wedged}`, { method: "POST", headers: { "x-drain-secret": secret } });
   const j = await res.json().catch(() => ({}));
   console.log("[outbox-watchdog]", JSON.stringify(j));
   const stalled = Number(j.queued) > 0 && Number(j.sent) === 0;
