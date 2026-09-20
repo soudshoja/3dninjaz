@@ -216,6 +216,51 @@ export function nextBackoffMs(attempts: number): number {
 }
 
 // ---------------------------------------------------------------------------
+// Order-state guard (M2). Text is frozen at enqueue and retries can span 48h,
+// so a stale "please pay" message could reach a customer who already paid, or
+// any message could reach an admin-cancelled order. Re-checked immediately
+// before send for rows with an order_id. Unknown events are NOT blocked.
+//
+//   event                              guard
+//   order_pending                      send only while pending / awaiting_customer
+//   order_bank_transfer_instructions   send only while pending / awaiting_customer
+//   order_approved / order_confirmation
+//   order_processing / order_shipped
+//   order_delivered / invoice_pdf      block if cancelled
+//   (everything else, incl. order_cancelled, order_refunded, return_*: never blocked)
+// ---------------------------------------------------------------------------
+
+type OrderStateGuard = { allow: readonly string[] } | { block: readonly string[] };
+
+const PAYABLE_STATES = ["pending", "awaiting_customer"] as const;
+
+export const ORDER_STATE_GUARDS: Readonly<Record<string, OrderStateGuard>> = {
+  order_pending: { allow: PAYABLE_STATES },
+  order_bank_transfer_instructions: { allow: PAYABLE_STATES },
+  order_approved: { block: ["cancelled"] },
+  order_confirmation: { block: ["cancelled"] },
+  order_processing: { block: ["cancelled"] },
+  order_shipped: { block: ["cancelled"] },
+  order_delivered: { block: ["cancelled"] },
+  invoice_pdf: { block: ["cancelled"] },
+};
+
+/**
+ * True when the order's current state means this message must not be sent.
+ * `orderStatus` is null when the order no longer exists (pending orders are
+ * deletable): that blocks allow-guarded payment events, nothing else.
+ */
+export function orderStateBlocksSend(
+  eventKey: string,
+  orderStatus: string | null,
+): boolean {
+  const guard = ORDER_STATE_GUARDS[eventKey];
+  if (!guard) return false;
+  if ("allow" in guard) return orderStatus === null || !guard.allow.includes(orderStatus);
+  return orderStatus !== null && guard.block.includes(orderStatus);
+}
+
+// ---------------------------------------------------------------------------
 // Admin view types (shared by the "use server" actions and the UI; "use
 // server" files may not export types).
 // ---------------------------------------------------------------------------

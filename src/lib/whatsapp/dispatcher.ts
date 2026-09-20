@@ -32,6 +32,7 @@ import { runOutboxReconcile } from "@/lib/whatsapp/reconciler";
 import {
   MAX_AGE_SECONDS,
   shouldGiveUp,
+  orderStateBlocksSend,
   ackRank,
   classifyFailure,
   nextBackoffMs,
@@ -79,6 +80,8 @@ export type DispatcherDeps = {
     },
   ): Promise<void>;
   notificationsEnabled(): Promise<boolean>;
+  orderStatus(orderId: string): Promise<string | null>;
+  markCancelled(id: string, reason: string): Promise<void>;
   sendText: typeof sendText;
   sendMedia: typeof sendMedia;
   renderPdf(orderId: string): Promise<string | null>;
@@ -207,6 +210,18 @@ export function defaultDeps(): DispatcherDeps {
             next_attempt_at = NOW() + INTERVAL ${secs} SECOND
         WHERE id = ${id}`);
     },
+    async orderStatus(orderId) {
+      const r = await db.execute(
+        sql`SELECT status FROM orders WHERE id = ${orderId} LIMIT 1`,
+      );
+      const row = rowsOf(r)[0];
+      return row ? String(row.status) : null;
+    },
+    async markCancelled(id, reason) {
+      await db.execute(sql`
+        UPDATE whatsapp_outbox SET status = 'cancelled', last_error = ${reason}
+        WHERE id = ${id}`);
+    },
     async notificationsEnabled() {
       return (await getWhatsappStateFresh()).notificationsEnabled;
     },
@@ -265,6 +280,16 @@ export async function runOutboxTick(
         await deps.releaseForToggle(c.id);
         result.skipped++;
         continue;
+      }
+
+      // Order-state re-check: the text was frozen at enqueue time.
+      if (c.orderId) {
+        const st = await deps.orderStatus(c.orderId);
+        if (orderStateBlocksSend(c.eventKey, st)) {
+          await deps.markCancelled(c.id, "order-state-changed");
+          result.skipped++;
+          continue;
+        }
       }
 
       let send: EvoSendResult;

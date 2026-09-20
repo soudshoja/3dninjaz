@@ -57,6 +57,8 @@ function makeDeps(candidates: OutboxCandidate[], enabled = true) {
     markAccepted: vi.fn().mockResolvedValue(undefined),
     markFailure: vi.fn().mockResolvedValue(undefined),
     notificationsEnabled: vi.fn().mockResolvedValue(enabled),
+    orderStatus: vi.fn().mockResolvedValue("pending"),
+    markCancelled: vi.fn().mockResolvedValue(undefined),
     sendText,
     sendMedia,
     renderPdf: vi.fn(),
@@ -98,6 +100,56 @@ describe("cold-start age guard", () => {
   it("exempts rows already attempted (legitimate backoff retries)", async () => {
     const { deps, sendText } = makeDeps([cand({ attempts: 3, ageSeconds: 5 * 3600 })]);
     await runOutboxTick(deps);
+    expect(sendText).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("order-state re-check before send (M2)", () => {
+  async function run(eventKey: string, status: string | null, orderId: string | null = "o1") {
+    const { deps, sendText } = makeDeps([cand({ eventKey, orderId })]);
+    (deps.orderStatus as ReturnType<typeof vi.fn>).mockResolvedValue(status);
+    await runOutboxTick(deps);
+    return { deps, sendText };
+  }
+
+  it("cancels a payment reminder when the order has since been paid", async () => {
+    const { deps, sendText } = await run("order_pending", "paid");
+    expect(sendText).not.toHaveBeenCalled();
+    expect((deps.markCancelled as ReturnType<typeof vi.fn>).mock.calls[0][1]).toBe("order-state-changed");
+  });
+
+  it("cancels bank-transfer instructions once payment proof is under review", async () => {
+    const { sendText } = await run("order_bank_transfer_instructions", "awaiting_payment_review");
+    expect(sendText).not.toHaveBeenCalled();
+  });
+
+  it("cancels payment reminders for a deleted order", async () => {
+    const { sendText } = await run("order_pending", null);
+    expect(sendText).not.toHaveBeenCalled();
+  });
+
+  it("still sends a payment reminder while the order is pending", async () => {
+    const { sendText } = await run("order_pending", "pending");
+    expect(sendText).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks shipped/confirmation messages for a cancelled order", async () => {
+    for (const ev of ["order_shipped", "order_confirmation", "order_delivered"]) {
+      const { sendText } = await run(ev, "cancelled");
+      expect(sendText).not.toHaveBeenCalled();
+    }
+  });
+
+  it("never blocks the cancellation notice, refunds, returns or unknown events", async () => {
+    for (const ev of ["order_cancelled", "order_refunded", "return_requested", "some_future_event"]) {
+      const { sendText } = await run(ev, "cancelled");
+      expect(sendText).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("does not look up an order for rows without an order_id", async () => {
+    const { deps, sendText } = await run("draft_abandoned_reminder", "cancelled", null);
+    expect(deps.orderStatus).not.toHaveBeenCalled();
     expect(sendText).toHaveBeenCalledTimes(1);
   });
 });
