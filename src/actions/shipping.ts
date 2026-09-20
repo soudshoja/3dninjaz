@@ -898,6 +898,10 @@ async function _bookShipmentInternal(
         courierName,
         trackingNo: details?.trackingNo || "pending",
         trackingUrl: publicUrl(`/orders/${order.id}`),
+      }, {
+        // Content-bearing dedupe suffix: a manual "shipped (tracking pending)"
+        // message must not swallow this one carrying the real tracking number.
+        dedupeSuffix: `trk:${details?.trackingNo || details?.consignmentNo || "booked"}`,
       }).catch(() => {});
     }
 

@@ -475,7 +475,7 @@ export async function updateOrderStatus(
         courierName,
         trackingNo: "pending",
         trackingUrl: publicUrl(`/orders/${orderId}`),
-      }).catch((err) =>
+      }, { dedupeSuffix: "manual" }).catch((err) =>
         console.error("[admin-orders] shipped WhatsApp dispatch failed:", err),
       );
     }
@@ -1032,6 +1032,8 @@ export async function sendInvoiceViaWhatsApp(
       return { ok: false, error: "Customer phone number is not valid." };
     }
 
+    // Intentionally bypasses the outbox and still gates on connection state:
+    // the admin needs a synchronous success/failure toast for this click.
     const state = await getWhatsappStateFresh();
     if (!state.notificationsEnabled) {
       return { ok: false, error: "WhatsApp notifications are disabled." };
