@@ -181,3 +181,58 @@ export function nextBackoffMs(attempts: number): number {
   const jitterFactor = 0.8 + Math.random() * 0.4; // 0.8 .. 1.2
   return Math.round(capped * jitterFactor);
 }
+
+// ---------------------------------------------------------------------------
+// Admin view types (shared by the "use server" actions and the UI; "use
+// server" files may not export types).
+// ---------------------------------------------------------------------------
+
+export const OUTBOX_FILTERS = [
+  "all",
+  "queued",
+  "failing",
+  "failed",
+  "undelivered",
+  "sent",
+] as const;
+export type OutboxFilter = (typeof OUTBOX_FILTERS)[number];
+
+export const OUTBOX_FILTER_STATUSES: Record<
+  Exclude<OutboxFilter, "all">,
+  readonly OutboxStatus[]
+> = {
+  queued: ["queued", "sending"],
+  failing: ["failed_retryable"],
+  failed: ["failed_final"],
+  undelivered: ["undelivered"],
+  sent: ["accepted", "server_ack", "delivered", "read"],
+};
+
+export type OutboxListRow = {
+  id: string;
+  createdAt: string;
+  eventKey: string;
+  orderId: string | null;
+  orderNumber: string | null;
+  customerName: string | null;
+  recipient: string;
+  status: OutboxStatus;
+  attempts: number;
+  nextAttemptAt: string;
+  ackStatus: string | null;
+  lastError: string | null;
+};
+
+export type OutboxListResult = {
+  rows: OutboxListRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  counts: Record<string, number>;
+};
+
+export const RESENDABLE_STATUSES: readonly OutboxStatus[] = [
+  "failed_final",
+  "undelivered",
+  "failed_retryable",
+];
