@@ -6,6 +6,8 @@ import {
   classifyFailure,
   nextBackoffMs,
   MAX_ATTEMPTS,
+  MAX_AGE_SECONDS,
+  shouldGiveUp,
 } from "@/lib/whatsapp/outbox-types";
 
 describe("buildIdempotencyKey", () => {
@@ -88,6 +90,34 @@ describe("classifyFailure", () => {
   });
   it("401/403/404/409 are final", () => {
     for (const s of [401, 403, 404, 409]) expect(classifyFailure(s, "")).toBe("final");
+  });
+});
+
+describe("shouldGiveUp (age-based horizon)", () => {
+  it("horizon is 48h, longer than the 32.6h outage", () => {
+    expect(MAX_AGE_SECONDS).toBe(48 * 3600);
+    expect(MAX_AGE_SECONDS).toBeGreaterThan(32.6 * 3600);
+  });
+  it("keeps retrying while the next attempt lands inside 48h", () => {
+    expect(shouldGiveUp({ attempts: 5, ageSeconds: 33 * 3600, delayMs: 3600_000 })).toBeNull();
+    expect(shouldGiveUp({ attempts: 5, ageSeconds: 47 * 3600, delayMs: 3600_000 })).toBeNull();
+  });
+  it("gives up exactly when the next attempt would pass 48h", () => {
+    expect(shouldGiveUp({ attempts: 5, ageSeconds: 47 * 3600 + 1, delayMs: 3600_000 })).toBe("max-age");
+    expect(shouldGiveUp({ attempts: 5, ageSeconds: 48 * 3600, delayMs: 1 })).toBe("max-age");
+  });
+  it("attempts ceiling is only a safety valve", () => {
+    expect(shouldGiveUp({ attempts: MAX_ATTEMPTS, ageSeconds: 60, delayMs: 30_000 })).toBe("max-attempts");
+    expect(shouldGiveUp({ attempts: MAX_ATTEMPTS - 1, ageSeconds: 60, delayMs: 30_000 })).toBeNull();
+  });
+  it("the capped backoff schedule reaches 48h well before the attempts ceiling", () => {
+    let t = 0;
+    let n = 0;
+    while (t < MAX_AGE_SECONDS) {
+      n++;
+      t += Math.min(30 * 2 ** (n - 1), 6 * 3600);
+    }
+    expect(n).toBeLessThan(MAX_ATTEMPTS);
   });
 });
 

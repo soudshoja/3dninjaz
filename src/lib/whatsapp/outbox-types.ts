@@ -178,7 +178,27 @@ export function classifyFailure(
 // Backoff
 // ---------------------------------------------------------------------------
 
-export const MAX_ATTEMPTS = 12;
+// Terminal condition is AGE-based: give up 48h after created_at (longer than
+// the 32.6h outage that motivated this feature). The attempts ceiling is only
+// a safety valve so nothing can loop forever; with the 6h backoff cap a row
+// makes roughly 18 attempts in 48h, so it is never the binding limit.
+export const MAX_AGE_SECONDS = 48 * 60 * 60;
+export const MAX_ATTEMPTS = 50;
+
+/**
+ * Decide whether a failed attempt should be the last one. `delayMs` is the
+ * backoff to the NEXT attempt; if that attempt would land beyond the age
+ * horizon there is no point waiting - and no message is ever sent >48h old.
+ */
+export function shouldGiveUp(input: {
+  attempts: number;
+  ageSeconds: number;
+  delayMs: number;
+}): "max-age" | "max-attempts" | null {
+  if (input.ageSeconds + input.delayMs / 1000 > MAX_AGE_SECONDS) return "max-age";
+  if (input.attempts >= MAX_ATTEMPTS) return "max-attempts";
+  return null;
+}
 
 const BASE_BACKOFF_MS = 30_000; // 30s
 const MAX_BACKOFF_MS = 6 * 60 * 60 * 1000; // 6h

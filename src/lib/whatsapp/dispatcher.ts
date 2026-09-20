@@ -30,7 +30,8 @@ import { renderInvoicePdfBase64 } from "@/lib/pdf/render-invoice";
 import { formatOrderNumber } from "@/lib/orders";
 import { runOutboxReconcile } from "@/lib/whatsapp/reconciler";
 import {
-  MAX_ATTEMPTS,
+  MAX_AGE_SECONDS,
+  shouldGiveUp,
   ackRank,
   classifyFailure,
   nextBackoffMs,
@@ -245,6 +246,20 @@ export async function runOutboxTick(
         continue;
       }
 
+      // Age horizon: never send anything older than 48h, even if the
+      // dispatcher was down when its retry came due.
+      if (c.ageSeconds > MAX_AGE_SECONDS) {
+        await deps.markFailure(c.id, {
+          status: "failed_final",
+          attempts: c.attempts,
+          error: "max-age: expired before send",
+          httpStatus: null,
+          delayMs: 0,
+        });
+        result.skipped++;
+        continue;
+      }
+
       // Master toggle re-check (NOT connection_state - untrusted signal).
       if (!(await deps.notificationsEnabled())) {
         await deps.releaseForToggle(c.id);
@@ -263,7 +278,7 @@ export async function runOutboxTick(
           ? await withTimeout(deps.renderPdf(ref), deps.config.renderTimeoutMs)
           : null;
         if (!ref || !base64) {
-          await failRow(deps, c.id, attempts, "pdf-render-failed", null, "retryable");
+          await failRow(deps, c.id, attempts, c.ageSeconds, "pdf-render-failed", null, "retryable");
           result.failed++;
           continue;
         }
@@ -290,6 +305,7 @@ export async function runOutboxTick(
           deps,
           c.id,
           attempts,
+          c.ageSeconds,
           send.error ?? "send-failed",
           send.httpStatus,
           classifyFailure(send.httpStatus, send.error),
@@ -326,6 +342,7 @@ async function failRow(
   deps: DispatcherDeps,
   id: string,
   attempts: number,
+  ageSeconds: number,
   error: string,
   httpStatus: number | null,
   klass: FailureClass,
@@ -342,19 +359,21 @@ async function failRow(
     return;
   }
   const retryable = klass === "retryable";
-  if (retryable && attempts < MAX_ATTEMPTS) {
+  const delayMs = nextBackoffMs(attempts);
+  const giveUp = retryable ? shouldGiveUp({ attempts, ageSeconds, delayMs }) : null;
+  if (retryable && !giveUp) {
     await deps.markFailure(id, {
       status: "failed_retryable",
       attempts,
       error,
       httpStatus,
-      delayMs: nextBackoffMs(attempts),
+      delayMs,
     });
   } else {
     await deps.markFailure(id, {
       status: "failed_final",
       attempts,
-      error: retryable ? `max-attempts: ${error}` : error,
+      error: retryable ? `${giveUp}: ${error}` : error,
       httpStatus,
       delayMs: 0,
     });

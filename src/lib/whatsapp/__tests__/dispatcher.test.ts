@@ -102,6 +102,31 @@ describe("cold-start age guard", () => {
   });
 });
 
+describe("48h age horizon (M1)", () => {
+  it("a 429 at 33h old is still retried (survives the 32.6h outage)", async () => {
+    const { deps, sendText } = makeDeps([cand({ attempts: 9, ageSeconds: 33 * 3600 })]);
+    sendText.mockResolvedValue({ ok: false, httpStatus: 429, keyId: null, providerStatus: null, error: "slow" });
+    await runOutboxTick(deps);
+    expect(deps.markFailure.mock.calls[0][1].status).toBe("failed_retryable");
+  });
+
+  it("a failure whose next retry would pass 48h goes final with max-age", async () => {
+    const { deps, sendText } = makeDeps([cand({ attempts: 9, ageSeconds: 47.9 * 3600 })]);
+    sendText.mockResolvedValue({ ok: false, httpStatus: 503, keyId: null, providerStatus: null, error: "down" });
+    await runOutboxTick(deps);
+    const f = deps.markFailure.mock.calls[0][1];
+    expect(f.status).toBe("failed_final");
+    expect(f.error).toMatch(/^max-age/);
+  });
+
+  it("never sends a retry row older than 48h", async () => {
+    const { deps, sendText } = makeDeps([cand({ attempts: 4, ageSeconds: 49 * 3600 })]);
+    await runOutboxTick(deps);
+    expect(sendText).not.toHaveBeenCalled();
+    expect(deps.markFailure.mock.calls[0][1].error).toMatch(/^max-age/);
+  });
+});
+
 describe("stuck-row reaper (H2)", () => {
   it("parks stuck 'sending' rows as failed_final/unconfirmed and never re-queues them", async () => {
     await defaultDeps().reapStuck();
