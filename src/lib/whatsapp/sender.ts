@@ -21,6 +21,9 @@ import type { WhatsappEventKey } from "@/lib/whatsapp/events";
 import { normalizeMsisdn, renderWhatsappTemplate } from "@/lib/whatsapp/events";
 import { getWhatsappStateFresh, getWhatsappNotification } from "@/lib/whatsapp/settings";
 import { enqueueOutbox } from "@/lib/whatsapp/outbox";
+import { sendText, sendMedia } from "@/lib/whatsapp/client";
+import { renderInvoicePdfBase64 } from "@/lib/pdf/render-invoice";
+import { formatOrderNumber } from "@/lib/orders";
 
 export type SendOpts = {
   /**
@@ -55,7 +58,7 @@ export async function sendWhatsAppInvoicePdf(
     const s = await getWhatsappStateFresh();
     if (!s.notificationsEnabled) return;
 
-    await enqueueOutbox({
+    const q = await enqueueOutbox({
       eventKey: "invoice_pdf",
       orderId,
       recipient: number,
@@ -63,6 +66,18 @@ export async function sendWhatsAppInvoicePdf(
       payloadRef: orderId,
       dedupeSuffix: opts?.dedupeSuffix ?? null,
     });
+    if (q.tableMissing) {
+      // Code deployed before the migration: fall back to the pre-outbox direct
+      // send rather than dropping the message (loud Error: already logged).
+      const base64 = await renderInvoicePdfBase64(orderId);
+      if (base64) {
+        await sendMedia({
+          number,
+          base64,
+          fileName: `invoice-${formatOrderNumber(orderId)}.pdf`,
+        });
+      }
+    }
   } catch (err) {
     console.error("[whatsapp] sendWhatsAppInvoicePdf failed", orderId, err);
   }
@@ -117,7 +132,7 @@ export async function sendWhatsAppNotification(
     if (!orderId && orderNumber) parts.push(`n=${orderNumber}`);
     if (opts?.dedupeSuffix) parts.push(opts.dedupeSuffix);
 
-    await enqueueOutbox({
+    const q = await enqueueOutbox({
       eventKey,
       orderId,
       recipient: number,
@@ -125,6 +140,12 @@ export async function sendWhatsAppNotification(
       payloadText: text,
       dedupeSuffix: parts.length ? parts.join(":") : null,
     });
+    if (q.tableMissing) {
+      // Code deployed before the migration: fall back to the pre-outbox direct
+      // send rather than dropping the message (loud Error: already logged).
+      // Only for a missing table - any other DB error just stays loud.
+      await sendText({ number, text });
+    }
   } catch (err) {
     console.error("[whatsapp] sendWhatsAppNotification failed", eventKey, err);
   }

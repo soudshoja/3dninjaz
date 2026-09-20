@@ -36,7 +36,12 @@ export type EnqueueOutboxInput = {
   dedupeSuffix?: string | null;
 };
 
-export type EnqueueOutboxResult = { enqueued: boolean; id: string | null };
+export type EnqueueOutboxResult = {
+  enqueued: boolean;
+  id: string | null;
+  /** True only when the failure was "table does not exist" (code before migration). */
+  tableMissing?: boolean;
+};
 
 /**
  * Enqueue a row into whatsapp_outbox. Idempotent via the DB-enforced unique
@@ -82,9 +87,47 @@ export async function enqueueOutbox(
 
     return { enqueued, id: enqueued ? id : null };
   } catch (err) {
-    console.error("[whatsapp-outbox] enqueueOutbox failed", input.eventKey, err);
-    return { enqueued: false, id: null };
+    const tableMissing = isMissingTableError(err);
+    alertEnqueueFailure(input.eventKey, tableMissing, err);
+    return { enqueued: false, id: null, tableMissing };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Loud failure reporting. Every enqueue error used to be a quiet console.error,
+// so shipping the code before the migration would silently drop ALL
+// notifications. The first failure, and at most one per 10 minutes after,
+// emits a line beginning exactly "Error:" - the pattern scripts/log-alert.cjs
+// matches - so it pages a human.
+// ---------------------------------------------------------------------------
+
+const ALERT_INTERVAL_MS = 10 * 60 * 1000;
+let lastEnqueueAlertAt = 0;
+
+export function isMissingTableError(err: unknown): boolean {
+  let e: unknown = err;
+  for (let i = 0; i < 4 && e; i++) {
+    const o = e as { code?: string; errno?: number; message?: string; cause?: unknown };
+    if (o.code === "ER_NO_SUCH_TABLE" || o.errno === 1146) return true;
+    if (typeof o.message === "string" && /table .*whatsapp_outbox.* doesn't exist/i.test(o.message)) {
+      return true;
+    }
+    e = o.cause;
+  }
+  return false;
+}
+
+function alertEnqueueFailure(eventKey: string, tableMissing: boolean, err: unknown): void {
+  const now = Date.now();
+  if (lastEnqueueAlertAt !== 0 && now - lastEnqueueAlertAt < ALERT_INTERVAL_MS) return;
+  lastEnqueueAlertAt = now;
+  const reason = tableMissing
+    ? "whatsapp_outbox table is MISSING (run scripts/whatsapp-outbox-migrate.cjs); falling back to direct send"
+    : "database error while enqueueing";
+  console.error(
+    `Error: whatsapp-outbox enqueue failed (${eventKey}): ${reason} - notifications are being lost or bypassing the queue`,
+    err instanceof Error ? err.message : err,
+  );
 }
 
 export type ApplyAckInput = {

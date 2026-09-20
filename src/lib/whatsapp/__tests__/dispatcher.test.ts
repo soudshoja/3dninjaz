@@ -89,6 +89,14 @@ describe("cold-start age guard", () => {
     expect(r.sent).toBe(0);
   });
 
+  it("logs an Error: line when the guard discards rows (e.g. after a dispatcher outage)", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { deps } = makeDeps([cand({ ageSeconds: 61 * 60 })]);
+    await runOutboxTick(deps);
+    expect(spy.mock.calls.some((c) => String(c[0]).startsWith("Error: whatsapp-outbox age guard discarded 1"))).toBe(true);
+    spy.mockRestore();
+  });
+
   it("sends a fresh row", async () => {
     const { deps, sendText } = makeDeps([cand({ ageSeconds: 60 })]);
     const r = await runOutboxTick(deps);

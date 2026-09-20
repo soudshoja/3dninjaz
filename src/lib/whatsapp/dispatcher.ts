@@ -191,7 +191,7 @@ export function defaultDeps(): DispatcherDeps {
           WHERE id = ${id}`);
       } catch (err) {
         // e.g. duplicate provider_key_id. The message WAS sent, so never
-        // leave the row 'sending' (the reaper would re-send it).
+        // leave the row 'sending' (the reaper would park it as unconfirmed).
         console.error("[whatsapp-outbox] markAccepted retrying w/o key", id, err);
         await db.execute(sql`
           UPDATE whatsapp_outbox
@@ -249,6 +249,7 @@ export async function runOutboxTick(
     await deps.reapStuck();
     const candidates = await deps.selectCandidates(deps.config.maxPerTick);
     const maxAgeSec = deps.config.maxAgeMin * 60;
+    let staleCount = 0;
 
     for (const c of candidates) {
       if (!(await deps.claim(c.id))) continue;
@@ -258,6 +259,7 @@ export async function runOutboxTick(
       if (c.attempts === 0 && c.ageSeconds > maxAgeSec) {
         await deps.markStale(c.id);
         result.skipped++;
+        staleCount++;
         continue;
       }
 
@@ -339,6 +341,12 @@ export async function runOutboxTick(
       }
       await deps.sleep(deps.config.sendGapMs);
     }
+    if (staleCount > 0) {
+      // Also what a dispatcher outage longer than the age guard looks like.
+      console.error(
+        `Error: whatsapp-outbox age guard discarded ${staleCount} never-attempted row(s) as stale - review /admin/notifications/outbox?filter=failed (Resend if they are genuine)`,
+      );
+    }
   } catch (err) {
     console.error("[whatsapp-outbox] tick failed", err);
   } finally {
@@ -403,6 +411,35 @@ async function failRow(
       delayMs: 0,
     });
   }
+}
+
+/**
+ * Startup health check. Emits "Error:"-prefixed lines (the pattern
+ * scripts/log-alert.cjs matches) when the dispatcher flag is unset or the
+ * whatsapp_outbox table cannot be read, so a mis-ordered deploy is not a
+ * silent total blackout. Never throws.
+ */
+export async function checkOutboxHealth(
+  probe: () => Promise<unknown> = () =>
+    db.execute(sql`SELECT 1 FROM whatsapp_outbox LIMIT 1`),
+): Promise<{ flagOn: boolean; tableOk: boolean }> {
+  const flagOn = process.env.WHATSAPP_OUTBOX_DISPATCHER === "1";
+  if (!flagOn) {
+    console.error(
+      "Error: whatsapp-outbox dispatcher is NOT running (WHATSAPP_OUTBOX_DISPATCHER != 1) - queued WhatsApp notifications will never be sent",
+    );
+  }
+  let tableOk = true;
+  try {
+    await probe();
+  } catch (err) {
+    tableOk = false;
+    console.error(
+      "Error: whatsapp-outbox table probe failed (run scripts/whatsapp-outbox-migrate.cjs)",
+      err instanceof Error ? err.message : err,
+    );
+  }
+  return { flagOn, tableOk };
 }
 
 export function startOutboxDispatcher(): void {
