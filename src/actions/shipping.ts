@@ -34,6 +34,8 @@ import type { ShippingConfigRow as ShippingConfigRowType } from "@/lib/shipping-
 import { filterByEnabledCatalog } from "@/lib/delyva-filter";
 import { sendOrderShippedEmail } from "@/actions/send-emails";
 import { formatOrderNumber } from "@/lib/orders";
+import { isDeliveredStatusCode } from "@/lib/delyva-delivery-status";
+import { handleDeliveredSignal, deliveredAtFromTracking } from "@/lib/order-delivery";
 import { sendWhatsAppNotification } from "@/lib/whatsapp/sender";
 import { ensureConfigJson, ensureConfigurationData, ensureTiers } from "@/lib/config-fields";
 import type { SelectFieldConfig } from "@/lib/config-fields";
@@ -1208,6 +1210,26 @@ async function hydrateTrackingView(
         "hydrateTrackingView: mirror update failed",
         (e as Error).message,
       );
+    }
+
+    // Delivered transition (shared with the webhook + poller). Own try/catch:
+    // a failure here must never break the page render. Notifications only
+    // fire if THIS call flipped the order (see handleDeliveredSignal).
+    if (isDeliveredStatusCode(live.statusCode)) {
+      try {
+        await handleDeliveredSignal({
+          orderId: shipment.orderId,
+          statusCode: live.statusCode,
+          deliveredAt: deliveredAtFromTracking(live.tracking),
+          // Previous mirror time = lower bound for when delivery happened.
+          fallbackEventAt: shipment.updatedAt ?? shipment.createdAt,
+        });
+      } catch (e) {
+        console.warn(
+          "hydrateTrackingView: delivered transition failed",
+          (e as Error).message,
+        );
+      }
     }
   }
 
