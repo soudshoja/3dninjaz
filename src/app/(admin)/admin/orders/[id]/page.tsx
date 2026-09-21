@@ -38,6 +38,7 @@ import { eq, desc, inArray } from "drizzle-orm";
 import { publicUrl } from "@/lib/public-url";
 import { CopyTrackingButton } from "@/components/orders/copy-tracking-button";
 import { FileDown, User, MapPin, Package, CreditCard, Truck, Activity, Settings, MessageSquare, RotateCcw, ChevronLeft, Send } from "lucide-react";
+import { MarkBalancePaidButton } from "@/components/admin/mark-balance-paid-button";
 import { PaymentProofSection } from "@/components/admin/payment-proof-section";
 import { AdminUploadProofForm } from "@/components/admin/admin-upload-proof-form";
 // Order editability gates — used to show/hide the "Edit order" button.
@@ -660,7 +661,14 @@ export default async function AdminOrderDetailPage({
                   <span>{balanceDue > 0 ? "Balance due" : "Fully paid"}</span>
                   <span>{balanceDue > 0 ? formatMYR(balanceDue.toFixed(2)) : formatMYR("0.00")}</span>
                 </div>
-                {/* MarkBalancePaidButton moved to the dedicated edit page */}
+                {balanceDue > 0 && row.status !== "cancelled" ? (
+                  <div className="mt-3">
+                    <MarkBalancePaidButton
+                      orderId={row.id}
+                      amount={balanceDue.toFixed(2)}
+                    />
+                  </div>
+                ) : null}
               </>
             ) : null}
           </div>
