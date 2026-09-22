@@ -7,6 +7,9 @@
  * Handles:
  *   connection.update — persists connection state changes
  *   qrcode.updated    — stamps lastQrAt (panel polls for the QR itself)
+ *   messages.update   — outbox ack reconciliation (receives nothing until the
+ *                       gateway stops dropping API-sent messages; Stage B)
+ *   send.message      — best-effort provider_key_id backfill
  */
 export const dynamic = "force-dynamic";
 
@@ -14,6 +17,8 @@ import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { WHATSAPP_INSTANCE_NAME } from "@/lib/whatsapp/types";
 import { updateWhatsappConnectionState } from "@/lib/whatsapp/settings";
+import { applyAck, backfillProviderKeyId } from "@/lib/whatsapp/outbox";
+import { normalizeMsisdn } from "@/lib/whatsapp/events";
 
 const ok200 = NextResponse.json({ ok: true });
 
@@ -112,6 +117,45 @@ export async function POST(req: Request): Promise<NextResponse> {
       await updateWhatsappConnectionState("connecting", undefined, { qr: true });
     } catch (err) {
       console.error("[evolution-webhook] qrcode.updated handling failed:", err);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // messages.update — delivery/read acks for outbox rows (monotonic in SQL)
+  // ---------------------------------------------------------------------------
+  if (ev === "messages.update") {
+    try {
+      const raw = body.data;
+      const entries = Array.isArray(raw) ? raw : raw ? [raw] : [];
+      for (const e of entries as Record<string, unknown>[]) {
+        const key = e.key as Record<string, unknown> | undefined;
+        const keyId = (e.keyId ?? key?.id) as unknown;
+        const fromMe = (e.fromMe ?? key?.fromMe) === true;
+        const status = e.status as unknown;
+        if (typeof keyId === "string" && typeof status === "string") {
+          await applyAck({ keyId, fromMe, ackStatus: status });
+        }
+      }
+    } catch (err) {
+      console.error("[evolution-webhook] messages.update handling failed:", err);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // send.message — backfill provider_key_id when the 201 body lacked it
+  // ---------------------------------------------------------------------------
+  if (ev === "send.message") {
+    try {
+      const data = body.data as Record<string, unknown> | undefined;
+      const key = data?.key as Record<string, unknown> | undefined;
+      const keyId = key?.id;
+      const jid = key?.remoteJid;
+      if (typeof keyId === "string" && typeof jid === "string") {
+        const recipient = normalizeMsisdn(jid.replace(/@.*$/, ""));
+        if (recipient) await backfillProviderKeyId({ recipient, keyId });
+      }
+    } catch (err) {
+      console.error("[evolution-webhook] send.message handling failed:", err);
     }
   }
 

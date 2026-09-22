@@ -226,6 +226,7 @@ export async function POST(req: NextRequest) {
               );
               void sendWhatsAppNotification("order_delivered", order[0].shippingPhone, {
                 customerName: order[0].shippingName,
+                orderId: order[0].id,
                 orderNumber: formatOrderNumber(order[0].id),
                 orderUrl: publicUrl(`/orders/${order[0].id}`),
               }).catch(() => {});

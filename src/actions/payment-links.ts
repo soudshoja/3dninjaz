@@ -548,6 +548,7 @@ export async function capturePaymentLinkPayment({
   }
   void sendWhatsAppNotification("order_confirmation", orderRow.shippingPhone, {
     customerName: orderRow.shippingName,
+    orderId: orderRow.id,
     orderNumber: shortOrderNumber(orderRow.id),
     orderUrl: publicUrl(`/orders/${orderRow.id}`),
   }).catch(() => {});

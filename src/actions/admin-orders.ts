@@ -400,6 +400,7 @@ export async function updateOrderStatus(
     );
     void sendWhatsAppNotification("order_processing", row.shippingPhone, {
       customerName: row.shippingName,
+      orderId: orderId,
       orderNumber: formatOrderNumber(orderId),
       orderUrl: publicUrl(`/orders/${orderId}`),
     }).catch(() => {});
@@ -419,6 +420,7 @@ export async function updateOrderStatus(
     }
     void sendWhatsAppNotification("order_approved", row.shippingPhone, {
       customerName: row.shippingName,
+      orderId: orderId,
       orderNumber: formatOrderNumber(orderId),
       orderUrl: publicUrl(`/orders/${orderId}`),
     }).catch(() => {});
@@ -469,11 +471,12 @@ export async function updateOrderStatus(
       );
       void sendWhatsAppNotification("order_shipped", row.shippingPhone, {
         customerName: row.shippingName,
+        orderId: orderId,
         orderNumber: formatOrderNumber(orderId),
         courierName,
         trackingNo: "pending",
         trackingUrl: publicUrl(`/orders/${orderId}`),
-      }).catch((err) =>
+      }, { dedupeSuffix: "manual" }).catch((err) =>
         console.error("[admin-orders] shipped WhatsApp dispatch failed:", err),
       );
     }
@@ -535,6 +538,7 @@ export async function approveWhatsAppOrder(
   // whichever template the admin has customised.
   void sendWhatsAppNotification("order_approved", row.shippingPhone, {
     customerName: row.shippingName,
+    orderId: orderId,
     orderNumber: formatOrderNumber(orderId),
     orderUrl: publicUrl(`/orders/${orderId}`),
   }).catch(() => {});
@@ -1052,6 +1056,8 @@ export async function sendInvoiceViaWhatsApp(
       return { ok: false, error: "Customer phone number is not valid." };
     }
 
+    // Intentionally bypasses the outbox and still gates on connection state:
+    // the admin needs a synchronous success/failure toast for this click.
     const state = await getWhatsappStateFresh();
     if (!state.notificationsEnabled) {
       return { ok: false, error: "WhatsApp notifications are disabled." };
@@ -1066,10 +1072,10 @@ export async function sendInvoiceViaWhatsApp(
     }
 
     const fileName = `invoice-${formatOrderNumber(orderId)}.pdf`;
-    const sent = await sendMedia({ number, base64, fileName });
+    const r = await sendMedia({ number, base64, fileName });
 
-    if (!sent) {
-      return { ok: false, error: "Failed to send message via Evolution API." };
+    if (!r.ok) {
+      return { ok: false, error: r.error ?? "Failed to send message via Evolution API." };
     }
 
     return { ok: true };
