@@ -43,19 +43,37 @@ export function isCancelledStatusCode(statusCode: number | null | undefined): bo
 }
 
 /**
- * Idempotency gate for the "order delivered" customer notification
- * (email + WhatsApp) and the orders.status = "delivered" write.
- *
- * `order_tracking.update` fires on every tracking scan, so once a parcel
- * reaches statusCode 700 further `update` events keep re-arriving at 700.
- * Only notify/update the order the FIRST time — a repeat delivered event
- * on an order that is already `delivered` must be a silent no-op.
+ * Order statuses from which a Delyva delivered signal may flip an order to
+ * "delivered". A booked parcel implies the order is being fulfilled:
+ *   - shipped    the normal case.
+ *   - processing admin booked the courier but has not yet clicked "shipped".
+ *   - paid       payment confirmed, parcel booked and delivered, admin never
+ *                advanced the status. The goods ARE delivered.
+ * NEVER allowed: cancelled (would resurrect a dead order), pending /
+ * awaiting_customer / awaiting_payment_review (unpaid — a parcel signal there
+ * is anomalous and needs a human), and delivered itself (no-op).
+ * (The enum has no refunded/returned state.)
+ */
+export const DELIVERABLE_SOURCE_STATUSES = ["paid", "processing", "shipped"] as const;
+
+export function isDeliverableSourceStatus(status: string | null | undefined): boolean {
+  return (
+    typeof status === "string" &&
+    (DELIVERABLE_SOURCE_STATUSES as readonly string[]).includes(status)
+  );
+}
+
+/**
+ * Pure gate: is this delivered signal allowed to flip / notify the order?
+ * True only for a delivered numeric code on an order in an allowed source
+ * status. Already-delivered and cancelled orders are a silent no-op.
  */
 export function shouldNotifyDelivered(params: {
   statusCode: number | null | undefined;
   currentOrderStatus: string | null | undefined;
 }): boolean {
   return (
-    isDeliveredStatusCode(params.statusCode) && params.currentOrderStatus !== "delivered"
+    isDeliveredStatusCode(params.statusCode) &&
+    isDeliverableSourceStatus(params.currentOrderStatus)
   );
 }
