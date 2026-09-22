@@ -274,7 +274,10 @@ export default async function AdminOrderEditPage({
                 </div>
                 {balanceDue > 0 ? (
                   <div className="mt-3">
-                    <MarkBalancePaidButton orderId={row.id} />
+                    <MarkBalancePaidButton
+                      orderId={row.id}
+                      amount={balanceDue.toFixed(2)}
+                    />
                   </div>
                 ) : null}
               </>
