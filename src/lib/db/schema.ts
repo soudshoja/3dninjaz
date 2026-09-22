@@ -601,6 +601,20 @@ export const orders = mysqlTable("orders", {
   // independent of payment status. NULL = not in production; a timestamp = the
   // moment the admin added it. Drives the Keychain batches view.
   productionAddedAt: timestamp("production_added_at"),
+  // 260922-shipto — shipped/delivered orders can't have their address
+  // silently rewritten (the courier already has the old one on the label).
+  // Instead an admin flags that a correction is needed and records what to
+  // change; a human then calls the courier out-of-band. addressCorrectionRequested
+  // is the at-a-glance boolean, addressCorrectionRequestedAt doubles as the
+  // "when flagged" timestamp (NULL = not flagged / cleared), and
+  // addressCorrectionNote carries the admin's free-text description of the
+  // fix needed. See flagAddressCorrection / clearAddressCorrection in
+  // src/actions/admin-orders.ts.
+  addressCorrectionRequested: boolean("address_correction_requested")
+    .notNull()
+    .default(false),
+  addressCorrectionNote: text("address_correction_note"),
+  addressCorrectionRequestedAt: timestamp("address_correction_requested_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
 });

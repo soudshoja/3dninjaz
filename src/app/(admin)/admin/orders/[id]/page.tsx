@@ -45,6 +45,8 @@ import { AdminUploadProofForm } from "@/components/admin/admin-upload-proof-form
 import { isOrderEditable, canAddItems } from "@/lib/order-editable";
 // Keychain production — production floor toggle + badge.
 import { OrderProductionToggle } from "@/components/admin/order-production-toggle";
+// 260922-shipto — address correction flag for shipped/delivered orders.
+import { OrderAddressCorrection } from "@/components/admin/order-address-correction";
 
 // WhatsApp SVG logo (official green brand mark, no external dependency)
 export const dynamic = "force-dynamic";
@@ -335,6 +337,18 @@ export default async function AdminOrderDetailPage({
                 In production
               </span>
             ) : null}
+            {row.addressCorrectionRequested ? (
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold"
+                style={{
+                  background: "rgba(245,158,11,0.22)",
+                  border: "1.5px solid rgba(245,158,11,0.45)",
+                  color: "#f59e0b",
+                }}
+              >
+                Address needs correction
+              </span>
+            ) : null}
             <AdminOrderStatusBadge status={row.status} />
           </div>
         </div>
@@ -441,6 +455,23 @@ export default async function AdminOrderDetailPage({
               {row.shippingState}, {row.shippingCountry}<br />
               <span className="font-mono text-xs" style={{ color: BRAND.blue }}>{row.shippingPhone}</span>
             </address>
+
+            {/* 260922-shipto — shipped/delivered orders can't have their
+                address silently rewritten (courier already has the old one
+                on the label); flag a correction instead. */}
+            {row.status === "shipped" || row.status === "delivered" ? (
+              <div
+                className="mt-4 pt-4"
+                style={{ borderTop: `1.5px solid ${BRAND.ink}0c` }}
+              >
+                <OrderAddressCorrection
+                  orderId={row.id}
+                  flagged={row.addressCorrectionRequested}
+                  note={row.addressCorrectionNote}
+                  requestedAt={row.addressCorrectionRequestedAt}
+                />
+              </div>
+            ) : null}
           </AdminCard>
         </div>
 
