@@ -16,6 +16,7 @@ import { and, eq, desc, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { MALAYSIAN_STATES } from "@/lib/validators";
+import { hasActiveShipment } from "@/lib/order-editable";
 import { validateCoupon } from "@/actions/coupons";
 import {
   assertValidTransition,
@@ -211,10 +212,6 @@ export type AdminOrderDetail = {
   discountCode: string | null;
   // Keychain production floor flag — set when admin adds order to production.
   productionAddedAt: Date | null;
-  // 260922-shipto — address correction flag for shipped/delivered orders.
-  addressCorrectionRequested: boolean;
-  addressCorrectionNote: string | null;
-  addressCorrectionRequestedAt: Date | null;
   user: { id: string; email: string; name: string } | null;
   items: Array<{
     id: string;
@@ -317,9 +314,6 @@ export async function getAdminOrder(orderId: string): Promise<AdminOrderDetail |
     discountAmount: head.o.discountAmount ?? "0.00",
     discountCode: head.o.discountCode ?? null,
     productionAddedAt: head.o.productionAddedAt ?? null,
-    addressCorrectionRequested: head.o.addressCorrectionRequested ?? false,
-    addressCorrectionNote: head.o.addressCorrectionNote ?? null,
-    addressCorrectionRequestedAt: head.o.addressCorrectionRequestedAt ?? null,
     user: head.uId
       ? { id: head.uId, email: head.uEmail ?? "", name: head.uName ?? "" }
       : null,
@@ -654,11 +648,18 @@ export async function updateOrderNotes(
  * Edit the ship-to / recipient details on an order (recipient name, phone, and
  * full Malaysian address). Admin-only.
  *
- * Intentionally NOT gated by payment/fulfilment status: admins need to correct
- * a wrong address or phone on shipped/manual orders in order to re-dispatch a
- * fresh courier label (see rebookShipment). It does not touch order totals or
- * status. After saving, rebook the courier so the new label carries the
- * corrected destination.
+ * Intentionally NOT gated by order.status — order.status is admin-settable and
+ * can drift from real-world fulfilment state. Instead gated on ACTUAL Delyva
+ * shipment booking state (260922-shipto): refused whenever the order has an
+ * active courier booking (hasActiveShipment — see src/lib/order-editable.ts),
+ * because the courier already has the OLD address printed on a label at that
+ * point and a silent DB edit here would drift from what they actually have.
+ * The admin must cancel the booking first (cancelShipment, this file's
+ * neighbour in src/actions/shipping.ts) — this is re-checked server-side, not
+ * just hidden in the UI, since the client cannot be trusted to have enforced
+ * the gate.
+ *
+ * Does not touch order totals or status.
  */
 export async function updateOrderShipTo(
   orderId: string,
@@ -700,6 +701,22 @@ export async function updateOrderShipTo(
     .limit(1);
   if (!row) return { ok: false, error: "Order not found." };
 
+  const [shipmentRow] = await db
+    .select({
+      delyvaOrderId: orderShipments.delyvaOrderId,
+      statusCode: orderShipments.statusCode,
+    })
+    .from(orderShipments)
+    .where(eq(orderShipments.orderId, orderId))
+    .limit(1);
+  if (hasActiveShipment(shipmentRow ?? null)) {
+    return {
+      ok: false,
+      error:
+        "A courier label is already booked for this order — cancel the shipment before editing the address.",
+    };
+  }
+
   await db
     .update(orders)
     .set({
@@ -715,99 +732,6 @@ export async function updateOrderShipTo(
 
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath(`/orders/${orderId}`);
-  return { ok: true };
-}
-
-// ============================================================================
-// 260922-shipto — Address correction flag for shipped/delivered orders.
-//
-// Once a parcel is booked the courier already has the old address printed on
-// the label — a silent DB edit here would drift from what the courier
-// actually has. Instead of unlocking address editing for these statuses, an
-// admin flags that a correction is needed and records what to change; the
-// actual courier contact is a manual step outside this system (see
-// CLAUDE.md "DECISION ALREADY MADE" for 260922-shipto).
-//
-// Deliberately NOT allowed for `cancelled` (nothing to correct on a dead
-// order) or for editable/add-only statuses (those already have the real
-// ship-to form via updateOrderShipTo / OrderShipToEdit above).
-// ============================================================================
-
-const ADDRESS_CORRECTION_ALLOWED_STATUSES = ["shipped", "delivered"] as const;
-
-type FlagAddressCorrectionResult = { ok: true } | { ok: false; error: string };
-
-/**
- * Flag an order's shipping address as needing a correction. Idempotent:
- * re-flagging an already-flagged order just updates the note and timestamp.
- */
-export async function flagAddressCorrection(
-  orderId: string,
-  note: string,
-): Promise<FlagAddressCorrectionResult> {
-  await requireAdmin();
-
-  const trimmedNote = typeof note === "string" ? note.trim() : "";
-  if (!trimmedNote) {
-    return { ok: false, error: "Describe what needs to be corrected." };
-  }
-  if (trimmedNote.length > 2000) {
-    return { ok: false, error: "Note too long (max 2000 characters)." };
-  }
-
-  const [row] = await db
-    .select({ id: orders.id, status: orders.status })
-    .from(orders)
-    .where(eq(orders.id, orderId))
-    .limit(1);
-  if (!row) return { ok: false, error: "Order not found." };
-
-  if (!(ADDRESS_CORRECTION_ALLOWED_STATUSES as readonly string[]).includes(row.status)) {
-    return {
-      ok: false,
-      error: "Address correction can only be flagged on shipped or delivered orders.",
-    };
-  }
-
-  await db
-    .update(orders)
-    .set({
-      addressCorrectionRequested: true,
-      addressCorrectionNote: trimmedNote,
-      addressCorrectionRequestedAt: new Date(),
-    })
-    .where(eq(orders.id, orderId));
-
-  revalidatePath(`/admin/orders/${orderId}`);
-  return { ok: true };
-}
-
-/**
- * Clear the address-correction flag once an admin has actually contacted the
- * courier and resolved it. Admin-only.
- */
-export async function clearAddressCorrection(
-  orderId: string,
-): Promise<FlagAddressCorrectionResult> {
-  await requireAdmin();
-
-  const [row] = await db
-    .select({ id: orders.id })
-    .from(orders)
-    .where(eq(orders.id, orderId))
-    .limit(1);
-  if (!row) return { ok: false, error: "Order not found." };
-
-  await db
-    .update(orders)
-    .set({
-      addressCorrectionRequested: false,
-      addressCorrectionNote: null,
-      addressCorrectionRequestedAt: null,
-    })
-    .where(eq(orders.id, orderId));
-
-  revalidatePath(`/admin/orders/${orderId}`);
   return { ok: true };
 }
 

@@ -42,11 +42,13 @@ import { MarkBalancePaidButton } from "@/components/admin/mark-balance-paid-butt
 import { PaymentProofSection } from "@/components/admin/payment-proof-section";
 import { AdminUploadProofForm } from "@/components/admin/admin-upload-proof-form";
 // Order editability gates — used to show/hide the "Edit order" button.
-import { isOrderEditable, canAddItems } from "@/lib/order-editable";
+import { isOrderEditable, canAddItems, hasActiveShipment } from "@/lib/order-editable";
 // Keychain production — production floor toggle + badge.
 import { OrderProductionToggle } from "@/components/admin/order-production-toggle";
-// 260922-shipto — address correction flag for shipped/delivered orders.
-import { OrderAddressCorrection } from "@/components/admin/order-address-correction";
+// 260922-shipto — ship-to address editability is governed by shipment
+// booking state (not order.status): no active Delyva booking → editable
+// in place; active booking → must cancel the shipment first.
+import { OrderShipToEdit } from "@/components/admin/order-shipto-edit";
 
 // WhatsApp SVG logo (official green brand mark, no external dependency)
 export const dynamic = "force-dynamic";
@@ -61,12 +63,15 @@ export const metadata: Metadata = {
 function AdminCard({
   children,
   className = "",
+  id,
 }: {
   children: React.ReactNode;
   className?: string;
+  id?: string;
 }) {
   return (
     <div
+      id={id}
       className={`rounded-3xl p-5 md:p-6 ${className}`}
       style={{
         backgroundColor: "#ffffff",
@@ -230,6 +235,12 @@ export default async function AdminOrderDetailPage({
     row.status === "awaiting_payment_review" ||
     (row.status === "pending" && !row.paypalCaptureId);
 
+  // 260922-shipto — ship-to editability is governed by real-world shipment
+  // booking state, NOT order.status (an admin can hand-flip status and it
+  // can drift from what the courier actually has). No active Delyva booking
+  // → address is editable in place, on the view page, regardless of status.
+  const shipToLocked = hasActiveShipment(shipment);
+
   // Gate for the "Edit order" / "Add items" button in the view.
   const editable = isOrderEditable({
     status: row.status,
@@ -337,7 +348,7 @@ export default async function AdminOrderDetailPage({
                 In production
               </span>
             ) : null}
-            {row.addressCorrectionRequested ? (
+            {shipToLocked ? (
               <span
                 className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold"
                 style={{
@@ -346,7 +357,7 @@ export default async function AdminOrderDetailPage({
                   color: "#f59e0b",
                 }}
               >
-                Address needs correction
+                Label booked — address locked
               </span>
             ) : null}
             <AdminOrderStatusBadge status={row.status} />
@@ -441,7 +452,10 @@ export default async function AdminOrderDetailPage({
             </div>
           </AdminCard>
 
-          {/* Ship-to card — read-only on the view page; edit via "Edit order" */}
+          {/* Ship-to card — editable in place whenever there's no active
+              courier booking (260922-shipto). Gated on real shipment state,
+              not order.status: an admin can hand-flip status and it can
+              drift from what the courier actually has booked. */}
           <AdminCard>
             <SectionHeader icon={MapPin} label="Ship to" accent={BRAND.purple} />
             <address
@@ -456,22 +470,49 @@ export default async function AdminOrderDetailPage({
               <span className="font-mono text-xs" style={{ color: BRAND.blue }}>{row.shippingPhone}</span>
             </address>
 
-            {/* 260922-shipto — shipped/delivered orders can't have their
-                address silently rewritten (courier already has the old one
-                on the label); flag a correction instead. */}
-            {row.status === "shipped" || row.status === "delivered" ? (
+            {shipToLocked ? (
+              <div
+                className="mt-4 rounded-2xl px-4 py-3"
+                style={{
+                  backgroundColor: "#fef3c720",
+                  border: "1.5px solid #fbbf2460",
+                }}
+              >
+                <p className="text-sm font-semibold" style={{ color: "#92400e" }}>
+                  A label is already booked with the courier
+                </p>
+                <p className="text-sm mt-1" style={{ color: "#78350f" }}>
+                  Editing the address here would not update what the courier
+                  has on file.{" "}
+                  <a
+                    href="#courier-shipping"
+                    className="font-semibold underline"
+                    style={{ color: "#92400e" }}
+                  >
+                    Cancel the label in the Courier section below
+                  </a>
+                  , then you can edit the address.
+                </p>
+              </div>
+            ) : (
               <div
                 className="mt-4 pt-4"
                 style={{ borderTop: `1.5px solid ${BRAND.ink}0c` }}
               >
-                <OrderAddressCorrection
+                <OrderShipToEdit
                   orderId={row.id}
-                  flagged={row.addressCorrectionRequested}
-                  note={row.addressCorrectionNote}
-                  requestedAt={row.addressCorrectionRequestedAt}
+                  initial={{
+                    shippingName: row.shippingName,
+                    shippingPhone: row.shippingPhone ?? "",
+                    shippingLine1: row.shippingLine1,
+                    shippingLine2: row.shippingLine2 ?? null,
+                    shippingCity: row.shippingCity,
+                    shippingState: row.shippingState,
+                    shippingPostcode: row.shippingPostcode,
+                  }}
                 />
               </div>
-            ) : null}
+            )}
           </AdminCard>
         </div>
 
@@ -809,7 +850,7 @@ export default async function AdminOrderDetailPage({
         </AdminCard>
 
         {/* ══ ZONE 6 — Courier / Shipping ══════════════════════════════════════ */}
-        <AdminCard className="mb-4">
+        <AdminCard className="mb-4" id="courier-shipping">
           <SectionHeader icon={Truck} label="Courier & shipping" accent={BRAND.purple} />
           <OrderShipmentPanel
             orderId={row.id}
