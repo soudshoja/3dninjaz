@@ -126,9 +126,18 @@ describe("order-state re-check before send (M2)", () => {
     expect((deps.markCancelled as ReturnType<typeof vi.fn>).mock.calls[0][1]).toBe("order-state-changed");
   });
 
-  it("cancels bank-transfer instructions once payment proof is under review", async () => {
+  it("SENDS bank-transfer instructions for a fresh bank-transfer order (status awaiting_payment_review)", async () => {
+    // Regression: the bank-transfer checkout inserts the order in awaiting_payment_review
+    // before any proof exists; cancelling here meant customers never got the bank details.
     const { sendText } = await run("order_bank_transfer_instructions", "awaiting_payment_review");
-    expect(sendText).not.toHaveBeenCalled();
+    expect(sendText).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels bank-transfer instructions once the order is paid, in progress, or cancelled", async () => {
+    for (const status of ["paid", "processing", "shipped", "delivered", "cancelled"]) {
+      const { sendText } = await run("order_bank_transfer_instructions", status);
+      expect(sendText).not.toHaveBeenCalled();
+    }
   });
 
   it("cancels payment reminders for a deleted order", async () => {
