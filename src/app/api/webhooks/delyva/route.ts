@@ -2,12 +2,13 @@ import { NextResponse, type NextRequest } from "next/server";
 import crypto from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { orderShipments, orders } from "@/lib/db/schema";
-import { sendOrderDeliveredEmail } from "@/actions/send-emails";
-import { formatOrderNumber } from "@/lib/orders";
+import { orderShipments } from "@/lib/db/schema";
 import { getDelyvaWebhookSecret } from "@/lib/delyva";
-import { sendWhatsAppNotification } from "@/lib/whatsapp/sender";
-import { publicUrl } from "@/lib/public-url";
+import {
+  isCancelledStatusCode,
+  isDeliveredStatusCode,
+} from "@/lib/delyva-delivery-status";
+import { handleDeliveredSignal } from "@/lib/order-delivery";
 
 // ============================================================================
 // Phase 9 (09-01) — Delyva webhook receiver.
@@ -64,6 +65,40 @@ function verifySignature(raw: string, got: string, secret: string): boolean {
   }
 }
 
+type WebhookDecision =
+  | "ignored"
+  | "mirrored"
+  | "delivered-transition"
+  | "already-delivered"
+  | "blocked-by-order-status"
+  | "error";
+
+function tail6(id: unknown): string {
+  return String(id ?? "").slice(-6);
+}
+
+function isTrackingEvent(event: string, id: unknown): boolean {
+  return (
+    id !== undefined &&
+    (event === "order_tracking.change" ||
+      event === "order_tracking.update" ||
+      event === "order.updated")
+  );
+}
+
+/** One structured line per tracking event. No customer data, no payloads. */
+function logDecision(
+  event: string,
+  id: unknown,
+  statusCode: unknown,
+  decision: WebhookDecision,
+): void {
+  console.info(
+    "[delyva-webhook]",
+    JSON.stringify({ event, delyva: tail6(id), statusCode: statusCode ?? null, decision }),
+  );
+}
+
 type DelyvaWebhookPayload = {
   event?: string;
   timestamp?: string;
@@ -118,17 +153,14 @@ export async function POST(req: NextRequest) {
   // Idempotency
   const idempKey = `${idRaw ?? ""}:${data.statusCode ?? ""}:${payload.timestamp ?? ""}`;
   if (!remember(idempKey)) {
+    logDecision(event, idRaw, data.statusCode, "ignored");
     return NextResponse.json({ ok: true, dup: true });
   }
+  let decision: WebhookDecision = "ignored";
 
   // Only tracking-state events touch our mirror. order.failed + order.created
   // we ack + log for now — follow-ups can expand this.
-  if (
-    idRaw !== undefined &&
-    (event === "order_tracking.change" ||
-      event === "order_tracking.update" ||
-      event === "order.updated")
-  ) {
+  if (isTrackingEvent(event, idRaw)) {
     try {
       const delyvaOrderId = String(idRaw);
       const eventAt = payload.timestamp ? new Date(payload.timestamp) : new Date();
@@ -156,69 +188,77 @@ export async function POST(req: NextRequest) {
         })
         .where(eq(orderShipments.delyvaOrderId, delyvaOrderId));
 
-      // Delivered detection — text-first because Delyva codes vary by
-      // courier (SPX uses 500 for in-transit, not 400 as docs claimed).
-      // Trigger the delivered email only when the rich text explicitly
-      // confirms delivery. Numeric fallback only if no text was given
-      // and the code is 700+ (well above the 400-699 in-transit band).
-      const textLower = (data.description ?? data.statusText ?? data.statusMessage ?? "").toLowerCase();
-      const looksDelivered =
-        /delivered|delivery successful|signed|received by recipient/.test(textLower) ||
-        (textLower === "" && typeof data.statusCode === "number" && data.statusCode >= 700);
-      if (looksDelivered) {
-        try {
-          // Find the order associated with this shipment to get customer info
-          const shipment = await db
-            .select({
-              orderId: orderShipments.orderId,
-            })
-            .from(orderShipments)
-            .where(eq(orderShipments.delyvaOrderId, delyvaOrderId))
-            .limit(1);
+      // Cancelled shipment (statusCode 900) — log only. Cancelling a
+      // customer order is a business decision, not something a courier
+      // tracking event should do automatically. The shipment row's
+      // statusCode/message above already reflects the cancellation.
+      if (isCancelledStatusCode(data.statusCode)) {
+        console.warn("[delyva-webhook] shipment cancelled at Delyva (statusCode 900) — orders.status left untouched", {
+          delyvaOrderId,
+        });
+      }
 
-          if (shipment.length > 0) {
-            const order = await db
-              .select({
-                id: orders.id,
-                customerEmail: orders.customerEmail,
-                shippingName: orders.shippingName,
-                shippingPhone: orders.shippingPhone,
-              })
-              .from(orders)
-              .where(eq(orders.id, shipment[0].orderId))
-              .limit(1);
+      // Delivered detection is numeric-only (statusCode >= 700, excluding
+      // 900/cancelled) — see src/lib/delyva-delivery-status.ts. Delyva's
+      // status/statusText/statusMessage text fields are the literal string
+      // "ready" at every stage and carry no delivered signal; do not
+      // resurrect a text-regex fallback here.
+      decision = "mirrored";
 
-            if (order.length > 0) {
-              await db
-                .update(orders)
-                .set({ status: "delivered" })
-                .where(eq(orders.id, order[0].id));
+      // Evidence-gathering only (NOT acted on): a per-scan event whose text
+      // says "deliver" but whose numeric code is < 700 may be why the
+      // order-level 700 never arrived.
+      if (
+        typeof data.statusCode === "number" &&
+        data.statusCode < 700 &&
+        /deliver/i.test(
+          [data.statusText, data.statusMessage, data.description].filter(Boolean).join(" "),
+        )
+      ) {
+        console.warn(
+          "[delyva-webhook] WARN text mentions 'deliver' but statusCode < 700",
+          JSON.stringify({ event, delyva: tail6(idRaw), statusCode: data.statusCode }),
+        );
+      }
 
-              void sendOrderDeliveredEmail({
-                customerEmail: order[0].customerEmail,
-                customerName: order[0].shippingName,
-                orderNumber: formatOrderNumber(order[0].id),
-                orderId: order[0].id,
-              }).catch((err) =>
-                console.error("[delyva-webhook] delivery email failed:", err)
-              );
-              void sendWhatsAppNotification("order_delivered", order[0].shippingPhone, {
-                customerName: order[0].shippingName,
-                orderNumber: formatOrderNumber(order[0].id),
-                orderUrl: publicUrl(`/orders/${order[0].id}`),
-              }).catch(() => {});
-            }
-          }
-        } catch (err) {
-          console.error("[delyva-webhook] failed to send delivery email:", err);
-          // Don't block the webhook response
+      if (isDeliveredStatusCode(data.statusCode)) {
+        const shipment = await db
+          .select({ orderId: orderShipments.orderId })
+          .from(orderShipments)
+          .where(eq(orderShipments.delyvaOrderId, delyvaOrderId))
+          .limit(1);
+
+        if (shipment.length > 0) {
+          // Shared atomic transition; notifies only if THIS call flipped the
+          // order and the delivery is fresh (<24h). Status write happens
+          // before, and independently of, any notification.
+          const outcome = await handleDeliveredSignal({
+            orderId: shipment[0].orderId,
+            statusCode: data.statusCode,
+            deliveredAt: eventAt,
+          });
+          decision =
+            outcome === "delivered-transition" || outcome === "delivered-transition-stale"
+              ? "delivered-transition"
+              : outcome === "already-delivered"
+                ? "already-delivered"
+                : outcome === "blocked-by-order-status"
+                  ? "blocked-by-order-status"
+                  : "mirrored";
         }
       }
     } catch (err) {
+      decision = "error";
+      // Let Delyva's hourly retry through instead of dropping it as a dup.
+      SEEN_KEYS.delete(idempKey);
       console.error("delyva webhook DB update failed", err);
       // Return 200 anyway — retrying won't fix a schema/DB issue and we have
       // refreshShipmentStatus() as a manual recovery.
     }
+  }
+
+  if (isTrackingEvent(event, idRaw)) {
+    logDecision(event, idRaw, data.statusCode, decision);
   }
 
   if (event === "order.failed") {

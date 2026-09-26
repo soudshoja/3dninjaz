@@ -237,7 +237,7 @@ export function CheckoutIsland({
   return (
     <PayPalScriptProvider options={initialOptions}>
       {/* Bottom padding reserves room for the mobile sticky dock (≥ 76px) */}
-      <div className="grid gap-8 lg:grid-cols-[1fr_420px] pb-24 md:pb-0">
+      <div className="no-ios-zoom grid gap-8 lg:grid-cols-[1fr_420px] pb-24 md:pb-0">
         <section
           aria-labelledby="ship-heading"
           className="order-1"
