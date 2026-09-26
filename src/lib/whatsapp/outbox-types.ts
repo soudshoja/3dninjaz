@@ -222,8 +222,8 @@ export function nextBackoffMs(attempts: number): number {
 // before send for rows with an order_id. Unknown events are NOT blocked.
 //
 //   event                              guard
-//   order_pending                      send only while pending / awaiting_customer
-//   order_bank_transfer_instructions   send only while pending / awaiting_customer
+//   order_pending                      send only while unpaid (pending / awaiting_customer / awaiting_payment_review)
+//   order_bank_transfer_instructions   send only while unpaid (pending / awaiting_customer / awaiting_payment_review)
 //   order_approved / order_confirmation
 //   order_processing / order_shipped
 //   order_delivered / invoice_pdf      block if cancelled
@@ -232,7 +232,11 @@ export function nextBackoffMs(attempts: number): number {
 
 type OrderStateGuard = { allow: readonly string[] } | { block: readonly string[] };
 
-const PAYABLE_STATES = ["pending", "awaiting_customer"] as const;
+// awaiting_payment_review MUST be in here: a bank-transfer checkout INSERTS the order in
+// that status (src/actions/whatsapp-order.ts), before any proof exists, so leaving it out
+// cancelled EVERY bank-transfer instructions message and customers never got the
+// bank details (2026-09-22 to 2026-09-26). It still means "not paid yet".
+const PAYABLE_STATES = ["pending", "awaiting_customer", "awaiting_payment_review"] as const;
 
 export const ORDER_STATE_GUARDS: Readonly<Record<string, OrderStateGuard>> = {
   order_pending: { allow: PAYABLE_STATES },
