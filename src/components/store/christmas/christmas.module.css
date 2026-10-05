@@ -148,7 +148,8 @@
 .treeStage {
   position: relative;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
 }
 
 .treeGlow {
@@ -212,14 +213,13 @@
 }
 
 .displayNote {
-  position: absolute;
-  bottom: -0.25rem;
-  right: 0.5rem;
-  max-width: 15rem;
+  position: relative;
+  margin-top: 0.75rem;
+  max-width: 20rem;
   font-size: 0.8125rem;
   line-height: 1.4;
-  text-align: right;
-  color: rgba(246, 251, 255, 0.65);
+  text-align: center;
+  color: rgba(246, 251, 255, 0.7);
 }
 
 /* ---------- Snow drift divider ---------- */
