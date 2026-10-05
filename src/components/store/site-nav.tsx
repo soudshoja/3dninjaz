@@ -17,11 +17,13 @@ const MAX_DISPLAY = 8;
 
 function ShopNavItem({
   activeCategories,
+  showChristmas,
   isOpen,
   onOpen,
   onClose,
 }: {
   activeCategories: CategoryTreeNode[];
+  showChristmas: boolean;
   isOpen: boolean;
   onOpen: () => void;
   onClose: () => void;
@@ -80,6 +82,18 @@ function ShopNavItem({
           onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
         >
           <ul role="list">
+            {showChristmas && (
+              <li>
+                <Link
+                  href="/christmas"
+                  onClick={onClose}
+                  className="block px-4 py-2.5 text-sm font-bold hover:bg-zinc-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset"
+                  style={{ color: "#E0242B", "--tw-ring-color": BRAND.blue } as React.CSSProperties}
+                >
+                  🎄 Christmas
+                </Link>
+              </li>
+            )}
             {activeCategories.map((cat) => (
               <li key={cat.id}>
                 <Link
@@ -179,7 +193,13 @@ function MobileCategoryAccordion({
   );
 }
 
-export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) {
+export function SiteNav({
+  categoryTree,
+  showChristmas = false,
+}: {
+  categoryTree: CategoryTreeNode[];
+  showChristmas?: boolean;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -286,6 +306,7 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
           <div className="flex items-center gap-6 text-sm font-semibold">
             <ShopNavItem
               activeCategories={activeCategories}
+              showChristmas={showChristmas}
               isOpen={shopOpen}
               onOpen={handleShopOpen}
               onClose={handleShopClose}
@@ -479,6 +500,18 @@ export function SiteNav({ categoryTree }: { categoryTree: CategoryTreeNode[] }) 
 
               {mobileShopOpen && (
                 <ul className="flex flex-col pl-4 pb-2">
+                  {showChristmas && (
+                    <li className="border-b border-zinc-100">
+                      <Link
+                        href="/christmas"
+                        onClick={() => setOpen(false)}
+                        className="flex items-center py-4 min-h-[48px] font-bold"
+                        style={{ color: "#E0242B" }}
+                      >
+                        🎄 Christmas
+                      </Link>
+                    </li>
+                  )}
                   {activeCategories.map((cat) => (
                     <MobileCategoryAccordion
                       key={cat.id}
