@@ -57,6 +57,10 @@ export function ChristmasTree() {
             <rect width="8" height="2" y="4" fill="rgba(0,0,0,0.22)" />
             <rect width="8" height="1" y="3" fill="rgba(255,255,255,0.12)" />
           </pattern>
+          <radialGradient id="xmasStarHalo" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0" stopColor="#ffc83d" stopOpacity="0.55" />
+            <stop offset="1" stopColor="#ffc83d" stopOpacity="0" />
+          </radialGradient>
           <radialGradient id="xmasStar" cx="0.5" cy="0.5" r="0.5">
             <stop offset="0" stopColor="#fff6c9" />
             <stop offset="1" stopColor="#ffc83d" />
@@ -84,13 +88,6 @@ export function ChristmasTree() {
           );
         })}
 
-        {/* Snow caps on the tier edges */}
-        <path
-          d="M 150 232 Q 176 252 200 238 Q 226 254 252 232 L 262 246 Q 200 276 138 246 Z"
-          fill="#f6fbff"
-          opacity="0.92"
-        />
-
         {/* String lights */}
         {LIGHTS.map(([x, y, delay, color], i) => (
           <circle
@@ -106,7 +103,7 @@ export function ChristmasTree() {
 
         {/* Star */}
         <g className={styles.starGlow}>
-          <circle cx={CX} cy="52" r="34" fill="rgba(255,200,61,0.25)" />
+          <circle cx={CX} cy="56" r="46" fill="url(#xmasStarHalo)" />
           <path
             d="M 200 22 L 211 46 L 238 49 L 218 67 L 224 93 L 200 80 L 176 93 L 182 67 L 162 49 L 189 46 Z"
             fill="url(#xmasStar)"
