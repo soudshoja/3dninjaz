@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ProductCard } from "@/components/store/product-card";
-import { ChristmasTree } from "@/components/store/christmas/christmas-tree";
+import { ChristmasTreeStage } from "@/components/store/christmas/christmas-tree-stage";
 import { FloatingElements } from "@/components/store/christmas/floating-elements";
 import styles from "@/components/store/christmas/christmas.module.css";
 import { getActiveProductsByCategorySlug } from "@/lib/catalog";
@@ -50,7 +50,7 @@ export default async function ChristmasPage() {
 
           <div className={styles.treeStage}>
             <div className={styles.treeGlow} aria-hidden="true" />
-            <ChristmasTree />
+            <ChristmasTreeStage />
             <p className={styles.displayNote}>
               Our tree is a display piece and isn&rsquo;t for sale.
             </p>
