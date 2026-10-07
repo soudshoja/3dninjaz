@@ -1,344 +1,47 @@
-/* Christmas landing page. Scoped to this page: red/gold are seasonal only and
-   do not extend the brand palette. */
+/* Christmas landing page. Deliberately small: snow dots and a candy-cane
+   rule. Everything else uses the store's own Tailwind patterns. */
 
-.page {
-  --xmas-night: #0a1f3d;
-  --xmas-night-deep: #06142b;
-  --xmas-red: #e0242b;
-  --xmas-gold: #ffc83d;
-  --xmas-snow: #f6fbff;
-  --xmas-pine: #1c8a4b;
-  --xmas-pine-dark: #0f5c32;
-  background:
-    radial-gradient(1200px 520px at 72% 0%, #16407a 0%, transparent 62%),
-    linear-gradient(180deg, var(--xmas-night) 0%, var(--xmas-night-deep) 100%);
-  color: var(--xmas-snow);
-  position: relative;
-  overflow-x: clip;
-}
-
-/* ---------- Floating elements ---------- */
-
-.floaters {
+.snow {
   position: absolute;
   inset: 0;
-  pointer-events: none;
   overflow: hidden;
-  z-index: 0;
+  pointer-events: none;
+  container-type: size;
 }
 
-.floater {
+.flake {
   position: absolute;
-  top: -12%;
+  top: -4%;
   left: var(--x);
-  font-size: var(--s);
-  line-height: 1;
-  opacity: var(--o, 0.85);
-  animation:
-    fall var(--d) linear var(--delay) infinite,
-    sway calc(var(--d) / 3) ease-in-out var(--delay) infinite alternate;
-  will-change: transform;
+  width: var(--s);
+  height: var(--s);
+  border-radius: 9999px;
+  background: #b9d6ff;
+  opacity: 0.7;
+  animation: drift var(--d) linear var(--delay) infinite;
 }
 
-@keyframes fall {
-  to {
-    top: 108%;
-  }
-}
-
-@keyframes sway {
+@keyframes drift {
   from {
-    transform: translateX(-18px) rotate(-12deg);
+    transform: translate3d(0, 0, 0);
   }
   to {
-    transform: translateX(18px) rotate(12deg);
+    transform: translate3d(var(--dx), 108cqh, 0);
   }
 }
 
-/* ---------- Hero ---------- */
-
-.hero {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  gap: 2.5rem;
-  align-items: center;
-  max-width: 72rem;
-  margin: 0 auto;
-  padding: 3.5rem 1.5rem 4.5rem;
-}
-
-@media (min-width: 900px) {
-  .hero {
-    grid-template-columns: 1.05fr 0.95fr;
-    padding-top: 5rem;
-    padding-bottom: 6rem;
-  }
-}
-
-.headline {
-  font-family: var(--font-heading), sans-serif;
-  font-size: clamp(2.6rem, 8vw, 5.4rem);
-  line-height: 0.98;
-  letter-spacing: -0.01em;
-  text-wrap: balance;
-}
-
-.headlineRed {
-  color: var(--xmas-red);
-  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
-}
-
-.lede {
-  margin-top: 1.25rem;
-  max-width: 34rem;
-  font-size: 1.125rem;
-  line-height: 1.6;
-  color: rgba(246, 251, 255, 0.86);
-}
-
-.ctaRow {
-  margin-top: 2rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.cta {
-  display: inline-flex;
-  align-items: center;
-  min-height: 56px;
-  padding: 0 2rem;
-  border-radius: 999px;
-  font-weight: 700;
-  font-size: 1.125rem;
-  background: var(--xmas-red);
-  color: #fff;
-  box-shadow: 0 5px 0 #8f1218;
-  transition:
-    transform 0.12s,
-    box-shadow 0.12s;
-}
-
-.cta:hover {
-  transform: translateY(2px);
-  box-shadow: 0 3px 0 #8f1218;
-}
-
-.ctaGhost {
-  composes: cta;
-  background: transparent;
-  color: var(--xmas-snow);
-  border: 2px solid rgba(246, 251, 255, 0.55);
-  box-shadow: none;
-}
-
-.ctaGhost:hover {
-  box-shadow: none;
-  background: rgba(246, 251, 255, 0.1);
-}
-
-.cta:focus-visible {
-  outline: 3px solid var(--xmas-gold);
-  outline-offset: 3px;
-}
-
-/* ---------- Tree ---------- */
-
-.treeStage {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.treeGlow {
-  position: absolute;
-  inset: 8% 6% 4%;
-  border-radius: 50%;
-  background: radial-gradient(
-    closest-side,
-    rgba(255, 200, 61, 0.28),
-    transparent 72%
+.candy {
+  height: 10px;
+  background: repeating-linear-gradient(
+    135deg,
+    #d42426 0 12px,
+    #ffffff 12px 24px
   );
-  animation: breathe 5s ease-in-out infinite;
-}
-
-@keyframes breathe {
-  50% {
-    opacity: 0.55;
-    transform: scale(1.06);
-  }
-}
-
-/* The tree "prints" bottom to top once on load, like a 3D print. */
-.printReveal {
-  position: relative;
-  width: min(100%, 24rem);
-  clip-path: inset(100% 0 0 0);
-  animation: print 2.6s steps(48, end) 0.3s forwards;
-}
-
-@keyframes print {
-  to {
-    clip-path: inset(0 0 0 0);
-  }
-}
-
-/* 3D tree canvas */
-.treeColumn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100%;
-}
-
-.canvasWrap {
-  position: relative;
-  width: min(100%, 26rem);
-  aspect-ratio: 4 / 5;
-}
-
-.canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.replay {
-  margin-top: 0.5rem;
-  min-height: 44px;
-  padding: 0 1.25rem;
-  border-radius: 999px;
-  border: 2px solid rgba(246, 251, 255, 0.5);
-  background: transparent;
-  color: var(--xmas-snow);
-  font-weight: 700;
-  font-size: 0.9375rem;
-  cursor: pointer;
-}
-
-.replay:hover {
-  background: rgba(246, 251, 255, 0.12);
-}
-
-.replay:focus-visible {
-  outline: 3px solid var(--xmas-gold);
-  outline-offset: 3px;
-}
-
-.twinkle {
-  animation: twinkle 2.4s ease-in-out infinite;
-  animation-delay: var(--t, 0s);
-}
-
-@keyframes twinkle {
-  0%,
-  100% {
-    opacity: 0.35;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-.starGlow {
-  animation: starPulse 3s ease-in-out infinite;
-  transform-origin: center;
-  transform-box: fill-box;
-}
-
-@keyframes starPulse {
-  50% {
-    transform: scale(1.12);
-  }
-}
-
-.displayNote {
-  position: relative;
-  margin-top: 0.75rem;
-  max-width: 20rem;
-  font-size: 0.8125rem;
-  line-height: 1.4;
-  text-align: center;
-  color: rgba(246, 251, 255, 0.7);
-}
-
-/* ---------- Snow drift divider ---------- */
-
-.drift {
-  display: block;
-  width: 100%;
-  height: 56px;
-  margin-bottom: -1px;
-}
-
-/* ---------- Product section ---------- */
-
-.shelf {
-  position: relative;
-  z-index: 1;
-  background: var(--xmas-snow);
-  color: #0b1020;
-  padding: 3rem 0 6rem;
-}
-
-.shelfHead {
-  max-width: 72rem;
-  margin: 0 auto;
-  padding: 0 1.5rem 2rem;
-}
-
-.shelfTitle {
-  font-family: var(--font-heading), sans-serif;
-  font-size: clamp(1.75rem, 4vw, 2.75rem);
-  color: var(--xmas-pine-dark);
-}
-
-.grid {
-  max-width: 72rem;
-  margin: 0 auto;
-  padding: 0 1.5rem;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-}
-
-@media (min-width: 768px) {
-  .grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 1.5rem;
-  }
-}
-
-@media (min-width: 1024px) {
-  .grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-.empty {
-  max-width: 36rem;
-  margin: 0 auto;
-  padding: 2rem 1.5rem;
-  text-align: center;
-  line-height: 1.6;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .floater,
-  .treeGlow,
-  .twinkle,
-  .starGlow {
+  .flake {
     animation: none;
-  }
-  .floater {
-    top: var(--y, 20%);
-  }
-  .printReveal {
-    animation: none;
-    clip-path: none;
+    top: var(--y);
   }
 }

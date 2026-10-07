@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { BRAND } from "@/lib/brand";
+import { ChristmasHero } from "@/components/store/christmas/christmas-hero";
 import { ProductCard } from "@/components/store/product-card";
-import { ChristmasTreeStage } from "@/components/store/christmas/christmas-tree-stage";
-import { FloatingElements } from "@/components/store/christmas/floating-elements";
-import styles from "@/components/store/christmas/christmas.module.css";
 import { getActiveProductsByCategorySlug } from "@/lib/catalog";
 import { getWishlistedProductIds } from "@/actions/wishlist";
 import { CHRISTMAS_CATEGORY_SLUG } from "@/lib/seasonal";
@@ -11,10 +10,10 @@ import { CHRISTMAS_CATEGORY_SLUG } from "@/lib/seasonal";
 export const metadata: Metadata = {
   title: "Christmas",
   description:
-    "Christmas gifts 3D printed in Malaysia by kids who love making things.",
+    "Christmas gifts 3D printed to order in Kuala Lumpur and shipped across Malaysia.",
 };
 
-// Product list is driven by the admin-managed "christmas" category.
+// The grid is driven by the admin-managed "christmas" category.
 export const dynamic = "force-dynamic";
 
 export default async function ChristmasPage() {
@@ -24,93 +23,61 @@ export default async function ChristmasPage() {
   const wishedIds = await getWishlistedProductIds(products.map((p) => p.id));
 
   return (
-    <div>
-      <div className={styles.page}>
-        <FloatingElements />
-
-        <section className={styles.hero} aria-labelledby="xmas-heading">
-          <div>
-            <h1 id="xmas-heading" className={styles.headline}>
-              A very <span className={styles.headlineRed}>ninja</span>{" "}
-              Christmas.
-            </h1>
-            <p className={styles.lede}>
-              Gifts 3D printed in Malaysia by kids who love making things. Pick
-              yours early so it reaches you in time for the 25th.
-            </p>
-            <div className={styles.ctaRow}>
-              <a href="#christmas-gifts" className={styles.cta}>
-                See Christmas gifts
-              </a>
-              <Link href="/shop" className={styles.ctaGhost}>
-                Shop everything
-              </Link>
-            </div>
-          </div>
-
-          <div className={styles.treeStage}>
-            <div className={styles.treeGlow} aria-hidden="true" />
-            <ChristmasTreeStage />
-            <p className={styles.displayNote}>
-              Our tree is a display piece and isn&rsquo;t for sale.
-            </p>
-          </div>
-        </section>
-
-        {/* Snow drift into the product shelf */}
-        <svg
-          className={styles.drift}
-          viewBox="0 0 1440 56"
-          preserveAspectRatio="none"
-          aria-hidden="true"
-        >
-          <path
-            d="M0 56 L0 30 Q120 4 260 28 T540 26 T820 30 T1100 24 T1440 30 L1440 56 Z"
-            fill="#f6fbff"
-          />
-        </svg>
-      </div>
+    <>
+      <ChristmasHero />
 
       <section
         id="christmas-gifts"
-        className={styles.shelf}
-        aria-labelledby="xmas-gifts-heading"
+        className="scroll-mt-24 py-16 md:py-24 border-t border-zinc-100"
+        style={{ backgroundColor: "#FAFAFA" }}
+        aria-labelledby="christmas-gifts-heading"
       >
-        <div className={styles.shelfHead}>
-          <h2 id="xmas-gifts-heading" className={styles.shelfTitle}>
-            Christmas gifts
-          </h2>
-        </div>
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="flex flex-col items-center mb-10">
+            <span
+              className="h-1 w-16 rounded-full mb-4"
+              style={{ backgroundColor: BRAND.green }}
+              aria-hidden
+            />
+            <h2
+              id="christmas-gifts-heading"
+              className="font-[var(--font-heading)] text-4xl md:text-6xl text-center mb-3 text-zinc-900"
+            >
+              CHRISTMAS GIFTS
+            </h2>
+            <p className="text-center text-lg text-zinc-600">
+              Printed when you order. Ninja fast delivery.
+            </p>
+          </div>
 
-        {products.length > 0 ? (
-          <ul className={styles.grid}>
-            {products.map((p, i) => (
-              <li key={p.id}>
+          {products.length > 0 ? (
+            <div className="grid grid-cols-1 min-[360px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {products.map((p, i) => (
                 <ProductCard
+                  key={p.id}
                   product={p}
                   accentIndex={i}
                   isWishlisted={wishedIds.has(p.id)}
                 />
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className={styles.empty}>
-            <p>
-              Our Christmas gifts are still printing. Browse the full shop in
-              the meantime.
-            </p>
-            <p className="mt-4">
+              ))}
+            </div>
+          ) : (
+            <div className="text-center max-w-md mx-auto">
+              <p className="text-lg text-zinc-600">
+                Our Christmas gifts are still printing. Browse the full shop in
+                the meantime.
+              </p>
               <Link
                 href="/shop"
-                className="font-bold underline underline-offset-4"
+                className="mt-6 rounded-full px-8 py-4 font-bold text-lg border-2 hover:bg-white transition min-h-[60px] inline-flex items-center"
+                style={{ borderColor: BRAND.blue, color: BRAND.blue }}
               >
                 Go to the shop
               </Link>
-            </p>
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </section>
-    </div>
+    </>
   );
 }
