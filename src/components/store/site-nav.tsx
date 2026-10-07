@@ -90,7 +90,7 @@ function ShopNavItem({
                   className="block px-4 py-2.5 text-sm font-bold hover:bg-zinc-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset"
                   style={{ color: "#E0242B", "--tw-ring-color": BRAND.blue } as React.CSSProperties}
                 >
-                  🎄 Christmas
+                  Christmas
                 </Link>
               </li>
             )}
@@ -508,7 +508,7 @@ export function SiteNav({
                         className="flex items-center py-4 min-h-[48px] font-bold"
                         style={{ color: "#E0242B" }}
                       >
-                        🎄 Christmas
+                        Christmas
                       </Link>
                     </li>
                   )}
