@@ -1,0 +1,637 @@
+/* Christmas landing page, variant 1 "Night shift".
+   One theme (dark), one accent (filament orange). Every colour, duration and
+   easing below comes from the tokens defined once on .page. */
+
+.page {
+  color-scheme: dark;
+
+  /* Colour: OKLCH, neutrals tinted toward the brand ink hue (262). */
+  --xmas-bg: oklch(0.165 0.03 262);
+  --xmas-bg-2: oklch(0.2 0.034 262);
+  --xmas-surface: oklch(0.24 0.036 262);
+  --xmas-surface-2: oklch(0.275 0.038 262);
+  --xmas-glow: oklch(0.27 0.075 258);
+  --xmas-line: oklch(0.34 0.035 262);
+  --xmas-line-strong: oklch(0.62 0.03 262);
+  --xmas-ink: oklch(0.96 0.01 262);
+  --xmas-ink-2: oklch(0.83 0.02 262);
+  --xmas-ink-3: oklch(0.74 0.025 262);
+  --xmas-snow: oklch(0.93 0.03 250);
+  --xmas-focus: oklch(0.96 0.01 262);
+
+  /* The single accent: filament orange. */
+  --xmas-accent: oklch(0.74 0.17 55);
+  --xmas-accent-hi: oklch(0.79 0.16 57);
+  --xmas-accent-deep: oklch(0.52 0.14 50);
+  --xmas-accent-ink: oklch(0.2 0.04 55);
+  --xmas-accent-glow: oklch(0.74 0.17 55 / 0.4);
+
+  /* Shadows are tinted toward the background hue, never pure black. */
+  --xmas-shadow: oklch(0.09 0.05 262 / 0.6);
+
+  /* Shape: pill buttons, 16px cards. */
+  --xmas-radius: 1rem;
+
+  /* Motion personality: Playful (150 / 250 / 400ms), strong ease-out. */
+  --motion-quick: 150ms;
+  --motion-standard: 250ms;
+  --motion-slow: 400ms;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --enter-offset: 12px;
+  --stagger: 50ms;
+
+  /* Layers. */
+  --z-snow: 0;
+  --z-content: 1;
+
+  /* Production passes the store nav height here so the hero still fits. */
+  --xmas-nav-h: 0px;
+
+  position: relative;
+  isolation: isolate;
+  overflow-x: clip;
+  background: var(--xmas-bg);
+  color: var(--xmas-ink);
+  font-family: var(--font-body), sans-serif;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- Hero ---------- */
+
+.hero {
+  position: relative;
+  display: grid;
+  align-content: center;
+  min-height: calc(100dvh - var(--xmas-nav-h));
+  background: radial-gradient(
+    56rem 30rem at 78% 0%,
+    color-mix(in oklab, var(--xmas-glow) 70%, transparent) 0%,
+    transparent 68%
+  );
+}
+
+.snow {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: var(--z-snow);
+  pointer-events: none;
+  mask-image: linear-gradient(180deg, #000 70%, transparent 100%);
+}
+
+.heroInner {
+  position: relative;
+  z-index: var(--z-content);
+  display: grid;
+  gap: 2rem;
+  align-items: center;
+  width: 100%;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.5rem 3rem;
+}
+
+@media (min-width: 900px) {
+  .heroInner {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    gap: 3rem;
+    padding-top: 4rem;
+    padding-bottom: 3rem;
+  }
+}
+
+.headline {
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 400;
+  font-size: clamp(2.4rem, 5.4vw, 4.5rem);
+  line-height: 1.04;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+  color: var(--xmas-ink);
+}
+
+.lede {
+  margin-top: 1.25rem;
+  max-width: 30rem;
+  font-size: 1.1875rem;
+  line-height: 1.55;
+  color: var(--xmas-ink-2);
+  text-wrap: pretty;
+}
+
+.ctaRow {
+  margin-top: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@media (min-width: 520px) {
+  .ctaRow {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+/* ---------- Buttons ---------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  min-height: 3.25rem;
+  padding: 0 1.75rem;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  font-family: var(--font-body), sans-serif;
+  font-weight: 700;
+  font-size: 1.0625rem;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform var(--motion-quick) var(--ease-out),
+    box-shadow var(--motion-quick) var(--ease-out),
+    background-color var(--motion-quick) var(--ease-out),
+    border-color var(--motion-quick) var(--ease-out),
+    opacity var(--motion-quick) var(--ease-out);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--xmas-focus);
+  outline-offset: 3px;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btnPrimary {
+  background: var(--xmas-accent);
+  color: var(--xmas-accent-ink);
+  box-shadow:
+    0 4px 0 var(--xmas-accent-deep),
+    0 12px 24px -10px var(--xmas-accent-glow);
+}
+
+.btnPrimary .btnIcon {
+  transition: transform var(--motion-standard) var(--ease-out);
+}
+
+.btnGhost {
+  background: transparent;
+  color: var(--xmas-ink);
+  border-color: var(--xmas-line-strong);
+}
+
+.btnSmall {
+  min-height: 2.75rem;
+  padding: 0 1.125rem;
+  font-size: 0.9375rem;
+}
+
+@media (hover: hover) {
+  .btnPrimary:hover {
+    background: var(--xmas-accent-hi);
+    transform: translateY(-1px);
+    box-shadow:
+      0 5px 0 var(--xmas-accent-deep),
+      0 16px 28px -10px var(--xmas-accent-glow);
+  }
+  .btnPrimary:hover .btnIcon {
+    transform: translateY(2px);
+  }
+  .btnGhost:hover:not(:disabled) {
+    background: var(--xmas-surface);
+    border-color: var(--xmas-ink-2);
+  }
+}
+
+.btnPrimary:active {
+  background: var(--xmas-accent);
+  transform: translateY(3px) scale(0.97);
+  box-shadow:
+    0 1px 0 var(--xmas-accent-deep),
+    0 6px 14px -8px var(--xmas-accent-glow);
+}
+
+.btnGhost:active:not(:disabled) {
+  background: var(--xmas-surface-2);
+  transform: scale(0.97);
+}
+
+/* ---------- Tree stage ---------- */
+
+.treeStage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.treeGlow {
+  position: absolute;
+  inset: 4% 4% 14%;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in oklab, var(--xmas-accent) 16%, transparent),
+    transparent 72%
+  );
+  animation: breathe 6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.treeColumn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.canvasWrap {
+  position: relative;
+  /* Width follows the viewport height too, so the whole tree and its
+     controls stay inside the first screen on short laptops. */
+  width: min(100%, 26rem, max(15rem, calc((100dvh - 16rem) * 0.8)));
+  aspect-ratio: 4 / 5;
+}
+
+.canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.controls {
+  position: relative;
+  width: min(100%, 26rem);
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.readoutBlock {
+  min-width: 0;
+  flex: 1;
+}
+
+.readout {
+  display: block;
+  min-height: 1.25rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--xmas-ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.bar {
+  display: block;
+  margin-top: 0.4rem;
+  height: 3px;
+  max-width: 14rem;
+  border-radius: 999px;
+  background: var(--xmas-line);
+  overflow: hidden;
+}
+
+.barFill {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--xmas-accent);
+  transform-origin: left center;
+  transform: scaleX(0);
+}
+
+.displayNote {
+  position: relative;
+  margin-top: 0.75rem;
+  max-width: 22rem;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  text-align: center;
+  color: var(--xmas-ink-3);
+}
+
+/* SVG fallback tree (no WebGL) */
+.printReveal {
+  position: relative;
+  width: min(100%, 22rem);
+  clip-path: inset(100% 0 0 0);
+  animation: print 2.6s steps(48, end) 0.3s forwards;
+}
+
+@keyframes print {
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+.twinkle {
+  animation: twinkle 2.4s ease-in-out infinite;
+  animation-delay: var(--t, 0s);
+}
+
+@keyframes twinkle {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ---------- Gift shelf ---------- */
+
+.shelf {
+  position: relative;
+  z-index: var(--z-content);
+  background: var(--xmas-bg-2);
+  border-top: 1px solid var(--xmas-line);
+  padding: 4rem 0 6rem;
+  scroll-margin-top: calc(var(--xmas-nav-h) + 1rem);
+}
+
+/* Print layer lines fading out under the hero, the one decorative motif. */
+.shelf::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1.75rem;
+  background: repeating-linear-gradient(
+    180deg,
+    var(--xmas-line) 0 1px,
+    transparent 1px 7px
+  );
+  mask-image: linear-gradient(180deg, #000, transparent);
+  pointer-events: none;
+}
+
+.shelfHead {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 1.5rem 2rem;
+}
+
+.shelfTitle {
+  font-family: var(--font-heading), sans-serif;
+  font-weight: 400;
+  font-size: clamp(1.75rem, 3.6vw, 2.5rem);
+  line-height: 1.1;
+  color: var(--xmas-ink);
+}
+
+.shelfSub {
+  margin-top: 0.75rem;
+  max-width: 34rem;
+  font-size: 1.0625rem;
+  line-height: 1.55;
+  color: var(--xmas-ink-2);
+}
+
+.grid {
+  list-style: none;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+@media (min-width: 900px) {
+  .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.5rem;
+  }
+  .gridFeatured > li:first-child {
+    grid-column: span 2;
+    grid-row: span 2;
+  }
+}
+
+.cell {
+  min-width: 0;
+}
+
+/* Scroll reveal: transform and opacity only, CSS-driven, no JS. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .cell {
+      animation: rise linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 45%;
+    }
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(var(--enter-offset));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border: 1px solid var(--xmas-line);
+  border-radius: var(--xmas-radius);
+  background: var(--xmas-surface);
+  color: inherit;
+  text-decoration: none;
+  overflow: hidden;
+  box-shadow: 0 16px 32px -20px var(--xmas-shadow);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform var(--motion-quick) var(--ease-out),
+    border-color var(--motion-quick) var(--ease-out),
+    box-shadow var(--motion-standard) var(--ease-out);
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--xmas-focus);
+  outline-offset: 3px;
+}
+
+@media (hover: hover) {
+  .card:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in oklab, var(--xmas-accent) 60%, var(--xmas-line));
+    box-shadow: 0 22px 36px -18px var(--xmas-shadow);
+  }
+  .card:hover .mediaImg {
+    transform: scale(1.03);
+  }
+}
+
+.card:active {
+  transform: translateY(1px) scale(0.985);
+}
+
+.media {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  background:
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 5px,
+      color-mix(in oklab, var(--xmas-line) 55%, transparent) 5px 6px
+    ),
+    var(--xmas-surface-2);
+}
+
+.mediaImg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--motion-standard) var(--ease-out);
+}
+
+.mediaSoldOut {
+  opacity: 0.55;
+}
+
+.placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  color: var(--xmas-ink-3);
+}
+
+.placeholderNote {
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  text-align: center;
+  padding: 0 0.75rem;
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.875rem 1rem 1rem;
+}
+
+.cardName {
+  font-family: var(--font-body), sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--xmas-ink);
+  overflow-wrap: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.cardPrice {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--xmas-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.cardPriceSoldOut {
+  color: var(--xmas-ink-3);
+}
+
+@media (min-width: 900px) {
+  .cardFeatured .media {
+    aspect-ratio: auto;
+    flex: 1;
+    min-height: 18rem;
+  }
+  .cardFeatured .cardName {
+    font-size: 1.25rem;
+  }
+  .cardFeatured .cardPrice {
+    font-size: 1.0625rem;
+  }
+  .cardFeatured .cardBody {
+    padding: 1.125rem 1.25rem 1.25rem;
+  }
+}
+
+.empty {
+  max-width: 36rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  line-height: 1.6;
+  color: var(--xmas-ink-2);
+}
+
+.empty .btn {
+  margin-top: 1.25rem;
+}
+
+/* ---------- Entrance (the hero text, once, on load) ---------- */
+
+@media (prefers-reduced-motion: no-preference) {
+  .enter {
+    animation: rise var(--motion-slow) var(--ease-out) both;
+    animation-delay: calc(var(--i, 0) * var(--stagger));
+  }
+}
+
+/* ---------- Reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .treeGlow,
+  .twinkle {
+    animation: none;
+  }
+  .printReveal {
+    animation: none;
+    clip-path: none;
+  }
+  .btn,
+  .card,
+  .mediaImg {
+    transition-duration: 0.01ms;
+  }
+}
