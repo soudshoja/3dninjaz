@@ -580,6 +580,7 @@ export async function createWhatsAppOrder(
           addr.data.phone,
           {
             customerName: addr.data.recipientName,
+            orderId: internalOrderId,
             orderNumber: formatOrderNumber(internalOrderId),
             orderTotal: `RM ${totalStr}`,
             bankName: s.bankName ?? "",

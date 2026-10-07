@@ -166,7 +166,7 @@ function BagContent() {
 
 export default function BagPage() {
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10 md:py-14">
+    <div className="no-ios-zoom max-w-5xl mx-auto px-6 py-10 md:py-14">
       <div className="flex items-center gap-3 mb-2">
         <Shuriken className="w-7 h-7" fill={BRAND.purple} />
         <h1

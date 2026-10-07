@@ -12,7 +12,12 @@
  * Used by:
  *   - src/actions/admin-order-edit.ts (assertEditable before every mutation)
  *   - src/app/(admin)/admin/orders/[id]/page.tsx (gate edit UI rendering)
+ *
+ * See also hasActiveShipment() below — the SEPARATE, shipment-state-based
+ * gate for ship-to address editability specifically (260922-shipto).
  */
+
+import { isCancelledStatusCode } from "@/lib/delyva-delivery-status";
 
 export const LOCKED_STATUSES = [
   "paid",
@@ -62,4 +67,30 @@ export function assertCanAddItems(o: { status: string }): void {
       "Items can't be added — this order is already shipped, delivered or cancelled.",
     );
   }
+}
+
+/**
+ * 260922-shipto — Ship-to address editability gate.
+ *
+ * Deliberately keyed off the REAL courier booking state (order_shipments),
+ * NOT order.status. order.status is an admin-settable field that can drift
+ * from reality (e.g. an admin manually flips status to "shipped" without a
+ * parcel ever being booked, or a courier booking is cancelled but the order
+ * stays "shipped"). The only thing that actually matters for "is it safe to
+ * silently rewrite the address in our DB" is: does Delyva currently have a
+ * live booking with the OLD address printed on a label?
+ *
+ * True (locked) only when a shipment row exists, it has a delyvaOrderId
+ * (i.e. a booking was actually placed, not just a draft row), AND that
+ * booking's last-known statusCode is not the cancelled code (900 — see
+ * isCancelledStatusCode in src/lib/delyva-delivery-status.ts). Cancel the
+ * booking (cancelShipment in src/actions/shipping.ts) to unlock editing
+ * again.
+ */
+export function hasActiveShipment(
+  shipment: { delyvaOrderId: string | null; statusCode: number | null } | null | undefined,
+): boolean {
+  if (!shipment) return false;
+  if (!shipment.delyvaOrderId) return false;
+  return !isCancelledStatusCode(shipment.statusCode);
 }

@@ -24,7 +24,7 @@
  * Admin-content textarea fields still render in both branches.
  */
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import Image from "next/image";
 import { ShoppingBag } from "lucide-react";
 import { BRAND } from "@/lib/brand";
@@ -43,6 +43,7 @@ import type { HydratedOption, HydratedVariant } from "@/lib/variants";
 import type { PictureData } from "@/lib/image-manifest";
 import type { TextareaFieldConfig, SelectFieldConfig } from "@/lib/config-fields";
 import { customKey, CUSTOM_TEXT_SUFFIX } from "@/lib/custom-text";
+import { scrollToFirstEmpty } from "@/lib/scroll-to-first-empty";
 import type { PosAddToOrderLine } from "@/components/store/product-detail";
 
 // ============================================================================
@@ -149,6 +150,12 @@ export function SimpleProductView({
   onAddToOrder,
 }: Props) {
   const [values, setValues] = useState<Record<string, string>>({});
+
+  // Task 17 (Finding B1) — scroll target for the sticky CTA when the form
+  // isn't ready yet. Whichever of "Products" (variants) / "Customise"
+  // (input fields) is rendered gets this ref — the two are mutually
+  // exclusive per product, so there's never a duplicate id="personalise".
+  const personaliseRef = useRef<HTMLDivElement>(null);
 
   // Quick task 260501-spv — variant branch toggle. Single source of truth.
   const hasVariants = hydratedVariants.length > 0;
@@ -586,6 +593,8 @@ export function SimpleProductView({
                 "with variants". */}
             {hasVariants && (
               <div
+                id="personalise"
+                ref={personaliseRef}
                 className="rounded-3xl p-5 sm:p-6"
                 style={{
                   background: "#ffffff",
@@ -632,6 +641,8 @@ export function SimpleProductView({
                 hybrid we don't ship; the cart can't carry both shapes). */}
             {inputFields.length > 0 && (
               <div
+                id="personalise"
+                ref={personaliseRef}
                 className="rounded-3xl p-5 sm:p-6"
                 style={{
                   background: "#ffffff",
@@ -764,28 +775,44 @@ export function SimpleProductView({
 
       {/* Sticky mobile CTA */}
       <div
-        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 px-4 pb-safe-area-inset-bottom"
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 px-4"
         style={{
           backgroundColor: "rgba(247,250,244,0.96)",
           backdropFilter: "blur(12px)",
           borderTop: `2px solid ${BRAND.ink}10`,
           paddingTop: 12,
-          paddingBottom: 16,
+          paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
         }}
       >
         <button
           type="button"
-          disabled={!canAdd}
-          onClick={handleAddToBag}
-          className="w-full flex items-center justify-center gap-2 rounded-2xl px-6 py-4 text-base font-extrabold uppercase tracking-wide transition-all duration-200"
-          style={{
-            backgroundColor: canAdd ? BRAND.green : "#e2e8f0",
-            color: canAdd ? BRAND.ink : "#94a3b8",
-            cursor: canAdd ? "pointer" : "not-allowed",
-            minHeight: 54,
-            boxShadow: canAdd ? `0 4px 0 ${BRAND.greenDark}` : "none",
-          }}
-          aria-disabled={!canAdd}
+          onClick={
+            canAdd
+              ? handleAddToBag
+              : () => scrollToFirstEmpty(personaliseRef.current)
+          }
+          className="w-full flex items-center justify-center gap-2 rounded-2xl border-2 px-6 py-4 text-base font-extrabold uppercase tracking-wide transition-all duration-200"
+          style={
+            canAdd
+              ? {
+                  backgroundColor: BRAND.green,
+                  borderColor: BRAND.green,
+                  color: BRAND.ink,
+                  cursor: "pointer",
+                  minHeight: 54,
+                  boxShadow: `0 4px 0 ${BRAND.greenDark}`,
+                }
+              : {
+                  // Task 17 (Finding B1) — no longer inert: taps scroll to
+                  // the first unfilled field / the variant picker section.
+                  backgroundColor: "transparent",
+                  borderColor: BRAND.ink,
+                  color: BRAND.ink,
+                  cursor: "pointer",
+                  minHeight: 54,
+                  boxShadow: "none",
+                }
+          }
           aria-label={ctaLabel}
         >
           <ShoppingBag size={20} strokeWidth={2.5} aria-hidden="true" />

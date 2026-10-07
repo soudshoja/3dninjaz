@@ -26,7 +26,8 @@
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 import { orders, orderItems, products, productVariants } from "@/lib/db/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { canSettleBalance } from "@/lib/balance-settle";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { assertEditable, assertCanAddItems } from "@/lib/order-editable";
@@ -736,16 +737,42 @@ export async function markBalancePaid(orderId: string): Promise<ActionResult> {
   await requireAdmin();
 
   const [orderRow] = await db
-    .select({ id: orders.id, totalAmount: orders.totalAmount })
+    .select({
+      id: orders.id,
+      status: orders.status,
+      totalAmount: orders.totalAmount,
+      amountPaid: orders.amountPaid,
+    })
     .from(orders)
     .where(eq(orders.id, orderId))
     .limit(1);
   if (!orderRow) return { ok: false, error: "Order not found." };
 
-  await db
+  const check = canSettleBalance(orderRow);
+  if (!check.ok) return check;
+
+  // Conditional update: only applies if amountPaid/status are still what we
+  // validated, so a concurrent payment/cancel is never overwritten. amountPaid
+  // is set from the column itself so it always equals the current total.
+  const result = await db
     .update(orders)
-    .set({ amountPaid: orderRow.totalAmount })
-    .where(eq(orders.id, orderId));
+    .set({ amountPaid: sql`${orders.totalAmount}` })
+    .where(
+      and(
+        eq(orders.id, orderId),
+        eq(orders.status, orderRow.status),
+        eq(orders.amountPaid, orderRow.amountPaid ?? "0.00"),
+      ),
+    );
+  const header = (Array.isArray(result) ? result[0] : result) as
+    | { affectedRows?: number }
+    | undefined;
+  if (header && header.affectedRows === 0) {
+    return {
+      ok: false,
+      error: "This order changed while you were working. Refresh the page and try again.",
+    };
+  }
 
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath(`/admin/orders`);

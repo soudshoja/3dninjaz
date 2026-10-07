@@ -10,7 +10,14 @@ import { markBalancePaid } from "@/actions/admin-order-edit";
  * already-paid order and the customer paid the difference). Sets amountPaid =
  * totalAmount. Confirms first.
  */
-export function MarkBalancePaidButton({ orderId }: { orderId: string }) {
+export function MarkBalancePaidButton({
+  orderId,
+  amount,
+}: {
+  orderId: string;
+  /** Balance being settled, e.g. "24.50" - shown in the confirm prompt. */
+  amount?: string;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -18,7 +25,7 @@ export function MarkBalancePaidButton({ orderId }: { orderId: string }) {
   const markPaid = () => {
     if (
       !confirm(
-        "Mark the outstanding balance as PAID?\n\nUse this once the customer has paid the difference for the items you added.",
+        `Mark ${amount ? `RM ${amount}` : "the outstanding balance"} as received / PAID?\n\nUse this once the customer has paid the difference for the items you added.`,
       )
     )
       return;

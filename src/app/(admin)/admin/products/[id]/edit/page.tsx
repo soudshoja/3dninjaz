@@ -148,6 +148,9 @@ export default async function EditProductPage({
     thumbnailIndex: product.thumbnailIndex ?? 0,
     materialType: product.materialType,
     estimatedProductionDays: product.estimatedProductionDays,
+    // Quick task 260911-mpw — mandatory shipping weight pre-fill.
+    // getProduct() already returns this column — no query change.
+    shippingWeightKg: product.shippingWeightKg ?? null,
     isActive: product.isActive,
     isFeatured: product.isFeatured,
     categoryId: product.categoryId,

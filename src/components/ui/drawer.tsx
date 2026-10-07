@@ -57,7 +57,7 @@ const DrawerContent = React.forwardRef<
       ref={ref}
       className={cn(
         "fixed right-0 top-0 bottom-0 z-50 flex h-full w-full max-w-md flex-col overflow-hidden shadow-2xl",
-        "max-md:top-auto max-md:right-0 max-md:left-0 max-md:h-[85vh] max-md:max-w-none max-md:rounded-t-[24px]",
+        "max-md:top-auto max-md:right-0 max-md:left-0 max-md:h-[85dvh] max-md:max-w-none max-md:rounded-t-[24px]",
         className
       )}
       style={{ backgroundColor: BRAND.cream, color: BRAND.ink }}
@@ -84,6 +84,7 @@ DrawerHeader.displayName = "DrawerHeader";
 
 const DrawerFooter = ({
   className,
+  style,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
@@ -91,6 +92,13 @@ const DrawerFooter = ({
       "mt-auto p-5 border-t border-black/10 bg-white/70 backdrop-blur",
       className
     )}
+    style={{
+      // Lift the footer's own content (PayPal/WhatsApp buttons in the
+      // cart drawer and Review & Pay sheet) above the home indicator / IG
+      // bottom bar. Inert (0px) unless layout.tsx sets viewportFit: "cover".
+      paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom, 0px))",
+      ...style,
+    }}
     {...props}
   />
 );

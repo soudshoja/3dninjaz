@@ -213,6 +213,7 @@ export async function generatePaymentLink({
       if (orderRow) {
         await sendWhatsAppNotification("order_pending", orderRow.shippingPhone, {
           customerName: orderRow.shippingName,
+          orderId: orderId,
           orderNumber: formatOrderNumber(orderId),
           orderTotal: orderRow.totalAmount,
           paymentLink: `${PUBLIC_LINK_BASE}/payment-links/${token}`,

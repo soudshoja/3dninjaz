@@ -368,6 +368,7 @@ export async function submitReturnRequest(input: unknown) {
   );
   void sendWhatsAppNotification("return_requested", order.shippingPhone, {
     customerName: order.shippingName,
+    orderId: parsed.data.orderId,
     orderNumber: formatOrderNumber(parsed.data.orderId),
   }).catch(() => {});
 

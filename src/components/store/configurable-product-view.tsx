@@ -21,7 +21,8 @@ import { useState, useMemo, useRef } from "react";
 import Image from "next/image";
 import { ShoppingBag, Heart } from "lucide-react";
 import { BRAND } from "@/lib/brand";
-import { formatMYR } from "@/lib/format";
+import { formatMYR, formatFromTier } from "@/lib/format";
+import { scrollToFirstEmpty } from "@/lib/scroll-to-first-empty";
 import {
   lookupTierPrice,
   lookupTierPriceBySlotCount,
@@ -151,6 +152,7 @@ function PricePill({
   hideBasePrice = false,
   selectPriceOverride,
   isKeycapseq = false,
+  fromLabel = null,
 }: {
   outOfTable: boolean;
   maxUnitCount: number | null;
@@ -160,6 +162,9 @@ function PricePill({
   selectPriceOverride: number | null;
   /** Phase 25 — over-cap label becomes "Too many keycaps" for keycapseq fields. */
   isKeycapseq?: boolean;
+  /** Task 16 (Finding A) — "From RM 7.00" shown before the tier lookup has
+   * anything to key on (e.g. a text-keyed unit field with no input yet). */
+  fromLabel?: string | null;
 }) {
   if (outOfTable) {
     return (
@@ -181,6 +186,25 @@ function PricePill({
       >
         Select an option to see price
       </span>
+    );
+  }
+  // Task 16 (Finding A) — the tier lookup has nothing to key on yet (e.g. a
+  // text-keyed unit field before the customer types anything), but the
+  // product still has a real cheapest tier. Show "From RM X.00" instead of
+  // the flat "Enter your details to see price" dead end.
+  if (currentPrice === null && fromLabel) {
+    return (
+      <div className="flex flex-col gap-1">
+        <span
+          className="inline-flex self-start items-center rounded-full px-5 py-2 text-base font-semibold"
+          style={{ backgroundColor: "#f1f5f9", color: "#64748b", border: "2px solid #e2e8f0" }}
+        >
+          {fromLabel}
+        </span>
+        <span className="text-xs text-slate-500">
+          Final price depends on length — type your text below.
+        </span>
+      </div>
     );
   }
   if (currentPrice !== null) {
@@ -234,6 +258,9 @@ export function ConfigurableProductView({
     product.productType === "keychain" || product.productType === "vending",
   );
   const previewRef = useRef<HTMLDivElement>(null);
+  // Task 17 (Finding B1) — scroll target for the sticky CTA when the form
+  // isn't ready yet.
+  const personaliseRef = useRef<HTMLDivElement>(null);
 
   // ── Derived state ──────────────────────────────────────────────────────────
 
@@ -307,6 +334,11 @@ export function ConfigurableProductView({
     if (selectPriceOverride !== null) return selectPriceOverride;
     return basePriceBeforeOverride;
   }, [basePriceBeforeOverride, selectPriceOverride]);
+
+  // Task 16 (Finding A) — "From RM 7.00", reusing the same tested helper the
+  // shop card already uses. Computed once from priceTiers (not per-keystroke
+  // state), so it stays stable while currentPrice resolves.
+  const fromLabel = useMemo(() => formatFromTier(priceTiers), [priceTiers]);
 
   // Phase 25 — keycapseq over-cap keys off TOTAL slot count vs maxUnitCount.
   const keycapOverCap =
@@ -487,8 +519,8 @@ export function ConfigurableProductView({
     : outOfTable
     ? (keycapseqFieldId ? "Too many keycaps" : "Too many characters")
     : !requiredFilled || !customInputsSatisfied
-    ? "Fill in all fields first"
-    : "Enter your details";
+    ? (fromLabel ? `Personalise · ${fromLabel}` : "Fill in all fields first")
+    : (fromLabel ? `Personalise · ${fromLabel}` : "Enter your details");
 
   // ============================================================================
   // Render
@@ -666,6 +698,7 @@ export function ConfigurableProductView({
                   hideBasePrice={hideBasePrice}
                   selectPriceOverride={selectPriceOverride}
                   isKeycapseq={keycapseqFieldId !== null}
+                  fromLabel={fromLabel}
                 />
               </div>
 
@@ -680,6 +713,8 @@ export function ConfigurableProductView({
 
             {/* ── Personalise section card ────────────────────────────── */}
             <div
+              id="personalise"
+              ref={personaliseRef}
               className="rounded-3xl p-5 sm:p-6"
               style={{
                 background: "#ffffff",
@@ -866,28 +901,54 @@ export function ConfigurableProductView({
 
       {/* ── Sticky mobile CTA bar ────────────────────────────────────────── */}
       <div
-        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 px-4 pb-safe-area-inset-bottom"
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 px-4"
         style={{
           backgroundColor: "rgba(247,250,244,0.96)",
           backdropFilter: "blur(12px)",
           borderTop: `2px solid ${BRAND.ink}10`,
           paddingTop: 12,
-          paddingBottom: 16,
+          paddingBottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
         }}
       >
         <button
           type="button"
-          disabled={!canAdd}
-          onClick={handleAddToBag}
-          className="w-full flex items-center justify-center gap-2 rounded-2xl px-6 py-4 text-base font-extrabold uppercase tracking-wide transition-all duration-200"
-          style={{
-            backgroundColor: canAdd ? BRAND.green : "#e2e8f0",
-            color: canAdd ? BRAND.ink : "#94a3b8",
-            cursor: canAdd ? "pointer" : "not-allowed",
-            minHeight: 54,
-            boxShadow: canAdd ? `0 4px 0 ${BRAND.greenDark}` : "none",
-          }}
-          aria-disabled={!canAdd}
+          onClick={
+            canAdd
+              ? handleAddToBag
+              : () => scrollToFirstEmpty(personaliseRef.current)
+          }
+          className="w-full flex items-center justify-center gap-2 rounded-2xl border-2 px-6 py-4 text-base font-extrabold uppercase tracking-wide transition-all duration-200"
+          style={
+            canAdd
+              ? {
+                  backgroundColor: BRAND.green,
+                  borderColor: BRAND.green,
+                  color: BRAND.ink,
+                  cursor: "pointer",
+                  minHeight: 54,
+                  boxShadow: `0 4px 0 ${BRAND.greenDark}`,
+                }
+              : outOfTable
+              ? {
+                  backgroundColor: "#e2e8f0",
+                  borderColor: "#e2e8f0",
+                  color: "#94a3b8",
+                  cursor: "not-allowed",
+                  minHeight: 54,
+                  boxShadow: "none",
+                }
+              : {
+                  // Task 17 (Finding B1) — no longer inert: taps scroll to
+                  // the first unfilled field. Ink outline (no fill) signals
+                  // "not ready yet" without the old dead-grey disabled look.
+                  backgroundColor: "transparent",
+                  borderColor: BRAND.ink,
+                  color: BRAND.ink,
+                  cursor: "pointer",
+                  minHeight: 54,
+                  boxShadow: "none",
+                }
+          }
           aria-label={ctaLabel}
         >
           <ShoppingBag size={20} strokeWidth={2.5} aria-hidden="true" />

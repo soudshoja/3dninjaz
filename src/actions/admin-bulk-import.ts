@@ -131,6 +131,8 @@ export type PreviewRowValid = {
     categoryId: string | null;
     materialType: string | null;
     estimatedProductionDays: number | null;
+    // Quick task 260911-mpw — mandatory shipping weight, grams.
+    shippingWeightG: number;
     options: ParsedOption[];
     variantCount: number;
   };
@@ -249,6 +251,8 @@ export async function previewCsv(
         categoryId,
         materialType: z.material_type ?? null,
         estimatedProductionDays: z.estimated_production_days ?? null,
+        // Quick task 260911-mpw — mandatory shipping weight, grams.
+        shippingWeightG: z.shipping_weight_g,
         options,
         variantCount,
       },
@@ -307,6 +311,8 @@ export async function commitCsvImport(fileName: string): Promise<CommitResult> {
             images: v.data.images,
             materialType: v.data.materialType,
             estimatedProductionDays: v.data.estimatedProductionDays,
+            // Quick task 260911-mpw — mandatory shipping weight, grams -> kg.
+            shippingWeightKg: (v.data.shippingWeightG / 1000).toFixed(3),
             categoryId: v.data.categoryId,
             isActive: true,
             isFeatured: false,

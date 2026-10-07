@@ -129,7 +129,10 @@ export function MobileSummarySheet({
     <>
       {/* Sticky bottom dock, mobile-only */}
       <div className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t border-black/10 bg-white shadow-lg">
-        <div className="mx-auto max-w-6xl px-4 py-3 flex items-center gap-3">
+        <div
+          className="mx-auto max-w-6xl px-4 pt-3 flex items-center gap-3"
+          style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom, 0px))" }}
+        >
           <div className="flex-1">
             <p className="text-[11px] text-slate-600 leading-none">Total</p>
             <p className="font-[var(--font-heading)] text-xl leading-tight">

@@ -33,6 +33,8 @@ import { useProductDraft } from "@/hooks/use-product-draft";
 import type { ConfigField } from "@/actions/configurator";
 import { VariantEditor } from "@/components/admin/variant-editor";
 import type { HydratedOption, HydratedVariant } from "@/lib/variants";
+// Quick task 260911-mpw — mandatory shipping weight helper.
+import { parseShippingWeightGrams, kgToGrams } from "@/lib/shipping-weight";
 
 export type ProductFormInitial = {
   id: string;
@@ -44,6 +46,14 @@ export type ProductFormInitial = {
   thumbnailIndex: number;
   materialType: string | null;
   estimatedProductionDays: number | null;
+  /**
+   * Quick task 260911-mpw — mandatory shipping weight. String because
+   * mysql2 returns the decimal(8,3) column as a string; this mirrors the
+   * DB row shape (unlike the payload sent on save, which is grams as a
+   * number). Null only for the create path via ProductFormInitial being
+   * entirely absent — always non-null on an existing product row.
+   */
+  shippingWeightKg: string | null;
   isActive: boolean;
   isFeatured: boolean;
   categoryId: string | null;
@@ -169,6 +179,13 @@ export function ProductForm({
       ? String(initialData.estimatedProductionDays)
       : ""
   );
+  // Quick task 260911-mpw — mandatory shipping weight, shown/entered in
+  // grams. Empty string on the create path (no initialData) so the admin
+  // is forced to type a value.
+  const [shippingWeightG, setShippingWeightG] = useState(() => {
+    const g = kgToGrams(initialData?.shippingWeightKg);
+    return g === null ? "" : String(g);
+  });
   const [isActive, setIsActive] = useState(initialData?.isActive ?? true);
   const [isFeatured, setIsFeatured] = useState(initialData?.isFeatured ?? false);
   // Bug 3 — hide flat-rate price pill on storefront PDP.
@@ -221,6 +238,7 @@ export function ProductForm({
       subcategoryId,
       materialType,
       productionDays,
+      shippingWeightG,
       isActive,
       isFeatured,
       productType,
@@ -239,6 +257,7 @@ export function ProductForm({
       subcategoryId,
       materialType,
       productionDays,
+      shippingWeightG,
       isActive,
       isFeatured,
       productType,
@@ -270,6 +289,10 @@ export function ProductForm({
     if (typeof v.subcategoryId === "string") setSubcategoryId(v.subcategoryId);
     if (typeof v.materialType === "string") setMaterialType(v.materialType);
     if (typeof v.productionDays === "string") setProductionDays(v.productionDays);
+    // Quick task 260911-mpw — the `typeof` guard matches the existing
+    // defensive pattern here: drafts saved before this change have no
+    // such key.
+    if (typeof v.shippingWeightG === "string") setShippingWeightG(v.shippingWeightG);
     if (typeof v.isActive === "boolean") setIsActive(v.isActive);
     if (typeof v.isFeatured === "boolean") setIsFeatured(v.isFeatured);
     if (typeof v.productType === "string") {
@@ -302,6 +325,16 @@ export function ProductForm({
       (!/^\d+$/.test(productionDays) || Number(productionDays) <= 0)
     ) {
       next.productionDays = "Must be a positive whole number";
+    }
+
+    // Quick task 260911-mpw — mandatory shipping weight, required on every
+    // product type and on edit as well as create. Unlike simplePrice, an
+    // empty weight is never "no change" — every existing product has a
+    // value to pre-fill, so an empty box on the edit page means the admin
+    // deliberately cleared it.
+    const weightResult = parseShippingWeightGrams(shippingWeightG);
+    if (!weightResult.ok) {
+      next.shippingWeightG = weightResult.error;
     }
 
     // Quick task 260430-icx — simplePrice required + numeric for `simple` products.
@@ -359,6 +392,10 @@ export function ProductForm({
       materialType: materialType.trim(),
       estimatedProductionDays:
         productionDays === "" ? undefined : Number(productionDays),
+      // Quick task 260911-mpw — sent unconditionally on both create and
+      // edit, no spread-conditional like simplePrice uses; an empty weight
+      // is never "no change".
+      shippingWeightG: Number(shippingWeightG.trim()),
       isActive,
       isFeatured,
       categoryId: categoryId === NO_CATEGORY ? null : categoryId,
@@ -872,6 +909,35 @@ export function ProductForm({
             {errors.productionDays && (
               <p className="text-sm text-red-600" role="alert">{errors.productionDays}</p>
             )}
+          </div>
+          {/* Quick task 260911-mpw — mandatory shipping weight, grams. */}
+          <div id="field-shippingWeightG" className="space-y-2">
+            <Label
+              htmlFor="shippingWeightG"
+              className={errors.shippingWeightG ? "text-red-600" : ""}
+            >
+              Shipping Weight (g) *
+            </Label>
+            <Input
+              id="shippingWeightG"
+              type="text"
+              inputMode="numeric"
+              value={shippingWeightG}
+              onChange={(e) => setShippingWeightG(e.target.value)}
+              placeholder="e.g. 300"
+              aria-invalid={!!errors.shippingWeightG}
+              className={
+                errors.shippingWeightG
+                  ? "h-10 border-red-500 ring-2 ring-red-500/30 focus-visible:ring-red-500/40"
+                  : "h-10"
+              }
+            />
+            {errors.shippingWeightG && (
+              <p className="text-sm text-red-600" role="alert">{errors.shippingWeightG}</p>
+            )}
+            <p className="text-xs text-[var(--color-brand-text-muted)]">
+              Used for shipping quotes when a variant or option has no weight of its own.
+            </p>
           </div>
         </CardContent>
       </Card>
