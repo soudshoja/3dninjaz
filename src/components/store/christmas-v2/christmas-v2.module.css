@@ -583,7 +583,9 @@
 @media (hover: hover) and (pointer: fine) {
   .card:hover {
     transform: translateY(-3px);
-    border-color: color-mix(in oklch, var(--accent) 60%, var(--line));
+    /* oklab, not oklch: mixing orange with the blue-ish line colour in oklch
+       travels through magenta hues. */
+    border-color: color-mix(in oklab, var(--accent) 60%, var(--line));
     box-shadow: 0 20px 34px -16px var(--shadow-accent);
   }
 
