@@ -55,6 +55,8 @@ type ProductDetailProps = {
     options: HydratedOption[];
     hydratedVariants: HydratedVariant[];
     productType?: "stocked" | "configurable" | "keychain" | "vending" | "simple";
+    /** Admin's manual product-level sold-out override; blocks purchase regardless of stock. */
+    soldOut?: boolean;
     /** Bug 3 — when true, hide the flat-rate base-price pill on simple/configurable PDPs. */
     hideBasePrice?: boolean;
     /** Quick task 260705-azw — keychain preview body shape (default "square"). */
@@ -203,7 +205,9 @@ export function ProductDetail({
       }),
     [product.hydratedVariants],
   );
-  const soldOut = product.hydratedVariants.length > 0 && visibleVariants.length === 0;
+  const soldOut =
+    product.soldOut === true ||
+    (product.hydratedVariants.length > 0 && visibleVariants.length === 0);
 
   // Effective price display — hover-aware
   const effectivePriceDisplay = displayedHydrated

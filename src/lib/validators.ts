@@ -144,6 +144,8 @@ export const productSchema = z.object({
     .optional(),
   isActive: z.boolean().default(true),
   isFeatured: z.boolean().default(false),
+  // Optional (not default) so callers that omit it never reset the flag on update.
+  soldOut: z.boolean().optional(),
   categoryId: z.string().uuid().optional().nullable(),
   // Phase 8 (08-01) — products now pick a subcategory (which implies a
   // parent category). Nullable to keep backward compatibility while older

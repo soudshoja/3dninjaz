@@ -125,6 +125,12 @@ export async function createWhatsAppOrder(
     if (!v.product?.isActive) {
       return { ok: false, error: "One or more items are no longer available." };
     }
+    if (v.product.soldOut) {
+      return {
+        ok: false,
+        error: `${v.product.name} is sold out. Please remove it from your bag.`,
+      };
+    }
     const trackedAndOOS = v.trackStock === true && (v.stock ?? 0) <= 0;
     const allowPreorder = v.allowPreorder === true;
     const legacyOOS = v.trackStock !== true && v.inStock === false;
@@ -242,11 +248,19 @@ export async function createWhatsAppOrder(
             slug: products.slug,
             name: products.name,
             priceTiers: products.priceTiers,
+            soldOut: products.soldOut,
           })
           .from(products)
           .where(inArray(products.id, configurableProductIds))
       : [];
   const productById = new Map(configurableProductRows.map((p) => [p.id, p]));
+  const soldOutConfigurable = configurableProductRows.find((p) => p.soldOut);
+  if (soldOutConfigurable) {
+    return {
+      ok: false,
+      error: `${soldOutConfigurable.name} is sold out. Please remove it from your bag.`,
+    };
+  }
 
   // quick task 260610-kh3 — T-kh3-01: server re-validation of customInput options.
   // Identical treatment as paypal.ts — WhatsApp orders MUST NOT trust client custom text.

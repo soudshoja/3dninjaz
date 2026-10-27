@@ -334,6 +334,7 @@ export async function createProduct(
     estimatedProductionDays: productData.estimatedProductionDays ?? null,
     isActive: productData.isActive,
     isFeatured: productData.isFeatured,
+    soldOut: productData.soldOut ?? false,
     categoryId: resolvedCategoryId,
     subcategoryId: productData.subcategoryId || null,
     // Phase 19 (19-03) — persist product type chosen at creation
@@ -544,6 +545,7 @@ export async function updateProduct(
       estimatedProductionDays: productData.estimatedProductionDays ?? null,
       isActive: productData.isActive,
       isFeatured: productData.isFeatured,
+      ...(productData.soldOut !== undefined ? { soldOut: productData.soldOut } : {}),
       categoryId: resolvedCategoryId,
       subcategoryId: productData.subcategoryId || null,
       // Phase 19 (19-03) — persist product type (additive, no variant logic change)

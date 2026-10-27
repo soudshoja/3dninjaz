@@ -66,6 +66,8 @@ type Props = {
     productType?: "stocked" | "configurable" | "keychain" | "vending" | "simple";
     /** Quick task 260705-azw — keychain preview body shape (default "square"). */
     keychainShape?: "square" | "round";
+    /** Admin's manual product-level sold-out override; blocks purchase regardless of stock. */
+    soldOut?: boolean;
   };
   fields: PublicConfigField[];
   maxUnitCount: number | null;
@@ -350,7 +352,8 @@ export function ConfigurableProductView({
   // filtering if such a surface is ever added.
   void CUSTOM_TEXT_SUFFIX;
 
-  const canAdd = currentPrice !== null && requiredFilled && customInputsSatisfied && !outOfTable;
+  const productSoldOut = product.soldOut === true;
+  const canAdd = !productSoldOut && currentPrice !== null && requiredFilled && customInputsSatisfied && !outOfTable;
 
   // ── Colour values for KeychainPreview ────────────────────────────────────
   const colourFields = useMemo(() => fields.filter((f) => f.fieldType === "colour"), [fields]);
@@ -482,7 +485,9 @@ export function ConfigurableProductView({
 
   // ── CTA button label ──────────────────────────────────────────────────────
   const addLabel = onAddToOrder ? "Add to order" : "Add to Bag";
-  const ctaLabel = canAdd
+  const ctaLabel = productSoldOut
+    ? "Sold out"
+    : canAdd
     ? `${addLabel} · ${formatMYR(currentPrice!)}`
     : outOfTable
     ? (keycapseqFieldId ? "Too many keycaps" : "Too many characters")
@@ -770,12 +775,18 @@ export function ConfigurableProductView({
               </div>
 
               {/* Contextual hint below CTA */}
-              {!canAdd && !outOfTable && (
-                <p className="mt-3 text-xs text-center font-medium" style={{ color: "#64748b" }}>
-                  {requiredFilled
-                    ? "Enter your name to unlock the price"
-                    : "Fill in all required fields above to continue"}
+              {productSoldOut ? (
+                <p className="mt-3 text-xs text-center font-medium" style={{ color: "#64748b" }} role="status">
+                  Currently sold out. Check back soon!
                 </p>
+              ) : (
+                !canAdd && !outOfTable && (
+                  <p className="mt-3 text-xs text-center font-medium" style={{ color: "#64748b" }}>
+                    {requiredFilled
+                      ? "Enter your name to unlock the price"
+                      : "Fill in all required fields above to continue"}
+                  </p>
+                )
               )}
             </div>
 
