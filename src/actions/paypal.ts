@@ -171,6 +171,12 @@ export async function createPayPalOrder(
     if (!v.product?.isActive) {
       return { ok: false, error: "One or more items are no longer available." };
     }
+    if (v.product.soldOut) {
+      return {
+        ok: false,
+        error: `${v.product.name} is sold out. Please remove it from your bag.`,
+      };
+    }
     // Phase 13 (T-05-04-tampering): server-side OOS check.
     // Phase 18: allow pre-order through — only reject OOS variants when
     // allow_preorder=FALSE. Reject hard when the variant is hidden.
@@ -311,11 +317,19 @@ export async function createPayPalOrder(
             slug: products.slug,
             name: products.name,
             priceTiers: products.priceTiers,
+            soldOut: products.soldOut,
           })
           .from(products)
           .where(inArray(products.id, configurableProductIds))
       : [];
   const productById = new Map(configurableProductRows.map((p) => [p.id, p]));
+  const soldOutConfigurable = configurableProductRows.find((p) => p.soldOut);
+  if (soldOutConfigurable) {
+    return {
+      ok: false,
+      error: `${soldOutConfigurable.name} is sold out. Please remove it from your bag.`,
+    };
+  }
 
   // quick task 260610-kh3 — T-kh3-01: server re-validation of customInput options.
   // Re-read select config fields from DB for all configurable products, then
