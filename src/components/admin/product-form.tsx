@@ -56,6 +56,7 @@ export type ProductFormInitial = {
   shippingWeightKg: string | null;
   isActive: boolean;
   isFeatured: boolean;
+  soldOut?: boolean;
   categoryId: string | null;
   subcategoryId: string | null;
   // Phase 19 (19-03) — product type + lock state
@@ -188,6 +189,7 @@ export function ProductForm({
   });
   const [isActive, setIsActive] = useState(initialData?.isActive ?? true);
   const [isFeatured, setIsFeatured] = useState(initialData?.isFeatured ?? false);
+  const [soldOut, setSoldOut] = useState(initialData?.soldOut ?? false);
   // Bug 3 — hide flat-rate price pill on storefront PDP.
   const [hideBasePrice, setHideBasePrice] = useState(initialData?.hideBasePrice ?? false);
   // Quick task 260705-azw — keychain preview body shape.
@@ -241,6 +243,7 @@ export function ProductForm({
       shippingWeightG,
       isActive,
       isFeatured,
+      soldOut,
       productType,
       simplePrice,
       fields,
@@ -260,6 +263,7 @@ export function ProductForm({
       shippingWeightG,
       isActive,
       isFeatured,
+      soldOut,
       productType,
       simplePrice,
       fields,
@@ -295,6 +299,7 @@ export function ProductForm({
     if (typeof v.shippingWeightG === "string") setShippingWeightG(v.shippingWeightG);
     if (typeof v.isActive === "boolean") setIsActive(v.isActive);
     if (typeof v.isFeatured === "boolean") setIsFeatured(v.isFeatured);
+    if (typeof v.soldOut === "boolean") setSoldOut(v.soldOut);
     if (typeof v.productType === "string") {
       setProductType(v.productType as typeof productType);
     }
@@ -398,6 +403,7 @@ export function ProductForm({
       shippingWeightG: Number(shippingWeightG.trim()),
       isActive,
       isFeatured,
+      soldOut,
       categoryId: categoryId === NO_CATEGORY ? null : categoryId,
       subcategoryId: subcategoryId === NO_CATEGORY ? null : subcategoryId,
       // Phase 19 (19-03) — include productType in every save
@@ -965,6 +971,16 @@ export function ProductForm({
               </p>
             </div>
             <Switch checked={isFeatured} onCheckedChange={setIsFeatured} />
+          </label>
+          <label className="flex items-center justify-between rounded-md border border-[var(--color-brand-border)] p-3">
+            <div>
+              <p className="text-sm font-medium">Sold out</p>
+              <p className="text-xs text-[var(--color-brand-text-muted)]">
+                Shows &ldquo;Sold out&rdquo; and blocks purchase, even if stock
+                is available. Stock quantities are not changed.
+              </p>
+            </div>
+            <Switch checked={soldOut} onCheckedChange={setSoldOut} />
           </label>
           {/* Bug 3 — only relevant when product has Select fields with per-option
               prices. Hides the top flat-rate price pill on the PDP so customers

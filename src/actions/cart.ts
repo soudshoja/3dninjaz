@@ -163,7 +163,7 @@ export async function hydrateCartItems(
       const trackedOOS = v.trackStock === true && (v.stock ?? 0) <= 0;
       const allowPreorder = v.allowPreorder === true;
       const legacyOOS = v.trackStock !== true && v.inStock === false;
-      const available = (!trackedOOS || allowPreorder) && !legacyOOS;
+      const available = (!trackedOOS || allowPreorder) && !legacyOOS && !product.soldOut;
 
       const images = extractImageUrls(product.images);
       const productImage =
@@ -219,7 +219,7 @@ export async function hydrateCartItems(
         variantLabel: item.configurationData.computedSummary,  // re-use existing line-2 slot
         unitPrice: item.configurationData.computedPrice.toFixed(2),
         inStock: true,        // configurable products are always "available" if isActive
-        available: row.isActive,
+        available: row.isActive && !row.soldOut,
         productType: (row.productType === "keychain"
           ? "keychain"
           : row.productType === "vending"

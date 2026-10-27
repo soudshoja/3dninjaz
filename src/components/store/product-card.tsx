@@ -58,12 +58,17 @@ export async function ProductCard({
   // Falls back to raw variants for products not yet migrated to Phase 16.
   const allHydrated = product.hydratedVariants.length > 0 ? product.hydratedVariants : [];
   const availableVariants = allHydrated.filter(isVariantAvailable);
-  const allSoldOut = product.productType === "stocked" && allHydrated.length > 0 && availableVariants.length === 0;
+  // Admin's manual product-level sold-out flag wins over stock for every type.
+  const allSoldOut =
+    product.soldOut ||
+    (product.productType === "stocked" && allHydrated.length > 0 && availableVariants.length === 0);
 
   // Phase 19 (19-07) — configurable/keychain products use tier-based "From MYR X" label.
   // Stocked products use the existing priceRangeMYR flow — UNTOUCHED.
   let priceLabel: string;
-  if (product.productType === "configurable" || product.productType === "keychain" || product.productType === "vending" || product.productType === "simple") {
+  if (product.soldOut) {
+    priceLabel = "Sold out";
+  } else if (product.productType === "configurable" || product.productType === "keychain" || product.productType === "vending" || product.productType === "simple") {
     priceLabel = formatFromTier(product.priceTiers);
   } else if (allHydrated.length === 0) {
     priceLabel = priceRangeMYR(product.variants);
@@ -74,7 +79,7 @@ export async function ProductCard({
   }
 
   // Show SALE chip when any AVAILABLE variant has an active sale (stocked only).
-  const hasSale = product.productType === "stocked" && availableVariants.some((v) => v.isOnSale);
+  const hasSale = !product.soldOut && product.productType === "stocked" && availableVariants.some((v) => v.isOnSale);
 
   return (
     <div className="relative group">
@@ -126,7 +131,7 @@ export async function ProductCard({
             </span>
           ) : null}
 
-          {product.productType === "stocked" && allSoldOut ? <SoldOutBadge /> : null}
+          {allSoldOut ? <SoldOutBadge /> : null}
         </div>
 
         {/* Card footer — white bar with name + price */}
