@@ -153,6 +153,7 @@ export default async function EditProductPage({
     shippingWeightKg: product.shippingWeightKg ?? null,
     isActive: product.isActive,
     isFeatured: product.isFeatured,
+    soldOut: product.soldOut,
     categoryId: product.categoryId,
     subcategoryId: product.subcategoryId,
     // Phase 19 (19-03) — product type + lock state

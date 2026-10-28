@@ -96,6 +96,8 @@ export default async function ProductDetailPage({ params }: { params: Params }) 
           hydratedVariants,
           // Phase 19 (19-06) — product type discriminator
           productType: product.productType,
+          // Admin's manual product-level sold-out override
+          soldOut: product.soldOut ?? false,
           // Bug 3 — pass hide-base-price flag to view components
           hideBasePrice: product.hideBasePrice ?? false,
           // Quick task 260705-azw — keychain preview body shape

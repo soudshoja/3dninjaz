@@ -65,6 +65,8 @@ type Props = {
     category: { name: string; slug: string } | null;
     pictures?: PictureData[];
     productType?: "stocked" | "configurable" | "keychain" | "vending" | "simple";
+    /** Admin's manual product-level sold-out override; blocks purchase regardless of stock. */
+    soldOut?: boolean;
   };
   fields: PublicConfigField[];
   /** Always 1 for simple products — kept for prop-shape parity with ConfigurableProductView. */
@@ -188,7 +190,8 @@ export function SimpleProductView({
       }),
     [hydratedVariants],
   );
-  const soldOut = hasVariants && visibleVariants.length === 0;
+  const productSoldOut = product.soldOut === true;
+  const soldOut = productSoldOut || (hasVariants && visibleVariants.length === 0);
 
   // If any select field has a selected option with a `price` override, use it
   // as the effective price (last one wins if multiple selects have overrides).
@@ -284,9 +287,11 @@ export function SimpleProductView({
     ? (displayedHydrated ? Number.parseFloat(displayedHydrated.effectivePrice) : null)
     : flatPrice;
 
-  const canAdd = hasVariants
-    ? !soldOut && !!selectedHydrated
-    : flatPrice !== null && requiredFilled && customInputsSatisfied;
+  const canAdd = productSoldOut
+    ? false
+    : hasVariants
+      ? !soldOut && !!selectedHydrated
+      : flatPrice !== null && requiredFilled && customInputsSatisfied;
 
   const addItem = useCartStore((s) => s.addItem);
   const setDrawerOpen = useCartStore((s) => s.setDrawerOpen);
@@ -366,6 +371,7 @@ export function SimpleProductView({
   // CTA label — three branches: variant / flat-with-fields / flat-no-fields.
   const addLabel = onAddToOrder ? "Add to order" : "Add to Bag";
   const ctaLabel = (() => {
+    if (productSoldOut) return "Sold out";
     if (hasVariants) {
       if (soldOut) return "Out of stock";
       if (!selectedHydrated) {

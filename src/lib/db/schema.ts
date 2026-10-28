@@ -177,6 +177,10 @@ export const products = mysqlTable("products", {
   estimatedProductionDays: int("estimated_production_days"),
   isActive: boolean("is_active").notNull().default(true), // ADM-04
   isFeatured: boolean("is_featured").notNull().default(false), // D-12
+  // Manual product-level sold-out override. When TRUE the product stays listed
+  // but cannot be bought, regardless of variant stock / productType. Stock
+  // quantities are untouched so un-ticking restores the prior availability.
+  soldOut: boolean("sold_out").notNull().default(false),
   categoryId: varchar("category_id", { length: 36 }).references(
     () => categories.id
   ),
