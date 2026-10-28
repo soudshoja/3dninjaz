@@ -3,7 +3,8 @@
  *
  * Plain server module — NOT "use server". May export sync types/consts
  * AND async functions. All functions are best-effort: they throw on hard
- * failure so callers can try/catch; sendText never throws (returns boolean).
+ * failure so callers can try/catch; sendText/sendMedia never throw (they
+ * return a { ok, httpStatus, keyId, providerStatus, error } result object).
  */
 import "server-only";
 import { WHATSAPP_INSTANCE_NAME } from "@/lib/whatsapp/types";
@@ -15,13 +16,88 @@ function headers(): Record<string, string> {
   return { "Content-Type": "application/json", apikey: KEY };
 }
 
-async function evoFetch(path: string, init?: RequestInit): Promise<Response> {
+// Default 10s timeout — stops a stalled gateway from hanging a checkout
+// server action. sendMedia passes 30s (a base64 PDF upload legitimately
+// takes longer than a text send).
+async function evoFetch(
+  path: string,
+  init?: RequestInit,
+  timeoutMs = 10_000,
+): Promise<Response> {
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: { ...headers(), ...((init?.headers as Record<string, string>) ?? {}) },
     cache: "no-store",
+    signal: AbortSignal.timeout(timeoutMs),
   });
   return res;
+}
+
+export type EvoSendResult = {
+  ok: boolean;
+  httpStatus: number | null;
+  keyId: string | null;
+  providerStatus: string | null;
+  error: string | null;
+};
+
+async function parseSendResponse(res: Response): Promise<EvoSendResult> {
+  let bodyText: string | null = null;
+  let keyId: string | null = null;
+  let providerStatus: string | null = null;
+
+  try {
+    bodyText = await res.text();
+    if (bodyText) {
+      const json = JSON.parse(bodyText) as Record<string, unknown>;
+      const key = json.key as Record<string, unknown> | undefined;
+      keyId = typeof key?.id === "string" ? key.id : null;
+      providerStatus = typeof json.status === "string" ? json.status : null;
+    }
+  } catch {
+    // Tolerate a missing/unparseable body — still ok if res.ok.
+  }
+
+  if (res.ok) {
+    return { ok: true, httpStatus: res.status, keyId, providerStatus, error: null };
+  }
+
+  const errorDetail = `${res.statusText}${bodyText ? ` — ${bodyText.slice(0, 400)}` : ""}`;
+  return {
+    ok: false,
+    httpStatus: res.status,
+    keyId,
+    providerStatus,
+    error: errorDetail,
+  };
+}
+
+// AbortSignal.timeout() rejects with a DOMException named "TimeoutError"
+// (a manual abort is "AbortError"). Both mean: we gave up waiting, and the
+// gateway MAY still have accepted and delivered the message.
+export const SEND_TIMEOUT_ERROR = "timeout";
+
+function isTimeoutError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    (err.name === "TimeoutError" ||
+      err.name === "AbortError" ||
+      /aborted due to timeout/i.test(err.message))
+  );
+}
+
+function errorResult(err: unknown): EvoSendResult {
+  return {
+    ok: false,
+    httpStatus: null,
+    keyId: null,
+    providerStatus: null,
+    error: isTimeoutError(err)
+      ? SEND_TIMEOUT_ERROR
+      : err instanceof Error
+        ? err.message
+        : String(err),
+  };
 }
 
 /**
@@ -113,29 +189,34 @@ export async function logout(
 }
 
 /**
- * Send a text message via Evolution. Returns true on HTTP 2xx, false otherwise.
- * Never throws.
+ * Send a text message via Evolution.
+ *
+ * Returns a result object — never throws, never returns a bare boolean.
+ * `keyId` (Evolution's message key.id) is what the ack webhook later
+ * correlates against; `providerStatus` (e.g. "PENDING") seeds ack_rank.
  */
 export async function sendText(opts: {
   number: string;
   text: string;
   instanceName?: string;
-}): Promise<boolean> {
+}): Promise<EvoSendResult> {
   const name = opts.instanceName ?? WHATSAPP_INSTANCE_NAME;
   try {
     const res = await evoFetch(`/message/sendText/${name}`, {
       method: "POST",
       body: JSON.stringify({ number: opts.number, text: opts.text }),
     });
-    return res.ok;
-  } catch {
-    return false;
+    return await parseSendResponse(res);
+  } catch (err) {
+    return errorResult(err);
   }
 }
 
 /**
- * Send a media document via Evolution. Returns true on HTTP 2xx, false otherwise.
- * Never throws. Best-effort — swallows all errors.
+ * Send a media document via Evolution.
+ *
+ * Returns a result object — never throws. Uses a 30s timeout (a base64 PDF
+ * upload legitimately takes longer than a text send).
  *
  * @param number   - E.164 MSISDN without the + prefix, e.g. "601125434730"
  * @param base64   - Raw base64-encoded file data (no data: URI prefix)
@@ -148,22 +229,26 @@ export async function sendMedia(opts: {
   fileName: string;
   caption?: string;
   instanceName?: string;
-}): Promise<boolean> {
+}): Promise<EvoSendResult> {
   const name = opts.instanceName ?? WHATSAPP_INSTANCE_NAME;
   try {
-    const res = await evoFetch(`/message/sendMedia/${name}`, {
-      method: "POST",
-      body: JSON.stringify({
-        number: opts.number,
-        mediatype: "document",
-        media: opts.base64,
-        fileName: opts.fileName,
-        caption: opts.caption ?? "",
-      }),
-    });
-    return res.ok;
-  } catch {
-    return false;
+    const res = await evoFetch(
+      `/message/sendMedia/${name}`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          number: opts.number,
+          mediatype: "document",
+          media: opts.base64,
+          fileName: opts.fileName,
+          caption: opts.caption ?? "",
+        }),
+      },
+      30_000,
+    );
+    return await parseSendResponse(res);
+  } catch (err) {
+    return errorResult(err);
   }
 }
 

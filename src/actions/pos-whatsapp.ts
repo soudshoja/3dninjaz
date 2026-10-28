@@ -80,6 +80,7 @@ export async function sendPosPaymentLinkWhatsApp(
   // Fire the order_pending WhatsApp notification — best-effort, no await on errors.
   void sendWhatsAppNotification("order_pending", orderRow.shippingPhone, {
     customerName: orderRow.shippingName ?? "",
+    orderId: orderId,
     orderNumber,
     orderTotal: orderRow.totalAmount ?? "",
     paymentLink,

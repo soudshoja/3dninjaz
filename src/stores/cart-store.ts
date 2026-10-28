@@ -24,6 +24,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { hashConfigurationData } from "@/lib/config-hash";
 import type { ConfigurationData } from "@/lib/config-fields";
+import { createSafeStorage } from "@/lib/safe-storage";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -196,8 +197,12 @@ export const useCartStore = create<CartState>()(
     }),
     {
       name: "print-ninjaz-cart-v2", // Phase 16 key bump — auto-clears v1 carts
+      // Task 10 (IG WebView hardening): wrap localStorage so a synchronous
+      // setItem throw (quota exceeded, private-mode SecurityError, storage
+      // disabled by an in-app WebView) can never escape into addItem()'s
+      // caller — the in-memory state update still applies either way.
       storage: createJSONStorage(() =>
-        isBrowser ? localStorage : noopStorage,
+        isBrowser ? createSafeStorage(() => localStorage) : noopStorage,
       ),
       version: 3, // Phase 19: bumped from 2 to accommodate ConfigurableCartItem shape
       migrate: (persisted, version) => {

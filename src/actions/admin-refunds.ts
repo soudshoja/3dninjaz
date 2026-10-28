@@ -129,6 +129,7 @@ export async function issueRefund(
   );
   void sendWhatsAppNotification("order_refunded", row.shippingPhone, {
     customerName: row.shippingName,
+    orderId: input.orderId,
     orderNumber: formatOrderNumber(input.orderId),
     refundAmount: `RM ${newRefunded.toFixed(2)}`,
   }).catch(() => {});

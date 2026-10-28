@@ -71,6 +71,39 @@ export function assertValidTransition(
 }
 
 /**
+ * Idempotency gate for the "order shipped" customer notification
+ * (email + WhatsApp) fired from the admin manual status-change action
+ * (`updateOrderStatus` in src/actions/admin-orders.ts).
+ *
+ * Two distinct ways an order can already have been notified as shipped:
+ *   1. `bookShipment()` in src/actions/shipping.ts sends its own
+ *      "order_shipped" notification at booking time (unless explicitly
+ *      suppressed). A real Delyva booking always leaves exactly one row in
+ *      `orderShipments` (unique per order) — `hasShipmentRow` detects this.
+ *   2. The order was already `shipped` before this call (re-submission,
+ *      double-click, or a race) — `previousStatus` detects this. In
+ *      practice `assertValidTransition` already rejects a shipped->shipped
+ *      transition before this helper is reached, but the check is kept
+ *      here too so the notify decision does not silently depend on that
+ *      unrelated state-machine rule.
+ *
+ * Mirrors the pattern of `shouldNotifyDelivered` in
+ * src/lib/delyva-delivery-status.ts. Only notify when transitioning INTO
+ * "shipped" AND neither of the above already happened.
+ */
+export function shouldNotifyShipped(params: {
+  newStatus: OrderStatus;
+  previousStatus: OrderStatus | string | null | undefined;
+  hasShipmentRow: boolean;
+}): boolean {
+  return (
+    params.newStatus === "shipped" &&
+    params.previousStatus !== "shipped" &&
+    !params.hasShipmentRow
+  );
+}
+
+/**
  * Detects free-text manual lines by their sentinel product/variant IDs.
  * Real products have UUID-shaped ids; the literal string 'manual' cannot collide
  * with a real UUID. Per D-06/D-07 (Phase 20).

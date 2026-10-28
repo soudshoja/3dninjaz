@@ -110,6 +110,7 @@ async function expireStaleReturnsAdmin(
           if (orderRow) {
             await sendWhatsAppNotification("return_expired", orderRow.shippingPhone, {
               customerName: orderRow.shippingName,
+              orderId: r.orderId,
               orderNumber: formatOrderNumber(r.orderId),
             });
           }
@@ -246,6 +247,7 @@ export async function approveOrderRequest(
             : "within 3 days";
           await sendWhatsAppNotification("return_approved", orderRow?.shippingPhone, {
             customerName: orderRow?.shippingName,
+            orderId: result.orderId,
             orderNumber: formatOrderNumber(result.orderId),
             shipByDate,
           });
@@ -276,6 +278,7 @@ export async function approveOrderRequest(
             }).catch((e) => console.error("[approveOrderRequest] cancel email failed", e));
             await sendWhatsAppNotification("order_cancelled", orderRow.shippingPhone, {
               customerName: orderRow.shippingName,
+              orderId: result.orderId,
               orderNumber: formatOrderNumber(result.orderId),
               reason: "Your cancellation request has been approved.",
             });
@@ -337,6 +340,7 @@ export async function rejectOrderRequest(
           .limit(1);
         await sendWhatsAppNotification("return_rejected", orderRow?.shippingPhone, {
           customerName: orderRow?.shippingName,
+          orderId: req.orderId,
           orderNumber: formatOrderNumber(req.orderId),
           reason: adminNotes ?? "No reason provided.",
         });
@@ -397,6 +401,7 @@ export async function markReturnReceived(
         .limit(1);
       await sendWhatsAppNotification("return_received", orderRow?.shippingPhone, {
         customerName: orderRow?.shippingName,
+        orderId: req.orderId,
         orderNumber: formatOrderNumber(req.orderId),
       });
     } catch { /* best-effort */ }

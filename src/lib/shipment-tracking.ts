@@ -17,6 +17,10 @@
 // ShipmentRow satisfies this shape via structural typing.
 
 import type { OrderDetails } from "@/lib/delyva";
+import {
+  isDeliveredStatusCode,
+  isCancelledStatusCode,
+} from "@/lib/delyva-delivery-status";
 
 export type ShipmentMirrorRow = {
   orderId: string;
@@ -38,17 +42,19 @@ export type ShipmentMirrorRow = {
 // surfaces — any new Delyva field we expose must be added here once and the
 // two rendering components pick it up for free.
 //
-// Status semantics (observed, not documented by Delyva):
-//   <  90  : pre-booking / draft           → "Awaiting pickup"
-//   = 90   : cancelled
-//   100-199: picked up / collected
-//   200-299: in transit / out for delivery
-//   300-399: last-mile / arrived at hub
-//   400-499: delivered (terminal, good)
-//   500    : failed / returned / exception
+// Status semantics — see src/lib/delyva-delivery-status.ts for the verified
+// (2026-09-16, live Delyva account) numeric facts and the single source of
+// truth for the delivered/cancelled decision. Do NOT re-derive a second copy
+// of that logic here.
+//   110    : label printed
+//   700+   : delivered (terminal, good) — EXCEPT 900
+//   900    : cancelled (terminal)
+//   0/100/500/600: not authoritatively documented — no customer-facing
+//                  delivered/cancelled label may be keyed off these.
 //
-// `delivered` is anything >= 400 that is NOT 500. `cancelled` is exactly 90.
-// Everything else is "in transit".
+// `delivered` = `isDeliveredStatusCode(statusCode)` (>= 700, excluding 900).
+// `cancelled` = `isCancelledStatusCode(statusCode)` (=== 900).
+// Everything else renders as an intermediate bucket (see bucketForStatusCode).
 // ============================================================================
 
 export type ShipmentTimelineEvent = {
@@ -70,9 +76,9 @@ export type ShipmentTrackingView = {
   statusCode: number | null;
   /** Latest human-readable statusMessage from Delyva. */
   statusMessage: string | null;
-  /** `statusCode >= 400 && statusCode !== 500` — terminal good state. */
+  /** `isDeliveredStatusCode(statusCode)` — statusCode >= 700, excluding 900. */
   delivered: boolean;
-  /** `statusCode === 90` — cancelled booking. */
+  /** `isCancelledStatusCode(statusCode)` — statusCode === 900. */
   cancelled: boolean;
   /** Newest-first list of delivery events. */
   timeline: ShipmentTimelineEvent[];
@@ -174,9 +180,8 @@ export function buildTrackingView(args: {
   const statusMessage =
     live?.statusMessage ?? live?.status ?? shipment.statusMessage ?? null;
 
-  const delivered =
-    typeof statusCode === "number" && statusCode >= 400 && statusCode !== 500;
-  const cancelled = statusCode === 90;
+  const delivered = isDeliveredStatusCode(statusCode);
+  const cancelled = isCancelledStatusCode(statusCode);
 
   const timeline = (live?.tracking ?? []).reduce<ShipmentTimelineEvent[]>(
     (acc, evt) => {
@@ -333,7 +338,11 @@ export function bucketForStatusCode(
 ): TrackingBucket {
   if (!hasShipment) return "awaiting";
   if (code === null) return "awaiting";
-  if (code === 90) return "cancelled";
+  // Numeric-only, verified thresholds — see delyva-delivery-status.ts.
+  // Cancelled (900) must be checked before the delivered check, since 900
+  // is numerically >= the delivered threshold too.
+  if (isCancelledStatusCode(code)) return "cancelled";
+  if (isDeliveredStatusCode(code)) return "delivered";
   if (code === 500) {
     // Delyva double-books code 500: docs say "failed delivery", but the live
     // API also returns 500 with status "ready" for a freshly-created
@@ -346,7 +355,6 @@ export function bucketForStatusCode(
     if (opts?.hasProgress === false) return "awaiting";
     return "exception";
   }
-  if (code >= 400) return "delivered";
   if (code >= 300) return "out_for_delivery";
   if (code >= 200) return "in_transit";
   if (code >= 100) return "picked_up";

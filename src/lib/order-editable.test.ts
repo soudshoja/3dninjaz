@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isOrderEditable, assertEditable } from "./order-editable";
+import { isOrderEditable, assertEditable, hasActiveShipment } from "./order-editable";
 
 const EDITABLE_STATUSES = [
   "pending",
@@ -85,5 +85,43 @@ describe("assertEditable", () => {
         assertEditable({ status, paypalCaptureId: null }),
       ).toThrow();
     }
+  });
+});
+
+// 260922-shipto — hasActiveShipment is the SEPARATE gate for ship-to address
+// editability. Deliberately independent of order.status.
+describe("hasActiveShipment", () => {
+  it("returns false when there is no shipment row at all", () => {
+    expect(hasActiveShipment(null)).toBe(false);
+    expect(hasActiveShipment(undefined)).toBe(false);
+  });
+
+  it("returns false when a row exists but has no delyvaOrderId (draft-only)", () => {
+    expect(
+      hasActiveShipment({ delyvaOrderId: null, statusCode: null }),
+    ).toBe(false);
+  });
+
+  it("returns true when a real booking exists and is not cancelled", () => {
+    expect(
+      hasActiveShipment({ delyvaOrderId: "DLV-123", statusCode: 110 }),
+    ).toBe(true);
+    // statusCode null (not yet synced) still counts as active — a
+    // delyvaOrderId means the booking was placed.
+    expect(
+      hasActiveShipment({ delyvaOrderId: "DLV-123", statusCode: null }),
+    ).toBe(true);
+  });
+
+  it("returns false when the booking's statusCode is the cancelled code (900)", () => {
+    expect(
+      hasActiveShipment({ delyvaOrderId: "DLV-123", statusCode: 900 }),
+    ).toBe(false);
+  });
+
+  it("returns true for a delivered booking (700) — delivered is still a real booking, not cancelled", () => {
+    expect(
+      hasActiveShipment({ delyvaOrderId: "DLV-123", statusCode: 700 }),
+    ).toBe(true);
   });
 });
