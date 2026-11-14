@@ -83,3 +83,6 @@ public/logo-original-backup.png
 # Phase 25-02 — transient keycap-icon extraction staging (renamed to catalog
 # ids + deleted in Task 3; never committed). See scripts/extract-keycap-icons.ts
 /public/icons/keycaps/_staging/
+
+# Accounting v2 sheet import: private financial data (repo is public, never commit)
+/.planning/data/private/
