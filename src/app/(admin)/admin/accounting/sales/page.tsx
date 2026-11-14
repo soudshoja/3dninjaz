@@ -4,6 +4,9 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
 import { getSalesReport } from "@/lib/accounting";
+import { resolveRange, rangeToQuery } from "@/lib/date-range";
+import { DateRangePicker } from "@/components/admin/date-range-picker";
+import { Notice } from "@/components/admin/accounting-ui";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -11,30 +14,20 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-/** Default range: first day of current month → today (YYYY-MM-DD). */
-function defaultRange(): { from: string; to: string } {
-  const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  const iso = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-      d.getDate(),
-    ).padStart(2, "0")}`;
-  return { from: iso(from), to: iso(now) };
-}
+const BUCKET_NOUN = { day: "day", week: "week", month: "month" } as const;
 
 export default async function SalesReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string }>;
+  searchParams: Promise<{ range?: string; from?: string; to?: string }>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
-  const def = defaultRange();
-  const dateRe = /^\d{4}-\d{2}-\d{2}$/;
-  const from = sp.from && dateRe.test(sp.from) ? sp.from : def.from;
-  const to = sp.to && dateRe.test(sp.to) ? sp.to : def.to;
+  const range = resolveRange(sp, { defaultPreset: "this_month" });
 
-  const rows = await getSalesReport({ from, to });
+  const rows = await getSalesReport({ from: range.from, to: range.to, bucket: range.bucket });
+  const lowCoverage = rows.some((r) => r.grossMargin == null);
+  const noun = BUCKET_NOUN[range.bucket];
 
   return (
     <main
@@ -53,53 +46,20 @@ export default async function SalesReportPage({
           Sales report
         </h1>
         <p className="mt-1 text-slate-600">
-          Monthly revenue, COGS, shipping, PayPal fees and profit from paid
-          orders in the selected range.
+          {range.label}, one row per {noun}. Sales exclude shipping, which is passed through to
+          the courier.
         </p>
 
-        {/* Date-range filter (server-side; no client JS → no hydration risk) */}
-        <form method="get" className="mb-6 mt-4 flex flex-wrap items-end gap-3">
-          <div>
-            <label htmlFor="from" className="block text-xs font-semibold mb-1">
-              From
-            </label>
-            <input
-              id="from"
-              name="from"
-              type="date"
-              defaultValue={from}
-              className="rounded-xl border-2 px-3 py-2 text-sm min-h-[44px]"
-              style={{ borderColor: `${BRAND.ink}33` }}
-            />
-          </div>
-          <div>
-            <label htmlFor="to" className="block text-xs font-semibold mb-1">
-              To
-            </label>
-            <input
-              id="to"
-              name="to"
-              type="date"
-              defaultValue={to}
-              className="rounded-xl border-2 px-3 py-2 text-sm min-h-[44px]"
-              style={{ borderColor: `${BRAND.ink}33` }}
-            />
-          </div>
-          <button
-            type="submit"
-            className="rounded-full px-5 py-2 font-semibold text-white min-h-[44px]"
-            style={{ backgroundColor: BRAND.ink }}
-          >
-            Apply
-          </button>
+        <div className="mb-6 mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <DateRangePicker current={range} />
           <a
-            href={`/api/admin/accounting/sales-export?from=${from}&to=${to}`}
-            className="inline-flex items-center justify-center rounded-full border-2 px-5 py-2 font-semibold min-h-[44px]"
+            href={`/api/admin/accounting/sales-export?${rangeToQuery(range)}`}
+            className="inline-flex items-center justify-center rounded-full border-2 px-5 py-2 font-semibold min-h-[44px] shrink-0"
             style={{ borderColor: `${BRAND.ink}33`, color: BRAND.ink }}
           >
             Export CSV
           </a>
-        </form>
+        </div>
 
         {rows.length === 0 ? (
           <div
@@ -107,6 +67,9 @@ export default async function SalesReportPage({
             style={{ backgroundColor: "#ffffff" }}
           >
             <p className="text-lg font-bold">No paid orders in this range.</p>
+            <p className="mt-1 text-sm text-slate-600">
+              Pick a longer range, or All time, to see earlier sales.
+            </p>
           </div>
         ) : (
           <div
@@ -121,42 +84,41 @@ export default async function SalesReportPage({
                     className="text-left"
                     style={{ backgroundColor: `${BRAND.ink}0d` }}
                   >
-                    <th className="p-3">Month</th>
-                    <th className="p-3 text-right">Revenue</th>
-                    <th className="p-3 text-right">COGS</th>
-                    <th className="p-3 text-right">Shipping</th>
-                    <th className="p-3 text-right">PayPal fees</th>
-                    <th className="p-3 text-right">Profit</th>
+                    <th className="p-3 capitalize">{noun}</th>
                     <th className="p-3 text-right">Orders</th>
+                    <th className="p-3 text-right">Sales excl. shipping</th>
+                    <th className="p-3 text-right">Shipping collected</th>
+                    <th className="p-3 text-right">PayPal fees</th>
+                    <th className="p-3 text-right">Product cost</th>
+                    <th className="p-3 text-right">Gross margin</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((r) => (
                     <tr
-                      key={r.month}
+                      key={r.bucket}
                       className="border-t border-black/10 hover:bg-slate-50"
                     >
-                      <td className="p-3 font-semibold">{r.month}</td>
-                      <td className="p-3 text-right tabular-nums">
-                        {formatMYR(r.revenue)}
+                      <td className="p-3 font-semibold whitespace-nowrap">{r.label}</td>
+                      <td className="p-3 text-right tabular-nums">{r.orderCount}</td>
+                      <td className="p-3 text-right tabular-nums">{formatMYR(r.sales)}</td>
+                      <td className="p-3 text-right tabular-nums text-slate-500">
+                        {formatMYR(r.shippingCollected)}
                       </td>
-                      <td className="p-3 text-right tabular-nums">
-                        {formatMYR(r.cogs)}
-                      </td>
-                      <td className="p-3 text-right tabular-nums">
-                        {formatMYR(r.shipping)}
-                      </td>
-                      <td className="p-3 text-right tabular-nums">
-                        {formatMYR(r.paypalFees)}
-                      </td>
+                      <td className="p-3 text-right tabular-nums">{formatMYR(r.paypalFees)}</td>
+                      <td className="p-3 text-right tabular-nums">{formatMYR(r.productCost)}</td>
                       <td
                         className="p-3 text-right tabular-nums font-semibold"
-                        style={{ color: r.profit >= 0 ? BRAND.green : "#dc2626" }}
+                        style={{
+                          color:
+                            r.grossMargin == null
+                              ? "#64748b"
+                              : r.grossMargin >= 0
+                                ? BRAND.green
+                                : "#dc2626",
+                        }}
                       >
-                        {formatMYR(r.profit)}
-                      </td>
-                      <td className="p-3 text-right tabular-nums">
-                        {r.orderCount}
+                        {r.grossMargin == null ? "Not enough cost data" : formatMYR(r.grossMargin)}
                       </td>
                     </tr>
                   ))}
@@ -167,39 +129,29 @@ export default async function SalesReportPage({
             {/* Mobile card list — shown below md */}
             <div className="md:hidden divide-y divide-black/10">
               {rows.map((r) => (
-                <div key={r.month} className="p-4 space-y-2">
-                  <p className="font-bold text-base">{r.month}</p>
+                <div key={r.bucket} className="p-4 space-y-2">
+                  <p className="font-bold text-base">{r.label}</p>
                   <dl className="space-y-1 text-sm">
+                    <Line label="Orders" value={String(r.orderCount)} />
+                    <Line label="Sales excl. shipping" value={formatMYR(r.sales)} strong />
+                    <Line label="Shipping collected" value={formatMYR(r.shippingCollected)} />
+                    <Line label="PayPal fees" value={formatMYR(r.paypalFees)} />
+                    <Line label="Product cost" value={formatMYR(r.productCost)} />
                     <div className="flex items-center justify-between gap-2">
-                      <dt className="text-slate-600">Revenue</dt>
-                      <dd className="tabular-nums font-semibold">
-                        {formatMYR(r.revenue)}
-                      </dd>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <dt className="text-slate-600">COGS</dt>
-                      <dd className="tabular-nums">{formatMYR(r.cogs)}</dd>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <dt className="text-slate-600">Shipping</dt>
-                      <dd className="tabular-nums">{formatMYR(r.shipping)}</dd>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <dt className="text-slate-600">PayPal fees</dt>
-                      <dd className="tabular-nums">{formatMYR(r.paypalFees)}</dd>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <dt className="text-slate-600">Profit</dt>
+                      <dt className="text-slate-600">Gross margin</dt>
                       <dd
-                        className="tabular-nums font-semibold"
-                        style={{ color: r.profit >= 0 ? BRAND.green : "#dc2626" }}
+                        className="tabular-nums font-semibold text-right"
+                        style={{
+                          color:
+                            r.grossMargin == null
+                              ? "#64748b"
+                              : r.grossMargin >= 0
+                                ? BRAND.green
+                                : "#dc2626",
+                        }}
                       >
-                        {formatMYR(r.profit)}
+                        {r.grossMargin == null ? "Not enough cost data" : formatMYR(r.grossMargin)}
                       </dd>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <dt className="text-slate-600">Orders</dt>
-                      <dd className="tabular-nums">{r.orderCount}</dd>
                     </div>
                   </dl>
                 </div>
@@ -207,7 +159,28 @@ export default async function SalesReportPage({
             </div>
           </div>
         )}
+
+        {lowCoverageNote(lowCoverage)}
       </div>
     </main>
+  );
+}
+
+function lowCoverageNote(low: boolean) {
+  if (!low) return null;
+  return (
+    <Notice>
+      Gross margin is hidden for periods where fewer than 90% of order lines have a product
+      cost. Add product costs to fill it in.
+    </Notice>
+  );
+}
+
+function Line({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <dt className="text-slate-600">{label}</dt>
+      <dd className={`tabular-nums ${strong ? "font-semibold" : ""}`}>{value}</dd>
+    </div>
   );
 }

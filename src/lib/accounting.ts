@@ -1,389 +1,497 @@
 import "server-only";
 
 import { db } from "@/lib/db";
-import {
-  orders,
-  orderItems,
-  orderShipments,
-  shippingConfig,
-  expenses,
-  payouts,
-  assets,
-} from "@/lib/db/schema";
-import { and, gte, lt, inArray, eq, sql } from "drizzle-orm";
+import { expenses, assets, assetPayments, incomeEntries, storeSettings } from "@/lib/db/schema";
+import { and, gte, lte, sql, eq, type SQL } from "drizzle-orm";
 import { toNum } from "@/lib/profit";
+import {
+  type DateRange,
+  type RangeBucket,
+  bucketForRange,
+  bucketKeyForInstant,
+  bucketLabel,
+} from "@/lib/date-range";
+import {
+  fetchPaidOrders,
+  fetchOrderLines,
+  orderProductSales,
+  orderShippingKept,
+  orderReceipts,
+  type PaidOrderRow,
+  type PaidOrderItemRow,
+} from "@/lib/paid-orders";
+import {
+  round2,
+  computeNetProfitCash,
+  computeGrossMargin,
+  computeNetPosition,
+  costCoverage,
+  hasEnoughCostData,
+} from "@/lib/accounting-math";
+import { PROFIT_INCOME_KINDS } from "@/lib/accounting-types";
 
 // ============================================================================
-// Accounting aggregation engine (cash basis).
+// Accounting aggregation engine, split into three views (see accounting-math):
 //
-// Sales, COGS, shipping cost, and PayPal fees are DERIVED from paid orders —
-// nothing is double-entered. Expenses/assets/payouts come from their tables.
+//   getCashSummary   View A  Net profit (cash)  - never subtracts product cost
+//   getGrossMargin   View B  Gross margin       - never subtracts expenses
+//   getNetPosition   View C  Net position       - View A + assets + funding
+//   getAccountBalances (account-balances.ts)    - where the money sits
 //
-//   Profit = Sales − COGS − Shipping − PayPalFees − Expenses
-//   Sales      = Σ(amountPaid − refundedAmount)        [orders with amountPaid > 0]
-//   COGS       = Σ(unitCost × qty) + Σ extraCost
-//   Shipping   = Σ actual courier base cost (resolveShippingCost)
-//   PayPalFees = Σ paypalFee
-//   Expenses   = Σ expenses.amount (date-filtered)
-//   Assets are EXCLUDED from profit.
+// Shipping is a pass-through (customer pays, courier gets it): it is excluded
+// from sales and from cost, so there is no courier cost or markup logic here.
 //
-// MariaDB notes (CLAUDE.md): no LATERAL joins → manual multi-query hydration;
-// mysql2 returns DECIMAL/LONGTEXT as strings → toNum before arithmetic.
+// Orders come from paid-orders.ts (the single shared paid-order filter, MYT
+// boundaries). Expenses/income/asset dates are plain "YYYY-MM-DD" strings, so
+// they are compared as strings against the inclusive range.
 //
-// Date handling: order date bounds are parsed UTC-consistently (date-only
-// strings → UTC midnight) with an EXCLUSIVE next-day upper bound, matching the
-// convention in admin-payments.ts. The sales-report month bucket uses the same
-// UTC basis (toISOString) so filter and bucket agree.
+// MariaDB notes (CLAUDE.md): no LATERAL joins -> manual multi-query hydration;
+// mysql2 returns DECIMAL as strings -> toNum before arithmetic.
 // ============================================================================
 
-function round2(n: number): number {
-  return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
-}
+export type { DateRange } from "@/lib/date-range";
+export { getAccountBalances } from "@/lib/account-balances";
+export type { AccountBalances } from "@/lib/account-balances";
 
-/** Date range as inclusive "YYYY-MM-DD" strings. null = unbounded. */
-export type DateRange = { from: string | null; to: string | null };
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
-export type AccountingSummary = {
-  sales: number;
-  cogs: number;
-  shipping: number;
+export type CashSummary = {
+  /** Product sales excluding shipping, net of refunds. */
+  productSales: number;
+  /** Shipping collected from customers. Information only, never revenue. */
+  shippingCollected: number;
+  /** Receipts including shipping, net of refunds. Information only. */
+  receipts: number;
+  /** Income entries of kind project | event | other (never website sales). */
+  otherIncome: number;
   paypalFees: number;
   expensesTotal: number;
-  profit: number;
+  /** View A. */
+  netProfit: number;
   orderCount: number;
-  /** Orders where courier cost had to be estimated from markup config. */
-  missingShippingCostCount: number;
-  /** Line items with no cost price recorded (COGS understated). */
-  missingItemCostCount: number;
-  /** Paid orders whose PayPal fee isn't captured yet (fees understated). */
+  /** Paid orders that went through PayPal but have no fee captured yet. */
   missingPaypalFeeCount: number;
+  /** Paid orders with no payment method (they reach no balance). */
+  unknownMethodCount: number;
+  /** RM (absolute) of expenses and income dated by estimate inside the range. */
+  estimatedDateAmount: number;
 };
 
-export type AccountBalances = {
-  paypal: number;
-  bank: number;
-  cash: number;
-  totalAssets: number;
-  /** Paid orders whose PayPal net isn't captured yet (balance understated). */
-  paypalNetMissingCount: number;
+/** Kept as the name existing callers (admin-accounting.ts) import. */
+export type AccountingSummary = CashSummary;
+
+export type GrossMarginSummary = {
+  productSales: number;
+  productCost: number;
+  extraCost: number;
+  paypalFees: number;
+  /** View B. Present even when coverage is low; hide the headline with enoughData. */
+  margin: number;
+  marginPercent: number | null;
+  /** 0..1 share of order lines with a unit cost. */
+  coverage: number;
+  linesTotal: number;
+  linesWithCost: number;
+  /** False when coverage is below 90%: show "Not enough cost data". */
+  enoughData: boolean;
+  /** Memo only: materials bought (expenses) vs materials used (product cost). */
+  materialsBought: number;
+  materialsUsed: number;
+  orderCount: number;
+};
+
+export type NetPosition = {
+  netProfitCash: number;
+  assetPaymentsMade: number;
+  capitalIn: number;
+  capitalOut: number;
+  /** Net position now. */
+  now: number;
+  /** Still owed on instalment assets (all time). */
+  instalmentsOwed: number;
+  /** Net position once every instalment is paid. */
+  afterInstalments: number;
+  /** Assets with no payment rows recorded (not counted in the position). */
+  assetsWithoutPayments: number;
 };
 
 export type SalesReportRow = {
-  month: string; // "YYYY-MM"
-  revenue: number;
-  cogs: number;
-  shipping: number;
-  paypalFees: number;
-  profit: number;
+  /** Bucket key: YYYY-MM-DD (day), Monday (week) or YYYY-MM-01 (month). */
+  bucket: string;
+  label: string;
   orderCount: number;
+  sales: number;
+  shippingCollected: number;
+  paypalFees: number;
+  /** Order line cost + extra cost for the bucket. */
+  productCost: number;
+  coverage: number;
+  /** Null when coverage is below 90%. */
+  grossMargin: number | null;
 };
 
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Cash-basis order filter: only orders where money was actually received
- * (amountPaid > 0), optionally bounded by createdAt date range.
- *
- * Both bounds parse the "YYYY-MM-DD" string as UTC midnight (date-only strings
- * are UTC per ECMAScript); the upper bound is the EXCLUSIVE next day so the
- * whole "to" day is included. Invalid strings are ignored (no bound), so a
- * malformed query param can never produce an Invalid Date for the driver.
- */
-function orderRangeConditions(range: DateRange) {
-  const conds = [sql`CAST(${orders.amountPaid} AS DECIMAL(10,2)) > 0`];
-  if (range.from) {
-    const lo = new Date(range.from);
-    if (!Number.isNaN(lo.getTime())) conds.push(gte(orders.createdAt, lo));
-  }
-  if (range.to) {
-    const hi = new Date(range.to);
-    if (!Number.isNaN(hi.getTime())) {
-      hi.setUTCDate(hi.getUTCDate() + 1); // exclusive next-day boundary
-      conds.push(lt(orders.createdAt, hi));
-    }
-  }
+/** Inclusive string-date conditions for a "YYYY-MM-DD" varchar column. */
+function ymdConds(col: Parameters<typeof gte>[0], range: DateRange): SQL[] {
+  const conds: SQL[] = [];
+  if (range.from) conds.push(gte(col, range.from));
+  if (range.to) conds.push(lte(col, range.to));
   return conds;
 }
 
-function parseSnapshot(raw: unknown): Record<string, unknown> | null {
-  if (!raw) return null;
-  try {
-    const o = typeof raw === "string" ? JSON.parse(raw) : raw;
-    return o && typeof o === "object" ? (o as Record<string, unknown>) : null;
-  } catch {
-    return null;
+type LineStats = { cost: number; withCost: number; total: number };
+
+function lineStatsByOrder(lines: PaidOrderItemRow[]): Map<string, LineStats> {
+  const m = new Map<string, LineStats>();
+  for (const l of lines) {
+    const s = m.get(l.orderId) ?? { cost: 0, withCost: 0, total: 0 };
+    s.total += 1;
+    if (l.unitCost != null) {
+      s.withCost += 1;
+      s.cost += l.unitCost * l.quantity;
+    }
+    m.set(l.orderId, s);
   }
+  return m;
 }
 
-/** Pull the real courier base price out of a Delyva service snapshot, if present. */
-function snapshotBasePrice(snap: Record<string, unknown> | null): number | null {
-  if (!snap) return null;
-  // Preferred: explicit basePrice captured at booking (see shipping.ts booking
-  // write). Fallbacks: a nested { price: { amount } } service object.
-  const base = toNum(snap.basePrice as string | number | null | undefined);
-  if (base > 0) return base;
-  const price = snap.price as unknown;
-  if (price && typeof price === "object") {
-    const amt = (price as Record<string, unknown>).amount;
-    const n = toNum(amt as string | number | null | undefined);
-    if (n > 0) return n;
-  }
-  return null;
-}
-
-/**
- * Resolve the ACTUAL courier cost we pay for an order.
- *
- * IMPORTANT: orders.shippingCost (and shippingQuotedPrice) is the MARKED-UP
- * price CHARGED to the customer, not what we pay the courier. So we never use
- * it verbatim as cost. Priority:
- *   1. basePrice captured in the service snapshot at booking (exact).
- *   2. reverse-engineer from the charged price using the markup config:
- *        charged = base*(1+pct/100) + flat  ⇒  base = (charged − flat)/(1+pct/100)
- *      (flagged `estimated` — uses the CURRENT markup config).
- *   3. free-shipping order (charged 0) → 0 courier cost (not flagged).
- */
-function resolveShippingCost(
-  shippingCost: number,
-  snapBase: number | null,
-  markupPercent: number,
-  markupFlat: number,
-): { cost: number; estimated: boolean } {
-  if (snapBase != null && snapBase > 0) return { cost: round2(snapBase), estimated: false };
-  if (shippingCost <= 0) return { cost: 0, estimated: false };
-  const base = (shippingCost - markupFlat) / (1 + markupPercent / 100);
-  return { cost: round2(Math.max(0, base)), estimated: true };
-}
-
-async function getMarkupConfig(): Promise<{ percent: number; flat: number }> {
+async function sumExpenses(range: DateRange) {
   const [row] = await db
-    .select({ percent: shippingConfig.markupPercent, flat: shippingConfig.markupFlat })
-    .from(shippingConfig)
-    .where(eq(shippingConfig.id, "default"))
-    .limit(1);
-  return { percent: toNum(row?.percent), flat: toNum(row?.flat) };
+    .select({
+      total: sql<string>`COALESCE(SUM(${expenses.amount}), 0)`,
+      materials: sql<string>`COALESCE(SUM(CASE WHEN ${expenses.category} = 'materials' THEN ${expenses.amount} ELSE 0 END), 0)`,
+      estimated: sql<string>`COALESCE(SUM(CASE WHEN ${expenses.dateIsEstimate} = 1 THEN ABS(${expenses.amount}) ELSE 0 END), 0)`,
+    })
+    .from(expenses)
+    .where(and(...ymdConds(expenses.expenseDate, range)));
+  return {
+    total: toNum(row?.total),
+    materials: toNum(row?.materials),
+    estimated: toNum(row?.estimated),
+  };
 }
 
-type OrderRow = {
-  id: string;
-  amountPaid: string | null;
-  refundedAmount: string | null;
-  paypalFee: string | null;
-  // The reliable "this order went through PayPal" signal. paymentMethod is
-  // unreliable (NULL on real PayPal orders whose back-fill never ran), so we
-  // key PayPal-fee expectations off the capture id. Manual/WhatsApp/bank-
-  // transfer orders have no capture and legitimately carry no PayPal fee.
-  paypalCaptureId: string | null;
-  extraCost: string | null;
-  shippingCost: string | null;
-  createdAt: Date;
+type IncomeTotals = {
+  profitKinds: number;
+  capitalIn: number;
+  capitalOut: number;
+  estimated: number;
 };
 
-/** Shared fetch: paid orders in range + their per-order COGS + courier base. */
-async function fetchOrderFinancials(range: DateRange) {
-  const orderRows: OrderRow[] = await db
+async function sumIncome(range: DateRange): Promise<IncomeTotals> {
+  const rows = await db
     .select({
-      id: orders.id,
-      amountPaid: orders.amountPaid,
-      refundedAmount: orders.refundedAmount,
-      paypalFee: orders.paypalFee,
-      paypalCaptureId: orders.paypalCaptureId,
-      extraCost: orders.extraCost,
-      shippingCost: orders.shippingCost,
-      createdAt: orders.createdAt,
+      kind: incomeEntries.kind,
+      total: sql<string>`COALESCE(SUM(${incomeEntries.amount}), 0)`,
+      estimated: sql<string>`COALESCE(SUM(CASE WHEN ${incomeEntries.dateIsEstimate} = 1 THEN ABS(${incomeEntries.amount}) ELSE 0 END), 0)`,
     })
-    .from(orders)
-    .where(and(...orderRangeConditions(range)));
+    .from(incomeEntries)
+    .where(and(...ymdConds(incomeEntries.entryDate, range)))
+    .groupBy(incomeEntries.kind);
+  const out: IncomeTotals = { profitKinds: 0, capitalIn: 0, capitalOut: 0, estimated: 0 };
+  for (const r of rows) {
+    const t = toNum(r.total);
+    out.estimated += toNum(r.estimated);
+    if ((PROFIT_INCOME_KINDS as readonly string[]).includes(r.kind)) out.profitKinds += t;
+    else if (r.kind === "capital_in") out.capitalIn += t;
+    else if (r.kind === "capital_out") out.capitalOut += t;
+  }
+  return out;
+}
 
-  const ids = orderRows.map((o) => o.id);
-  const cogsByOrder = new Map<string, number>();
-  const snapBaseByOrder = new Map<string, number | null>();
-  let missingItemCostCount = 0;
+function buildCash(
+  orders: PaidOrderRow[],
+  exp: { total: number; estimated: number },
+  inc: IncomeTotals,
+): CashSummary {
+  let productSales = 0;
+  let shippingCollected = 0;
+  let receipts = 0;
+  let paypalFees = 0;
+  let missingPaypalFeeCount = 0;
+  let unknownMethodCount = 0;
+  for (const o of orders) {
+    productSales += orderProductSales(o);
+    receipts += orderReceipts(o);
+    shippingCollected += orderShippingKept(o);
+    paypalFees += o.paypalFee ?? 0;
+    // Only PayPal-captured orders are expected to carry a fee.
+    if (o.paypalCaptureId != null && o.paypalFee == null) missingPaypalFeeCount++;
+    if (o.paymentMethod == null) unknownMethodCount++;
+  }
+  const netProfit = computeNetProfitCash({
+    productSales,
+    incomeEntries: inc.profitKinds,
+    paypalFees,
+    expenses: exp.total,
+  });
+  return {
+    productSales: round2(productSales),
+    shippingCollected: round2(shippingCollected),
+    receipts: round2(receipts),
+    otherIncome: round2(inc.profitKinds),
+    paypalFees: round2(paypalFees),
+    expensesTotal: round2(exp.total),
+    netProfit,
+    orderCount: orders.length,
+    missingPaypalFeeCount,
+    unknownMethodCount,
+    estimatedDateAmount: round2(exp.estimated + inc.estimated),
+  };
+}
 
-  if (ids.length > 0) {
-    const items = await db
-      .select({
-        orderId: orderItems.orderId,
-        unitCost: orderItems.unitCost,
-        quantity: orderItems.quantity,
-      })
-      .from(orderItems)
-      .where(inArray(orderItems.orderId, ids));
-    for (const it of items) {
-      if (it.unitCost == null) missingItemCostCount++;
-      const prev = cogsByOrder.get(it.orderId) ?? 0;
-      cogsByOrder.set(it.orderId, prev + toNum(it.unitCost) * (it.quantity ?? 0));
-    }
-
-    const ships = await db
-      .select({
-        orderId: orderShipments.orderId,
-        serviceSnapshot: orderShipments.serviceSnapshot,
-      })
-      .from(orderShipments)
-      .where(inArray(orderShipments.orderId, ids));
-    for (const s of ships) {
-      snapBaseByOrder.set(s.orderId, snapshotBasePrice(parseSnapshot(s.serviceSnapshot)));
+function buildMargin(
+  orders: PaidOrderRow[],
+  lines: PaidOrderItemRow[],
+  materialsBought: number,
+): GrossMarginSummary {
+  const stats = lineStatsByOrder(lines);
+  let productSales = 0;
+  let productCost = 0;
+  let extraCost = 0;
+  let paypalFees = 0;
+  let linesTotal = 0;
+  let linesWithCost = 0;
+  for (const o of orders) {
+    productSales += orderProductSales(o);
+    extraCost += o.extraCost;
+    paypalFees += o.paypalFee ?? 0;
+    const s = stats.get(o.id);
+    if (s) {
+      productCost += s.cost;
+      linesTotal += s.total;
+      linesWithCost += s.withCost;
     }
   }
-
-  return { orderRows, cogsByOrder, snapBaseByOrder, missingItemCostCount };
+  const coverage = costCoverage(linesWithCost, linesTotal, productSales > 0);
+  const margin = computeGrossMargin({ productSales, productCost, extraCost, paypalFees });
+  return {
+    productSales: round2(productSales),
+    productCost: round2(productCost),
+    extraCost: round2(extraCost),
+    paypalFees: round2(paypalFees),
+    margin,
+    marginPercent: productSales > 0 ? round2((margin / productSales) * 100) : null,
+    coverage,
+    linesTotal,
+    linesWithCost,
+    enoughData: hasEnoughCostData(coverage),
+    materialsBought: round2(materialsBought),
+    materialsUsed: round2(productCost),
+    orderCount: orders.length,
+  };
 }
 
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
+/** View A. */
+export async function getCashSummary(range: DateRange): Promise<CashSummary> {
+  const [orders, exp, inc] = await Promise.all([
+    fetchPaidOrders(range),
+    sumExpenses(range),
+    sumIncome(range),
+  ]);
+  return buildCash(orders, exp, inc);
+}
+
+/** View B. */
+export async function getGrossMargin(range: DateRange): Promise<GrossMarginSummary> {
+  const [orders, exp] = await Promise.all([fetchPaidOrders(range), sumExpenses(range)]);
+  const lines = await fetchOrderLines(orders.map((o) => o.id));
+  return buildMargin(orders, lines, exp.materials);
+}
+
+/** View A and View B from one set of queries (dashboard, overview, summary). */
+export async function getAccountingOverview(
+  range: DateRange,
+): Promise<{ cash: CashSummary; margin: GrossMarginSummary }> {
+  const [orders, exp, inc] = await Promise.all([
+    fetchPaidOrders(range),
+    sumExpenses(range),
+    sumIncome(range),
+  ]);
+  const lines = await fetchOrderLines(orders.map((o) => o.id));
+  return {
+    cash: buildCash(orders, exp, inc),
+    margin: buildMargin(orders, lines, exp.materials),
+  };
+}
+
+/** Existing name used by admin-accounting.ts: the cash view. */
 export async function getAccountingSummary(range: DateRange): Promise<AccountingSummary> {
-  const [{ orderRows, cogsByOrder, snapBaseByOrder, missingItemCostCount }, markup, expensesTotal] =
-    await Promise.all([fetchOrderFinancials(range), getMarkupConfig(), sumExpenses(range)]);
+  return getCashSummary(range);
+}
 
-  let sales = 0;
-  let cogs = 0;
-  let shipping = 0;
-  let paypalFees = 0;
-  let missingShippingCostCount = 0;
-  let missingPaypalFeeCount = 0;
+export type AssetProgress = {
+  id: string;
+  name: string;
+  seller: string | null;
+  assetDate: string;
+  total: number;
+  isInstalment: boolean;
+  instalmentCount: number | null;
+  /** Payments dated inside the range. */
+  paidInRange: number;
+  /** All payments ever made, regardless of the range. */
+  paidToDate: number;
+  paymentsCount: number;
+  /** Instalment assets only: total minus ALL payments (all-time balance), never below 0. */
+  stillToPay: number;
+};
 
-  for (const o of orderRows) {
-    sales += toNum(o.amountPaid) - toNum(o.refundedAmount);
-    cogs += (cogsByOrder.get(o.id) ?? 0) + toNum(o.extraCost);
-    // Only PayPal-captured orders are expected to have a fee. Manual/WhatsApp/
-    // bank-transfer orders have no PayPal charge — never flag them.
-    if (o.paypalCaptureId != null && o.paypalFee == null) missingPaypalFeeCount++;
-    paypalFees += toNum(o.paypalFee);
-    const { cost, estimated } = resolveShippingCost(
-      toNum(o.shippingCost),
-      snapBaseByOrder.get(o.id) ?? null,
-      markup.percent,
-      markup.flat,
-    );
-    shipping += cost;
-    if (estimated && toNum(o.shippingCost) > 0) missingShippingCostCount++;
+export async function getAssetsProgress(range: DateRange): Promise<AssetProgress[]> {
+  const [assetRows, payRows] = await Promise.all([
+    db.select().from(assets).orderBy(assets.assetDate),
+    db.select().from(assetPayments),
+  ]);
+  const byAsset = new Map<string, { inRange: number; toDate: number; count: number }>();
+  for (const p of payRows) {
+    const s = byAsset.get(p.assetId) ?? { inRange: 0, toDate: 0, count: 0 };
+    const amt = toNum(p.amount);
+    const d = p.paymentDate;
+    const afterFrom = !range.from || d >= range.from;
+    const beforeTo = !range.to || d <= range.to;
+    if (afterFrom && beforeTo) s.inRange += amt;
+    s.toDate += amt;
+    s.count += 1;
+    byAsset.set(p.assetId, s);
   }
+  return assetRows.map((a) => {
+    const s = byAsset.get(a.id) ?? { inRange: 0, toDate: 0, count: 0 };
+    const total = toNum(a.amount);
+    const isInstalment = a.instalmentCount != null;
+    return {
+      id: a.id,
+      name: a.name,
+      seller: a.seller ?? null,
+      assetDate: a.assetDate,
+      total,
+      isInstalment,
+      instalmentCount: a.instalmentCount ?? null,
+      paidInRange: round2(s.inRange),
+      paidToDate: round2(s.toDate),
+      paymentsCount: s.count,
+      stillToPay: isInstalment ? round2(Math.max(0, total - s.toDate)) : 0,
+    };
+  });
+}
 
-  const profit = sales - cogs - shipping - paypalFees - expensesTotal;
+/**
+ * Still owed on instalment assets, ALL TIME. Never range-bound: a debt does not
+ * disappear because the report window ends before it falls due.
+ */
+export async function getInstalmentsOwed(): Promise<number> {
+  const all = await getAssetsProgress({ from: null, to: null });
+  return round2(all.reduce((s, a) => s + a.stillToPay, 0));
+}
 
+/** View C. Pass an already-computed cash summary to skip re-querying orders. */
+export async function getNetPosition(
+  range: DateRange,
+  cash?: CashSummary,
+): Promise<NetPosition> {
+  const [cashSummary, payAgg, inc, progress] = await Promise.all([
+    cash ? Promise.resolve(cash) : getCashSummary(range),
+    db
+      .select({ total: sql<string>`COALESCE(SUM(${assetPayments.amount}), 0)` })
+      .from(assetPayments)
+      .where(and(...ymdConds(assetPayments.paymentDate, range))),
+    sumIncome(range),
+    getAssetsProgress({ from: null, to: null }),
+  ]);
+  const assetPaymentsMade = toNum(payAgg[0]?.total);
+  const instalmentsOwed = round2(progress.reduce((s, a) => s + a.stillToPay, 0));
+  const pos = computeNetPosition({
+    netProfitCash: cashSummary.netProfit,
+    assetPaymentsMade,
+    capitalIn: inc.capitalIn,
+    capitalOut: inc.capitalOut,
+    instalmentsOwed,
+  });
   return {
-    sales: round2(sales),
-    cogs: round2(cogs),
-    shipping: round2(shipping),
-    paypalFees: round2(paypalFees),
-    expensesTotal: round2(expensesTotal),
-    profit: round2(profit),
-    orderCount: orderRows.length,
-    missingShippingCostCount,
-    missingItemCostCount,
-    missingPaypalFeeCount,
+    netProfitCash: cashSummary.netProfit,
+    assetPaymentsMade: round2(assetPaymentsMade),
+    capitalIn: round2(inc.capitalIn),
+    capitalOut: round2(inc.capitalOut),
+    now: pos.now,
+    instalmentsOwed,
+    afterInstalments: pos.afterInstalments,
+    assetsWithoutPayments: progress.filter((a) => a.paymentsCount === 0 && a.total > 0).length,
   };
 }
 
-export async function getSalesReport(range: DateRange): Promise<SalesReportRow[]> {
-  const { orderRows, cogsByOrder, snapBaseByOrder } = await fetchOrderFinancials(range);
-  const markup = await getMarkupConfig();
+/**
+ * Sales by period. Bucket defaults from the span (daily <= 31 days, weekly
+ * <= 180, else monthly). Rows exist only for periods that have paid orders.
+ */
+export async function getSalesReport(
+  range: DateRange & { bucket?: RangeBucket },
+): Promise<SalesReportRow[]> {
+  const bucket = range.bucket ?? bucketForRange(range);
+  const orders = await fetchPaidOrders(range);
+  const lines = await fetchOrderLines(orders.map((o) => o.id));
+  const stats = lineStatsByOrder(lines);
 
-  type Acc = Omit<SalesReportRow, "month" | "profit">;
-  const byMonth = new Map<string, Acc>();
-
-  for (const o of orderRows) {
-    // UTC month bucket — consistent with the UTC-based order date filter.
-    const month = new Date(o.createdAt).toISOString().slice(0, 7); // YYYY-MM
-    const acc =
-      byMonth.get(month) ??
-      { revenue: 0, cogs: 0, shipping: 0, paypalFees: 0, orderCount: 0 };
-    acc.revenue += toNum(o.amountPaid) - toNum(o.refundedAmount);
-    acc.cogs += (cogsByOrder.get(o.id) ?? 0) + toNum(o.extraCost);
-    acc.paypalFees += toNum(o.paypalFee);
-    const { cost } = resolveShippingCost(
-      toNum(o.shippingCost),
-      snapBaseByOrder.get(o.id) ?? null,
-      markup.percent,
-      markup.flat,
-    );
-    acc.shipping += cost;
-    acc.orderCount += 1;
-    byMonth.set(month, acc);
+  type Acc = {
+    orderCount: number;
+    sales: number;
+    shipping: number;
+    fees: number;
+    cost: number;
+    linesTotal: number;
+    linesWithCost: number;
+  };
+  const byBucket = new Map<string, Acc>();
+  for (const o of orders) {
+    const key = bucketKeyForInstant(o.createdAt, bucket);
+    const a =
+      byBucket.get(key) ??
+      { orderCount: 0, sales: 0, shipping: 0, fees: 0, cost: 0, linesTotal: 0, linesWithCost: 0 };
+    a.orderCount += 1;
+    a.sales += orderProductSales(o);
+    a.shipping += orderShippingKept(o);
+    a.fees += o.paypalFee ?? 0;
+    a.cost += o.extraCost;
+    const s = stats.get(o.id);
+    if (s) {
+      a.cost += s.cost;
+      a.linesTotal += s.total;
+      a.linesWithCost += s.withCost;
+    }
+    byBucket.set(key, a);
   }
 
-  return [...byMonth.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([month, a]) => ({
-      month,
-      revenue: round2(a.revenue),
-      cogs: round2(a.cogs),
-      shipping: round2(a.shipping),
-      paypalFees: round2(a.paypalFees),
-      profit: round2(a.revenue - a.cogs - a.shipping - a.paypalFees),
-      orderCount: a.orderCount,
-    }));
+  return [...byBucket.entries()]
+    .sort((x, y) => x[0].localeCompare(y[0]))
+    .map(([key, a]) => {
+      const coverage = costCoverage(a.linesWithCost, a.linesTotal, a.sales > 0);
+      return {
+        bucket: key,
+        label: bucketLabel(key, bucket),
+        orderCount: a.orderCount,
+        sales: round2(a.sales),
+        shippingCollected: round2(a.shipping),
+        paypalFees: round2(a.fees),
+        productCost: round2(a.cost),
+        coverage,
+        grossMargin: hasEnoughCostData(coverage) ? round2(a.sales - a.cost - a.fees) : null,
+      };
+    });
 }
 
-/** Σ expenses.amount within the date range (expenseDate is "YYYY-MM-DD" string). */
-async function sumExpenses(range: DateRange): Promise<number> {
-  const conds = [];
-  if (range.from) conds.push(gte(expenses.expenseDate, range.from));
-  if (range.to) conds.push(lt(expenses.expenseDate, nextDay(range.to)));
+/** True when SST is switched on in store settings (SST is not modelled here). */
+export async function getSstEnabled(): Promise<boolean> {
   const [row] = await db
-    .select({ total: sql<string>`COALESCE(SUM(${expenses.amount}), 0)` })
-    .from(expenses)
-    .where(conds.length ? and(...conds) : undefined);
-  return toNum(row?.total);
-}
-
-/** "YYYY-MM-DD" → the next calendar day "YYYY-MM-DD" (for exclusive upper bounds). */
-function nextDay(ymd: string): string {
-  const d = new Date(ymd + "T00:00:00Z");
-  if (Number.isNaN(d.getTime())) return ymd;
-  d.setUTCDate(d.getUTCDate() + 1);
-  return d.toISOString().slice(0, 10);
-}
-
-export async function getAccountBalances(): Promise<AccountBalances> {
-  // PayPal inflow/refunds restricted to paid orders. Bank/Cash move via payouts.
-  const [ordAgg] = await db
-    .select({
-      paypalNet: sql<string>`COALESCE(SUM(${orders.paypalNet}), 0)`,
-      refunds: sql<string>`COALESCE(SUM(${orders.refundedAmount}), 0)`,
-      netMissing: sql<number>`SUM(CASE WHEN ${orders.paypalCaptureId} IS NOT NULL AND ${orders.paypalNet} IS NULL THEN 1 ELSE 0 END)`,
-    })
-    .from(orders)
-    .where(sql`CAST(${orders.amountPaid} AS DECIMAL(10,2)) > 0`);
-
-  const [payoutAgg] = await db
-    .select({
-      total: sql<string>`COALESCE(SUM(${payouts.amount}), 0)`,
-      intoBank: sql<string>`COALESCE(SUM(CASE WHEN ${payouts.paidInto} = 'bank' THEN ${payouts.amount} ELSE 0 END), 0)`,
-      intoCash: sql<string>`COALESCE(SUM(CASE WHEN ${payouts.paidInto} = 'cash' THEN ${payouts.amount} ELSE 0 END), 0)`,
-    })
-    .from(payouts);
-
-  const [expAgg] = await db
-    .select({
-      paypal: sql<string>`COALESCE(SUM(CASE WHEN ${expenses.paidFrom} = 'paypal' THEN ${expenses.amount} ELSE 0 END), 0)`,
-      bank: sql<string>`COALESCE(SUM(CASE WHEN ${expenses.paidFrom} = 'bank' THEN ${expenses.amount} ELSE 0 END), 0)`,
-      cash: sql<string>`COALESCE(SUM(CASE WHEN ${expenses.paidFrom} = 'cash' THEN ${expenses.amount} ELSE 0 END), 0)`,
-    })
-    .from(expenses);
-
-  const [assetAgg] = await db
-    .select({ total: sql<string>`COALESCE(SUM(${assets.amount}), 0)` })
-    .from(assets);
-
-  const paypal =
-    toNum(ordAgg?.paypalNet) -
-    toNum(ordAgg?.refunds) -
-    toNum(payoutAgg?.total) -
-    toNum(expAgg?.paypal);
-  const bank = toNum(payoutAgg?.intoBank) - toNum(expAgg?.bank);
-  const cash = toNum(payoutAgg?.intoCash) - toNum(expAgg?.cash);
-
-  return {
-    paypal: round2(paypal),
-    bank: round2(bank),
-    cash: round2(cash),
-    totalAssets: round2(toNum(assetAgg?.total)),
-    paypalNetMissingCount: Number(ordAgg?.netMissing ?? 0),
-  };
+    .select({ on: storeSettings.sstEnabled })
+    .from(storeSettings)
+    .where(eq(storeSettings.id, "default"))
+    .limit(1);
+  return !!row?.on;
 }

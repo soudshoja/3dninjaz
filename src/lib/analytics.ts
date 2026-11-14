@@ -1,55 +1,58 @@
-import "server-only";
-
 /**
- * Phase 5 plan 05-02 — analytics primitives. Pure date math + a small set of
- * helpers used by both the dashboard and the events ingest endpoint.
+ * Dashboard analytics primitives. Pure helpers (no DB): bucketing paid orders
+ * into a gap-free revenue series on the Malaysia calendar.
  *
- * Q-05-02 resolution: 7d/30d/90d ranges all use DAILY buckets (simpler, fits
- * 90 x-axis points cleanly in Recharts). Per the prompt "daily buckets up to
- * 30 days, weekly buckets for 31-90 days" — but we keep daily buckets for
- * v1 simplicity; weekly grouping is a chart-side aggregation we can layer
- * on later without refactoring the action.
+ * The range model lives in src/lib/date-range.ts; the paid-order filter and
+ * sales definition live in src/lib/paid-orders.ts.
  */
 
-export type AnalyticsRange = "7d" | "30d" | "90d";
+import {
+  type ResolvedRange,
+  type RangeBucket,
+  bucketKeyForInstant,
+  bucketLabel,
+  enumerateBuckets,
+  mytYmd,
+} from "@/lib/date-range";
+import type { PaidOrderRow } from "@/lib/paid-orders";
+import { productSalesOf } from "@/lib/accounting-math";
 
-const VALID_RANGES: readonly AnalyticsRange[] = ["7d", "30d", "90d"];
-
-export function parseRange(val: string | null | undefined): AnalyticsRange {
-  return (VALID_RANGES as readonly string[]).includes(val ?? "")
-    ? (val as AnalyticsRange)
-    : "30d";
-}
-
-export function rangeToDays(range: AnalyticsRange): number {
-  return range === "7d" ? 7 : range === "30d" ? 30 : 90;
-}
+export type RevenuePoint = {
+  /** Bucket key: YYYY-MM-DD (day), Monday (week) or YYYY-MM-01 (month). */
+  day: string;
+  label: string;
+  /** Product sales excluding shipping, net of refunds. */
+  revenue: number;
+};
 
 /**
- * Inclusive range start at UTC 00:00 (today minus N-1 days). The chart x-axis
- * goes from this date up to today, inclusive — N daily buckets total.
+ * One point per bucket from the range start to its end, zero-filled. For an
+ * unbounded start ("All time") the series begins at the first paid order.
  */
-export function rangeStartDate(range: AnalyticsRange): Date {
-  const d = new Date();
-  d.setUTCHours(0, 0, 0, 0);
-  d.setUTCDate(d.getUTCDate() - rangeToDays(range) + 1);
-  return d;
-}
-
-/**
- * Iterate from `start` (inclusive) to `end` (inclusive) at 1-day steps. Each
- * day is returned as an `YYYY-MM-DD` UTC string suitable for joining against
- * MySQL `DATE(created_at)` aggregates.
- */
-export function iterateDays(start: Date, end: Date): string[] {
-  const out: string[] = [];
-  const cur = new Date(start);
-  cur.setUTCHours(0, 0, 0, 0);
-  const last = new Date(end);
-  last.setUTCHours(0, 0, 0, 0);
-  while (cur <= last) {
-    out.push(cur.toISOString().slice(0, 10));
-    cur.setUTCDate(cur.getUTCDate() + 1);
+export function buildRevenueSeries(
+  orders: Pick<PaidOrderRow, "createdAt" | "amountPaid" | "refunded" | "shipping">[],
+  range: ResolvedRange,
+  now: Date = new Date(),
+): { bucket: RangeBucket; points: RevenuePoint[] } {
+  const bucket = range.bucket;
+  const today = mytYmd(now);
+  const sums = new Map<string, number>();
+  let earliest: string | null = null;
+  for (const o of orders) {
+    const key = bucketKeyForInstant(o.createdAt, bucket);
+    sums.set(key, (sums.get(key) ?? 0) + productSalesOf(o));
+    const day = mytYmd(o.createdAt);
+    if (earliest == null || day < earliest) earliest = day;
   }
-  return out;
+  const from = range.from ?? earliest ?? today;
+  const to = range.to ?? today;
+  const keys = enumerateBuckets(from <= to ? from : to, to, bucket);
+  return {
+    bucket,
+    points: keys.map((k) => ({
+      day: k,
+      label: bucketLabel(k, bucket),
+      revenue: Math.round((sums.get(k) ?? 0) * 100) / 100,
+    })),
+  };
 }
