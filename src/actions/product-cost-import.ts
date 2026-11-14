@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import {
   commitImport,
   fileToGrid,
+  MAX_IMPORT_BYTES,
   previewImport,
 } from "@/lib/product-cost-import";
 import type {
@@ -27,6 +28,10 @@ async function readUpload(
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
     return { ok: false, error: "Choose a file to upload." };
+  }
+  // Reject before buffering an oversized upload into memory.
+  if (file.size > MAX_IMPORT_BYTES) {
+    return { ok: false, error: "That file is larger than 5 MB." };
   }
   const bytes = await file.arrayBuffer();
   const read = await fileToGrid(file.name, bytes);

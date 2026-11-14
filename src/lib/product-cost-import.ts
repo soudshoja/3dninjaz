@@ -6,8 +6,6 @@ import "server-only";
 // The dry run runs the exact same code as the commit inside a transaction that
 // is rolled back, so the preview can never disagree with the real thing.
 
-import ExcelJS from "exceljs";
-import { parse as parseCsv } from "csv-parse/sync";
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { orderItems, productVariants, products } from "@/lib/db/schema";
@@ -32,9 +30,6 @@ import type {
   CostImportRow,
 } from "@/lib/product-cost-types";
 
-export const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
-const MAX_IMPORT_ROWS = 2000;
-
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /** Thrown inside the dry-run transaction to force a rollback. */
@@ -54,69 +49,8 @@ export type ImportRun = {
   backfill: CostImportBackfill;
 };
 
-// ---------------------------------------------------------------------------
-// File -> grid
-// ---------------------------------------------------------------------------
-
-function cellPrimitive(v: ExcelJS.CellValue): unknown {
-  if (v === null || v === undefined) return null;
-  if (typeof v === "number" || typeof v === "string" || typeof v === "boolean") return v;
-  if (v instanceof Date) return v.toISOString();
-  if (typeof v === "object") {
-    const o = v as unknown as Record<string, unknown>;
-    if ("result" in o) return cellPrimitive(o.result as ExcelJS.CellValue); // formula
-    if (Array.isArray(o.richText)) {
-      return (o.richText as Array<{ text: string }>).map((t) => t.text).join("");
-    }
-    if (typeof o.text === "string") return o.text; // hyperlink
-  }
-  return null;
-}
-
-export async function fileToGrid(
-  fileName: string,
-  bytes: ArrayBuffer,
-): Promise<{ ok: true; grid: unknown[][] } | { ok: false; error: string }> {
-  if (bytes.byteLength === 0) return { ok: false, error: "That file is empty." };
-  if (bytes.byteLength > MAX_IMPORT_BYTES) {
-    return { ok: false, error: "That file is larger than 5 MB." };
-  }
-  const lower = fileName.toLowerCase();
-  try {
-    let grid: unknown[][];
-    if (lower.endsWith(".xlsx")) {
-      const wb = new ExcelJS.Workbook();
-      await wb.xlsx.load(bytes);
-      const ws =
-        wb.worksheets.find((w) => /product\s*costs?/i.test(w.name)) ?? wb.worksheets[0];
-      if (!ws) return { ok: false, error: "The workbook has no sheets." };
-      grid = [];
-      ws.eachRow({ includeEmpty: true }, (row, rowNumber) => {
-        const cells: unknown[] = [];
-        for (let c = 1; c <= 12; c++) cells.push(cellPrimitive(row.getCell(c).value));
-        grid[rowNumber - 1] = cells;
-      });
-      for (let i = 0; i < grid.length; i++) if (!grid[i]) grid[i] = [];
-    } else if (lower.endsWith(".csv")) {
-      let text = Buffer.from(bytes).toString("utf8");
-      if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
-      grid = parseCsv(text, {
-        relax_column_count: true,
-        skip_empty_lines: false,
-        bom: true,
-      }) as string[][];
-    } else {
-      return { ok: false, error: "Upload an .xlsx or .csv file." };
-    }
-    if (grid.length > MAX_IMPORT_ROWS + 12) {
-      return { ok: false, error: `That file has more than ${MAX_IMPORT_ROWS} rows.` };
-    }
-    return { ok: true, grid };
-  } catch (err) {
-    console.error("[product-cost-import] could not read file:", err);
-    return { ok: false, error: "Could not read that file. Check it is a valid .xlsx or .csv." };
-  }
-}
+// File -> grid lives in product-cost-file.ts (DB-free, unit tested).
+export { fileToGrid, MAX_IMPORT_BYTES } from "@/lib/product-cost-file";
 
 // ---------------------------------------------------------------------------
 // Product snapshots
