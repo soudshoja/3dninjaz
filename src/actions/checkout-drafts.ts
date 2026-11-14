@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
+import { resolveUnitCosts, costColumns } from "@/lib/product-cost";
 import { checkoutDrafts, orders, orderItems } from "@/lib/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
@@ -365,8 +366,18 @@ export async function convertDraftToOrder(
       notes: "Created from an abandoned checkout draft.",
     });
 
+    // Accounting v2 - snapshot per-unit cost. "manual" product ids resolve to
+    // NULL. The keycap/character count is derived from the stored config values.
+    const resolvedCosts = await resolveUnitCosts(
+      items.map((it, i) => ({
+        productId: it.productId?.trim() || "manual",
+        variantId: it.variantId?.trim() || null,
+        configValues: quoteItems[i]?.configValues ?? null,
+      })),
+    );
+
     await db.insert(orderItems).values(
-      items.map((it) => ({
+      items.map((it, idx) => ({
         id: randomUUID(),
         orderId,
         // Use the real catalog linkage captured at checkout when present so the
@@ -379,6 +390,7 @@ export async function convertDraftToOrder(
         productImage: it.image?.trim() || null,
         variantLabel: null,
         unitPrice: (Number(it.unitPrice) || 0).toFixed(2),
+        ...costColumns(resolvedCosts[idx]),
         quantity: Math.max(1, Math.floor(Number(it.quantity) || 1)),
         lineTotal: (Number(it.lineTotal) || 0).toFixed(2),
         configurationData: it.configJson?.trim() || null,

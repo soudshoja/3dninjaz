@@ -35,6 +35,9 @@ import { VariantEditor } from "@/components/admin/variant-editor";
 import type { HydratedOption, HydratedVariant } from "@/lib/variants";
 // Quick task 260911-mpw — mandatory shipping weight helper.
 import { parseShippingWeightGrams, kgToGrams } from "@/lib/shipping-weight";
+// Accounting v2 - flat product cost card.
+import { ProductCostFields } from "@/components/admin/product-cost-fields";
+import { parseMoney } from "@/lib/product-cost-math";
 
 export type ProductFormInitial = {
   id: string;
@@ -90,7 +93,21 @@ export type ProductFormInitial = {
    * productType === "keychain"; defaults to "square" (existing behavior).
    */
   keychainShape?: "square" | "round";
+  /** Accounting v2 - flat cost per unit as a decimal string (admin-only). */
+  costPrice?: string | null;
+  /** Accounting v2 - keychains: cost per additional keycap. */
+  costPerExtraUnit?: string | null;
+  /** Accounting v2 - sell price used for the live margin (lowest variant / tier). */
+  referencePrice?: number | null;
+  /** Accounting v2 - keychain price tiers by keycap count, for the margin preview. */
+  priceTiers?: Record<string, number> | null;
 };
+
+/** "" when empty or invalid (validate() has already rejected invalid), else "3.50". */
+function moneyForServer(raw: string): string {
+  const n = raw.trim() === "" ? null : parseMoney(raw);
+  return n === null ? "" : n.toFixed(2);
+}
 
 export type CategoryOption = { id: string; name: string };
 export type SubcategoryOption = {
@@ -196,6 +213,11 @@ export function ProductForm({
   const [keychainShape, setKeychainShape] = useState<"square" | "round">(
     initialData?.keychainShape ?? "square"
   );
+  // Accounting v2 - flat cost per unit (+ per extra keycap for keychains).
+  const [costPrice, setCostPrice] = useState<string>(initialData?.costPrice ?? "");
+  const [costPerExtra, setCostPerExtra] = useState<string>(
+    initialData?.costPerExtraUnit ?? ""
+  );
   // Phase 19 (19-03) — product type state
   // Quick task 260430-icx — `simple` added.
   const [productType, setProductType] = useState<"stocked" | "configurable" | "keychain" | "vending" | "simple">(
@@ -249,6 +271,8 @@ export function ProductForm({
       fields,
       hideBasePrice,
       keychainShape,
+      costPrice,
+      costPerExtra,
     }),
     [
       name,
@@ -269,6 +293,8 @@ export function ProductForm({
       fields,
       hideBasePrice,
       keychainShape,
+      costPrice,
+      costPerExtra,
     ],
   );
 
@@ -307,6 +333,8 @@ export function ProductForm({
     if (Array.isArray(v.fields)) setFields(v.fields as PendingField[]);
     if (typeof v.hideBasePrice === "boolean") setHideBasePrice(v.hideBasePrice);
     if (v.keychainShape === "square" || v.keychainShape === "round") setKeychainShape(v.keychainShape);
+    if (typeof v.costPrice === "string") setCostPrice(v.costPrice);
+    if (typeof v.costPerExtra === "string") setCostPerExtra(v.costPerExtra);
     setBannerDismissed(true);
   }
 
@@ -354,6 +382,18 @@ export function ProductForm({
         // Any flow — if non-empty, format must be valid.
         next.simplePrice = "Price must be a number with up to 2 decimal places";
       }
+    }
+
+    // Accounting v2 - cost is optional; when typed it must be a valid amount.
+    if (costPrice.trim() !== "" && parseMoney(costPrice) === null) {
+      next.costPrice = "Enter a cost like 3.50 (no negatives)";
+    }
+    if (
+      productType === "keychain" &&
+      costPerExtra.trim() !== "" &&
+      parseMoney(costPerExtra) === null
+    ) {
+      next.costPerExtraUnit = "Enter a cost like 0.80 (no negatives)";
     }
 
     setErrors(next);
@@ -413,6 +453,15 @@ export function ProductForm({
       hideBasePrice,
       // Quick task 260705-azw — keychain preview body shape.
       keychainShape,
+      // Accounting v2 - empty string clears an existing cost on edit; on create
+      // an empty cost is simply omitted.
+      // parseMoney normalises "RM 3.5" / "1,234.5" to a plain 2dp string.
+      ...(editing || costPrice.trim() !== ""
+        ? { costPrice: moneyForServer(costPrice) }
+        : {}),
+      ...(productType === "keychain" && (editing || costPerExtra.trim() !== "")
+        ? { costPerExtraUnit: moneyForServer(costPerExtra) }
+        : {}),
       // Quick task 260430-icx — only include simplePrice when relevant.
       // Edit flow: omit entirely when field is empty so the action preserves
       // the existing tier. Create flow: always include (validate() guards above).
@@ -503,6 +552,8 @@ export function ProductForm({
     description: { label: "Description", anchorId: "field-description" },
     productionDays: { label: "Estimated Production Days", anchorId: "field-productionDays" },
     simplePrice: { label: "Price", anchorId: "field-simplePrice" },
+    costPrice: { label: "Cost per unit", anchorId: "field-cost" },
+    costPerExtraUnit: { label: "Cost per extra keycap", anchorId: "field-cost" },
     images: { label: "Images", anchorId: "field-images" },
   };
 
@@ -874,6 +925,22 @@ export function ProductForm({
           </CardContent>
         </Card>
       )}
+
+      {/* Accounting v2 - flat product cost + live margin (admin-only). */}
+      <ProductCostFields
+        productType={productType}
+        cost={costPrice}
+        costPerExtra={costPerExtra}
+        onCostChange={setCostPrice}
+        onCostPerExtraChange={setCostPerExtra}
+        price={
+          productType === "simple" && parseMoney(simplePrice) !== null
+            ? parseMoney(simplePrice)
+            : (initialData?.referencePrice ?? null)
+        }
+        tiers={initialData?.priceTiers ?? null}
+        errors={{ cost: errors.costPrice, costPerExtra: errors.costPerExtraUnit }}
+      />
 
       {/* Details */}
       <Card>

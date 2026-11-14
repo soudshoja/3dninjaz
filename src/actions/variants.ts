@@ -697,7 +697,7 @@ export async function getVariantEditorData(
   productId: string,
 ): Promise<{ data: { options: Awaited<ReturnType<typeof hydrateProductVariants>>["options"]; variants: Awaited<ReturnType<typeof hydrateProductVariants>>["variants"] } } | { error: string }> {
   await requireAdmin();
-  const { options, variants } = await hydrateProductVariants(productId);
+  const { options, variants } = await hydrateProductVariants(productId, { includeCosts: true });
   return { data: { options, variants } };
 }
 

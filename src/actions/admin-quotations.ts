@@ -344,6 +344,11 @@ async function claimAndCreateOrder(
         productImage: null,
         variantLabel: null,
         unitPrice: it.unitPrice,
+        // Accounting v2: free-text quotation lines have no product, so no cost
+        // is snapshotted (unit_cost / unit_cost_source stay NULL). The admin can
+        // enter a manual cost on the order's costs panel.
+        unitCost: null,
+        unitCostSource: null,
         quantity: Math.max(1, it.quantity),
         lineTotal: it.lineTotal,
         configurationData: null,

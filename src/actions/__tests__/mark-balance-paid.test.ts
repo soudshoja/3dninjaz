@@ -7,6 +7,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/actions/shipping", () => ({ refreshOrderShipping: vi.fn() }));
+// Accounting v2: admin-order-edit imports the (server-only) cost resolver.
+vi.mock("@/lib/product-cost", () => ({
+  resolveUnitCost: vi.fn(),
+  costColumns: vi.fn(() => ({})),
+}));
 
 const requireAdmin = vi.fn();
 vi.mock("@/lib/auth-helpers", () => ({ requireAdmin: () => requireAdmin() }));

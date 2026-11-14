@@ -138,6 +138,30 @@ export function composeVariantLabel(values: (string | null | undefined)[]): stri
  */
 export async function hydrateProductVariants(
   productId: string,
+  opts: { includeCosts?: boolean } = {},
+): Promise<HydratedProductVariants> {
+  const hydrated = await hydrateProductVariantsRaw(productId);
+  if (opts.includeCosts) return hydrated;
+  // Accounting v2: the storefront PDP and the POS loader call this without
+  // includeCosts, so cost fields never reach a customer-visible payload.
+  return {
+    ...hydrated,
+    variants: hydrated.variants.map((v) => ({
+      ...v,
+      costPrice: null,
+      filamentGrams: null,
+      printTimeHours: null,
+      laborMinutes: null,
+      otherCost: null,
+      filamentRateOverride: null,
+      laborRateOverride: null,
+      costPriceManual: false,
+    })),
+  };
+}
+
+async function hydrateProductVariantsRaw(
+  productId: string,
 ): Promise<HydratedProductVariants> {
   // Query 1: options
   const optionRows = await db

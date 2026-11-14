@@ -215,6 +215,27 @@ export const productSchema = z.object({
   // Quick task 260705-azw — keychain preview body shape. Only meaningful
   // when productType === "keychain"; default preserves existing behavior.
   keychainShape: z.enum(["square", "round"]).optional().default("square"),
+  // Accounting v2 - flat manual cost per product (RM, admin-only). undefined =
+  // leave as is; "" or null = clear; "12.50" = set. costPerExtraUnit only
+  // matters for keychains (cost per additional keycap).
+  costPrice: z
+    .union([
+      z.literal(""),
+      z.null(),
+      z
+        .string()
+        .regex(/^\d+(\.\d{1,2})?$/, "Cost must be a number with up to 2 decimal places"),
+    ])
+    .optional(),
+  costPerExtraUnit: z
+    .union([
+      z.literal(""),
+      z.null(),
+      z
+        .string()
+        .regex(/^\d+(\.\d{1,2})?$/, "Cost must be a number with up to 2 decimal places"),
+    ])
+    .optional(),
 });
 
 export type ProductInput = z.infer<typeof productSchema>;
@@ -326,6 +347,12 @@ export const manualOrderSchema = z.object({
     .number()
     .positive("Amount must be greater than 0")
     .max(99_999_999.99, "Amount exceeds the per-order maximum"),
+  // Accounting v2: optional own cost of this custom job (writes orders.extra_cost).
+  yourCost: z.coerce
+    .number()
+    .min(0, "Cost cannot be negative")
+    .max(99_999_999.99, "Cost exceeds the per-order maximum")
+    .optional(),
   images: z
     .array(
       z
