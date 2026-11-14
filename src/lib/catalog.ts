@@ -46,6 +46,44 @@ type SubcategoryRow = typeof subcategories.$inferSelect;
 
 export type CatalogVariant = VariantRow;
 
+/**
+ * Accounting v2: admin-only cost columns that must NEVER reach the storefront
+ * payload (RSC props are serialised into the HTML, so anything on a
+ * CatalogProduct is public). Stripped in hydrateProducts().
+ */
+export const STOREFRONT_STRIPPED_PRODUCT_KEYS = [
+  "costPrice",
+  "costPerExtraUnit",
+  "costUpdatedAt",
+] as const;
+
+/**
+ * Null out every cost-bearing column on a variant row before it is sent to
+ * the storefront. Keeps the row shape (types) intact.
+ */
+export function stripVariantCosts<T extends VariantRow>(v: T): T {
+  return {
+    ...v,
+    costPrice: null,
+    filamentGrams: null,
+    printTimeHours: null,
+    laborMinutes: null,
+    otherCost: null,
+    filamentRateOverride: null,
+    laborRateOverride: null,
+    costPriceManual: false,
+  };
+}
+
+/** Remove the admin-only cost keys from a products row (pure, no mutation). */
+export function stripProductCosts<T extends Record<string, unknown>>(
+  row: T,
+): Omit<T, (typeof STOREFRONT_STRIPPED_PRODUCT_KEYS)[number]> {
+  const copy: Record<string, unknown> = { ...row };
+  for (const k of STOREFRONT_STRIPPED_PRODUCT_KEYS) delete copy[k];
+  return copy as Omit<T, (typeof STOREFRONT_STRIPPED_PRODUCT_KEYS)[number]>;
+}
+
 /** Discriminator union for all product types. */
 export type ProductType = "stocked" | "configurable" | "keychain" | "vending" | "simple";
 
@@ -60,7 +98,13 @@ export function isConfigurableLike(t: ProductType): boolean {
   return t === "configurable" || t === "keychain" || t === "vending" || t === "simple";
 }
 
-export type CatalogProduct = Omit<ProductRow, "images" | "productType" | "priceTiers"> & {
+export type CatalogProduct = Omit<
+  ProductRow,
+  | "images"
+  | "productType"
+  | "priceTiers"
+  | (typeof STOREFRONT_STRIPPED_PRODUCT_KEYS)[number]
+> & {
   images: string[];
   /** Phase 19 (19-10) — image entries with caption/alt; backwards-compat with legacy string[] */
   imagesV2: ImageEntryV2[];
@@ -195,7 +239,7 @@ async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
   const valueById = new Map(valueRows.map((v) => [v.id, v]));
 
   return rows.map((p) => {
-    const rawVariants = variantByProduct.get(p.id) ?? [];
+    const rawVariants = (variantByProduct.get(p.id) ?? []).map(stripVariantCosts);
     const pOptions = optionsByProduct.get(p.id) ?? [];
 
     // Build HydratedOption[]
@@ -245,14 +289,15 @@ async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
           v.option5ValueId ?? null,
           v.option6ValueId ?? null,
         ] as [string | null, string | null, string | null, string | null, string | null, string | null],
-        costPrice: v.costPrice ?? null,
-        filamentGrams: v.filamentGrams ?? null,
-        printTimeHours: v.printTimeHours ?? null,
-        laborMinutes: v.laborMinutes ?? null,
-        otherCost: v.otherCost ?? null,
-        filamentRateOverride: v.filamentRateOverride ?? null,
-        laborRateOverride: v.laborRateOverride ?? null,
-        costPriceManual: v.costPriceManual ?? false,
+        // Accounting v2: cost fields are NEVER copied to the storefront.
+        costPrice: null,
+        filamentGrams: null,
+        printTimeHours: null,
+        laborMinutes: null,
+        otherCost: null,
+        filamentRateOverride: null,
+        laborRateOverride: null,
+        costPriceManual: false,
         salePrice: v.salePrice ?? null,
         saleFrom: v.saleFrom ?? null,
         saleTo: v.saleTo ?? null,
@@ -265,7 +310,7 @@ async function hydrateProducts(rows: ProductRow[]): Promise<CatalogProduct[]> {
     });
 
     return {
-      ...p,
+      ...stripProductCosts(p),
       images: ensureImagesArray(p.images),
       imagesV2: ensureImagesV2(p.images),
       variants: rawVariants,

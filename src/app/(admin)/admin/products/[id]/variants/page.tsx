@@ -45,7 +45,7 @@ export default async function VariantsPage({
     );
   }
 
-  const { options, variants } = await hydrateProductVariants(id);
+  const { options, variants } = await hydrateProductVariants(id, { includeCosts: true });
 
   return (
     <div className="space-y-6">

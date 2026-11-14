@@ -25,6 +25,7 @@
 
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
+import { resolveUnitCost, costColumns } from "@/lib/product-cost";
 import { orders, orderItems, products, productVariants } from "@/lib/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { canSettleBalance } from "@/lib/balance-settle";
@@ -255,6 +256,12 @@ export async function addCatalogLineItem(
 
   const lineTotal = (unitPrice * qty).toFixed(2);
 
+  // Accounting v2 - snapshot per-unit cost (variant cost, then product cost).
+  const resolvedCost = await resolveUnitCost({
+    productId: input.productId,
+    variantId: input.variantId,
+  });
+
   await db.insert(orderItems).values({
     id: randomUUID(),
     orderId,
@@ -269,7 +276,7 @@ export async function addCatalogLineItem(
     variantLabel: variantRow.labelCache ?? null,
     configurationData: null,
     unitPrice: unitPrice.toFixed(2),
-    unitCost: variantRow.costPrice ?? null,
+    ...costColumns(resolvedCost),
     quantity: qty,
     lineTotal,
   });
@@ -343,7 +350,9 @@ export async function addManualLineItem(
     variantLabel: null,
     configurationData: null,
     unitPrice: unitPrice.toFixed(2),
+    // Accounting v2: free-text lines have no product cost to snapshot.
     unitCost: null,
+    unitCostSource: null,
     quantity: qty,
     lineTotal,
   });
@@ -640,6 +649,11 @@ export async function addPosLineToOrder(
 
       const lineTotal = (unitPrice * qty).toFixed(2);
 
+      const resolvedCost = await resolveUnitCost({
+        productId: line.productId,
+        variantId: line.variantId as string,
+      });
+
       await db.insert(orderItems).values({
         id: randomUUID(),
         orderId,
@@ -651,7 +665,7 @@ export async function addPosLineToOrder(
         variantLabel: variantRow.labelCache ?? null,
         configurationData: null,
         unitPrice: unitPrice.toFixed(2),
-        unitCost: variantRow.costPrice ?? null,
+        ...costColumns(resolvedCost),
         quantity: qty,
         lineTotal,
       });
@@ -696,6 +710,14 @@ export async function addPosLineToOrder(
 
       const lineTotal = (unitPrice * qty).toFixed(2);
 
+      // Accounting v2 - the keycap/character count comes from the stored config
+      // values via the product's unit field (never a separate client number).
+      const resolvedCost = await resolveUnitCost({
+        productId: line.productId,
+        variantId: null,
+        configValues: line.configurationData?.values ?? null,
+      });
+
       await db.insert(orderItems).values({
         id: randomUUID(),
         orderId,
@@ -709,7 +731,7 @@ export async function addPosLineToOrder(
           ? JSON.stringify(line.configurationData)
           : null,
         unitPrice: unitPrice.toFixed(2),
-        unitCost: null,
+        ...costColumns(resolvedCost),
         quantity: qty,
         lineTotal,
       });

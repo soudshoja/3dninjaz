@@ -20,6 +20,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
+import { stripVariantCosts } from "@/lib/catalog";
 import { products, productVariants, wishlists } from "@/lib/db/schema";
 import { wishlistAddSchema } from "@/lib/validators";
 import { getSessionUser, requireUser } from "@/lib/auth-helpers";
@@ -250,7 +251,8 @@ export async function listMyWishlist(): Promise<WishlistedItem[]> {
       wishlistId: r.id,
       wishlistedAt: r.createdAt,
       product,
-      variants: variantsByProduct.get(r.productId) ?? [],
+      // Accounting v2: never ship variant cost columns to the customer.
+      variants: (variantsByProduct.get(r.productId) ?? []).map(stripVariantCosts),
     });
   }
   return out;

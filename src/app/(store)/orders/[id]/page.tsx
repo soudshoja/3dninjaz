@@ -24,6 +24,7 @@ import { getMyOrderTracking } from "@/actions/shipping";
 import { OrderTracking } from "@/components/store/order-tracking";
 // 260601-afs — return ship form (shown when a return is approved)
 import { ReturnShipForm } from "@/components/orders/return-ship-form";
+import { redactOrderItemCost } from "@/lib/order-item-redact";
 
 // ── Guest order row type ────────────────────────────────────────────────────
 type GuestOrderRow = typeof ordersTable.$inferSelect & {
@@ -286,10 +287,12 @@ export default async function OrderDetailPage({
         notFound();
       }
 
-      const items = await db
-        .select()
-        .from(orderItemsTable)
-        .where(eq(orderItemsTable.orderId, orderRow.id));
+      const items = (
+        await db
+          .select()
+          .from(orderItemsTable)
+          .where(eq(orderItemsTable.orderId, orderRow.id))
+      ).map(redactOrderItemCost); // never expose cost to the customer
 
       const row = { ...orderRow, items };
       const guestImgFallback = await productImageFallback(items);
