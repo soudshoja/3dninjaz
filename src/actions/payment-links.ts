@@ -522,7 +522,7 @@ export async function capturePaymentLinkPayment({
   try {
     await db
       .update(orders)
-      .set({ status: "paid", paypalCaptureId: captureId, amountPaid: sql`${orders.totalAmount}` })
+      .set({ status: "paid", paypalCaptureId: captureId, paymentMethod: "paypal", amountPaid: sql`${orders.totalAmount}` })
       .where(eq(orders.id, orderRow.id));
     await db
       .update(paymentLinks)

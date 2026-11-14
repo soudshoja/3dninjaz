@@ -16,6 +16,8 @@ type Props = {
   current: { preset: RangePreset | "custom"; from: string | null; to: string | null };
   /** Subset/order of preset chips. Defaults to all presets. */
   presets?: readonly RangePreset[];
+  /** Optional path to navigate on; defaults to the current pathname. */
+  basePath?: string;
 };
 
 /**
@@ -24,9 +26,10 @@ type Props = {
  * ?from=&to= (and clears ?range). Other query params are preserved.
  * All days are Malaysia time.
  */
-export function DateRangePicker({ current, presets = RANGE_PRESETS }: Props) {
+export function DateRangePicker({ current, presets = RANGE_PRESETS, basePath }: Props) {
   const router = useRouter();
-  const path = usePathname();
+  const pathname = usePathname();
+  const path = basePath ?? pathname;
   const sp = useSearchParams();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);

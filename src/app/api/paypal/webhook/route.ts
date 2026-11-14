@@ -254,6 +254,7 @@ export async function POST(req: NextRequest) {
           .set({
             status: "paid",
             paypalCaptureId: captureId,
+            paymentMethod: "paypal",
             amountPaid: existing.totalAmount,
             paypalFee: recv?.paypal_fee?.value ?? null,
             paypalNet: recv?.net_amount?.value ?? null,

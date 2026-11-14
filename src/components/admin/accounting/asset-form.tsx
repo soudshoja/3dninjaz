@@ -4,10 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { BRAND } from "@/lib/brand";
 import { createAsset, updateAsset } from "@/actions/admin-accounting";
-import type { AssetRow } from "@/lib/accounting-types";
-
-const inputCls = "w-full rounded-xl border-2 px-4 py-3 text-sm min-h-[48px]";
-const border = { borderColor: `${BRAND.ink}33` };
+import { ACCOUNT_KEYS, ACCOUNT_LABELS, type AssetRow } from "@/lib/accounting-types";
+import { ErrorBanner, Field, SubmitRow, border, inputCls, selectCls } from "./form-bits";
 
 /** /admin/accounting/assets/new + /[id]/edit form. Assets are NOT in profit. */
 export function AssetForm({
@@ -20,6 +18,9 @@ export function AssetForm({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [plan, setPlan] = useState<"full" | "instalments">(
+    initial?.instalmentCount ? "instalments" : "full",
+  );
 
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -38,10 +39,7 @@ export function AssetForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-4 max-w-xl" style={{ color: BRAND.ink }}>
-      <div>
-        <label htmlFor="af-name" className="block text-sm font-semibold mb-1">
-          Asset name
-        </label>
+      <Field id="af-name" label="Asset name">
         <input
           id="af-name"
           name="name"
@@ -51,15 +49,23 @@ export function AssetForm({
           defaultValue={initial?.name ?? ""}
           className={inputCls}
           style={border}
-          placeholder="Bambu Lab P1S printer"
         />
-      </div>
+      </Field>
+
+      <Field id="af-seller" label="Seller (optional)">
+        <input
+          id="af-seller"
+          name="seller"
+          type="text"
+          maxLength={200}
+          defaultValue={initial?.seller ?? ""}
+          className={inputCls}
+          style={border}
+        />
+      </Field>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label htmlFor="af-date" className="block text-sm font-semibold mb-1">
-            Purchase date
-          </label>
+        <Field id="af-date" label="Purchase date (first payment)">
           <input
             id="af-date"
             name="assetDate"
@@ -69,11 +75,8 @@ export function AssetForm({
             className={inputCls}
             style={border}
           />
-        </div>
-        <div>
-          <label htmlFor="af-amount" className="block text-sm font-semibold mb-1">
-            Cost (MYR)
-          </label>
+        </Field>
+        <Field id="af-amount" label="Total cost (MYR)">
           <input
             id="af-amount"
             name="amount"
@@ -82,17 +85,99 @@ export function AssetForm({
             inputMode="decimal"
             pattern="\d+(\.\d{1,2})?"
             defaultValue={initial?.amount ?? ""}
-            className={inputCls}
+            className={`${inputCls} tabular-nums`}
             style={border}
-            placeholder="3500.00"
           />
-        </div>
+        </Field>
       </div>
 
-      <div>
-        <label htmlFor="af-note" className="block text-sm font-semibold mb-1">
-          Note (optional)
+      <Field id="af-paidFrom" label="Paid from">
+        <select
+          id="af-paidFrom"
+          name="paidFrom"
+          defaultValue={initial?.paidFrom ?? "bank"}
+          className={selectCls}
+          style={border}
+        >
+          {ACCOUNT_KEYS.map((v) => (
+            <option key={v} value={v}>
+              {ACCOUNT_LABELS[v]}
+            </option>
+          ))}
+        </select>
+      </Field>
+
+      <fieldset className="rounded-2xl border-2 p-4 space-y-3" style={{ borderColor: `${BRAND.ink}1f` }}>
+        <legend className="px-2 text-sm font-bold">How is it paid?</legend>
+        <label className="flex items-center gap-3 min-h-[44px] text-sm font-semibold cursor-pointer">
+          <input
+            type="radio"
+            name="payPlan"
+            value="full"
+            checked={plan === "full"}
+            onChange={() => setPlan("full")}
+            className="h-5 w-5"
+          />
+          <span>
+            Paid in full
+            <span className="block text-xs font-normal text-slate-500">
+              {mode === "new"
+                ? "One payment for the total cost is recorded on the purchase date."
+                : "No instalment plan."}
+            </span>
+          </span>
         </label>
+        <label className="flex items-center gap-3 min-h-[44px] text-sm font-semibold cursor-pointer">
+          <input
+            type="radio"
+            name="payPlan"
+            value="instalments"
+            checked={plan === "instalments"}
+            onChange={() => setPlan("instalments")}
+            className="h-5 w-5"
+          />
+          <span>
+            By instalments
+            <span className="block text-xs font-normal text-slate-500">
+              Record each payment later with Record payment.
+            </span>
+          </span>
+        </label>
+
+        {plan === "instalments" ? (
+          <div className="grid gap-4 sm:grid-cols-2 pt-1">
+            <Field id="af-inst-amt" label="Instalment amount (MYR)">
+              <input
+                id="af-inst-amt"
+                name="instalmentAmount"
+                type="text"
+                required
+                inputMode="decimal"
+                pattern="\d+(\.\d{1,2})?"
+                defaultValue={initial?.instalmentAmount ?? ""}
+                className={`${inputCls} tabular-nums`}
+                style={border}
+              />
+            </Field>
+            <Field id="af-inst-count" label="Number of instalments">
+              <input
+                id="af-inst-count"
+                name="instalmentCount"
+                type="number"
+                required
+                min={1}
+                max={600}
+                defaultValue={initial?.instalmentCount ?? ""}
+                className={`${inputCls} tabular-nums`}
+                style={border}
+              />
+            </Field>
+          </div>
+        ) : null}
+        {mode === "new" && plan === "full" ? <input type="hidden" name="paidInFull" value="on" /> : null}
+      </fieldset>
+
+      <Field id="af-note" label="Note (optional)">
         <input
           id="af-note"
           name="note"
@@ -101,43 +186,21 @@ export function AssetForm({
           defaultValue={initial?.note ?? ""}
           className={inputCls}
           style={border}
-          placeholder="Serial #, warranty, etc."
         />
-      </div>
+      </Field>
 
       <p className="text-xs text-slate-500">
-        Assets are tracked separately and do <strong>not</strong> reduce profit.
+        Assets are tracked separately and do <strong>not</strong> reduce profit. Money paid for them still leaves the
+        account it was paid from.
       </p>
 
-      {error ? (
-        <p
-          role="alert"
-          className="rounded-xl px-3 py-2 text-sm"
-          style={{ backgroundColor: "#fee2e2", color: "#991b1b" }}
-        >
-          {error}
-        </p>
-      ) : null}
+      <ErrorBanner error={error} />
 
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-full px-6 py-3 font-bold text-white min-h-[48px] disabled:opacity-50"
-          style={{ backgroundColor: BRAND.ink }}
-        >
-          {pending ? "Saving…" : mode === "new" ? "Add asset" : "Save changes"}
-        </button>
-        <button
-          type="button"
-          onClick={() => router.push("/admin/accounting/assets")}
-          disabled={pending}
-          className="rounded-full px-6 py-3 font-semibold border-2 min-h-[48px]"
-          style={{ borderColor: `${BRAND.ink}33`, color: BRAND.ink }}
-        >
-          Cancel
-        </button>
-      </div>
+      <SubmitRow
+        pending={pending}
+        label={mode === "new" ? "Add asset" : "Save changes"}
+        onCancel={() => router.push("/admin/accounting/assets")}
+      />
     </form>
   );
 }
