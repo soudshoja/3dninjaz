@@ -8,7 +8,7 @@ import { PayoutForm } from "@/components/admin/accounting/payout-form";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
-  title: "Admin · Edit payout",
+  title: "Admin · Edit transfer",
   robots: { index: false, follow: false },
 };
 
@@ -33,14 +33,14 @@ export default async function EditPayoutPage({
           className="text-sm underline decoration-dotted"
           style={{ color: BRAND.ink }}
         >
-          ← Back to payouts
+          ← Back to transfers
         </Link>
         <h1 className="mt-3 font-[var(--font-heading)] text-3xl md:text-4xl">
-          Edit payout
+          Edit transfer
         </h1>
         <p className="mt-1 mb-6 text-slate-600">
-          A payout moves money out of PayPal into your bank or cash. Editing it
-          re-balances the affected accounts.
+          A transfer moves money between two of your own accounts. Editing it
+          re-balances both.
         </p>
         <PayoutForm mode="edit" initial={row} />
       </div>

@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { BRAND } from "@/lib/brand";
 import { bulkDeleteOrders } from "@/actions/admin-orders";
+import { bulkSetOrderPaymentMethod } from "@/actions/admin-order-payment-method";
+import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS } from "@/lib/accounting-types";
 import {
   AdminOrderRow,
   AdminOrderCard,
@@ -20,6 +22,8 @@ export function AdminOrdersList({ rows }: { rows: AdminOrderRowData[] }) {
   const [pending, startTransition] = useTransition();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [tagMethod, setTagMethod] = useState<string>("");
 
   const toggle = (id: string) =>
     setSelected((prev) => {
@@ -32,6 +36,30 @@ export function AdminOrdersList({ rows }: { rows: AdminOrderRowData[] }) {
   const allSelected = rows.length > 0 && selected.size === rows.length;
   const toggleAll = () =>
     setSelected(allSelected ? new Set() : new Set(rows.map((r) => r.id)));
+
+  // Accounting v2 — bulk-tag payment method. The server only touches paid
+  // orders whose method is still empty, so an existing method is never
+  // overwritten; the notice reports how many actually changed.
+  const tagSelected = () => {
+    if (selected.size === 0 || !tagMethod) return;
+    setError(null);
+    setNotice(null);
+    const total = selected.size;
+    startTransition(async () => {
+      const res = await bulkSetOrderPaymentMethod([...selected], tagMethod);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setNotice(
+        `Tagged ${res.updated} of ${total} selected ${total === 1 ? "order" : "orders"}. ` +
+          "Orders that were unpaid or already had a method were left alone.",
+      );
+      setSelected(new Set());
+      setTagMethod("");
+      router.refresh();
+    });
+  };
 
   const deleteSelected = () => {
     const n = selected.size;
@@ -78,6 +106,33 @@ export function AdminOrdersList({ rows }: { rows: AdminOrderRowData[] }) {
           >
             Clear
           </button>
+          <label className="sr-only" htmlFor="bulk-method">
+            Payment method to tag
+          </label>
+          <select
+            id="bulk-method"
+            value={tagMethod}
+            onChange={(e) => setTagMethod(e.target.value)}
+            disabled={pending}
+            className="rounded-xl bg-white px-3 text-sm min-h-[40px]"
+            style={{ border: `2px solid ${BRAND.ink}33`, color: BRAND.ink }}
+          >
+            <option value="">Payment method</option>
+            {PAYMENT_METHODS.map((m) => (
+              <option key={m} value={m}>
+                {PAYMENT_METHOD_LABELS[m]}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={tagSelected}
+            disabled={pending || !tagMethod}
+            className="rounded-full px-4 py-2 text-sm font-semibold min-h-[40px] text-white disabled:opacity-50"
+            style={{ backgroundColor: BRAND.ink }}
+          >
+            {pending ? "Working..." : "Tag selected"}
+          </button>
           <button
             type="button"
             onClick={deleteSelected}
@@ -88,6 +143,15 @@ export function AdminOrdersList({ rows }: { rows: AdminOrderRowData[] }) {
             {pending ? "Deleting…" : "Delete selected"}
           </button>
         </div>
+      ) : null}
+      {notice ? (
+        <p
+          className="px-4 py-2 text-sm"
+          style={{ backgroundColor: "#dcfce7", color: "#166534" }}
+          role="status"
+        >
+          {notice}
+        </p>
       ) : null}
       {error ? (
         <p

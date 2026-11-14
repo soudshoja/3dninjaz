@@ -21,6 +21,8 @@ export type AdminOrderRowData = {
   slipThumbnailUrl?: string | null;
   /** True when the order has been flagged for the keychain production floor. */
   inProduction?: boolean;
+  /** Accounting v2 — paid order with no payment method tagged yet. */
+  methodUnknown?: boolean;
 };
 
 /**
@@ -93,6 +95,14 @@ export function AdminOrderRow({
       <td className="p-3">
         <div className="flex flex-col gap-1.5">
           <AdminOrderStatusBadge status={order.status} />
+          {order.methodUnknown ? (
+            <span
+              className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold"
+              style={{ background: "#fef3c7", color: "#92400e" }}
+            >
+              Method unknown
+            </span>
+          ) : null}
           {order.inProduction ? (
             <span
               className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold"
@@ -189,6 +199,14 @@ export function AdminOrderCard({
           style={{ background: "rgba(163,85,247,0.15)", color: "#7c3aed" }}
         >
           In production
+        </span>
+      ) : null}
+      {order.methodUnknown ? (
+        <span
+          className="ml-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold"
+          style={{ background: "#fef3c7", color: "#92400e" }}
+        >
+          Method unknown
         </span>
       ) : null}
 

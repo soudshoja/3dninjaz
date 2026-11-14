@@ -883,6 +883,7 @@ export async function capturePayPalOrder({
     .set({
       status: "paid",
       paypalCaptureId: captureId,
+      paymentMethod: "paypal",
       amountPaid: existing.totalAmount,
       // May be null if PayPal omitted the breakdown; the payment page lazily
       // back-fills later in that case.

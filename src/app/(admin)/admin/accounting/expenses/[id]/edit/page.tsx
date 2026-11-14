@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { BRAND } from "@/lib/brand";
-import { getExpenseById } from "@/actions/admin-accounting";
+import { getExpenseById, getExpenseFacets } from "@/actions/admin-accounting";
 import { ExpenseForm } from "@/components/admin/accounting/expense-form";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,7 @@ export default async function EditExpensePage({
 }) {
   await requireAdmin();
   const { id } = await params;
-  const row = await getExpenseById(id);
+  const [row, facets] = await Promise.all([getExpenseById(id), getExpenseFacets()]);
   if (!row) notFound();
 
   return (
@@ -42,7 +42,7 @@ export default async function EditExpensePage({
           Update the expense details below. Changes are saved server-side and
           immediately reflected in the accounting totals.
         </p>
-        <ExpenseForm mode="edit" initial={row} />
+        <ExpenseForm mode="edit" initial={row} facets={facets} />
       </div>
     </main>
   );

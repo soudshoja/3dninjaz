@@ -51,7 +51,7 @@ import { PROFIT_INCOME_KINDS } from "@/lib/accounting-types";
 
 export type { DateRange } from "@/lib/date-range";
 export { getAccountBalances } from "@/lib/account-balances";
-export type { AccountBalances } from "@/lib/account-balances";
+export type { AccountBalancesResult, AccountBalancesResult as AccountBalances } from "@/lib/account-balances";
 
 // ---------------------------------------------------------------------------
 // Types

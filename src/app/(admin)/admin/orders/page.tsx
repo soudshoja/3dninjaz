@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { listAdminOrders } from "@/actions/admin-orders";
 import { getPaymentProofsAwaitingReviewCount } from "@/actions/admin-payment-proofs";
+import { listPaidOrderIdsMethodUnknown } from "@/actions/admin-order-payment-method";
 import { db } from "@/lib/db";
 import { paymentProofs } from "@/lib/db/schema";
 import { eq, inArray, desc } from "drizzle-orm";
@@ -48,12 +49,16 @@ const VALID: StatusFilter[] = [
 export default async function AdminOrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; method?: string }>;
 }) {
   await requireAdmin();
-  const { status } = await searchParams;
+  const { status, method } = await searchParams;
   const filter = (VALID.includes(status as StatusFilter) ? status : "all") as StatusFilter;
-  const rows = await listAdminOrders(filter);
+  // Accounting v2 — "Paid, method unknown" view. Overrides the status filter.
+  const methodUnknownOnly = method === "unknown";
+  const unknownMethodIds = new Set(await listPaidOrderIdsMethodUnknown());
+  const allRows = await listAdminOrders(methodUnknownOnly ? "all" : filter);
+  const rows = methodUnknownOnly ? allRows.filter((r) => unknownMethodIds.has(r.id)) : allRows;
 
   // Count of awaiting_payment_review orders — drives filter chip badge + sidebar badge.
   const pendingProofCount = await getPaymentProofsAwaitingReviewCount();
@@ -92,12 +97,15 @@ export default async function AdminOrdersPage({
           <h1 className="font-[var(--font-heading)] text-3xl md:text-4xl">Orders</h1>
           <p className="mt-1 text-slate-600">
             {rows.length} {rows.length === 1 ? "order" : "orders"} · filter:{" "}
-            <strong>{filter}</strong>
+            <strong>{methodUnknownOnly ? "paid, method unknown" : filter}</strong>
           </p>
         </header>
 
         <div className="mb-4">
-          <AdminOrderFilter pendingProofCount={pendingProofCount} />
+          <AdminOrderFilter
+            pendingProofCount={pendingProofCount}
+            methodUnknownCount={unknownMethodIds.size}
+          />
         </div>
 
         {rows.length === 0 ? (
@@ -118,6 +126,7 @@ export default async function AdminOrdersPage({
             rows={rows.map((o) => ({
               ...o,
               slipThumbnailUrl: slipThumbnailByOrder.get(o.id) ?? null,
+              methodUnknown: unknownMethodIds.has(o.id),
             }))}
           />
         )}
