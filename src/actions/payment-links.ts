@@ -203,7 +203,12 @@ export async function getPaymentLinkByToken(
       discountAmount,
       totalAmount: order.totalAmount,
       currency: order.currency,
-      paymentMethod: order.paymentMethod ?? null,
+      // Accounting v2 widened the column enum (cash/other); the pay-link page
+      // only distinguishes PayPal vs bank transfer, so anything else is null.
+      paymentMethod:
+        order.paymentMethod === "paypal" || order.paymentMethod === "bank_transfer"
+          ? order.paymentMethod
+          : null,
       status: order.status,
     },
     orderItems: items.map((item) => ({
