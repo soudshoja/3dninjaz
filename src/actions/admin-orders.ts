@@ -922,7 +922,7 @@ const DISCOUNTABLE_STATUSES: OrderStatus[] = [
  * Apply (or clear) an order-level discount on a not-yet-paid order. Admin can
  * pass a coupon `code` (re-validated server-side) OR a manual `amount` in MYR.
  * Passing neither (or amount 0 with no code) clears any existing discount.
- * Recomputes totalAmount = subtotal - discount + shipping + extraCost.
+ * Recomputes totalAmount = subtotal - discount + shipping (extraCost is internal cost, not charged).
  */
 export async function applyOrderDiscount(
   orderId: string,
@@ -936,7 +936,6 @@ export async function applyOrderDiscount(
       status: orders.status,
       subtotal: orders.subtotal,
       shippingCost: orders.shippingCost,
-      extraCost: orders.extraCost,
     })
     .from(orders)
     .where(eq(orders.id, orderId))
@@ -952,7 +951,6 @@ export async function applyOrderDiscount(
 
   const subtotal = toNum(row.subtotal);
   const shipping = toNum(row.shippingCost);
-  const extra = toNum(row.extraCost);
 
   let discount = 0;
   let discountCode: string | null = null;
@@ -972,7 +970,7 @@ export async function applyOrderDiscount(
   }
   // else: clear discount (discount stays 0, code null)
 
-  const total = Math.max(0, +(subtotal - discount + shipping + extra).toFixed(2));
+  const total = Math.max(0, +(subtotal - discount + shipping).toFixed(2));
 
   await db
     .update(orders)
