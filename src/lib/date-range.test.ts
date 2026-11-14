@@ -9,6 +9,7 @@ import {
   enumerateBuckets,
   mytYmd,
   addDays,
+  bucketBounds,
 } from "./date-range";
 
 // 2026-11-14 23:30 UTC is already 2026-11-15 07:30 in Malaysia.
@@ -132,5 +133,23 @@ describe("buckets", () => {
   });
   it("addDays crosses month ends", () => {
     expect(addDays("2026-12-31", 1)).toBe("2027-01-01");
+  });
+});
+
+describe("bucketBounds", () => {
+  it("month covers the 1st to the last day, including leap February and December", () => {
+    expect(bucketBounds("2026-06-01", "month")).toEqual({ from: "2026-06-01", to: "2026-06-30" });
+    expect(bucketBounds("2028-02-01", "month")).toEqual({ from: "2028-02-01", to: "2028-02-29" });
+    expect(bucketBounds("2026-12-01", "month")).toEqual({ from: "2026-12-01", to: "2026-12-31" });
+  });
+  it("week is Monday to Sunday and day is itself", () => {
+    expect(bucketBounds("2026-11-09", "week")).toEqual({ from: "2026-11-09", to: "2026-11-15" });
+    expect(bucketBounds("2026-11-14", "day")).toEqual({ from: "2026-11-14", to: "2026-11-14" });
+  });
+  it("every month bucket from enumerateBuckets tiles the calendar with no gap or overlap", () => {
+    const keys = enumerateBuckets("2026-06-01", "2026-11-30", "month");
+    for (let i = 1; i < keys.length; i++) {
+      expect(addDays(bucketBounds(keys[i - 1], "month").to, 1)).toBe(keys[i]);
+    }
   });
 });

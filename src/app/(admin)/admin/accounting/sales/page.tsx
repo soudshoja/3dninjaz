@@ -28,6 +28,9 @@ export default async function SalesReportPage({
   const rows = await getSalesReport({ from: range.from, to: range.to, bucket: range.bucket });
   const lowCoverage = rows.some((r) => r.grossMargin == null);
   const noun = BUCKET_NOUN[range.bucket];
+  /** Every order behind one row of the table. */
+  const detailHref = (key: string) =>
+    `/admin/accounting/sales/orders?${rangeToQuery(range)}&bucket=${range.bucket}&key=${key}`;
 
   return (
     <main
@@ -47,7 +50,7 @@ export default async function SalesReportPage({
         </h1>
         <p className="mt-1 text-slate-600">
           {range.label}, one row per {noun}. Sales exclude shipping, which is passed through to
-          the courier.
+          the courier. Tap a {noun} to see every order in it.
         </p>
 
         <div className="mb-6 mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -99,8 +102,25 @@ export default async function SalesReportPage({
                       key={r.bucket}
                       className="border-t border-black/10 hover:bg-slate-50"
                     >
-                      <td className="p-3 font-semibold whitespace-nowrap">{r.label}</td>
-                      <td className="p-3 text-right tabular-nums">{r.orderCount}</td>
+                      <td className="p-3 font-semibold whitespace-nowrap">
+                        <Link
+                          href={detailHref(r.bucket)}
+                          className="underline decoration-dotted underline-offset-4"
+                          style={{ color: BRAND.ink }}
+                          aria-label={`See the ${r.orderCount} orders for ${r.label}`}
+                        >
+                          {r.label}
+                        </Link>
+                      </td>
+                      <td className="p-3 text-right tabular-nums">
+                        <Link
+                          href={detailHref(r.bucket)}
+                          className="underline decoration-dotted underline-offset-4"
+                          style={{ color: BRAND.ink }}
+                        >
+                          {r.orderCount}
+                        </Link>
+                      </td>
                       <td className="p-3 text-right tabular-nums">{formatMYR(r.sales)}</td>
                       <td className="p-3 text-right tabular-nums text-slate-500">
                         {formatMYR(r.shippingCollected)}
@@ -130,7 +150,16 @@ export default async function SalesReportPage({
             <div className="md:hidden divide-y divide-black/10">
               {rows.map((r) => (
                 <div key={r.bucket} className="p-4 space-y-2">
-                  <p className="font-bold text-base">{r.label}</p>
+                  <Link
+                    href={detailHref(r.bucket)}
+                    className="flex min-h-[44px] items-center justify-between gap-2 text-base font-bold"
+                    style={{ color: BRAND.ink }}
+                  >
+                    <span>{r.label}</span>
+                    <span className="text-sm font-semibold underline decoration-dotted underline-offset-4">
+                      See {r.orderCount} {r.orderCount === 1 ? "order" : "orders"} →
+                    </span>
+                  </Link>
                   <dl className="space-y-1 text-sm">
                     <Line label="Orders" value={String(r.orderCount)} />
                     <Line label="Sales excl. shipping" value={formatMYR(r.sales)} strong />
