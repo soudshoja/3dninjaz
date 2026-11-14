@@ -168,6 +168,15 @@ export function bucketKeyForInstant(d: Date, bucket: RangeBucket): string {
   return bucketKey(mytYmd(d), bucket);
 }
 
+/** First and last calendar day (inclusive) covered by a bucket key. */
+export function bucketBounds(key: string, bucket: RangeBucket): { from: string; to: string } {
+  if (bucket === "day") return { from: key, to: key };
+  if (bucket === "week") return { from: key, to: addDays(key, 6) };
+  const y = Number(key.slice(0, 4));
+  const m = Number(key.slice(5, 7));
+  return { from: key, to: utcMsToYmd(Date.UTC(y, m, 1) - 86_400_000) };
+}
+
 /** Every bucket key from `from` to `to` inclusive, in order, with no gaps. */
 export function enumerateBuckets(from: string, to: string, bucket: RangeBucket): string[] {
   const out: string[] = [];
