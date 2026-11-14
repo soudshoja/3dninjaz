@@ -6,6 +6,7 @@
 // (central directory sizes / ratio / entry count) BEFORE ExcelJS sees the bytes,
 // and worksheet dimensions are checked BEFORE any grid is built.
 
+import { inflateRawSync } from "node:zlib";
 import ExcelJS from "exceljs";
 import { parse as parseCsv } from "csv-parse/sync";
 
@@ -31,12 +32,16 @@ const EOCD_SIG = 0x06054b50;
 const CEN_SIG = 0x02014b50;
 const EOCD_MIN = 22;
 const CEN_MIN = 46;
+const LOC_SIG = 0x04034b50;
+const LOC_MIN = 30;
 
 /**
  * Parse the ZIP end-of-central-directory record and central directory by hand
  * and reject anything that could expand into a memory/CPU bomb. Declared sizes
- * can lie, but the inflater (jszip) verifies the real size against the declared
- * one and throws on mismatch, so a lying header cannot smuggle extra data.
+ * can lie, and jszip only checks the real size AFTER it has inflated the whole
+ * entry, so pass 2 inflates every entry here with a hard output cap equal to its
+ * declared size: an entry that expands past what it declared is rejected before
+ * ExcelJS ever sees the bytes.
  * Returns null when safe, otherwise a reason (for server logs only).
  */
 export function validateZipContainer(bytes: Uint8Array): string | null {
@@ -74,11 +79,13 @@ export function validateZipContainer(bytes: Uint8Array): string | null {
   let pos = cdOffset;
   let total = 0;
   let seen = 0;
+  const found: Array<{ method: number; comp: number; uncomp: number; localOffset: number }> = [];
   while (seen < entries) {
     if (pos + CEN_MIN > eocd) return "truncated central directory";
     if (dv.getUint32(pos, true) !== CEN_SIG) return "bad central directory entry";
     const comp = dv.getUint32(pos + 20, true);
     const uncomp = dv.getUint32(pos + 24, true);
+    const method = dv.getUint16(pos + 10, true);
     const nameLen = dv.getUint16(pos + 28, true);
     const extraLen = dv.getUint16(pos + 30, true);
     const commentLen = dv.getUint16(pos + 32, true);
@@ -95,10 +102,38 @@ export function validateZipContainer(bytes: Uint8Array): string | null {
       return `compression ratio too high (${uncomp}:${comp})`;
     }
 
+    found.push({ method, comp, uncomp, localOffset });
     pos += CEN_MIN + nameLen + extraLen + commentLen;
     seen++;
   }
   if (pos > eocd) return "central directory overrun";
+
+  // Pass 2: never trust the declared sizes. Bounded inflate of every entry.
+  for (const e of found) {
+    if (e.localOffset + LOC_MIN > cdOffset) return "local header out of bounds";
+    if (dv.getUint32(e.localOffset, true) !== LOC_SIG) return "bad local header";
+    const dataStart =
+      e.localOffset +
+      LOC_MIN +
+      dv.getUint16(e.localOffset + 26, true) +
+      dv.getUint16(e.localOffset + 28, true);
+    if (dataStart + e.comp > cdOffset) return "entry data out of bounds";
+    if (e.method === 0) {
+      if (e.comp !== e.uncomp) return "stored entry size mismatch";
+    } else if (e.method === 8) {
+      let out: Buffer;
+      try {
+        out = inflateRawSync(bytes.subarray(dataStart, dataStart + e.comp), {
+          maxOutputLength: Math.max(e.uncomp, 1),
+        });
+      } catch {
+        return "entry does not inflate within its declared size";
+      }
+      if (out.length !== e.uncomp) return "entry size mismatch";
+    } else {
+      return "unsupported compression method";
+    }
+  }
   return null;
 }
 

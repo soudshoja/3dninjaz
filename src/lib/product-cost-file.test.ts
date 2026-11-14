@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { deflateRawSync } from "node:zlib";
 import ExcelJS from "exceljs";
 import {
   fileToGrid,
@@ -53,7 +54,45 @@ function craftZip(
   return toArrayBuffer(Buffer.concat([...parts, cd, eocd]));
 }
 
+/** One-entry ZIP with REAL deflated data but a central directory that lies about the size. */
+function liarZip(realBytes: number, declaredUncomp: number): ArrayBuffer {
+  const data = deflateRawSync(Buffer.alloc(realBytes));
+  const name = Buffer.from("xl/worksheets/sheet1.xml");
+  const local = Buffer.alloc(30 + name.length);
+  local.writeUInt32LE(0x04034b50, 0);
+  local.writeUInt16LE(8, 8);
+  local.writeUInt16LE(name.length, 26);
+  name.copy(local, 30);
+  const cen = Buffer.alloc(46 + name.length);
+  cen.writeUInt32LE(0x02014b50, 0);
+  cen.writeUInt16LE(8, 10);
+  cen.writeUInt32LE(data.length, 20);
+  cen.writeUInt32LE(declaredUncomp, 24);
+  cen.writeUInt16LE(name.length, 28);
+  cen.writeUInt32LE(0, 42);
+  name.copy(cen, 46);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(1, 8);
+  eocd.writeUInt16LE(1, 10);
+  eocd.writeUInt32LE(cen.length, 12);
+  eocd.writeUInt32LE(local.length + data.length, 16);
+  return toArrayBuffer(Buffer.concat([local, data, cen, eocd]));
+}
+
 describe("fileToGrid limits", () => {
+  it("rejects an entry that inflates past the size its header declares (lying header)", async () => {
+    // 30 MB of zeros compresses to ~30 KB; header claims 1 KB, so declared-size checks pass.
+    const bytes = liarZip(30 * 1024 * 1024, 1024);
+    expect(validateZipContainer(new Uint8Array(bytes))).toMatch(/declared size/);
+    expect(await fileToGrid("liar.xlsx", bytes)).toEqual({ ok: false, error: UNSAFE_FILE_ERROR });
+  });
+
+  it("accepts an entry whose declared size is honest", () => {
+    const bytes = liarZip(2048, 2048);
+    expect(validateZipContainer(new Uint8Array(bytes))).toBeNull();
+  });
+
   it("accepts a normal 80-row template", async () => {
     const bytes = await workbookBytes((ws) => {
       ws.addRow(["title"]);

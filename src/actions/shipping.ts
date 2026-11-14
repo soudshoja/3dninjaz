@@ -507,10 +507,10 @@ export async function refreshOrderShipping(orderId: string): Promise<
     : Math.round((base + (base * markupPct) / 100 + markupFlat) * 100) / 100;
 
   const discount = Number(order.discountAmount ?? 0);
-  const extra = Number(order.extraCost ?? 0);
+  // extraCost is the owner's INTERNAL cost (profit panel / analytics), never a customer charge; not part of the payable total.
   const total = Math.max(
     0,
-    Math.round((subtotalNum - discount + shipping + extra) * 100) / 100,
+    Math.round((subtotalNum - discount + shipping) * 100) / 100,
   );
 
   await db
