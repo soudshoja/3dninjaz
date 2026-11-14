@@ -16,6 +16,14 @@ export type ExpenseFilters = {
   q?: string | null;
 };
 
+export type IncomeFilters = {
+  from?: string | null;
+  to?: string | null;
+  kind?: string | null;
+  account?: string | null;
+  q?: string | null;
+};
+
 export type ExpenseFacets = {
   vendors: string[];
   subcategories: string[];

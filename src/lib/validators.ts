@@ -679,6 +679,16 @@ export const assetPaymentSchema = z.object({
 });
 export type AssetPaymentInput = z.infer<typeof assetPaymentSchema>;
 
+/**
+ * True when an income "source" is really the online store's own sales (which are
+ * derived from orders). Normalises (trim, lowercase, collapse whitespace) and
+ * rejects anything that contains "website", "online store" or "online sales".
+ */
+export function isWebsiteSalesSource(raw: string): boolean {
+  const v = raw.trim().toLowerCase().replace(/\s+/g, " ");
+  return v.includes("website") || v.includes("online store") || v.includes("online sales");
+}
+
 // Accounting v2 - non-website income. Website sales are ALWAYS derived from
 // orders, so a source named "Website" is rejected here.
 export const incomeEntrySchema = z.object({
@@ -691,8 +701,8 @@ export const incomeEntrySchema = z.object({
     .min(1, "Source is required")
     .max(200)
     .refine(
-      (v) => v.toLowerCase() !== "website",
-      "Website sales are calculated from orders, do not enter them here",
+      (v) => !isWebsiteSalesSource(v),
+      "Website sales are calculated from orders, do not enter them here. Record only income that is not an online-store sale.",
     ),
   amount: z
     .string()

@@ -3,7 +3,8 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { BRAND } from "@/lib/brand";
 import { fmtMoney } from "@/lib/accounting-format";
-import { describeRange, resolveEntryRange } from "@/lib/accounting-entry-range";
+import { describeRange } from "@/lib/accounting-entry-range";
+import { resolveRange } from "@/lib/date-range";
 import { getPaypalLedger, type PaypalLedgerRowKind } from "@/lib/paypal-ledger";
 import { DateRangePicker } from "@/components/admin/date-range-picker";
 
@@ -41,8 +42,8 @@ function Card({ label, value, hint, accent }: { label: string; value: string; hi
 export default async function PaypalLedgerPage({ searchParams }: { searchParams: Promise<SP> }) {
   await requireAdmin();
   const sp = await searchParams;
-  const range = resolveEntryRange(sp, "all");
-  const ledger = await getPaypalLedger(range);
+  const range = resolveRange(sp, { defaultPreset: "all" });
+  const ledger = await getPaypalLedger({ from: range.from, to: range.to });
   const allTime = !range.from && !range.to;
 
   return (
@@ -56,7 +57,7 @@ export default async function PaypalLedgerPage({ searchParams }: { searchParams:
         </header>
 
         <div className="mb-4">
-          <DateRangePicker basePath="/admin/accounting/paypal" />
+          <DateRangePicker current={range} />
         </div>
 
         <p className="mb-3 text-sm text-slate-600">{describeRange(range)}</p>

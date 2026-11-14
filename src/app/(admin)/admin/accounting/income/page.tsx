@@ -4,7 +4,8 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import { listIncomeEntries } from "@/actions/admin-income";
 import { BRAND } from "@/lib/brand";
 import { fmtMoney } from "@/lib/accounting-format";
-import { describeRange, resolveEntryRange } from "@/lib/accounting-entry-range";
+import { describeRange } from "@/lib/accounting-entry-range";
+import { resolveRange } from "@/lib/date-range";
 import {
   ACCOUNT_KEYS,
   ACCOUNT_LABELS,
@@ -37,7 +38,7 @@ function pickEnum<T extends string>(v: string | undefined, allowed: readonly T[]
 export default async function AdminIncomePage({ searchParams }: { searchParams: Promise<SP> }) {
   await requireAdmin();
   const sp = await searchParams;
-  const range = resolveEntryRange(sp, "all");
+  const range = resolveRange(sp, { defaultPreset: "all" });
   const kind = pickEnum(sp.kind, INCOME_KINDS);
   const account = pickEnum(sp.account, ACCOUNT_KEYS);
   const q = sp.q?.slice(0, 100) || undefined;
@@ -75,7 +76,7 @@ export default async function AdminIncomePage({ searchParams }: { searchParams: 
         </header>
 
         <div className="mb-3">
-          <DateRangePicker basePath="/admin/accounting/income" />
+          <DateRangePicker current={range} />
         </div>
 
         <form method="get" className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 items-end">

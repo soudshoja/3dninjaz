@@ -4,7 +4,8 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import { listExpenses, getExpenseFacets } from "@/actions/admin-accounting";
 import { BRAND } from "@/lib/brand";
 import { fmtMoney } from "@/lib/accounting-format";
-import { describeRange, resolveEntryRange } from "@/lib/accounting-entry-range";
+import { describeRange } from "@/lib/accounting-entry-range";
+import { resolveRange } from "@/lib/date-range";
 import {
   ACCOUNT_KEYS,
   ACCOUNT_LABELS,
@@ -51,7 +52,7 @@ export default async function AdminExpensesListPage({
 }) {
   await requireAdmin();
   const sp = await searchParams;
-  const range = resolveEntryRange(sp, "all");
+  const range = resolveRange(sp, { defaultPreset: "all" });
   const category = pickEnum(sp.category, EXPENSE_CATEGORIES);
   const paidFrom = pickEnum(sp.paidFrom, ACCOUNT_KEYS);
   const bankMatch = pickEnum(sp.bankMatch, BANK_MATCH_VALUES);
@@ -95,7 +96,7 @@ export default async function AdminExpensesListPage({
         </header>
 
         <div className="mb-3">
-          <DateRangePicker basePath="/admin/accounting/expenses" />
+          <DateRangePicker current={range} />
         </div>
 
         <form method="get" className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-6 items-end">

@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { BRAND } from "@/lib/brand";
 
 // Every accounting page, in the order the owner thinks about the money.
-// /summary is built by the acctcore track and 404s until that lands.
 const ITEMS: { href: string; label: string }[] = [
   { href: "/admin/accounting", label: "Overview" },
   { href: "/admin/accounting/summary", label: "Summary" },

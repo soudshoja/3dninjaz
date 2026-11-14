@@ -6,7 +6,7 @@
 // named "Website" is rejected by incomeEntrySchema.
 //
 // requireAdmin() is the FIRST await in every export (CVE-2025-29927). This is a
-// "use server" file: async functions only. Types live in accounting-types.
+// "use server" file: async functions only. Types live in accounting-types / accounting-entry-types.
 // ============================================================================
 
 import { db } from "@/lib/db";
@@ -16,16 +16,9 @@ import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { incomeEntrySchema } from "@/lib/validators";
-import { nextDayYmd } from "@/lib/accounting-entry-range";
+import { nextDayYmd, normalizeRange } from "@/lib/accounting-entry-range";
+import type { IncomeFilters } from "@/lib/accounting-entry-types";
 import type { IncomeEntryRow, MutateResult, BankMatch } from "@/lib/accounting-types";
-
-export type IncomeFilters = {
-  from?: string | null;
-  to?: string | null;
-  kind?: string | null;
-  account?: string | null;
-  q?: string | null;
-};
 
 const OVERVIEW = "/admin/accounting";
 
@@ -65,8 +58,9 @@ function toRow(r: IncomeDb): IncomeEntryRow {
 export async function listIncomeEntries(filters: IncomeFilters = {}): Promise<IncomeEntryRow[]> {
   await requireAdmin();
   const conds: SQL[] = [];
-  if (filters.from) conds.push(gte(incomeEntries.entryDate, filters.from));
-  if (filters.to) conds.push(lt(incomeEntries.entryDate, nextDayYmd(filters.to)));
+  const range = normalizeRange(filters);
+  if (range.from) conds.push(gte(incomeEntries.entryDate, range.from));
+  if (range.to) conds.push(lt(incomeEntries.entryDate, nextDayYmd(range.to)));
   if (filters.kind) conds.push(eq(incomeEntries.kind, filters.kind as IncomeDb["kind"]));
   if (filters.account) conds.push(eq(incomeEntries.account, filters.account as IncomeDb["account"]));
   const q = filters.q?.trim();

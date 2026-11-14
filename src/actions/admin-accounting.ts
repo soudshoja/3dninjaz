@@ -25,7 +25,7 @@ import {
   type ExpenseInput,
 } from "@/lib/validators";
 import { toNum } from "@/lib/profit";
-import { nextDayYmd } from "@/lib/accounting-entry-range";
+import { nextDayYmd, normalizeRange } from "@/lib/accounting-entry-range";
 import { round2 } from "@/lib/accounting-format";
 import type {
   MutateResult,
@@ -106,8 +106,9 @@ function toExpenseRow(r: ExpenseDb): ExpenseRow {
 export async function listExpenses(filters: ExpenseFilters = {}): Promise<ExpenseRow[]> {
   await requireAdmin();
   const conds: SQL[] = [];
-  if (filters.from) conds.push(gte(expenses.expenseDate, filters.from));
-  if (filters.to) conds.push(lt(expenses.expenseDate, nextDayYmd(filters.to)));
+  const range = normalizeRange(filters);
+  if (range.from) conds.push(gte(expenses.expenseDate, range.from));
+  if (range.to) conds.push(lt(expenses.expenseDate, nextDayYmd(range.to)));
   if (filters.category) conds.push(eq(expenses.category, filters.category as ExpenseDb["category"]));
   if (filters.paidFrom) conds.push(eq(expenses.paidFrom, filters.paidFrom as ExpenseDb["paidFrom"]));
   if (filters.bankMatch) conds.push(eq(expenses.bankMatch, filters.bankMatch as BankMatch));
@@ -207,6 +208,19 @@ function expenseValues(d: ExpenseInputData) {
 function expenseRuleError(d: ExpenseInputData): string | null {
   if (d.viaPaypal && d.paidFrom === "paypal") {
     return "A card charge made through PayPal is paid from the card, not from PayPal. Choose Credit card or Bank, or untick the PayPal box.";
+  }
+  if (d.currency !== "MYR") {
+    if (!d.amountOriginal) {
+      return `Enter the original amount in ${d.currency}.`;
+    }
+    const fx = d.fxRate ? Number(d.fxRate) : NaN;
+    if (!Number.isFinite(fx) || fx <= 0) {
+      return `Enter the exchange rate (MYR per 1 ${d.currency}).`;
+    }
+    const expected = round2(Number(d.amountOriginal) * fx);
+    if (Math.abs(Number(d.amount) - expected) > 0.05) {
+      return `The MYR amount (${Number(d.amount).toFixed(2)}) does not match the original amount times the rate (${expected.toFixed(2)}). Check the amount, original amount and rate.`;
+    }
   }
   return null;
 }
@@ -560,6 +574,18 @@ export async function updateAssetPayment(id: string, fd: FormData): Promise<Muta
   let blocked: string | null = null;
   try {
     await db.transaction(async (tx) => {
+      // The payment must exist and belong to this asset: an UPDATE that matches
+      // no row must not be reported as success.
+      const [existing] = await tx
+        .select({ id: assetPayments.id })
+        .from(assetPayments)
+        .where(and(eq(assetPayments.id, id), eq(assetPayments.assetId, d.assetId)))
+        .limit(1)
+        .for("update");
+      if (!existing) {
+        blocked = "Payment not found";
+        return;
+      }
       blocked = await checkAssetPayment(tx, d.assetId, d.amount, d.instalmentNo, id);
       if (blocked) return;
       await tx
