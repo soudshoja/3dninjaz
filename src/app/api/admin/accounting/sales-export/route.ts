@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { getSalesReport } from "@/lib/accounting";
+import { resolveRange } from "@/lib/date-range";
 import { publicOrigin } from "@/lib/public-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/admin/accounting/sales-export?from=YYYY-MM-DD&to=YYYY-MM-DD
- * Streams the by-month sales report as CSV. Amounts are raw 2dp numbers (no
- * "RM" prefix) so spreadsheets parse them numerically.
+ * GET /api/admin/accounting/sales-export?range=<preset> | ?from=YYYY-MM-DD&to=YYYY-MM-DD
+ * Streams the sales report (one row per day, week or month by span) as CSV.
+ * Amounts are raw 2dp numbers (no "RM" prefix) so spreadsheets parse them numerically.
  */
 
 function escapeCsv(value: string | number | null | undefined): string {
@@ -31,36 +32,37 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(url, { status: 307 });
   }
 
-  // Accept only well-formed YYYY-MM-DD; ignore junk so a malformed param can't
-  // reach new Date() in the query builder and 500 the export.
-  const dateRe = /^\d{4}-\d{2}-\d{2}$/;
-  const rawFrom = req.nextUrl.searchParams.get("from");
-  const rawTo = req.nextUrl.searchParams.get("to");
-  const from = rawFrom && dateRe.test(rawFrom) ? rawFrom : null;
-  const to = rawTo && dateRe.test(rawTo) ? rawTo : null;
-  const rows = await getSalesReport({ from, to });
+  // ?range=<preset> or ?from=&to= (same model as the accounting pages). Junk
+  // falls back to this month, matching the sales report page default.
+  const sp = req.nextUrl.searchParams;
+  const range = resolveRange(
+    { range: sp.get("range"), from: sp.get("from"), to: sp.get("to") },
+    { defaultPreset: "this_month" },
+  );
+  const rows = await getSalesReport({ from: range.from, to: range.to, bucket: range.bucket });
 
-  const header = "Month,Revenue,COGS,Shipping,PayPalFees,Profit,Orders\n";
+  const header =
+    "Period,Orders,SalesExclShipping,ShippingCollected,PayPalFees,ProductCost,GrossMargin\n";
   const body = rows
     .map((r) =>
       [
-        escapeCsv(r.month),
-        r.revenue.toFixed(2),
-        r.cogs.toFixed(2),
-        r.shipping.toFixed(2),
-        r.paypalFees.toFixed(2),
-        r.profit.toFixed(2),
+        escapeCsv(r.bucket),
         r.orderCount,
+        r.sales.toFixed(2),
+        r.shippingCollected.toFixed(2),
+        r.paypalFees.toFixed(2),
+        r.productCost.toFixed(2),
+        r.grossMargin == null ? "" : r.grossMargin.toFixed(2),
       ].join(","),
     )
     .join("\n");
 
-  const range = `${from || "all"}_${to || "all"}`;
+  const rangeLabel = `${range.from || "all"}_${range.to || "all"}`;
   return new NextResponse(header + body + (body ? "\n" : ""), {
     status: 200,
     headers: {
       "content-type": "text/csv; charset=utf-8",
-      "content-disposition": `attachment; filename="sales-${range}.csv"`,
+      "content-disposition": `attachment; filename="sales-${rangeLabel}.csv"`,
       "cache-control": "no-store",
     },
   });
