@@ -83,3 +83,8 @@ public/logo-original-backup.png
 # Phase 25-02 — transient keycap-icon extraction staging (renamed to catalog
 # ids + deleted in Task 3; never committed). See scripts/extract-keycap-icons.ts
 /public/icons/keycaps/_staging/
+
+# Accounting v2 - raw cost-tracker fixture holds private financial records
+# (bank refs, card digits, funder + client names). Repo is PUBLIC: never commit.
+# Keep the file local / on the box and pass it with --fixture=<path>.
+.planning/data/cost-tracker-*.json
