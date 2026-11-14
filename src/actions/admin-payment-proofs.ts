@@ -142,6 +142,7 @@ export async function confirmPaymentProof(
   );
   void sendWhatsAppNotification("order_confirmation", order.shippingPhone, {
     customerName: order.shippingName,
+    orderId: order.id,
     orderNumber: formatOrderNumber(order.id),
     orderUrl: publicUrl(`/orders/${order.id}`),
   }).catch(() => {});

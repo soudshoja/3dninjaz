@@ -16,9 +16,15 @@ import { and, eq, desc, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { MALAYSIAN_STATES } from "@/lib/validators";
+import { hasActiveShipment } from "@/lib/order-editable";
 import { validateCoupon } from "@/actions/coupons";
-import { assertValidTransition, formatOrderNumber, type OrderStatus } from "@/lib/orders";
-import { sendOrderProcessingEmail } from "@/actions/send-emails";
+import {
+  assertValidTransition,
+  formatOrderNumber,
+  shouldNotifyShipped,
+  type OrderStatus,
+} from "@/lib/orders";
+import { sendOrderProcessingEmail, sendOrderShippedEmail } from "@/actions/send-emails";
 import { orderStatusValues } from "@/lib/db/schema";
 import { computeOrderCost, toNum, toNumOrNull } from "@/lib/profit";
 import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
@@ -356,6 +362,7 @@ export async function updateOrderStatus(
       customerEmail: orders.customerEmail,
       shippingName: orders.shippingName,
       shippingPhone: orders.shippingPhone,
+      shippingServiceName: orders.shippingServiceName,
     })
     .from(orders)
     .where(eq(orders.id, orderId))
@@ -393,6 +400,7 @@ export async function updateOrderStatus(
     );
     void sendWhatsAppNotification("order_processing", row.shippingPhone, {
       customerName: row.shippingName,
+      orderId: orderId,
       orderNumber: formatOrderNumber(orderId),
       orderUrl: publicUrl(`/orders/${orderId}`),
     }).catch(() => {});
@@ -412,10 +420,66 @@ export async function updateOrderStatus(
     }
     void sendWhatsAppNotification("order_approved", row.shippingPhone, {
       customerName: row.shippingName,
+      orderId: orderId,
       orderNumber: formatOrderNumber(orderId),
       orderUrl: publicUrl(`/orders/${orderId}`),
     }).catch(() => {});
     void sendWhatsAppInvoicePdf(orderId, row.shippingPhone).catch(() => {});
+  }
+
+  // Status → shipped via the generic control, i.e. the admin flipped the
+  // status WITHOUT going through bookShipment() in shipping.ts (which
+  // notifies at booking time on its own). Without this block, an order
+  // shipped this way notified nobody — found via 6 prod orders sitting at
+  // "shipped" with no orderShipments row at all.
+  //
+  // Double-notify guard (shouldNotifyShipped): skip when a shipment row
+  // already exists (bookShipment already sent its own "order_shipped"
+  // notification at booking time) or when the order was already "shipped"
+  // (idempotency on resubmission/race — assertValidTransition above also
+  // rejects a shipped->shipped transition, but this check does not rely on
+  // that unrelated state-machine rule).
+  if (newStatus === "shipped") {
+    const [shipmentRow] = await db
+      .select({ id: orderShipments.id })
+      .from(orderShipments)
+      .where(eq(orderShipments.orderId, orderId))
+      .limit(1);
+
+    if (
+      shouldNotifyShipped({
+        newStatus,
+        previousStatus: row.status,
+        hasShipmentRow: Boolean(shipmentRow),
+      })
+    ) {
+      // No Delyva booking exists for this order, so there is no real
+      // courier/tracking info yet — fall back gracefully instead of
+      // rendering "undefined" into the customer-facing message. Mirrors the
+      // `details?.trackingNo || "pending"` fallback bookShipment() uses.
+      const courierName = row.shippingServiceName || "Your courier";
+      void sendOrderShippedEmail({
+        customerEmail: row.customerEmail,
+        customerName: row.shippingName,
+        orderNumber: formatOrderNumber(orderId),
+        courierName,
+        trackingNo: "pending",
+        consignmentNo: "pending",
+        orderId,
+      }).catch((err) =>
+        console.error("[admin-orders] shipped email dispatch failed:", err),
+      );
+      void sendWhatsAppNotification("order_shipped", row.shippingPhone, {
+        customerName: row.shippingName,
+        orderId: orderId,
+        orderNumber: formatOrderNumber(orderId),
+        courierName,
+        trackingNo: "pending",
+        trackingUrl: publicUrl(`/orders/${orderId}`),
+      }, { dedupeSuffix: "manual" }).catch((err) =>
+        console.error("[admin-orders] shipped WhatsApp dispatch failed:", err),
+      );
+    }
   }
 
   revalidatePath(`/admin/orders`);
@@ -474,6 +538,7 @@ export async function approveWhatsAppOrder(
   // whichever template the admin has customised.
   void sendWhatsAppNotification("order_approved", row.shippingPhone, {
     customerName: row.shippingName,
+    orderId: orderId,
     orderNumber: formatOrderNumber(orderId),
     orderUrl: publicUrl(`/orders/${orderId}`),
   }).catch(() => {});
@@ -587,11 +652,18 @@ export async function updateOrderNotes(
  * Edit the ship-to / recipient details on an order (recipient name, phone, and
  * full Malaysian address). Admin-only.
  *
- * Intentionally NOT gated by payment/fulfilment status: admins need to correct
- * a wrong address or phone on shipped/manual orders in order to re-dispatch a
- * fresh courier label (see rebookShipment). It does not touch order totals or
- * status. After saving, rebook the courier so the new label carries the
- * corrected destination.
+ * Intentionally NOT gated by order.status — order.status is admin-settable and
+ * can drift from real-world fulfilment state. Instead gated on ACTUAL Delyva
+ * shipment booking state (260922-shipto): refused whenever the order has an
+ * active courier booking (hasActiveShipment — see src/lib/order-editable.ts),
+ * because the courier already has the OLD address printed on a label at that
+ * point and a silent DB edit here would drift from what they actually have.
+ * The admin must cancel the booking first (cancelShipment, this file's
+ * neighbour in src/actions/shipping.ts) — this is re-checked server-side, not
+ * just hidden in the UI, since the client cannot be trusted to have enforced
+ * the gate.
+ *
+ * Does not touch order totals or status.
  */
 export async function updateOrderShipTo(
   orderId: string,
@@ -632,6 +704,22 @@ export async function updateOrderShipTo(
     .where(eq(orders.id, orderId))
     .limit(1);
   if (!row) return { ok: false, error: "Order not found." };
+
+  const [shipmentRow] = await db
+    .select({
+      delyvaOrderId: orderShipments.delyvaOrderId,
+      statusCode: orderShipments.statusCode,
+    })
+    .from(orderShipments)
+    .where(eq(orderShipments.orderId, orderId))
+    .limit(1);
+  if (hasActiveShipment(shipmentRow ?? null)) {
+    return {
+      ok: false,
+      error:
+        "A courier label is already booked for this order — cancel the shipment before editing the address.",
+    };
+  }
 
   await db
     .update(orders)
@@ -968,6 +1056,8 @@ export async function sendInvoiceViaWhatsApp(
       return { ok: false, error: "Customer phone number is not valid." };
     }
 
+    // Intentionally bypasses the outbox and still gates on connection state:
+    // the admin needs a synchronous success/failure toast for this click.
     const state = await getWhatsappStateFresh();
     if (!state.notificationsEnabled) {
       return { ok: false, error: "WhatsApp notifications are disabled." };
@@ -982,10 +1072,10 @@ export async function sendInvoiceViaWhatsApp(
     }
 
     const fileName = `invoice-${formatOrderNumber(orderId)}.pdf`;
-    const sent = await sendMedia({ number, base64, fileName });
+    const r = await sendMedia({ number, base64, fileName });
 
-    if (!sent) {
-      return { ok: false, error: "Failed to send message via Evolution API." };
+    if (!r.ok) {
+      return { ok: false, error: r.error ?? "Failed to send message via Evolution API." };
     }
 
     return { ok: true };
