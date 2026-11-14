@@ -13,6 +13,8 @@ import { productVariants, productConfigFields } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { getActiveCustomFontsForLoader } from "@/actions/custom-fonts";
 import { hydrateProductVariants } from "@/lib/variants";
+import { ensureTiers } from "@/lib/config-fields";
+import { representativePrice } from "@/lib/product-cost-math";
 
 export const metadata: Metadata = {
   title: "Admin · Edit Product",
@@ -44,7 +46,7 @@ export default async function EditProductPage({
   const _pt = (product.productType ?? "stocked") as string;
   const inlineVariantsData =
     _pt === "stocked" || _pt === "simple"
-      ? await hydrateProductVariants(id).catch(() => ({ options: [], variants: [] }))
+      ? await hydrateProductVariants(id, { includeCosts: true }).catch(() => ({ options: [], variants: [] }))
       : null;
 
   const variantCount = Number(variantCountRow[0]?.c ?? 0);
@@ -171,6 +173,18 @@ export default async function EditProductPage({
     hideBasePrice: product.hideBasePrice ?? false,
     // Quick task 260705-azw — keychain preview body shape.
     keychainShape: product.keychainShape ?? "square",
+    // Accounting v2 - flat cost + the sell price used for the live margin.
+    costPrice: product.costPrice ?? null,
+    costPerExtraUnit: product.costPerExtraUnit ?? null,
+    referencePrice: representativePrice({
+      productType,
+      variantPrices: (product.variants ?? []).map((v: { price: string }) => v.price),
+      priceTiers: ensureTiers(product.priceTiers),
+    }),
+    priceTiers:
+      productType !== "stocked" && Object.keys(ensureTiers(product.priceTiers)).length > 0
+        ? ensureTiers(product.priceTiers)
+        : null,
   };
 
   return (

@@ -129,6 +129,8 @@ export async function createManualOrder(
       customItemName: data.itemName,
       customItemDescription: data.itemDescription || null,
       customImages: data.images,
+      // Accounting v2: optional own cost of the job, used by gross margin.
+      extraCost: (data.yourCost ?? 0).toFixed(2),
     });
   } catch (err) {
     console.error("[admin-manual-orders] insert failed:", err);

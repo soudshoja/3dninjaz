@@ -1,0 +1,313 @@
+"use client";
+
+import { useMemo, useState, useTransition } from "react";
+import { AlertTriangle } from "lucide-react";
+import { applyBulkCost } from "@/actions/product-costs";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  applyBulkMode,
+  computeMargin,
+  formatPct,
+  formatRm,
+  parseMoney,
+  type BulkMode,
+} from "@/lib/product-cost-math";
+import type { BulkCostChange, ProductCostRow } from "@/lib/product-cost-types";
+
+type ModeKind = "set" | "percent_of_price" | "adjust";
+
+const MODE_OPTIONS: Array<{ kind: ModeKind; label: string; hint: string }> = [
+  { kind: "set", label: "Set an exact cost", hint: "Every selected product gets the same cost." },
+  {
+    kind: "percent_of_price",
+    label: "Cost is a % of price",
+    hint: "For example 40% of each sell price.",
+  },
+  {
+    kind: "adjust",
+    label: "Raise or lower the cost",
+    hint: "Change the existing costs by an amount or a percent.",
+  },
+];
+
+/**
+ * Bulk cost editor: choose a mode, see a BEFORE / AFTER preview with the new
+ * margin and a flag for any product whose cost reaches its price, then apply.
+ * The server recomputes every value from live data; this preview is only a
+ * preview. The parent offers the 8 second Undo from `onApplied`.
+ */
+export function BulkCostDialog({
+  open,
+  onOpenChange,
+  rows,
+  onApplied,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  rows: ProductCostRow[];
+  onApplied: (changes: BulkCostChange[], skipped: number) => void;
+}) {
+  const [kind, setKind] = useState<ModeKind>("set");
+  const [value, setValue] = useState("");
+  const [direction, setDirection] = useState<"raise" | "lower">("raise");
+  const [unit, setUnit] = useState<"rm" | "percent">("rm");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const mode: BulkMode | null = useMemo(() => {
+    const n = parseMoney(value);
+    if (n === null) return null;
+    if (kind === "set") return { kind: "set", amount: n };
+    if (kind === "percent_of_price") return { kind: "percent_of_price", percent: n };
+    const sign = direction === "raise" ? 1 : -1;
+    return unit === "rm"
+      ? { kind: "adjust_rm", delta: sign * n }
+      : { kind: "adjust_percent", percent: sign * n };
+  }, [kind, value, direction, unit]);
+
+  const preview = useMemo(
+    () =>
+      rows.map((r) => {
+        const next = mode ? applyBulkMode(mode, r.price, r.cost) : null;
+        const changes = next !== null && next !== r.cost;
+        return {
+          row: r,
+          next,
+          changes,
+          margin: computeMargin(r.price, next ?? r.cost),
+          tooHigh: next !== null && r.price !== null && next >= r.price,
+          noBase: mode !== null && next === null,
+        };
+      }),
+    [rows, mode],
+  );
+
+  const willChange = preview.filter((p) => p.changes).length;
+  const tooHighCount = preview.filter((p) => p.changes && p.tooHigh).length;
+
+  function apply() {
+    if (!mode || willChange === 0) return;
+    setError(null);
+    startTransition(async () => {
+      const res = await applyBulkCost({ ids: rows.map((r) => r.id), mode });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      onApplied(res.changes, res.skipped);
+      setValue("");
+      onOpenChange(false);
+    });
+  }
+
+  const valueLabel =
+    kind === "set"
+      ? "Cost (RM)"
+      : kind === "percent_of_price"
+        ? "Percent of price (%)"
+        : unit === "rm"
+          ? "Amount (RM)"
+          : "Amount (%)";
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>
+            Edit cost for {rows.length} {rows.length === 1 ? "product" : "products"}
+          </DialogTitle>
+          <DialogDescription>
+            Pick how to change the cost, check the preview, then apply. You can
+            undo for 8 seconds afterwards.
+          </DialogDescription>
+        </DialogHeader>
+
+        <fieldset className="space-y-2">
+          <legend className="mb-1 text-sm font-medium">How to change the cost</legend>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {MODE_OPTIONS.map((o) => (
+              <label
+                key={o.kind}
+                className={
+                  "flex min-h-[44px] cursor-pointer flex-col gap-0.5 rounded-lg border p-3 " +
+                  (kind === o.kind
+                    ? "border-[var(--color-brand-blue)] bg-[var(--color-brand-blue)]/5"
+                    : "border-[var(--color-brand-border)] hover:bg-muted/50")
+                }
+              >
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <input
+                    type="radio"
+                    name="bulk-mode"
+                    checked={kind === o.kind}
+                    onChange={() => setKind(o.kind)}
+                    className="h-4 w-4 accent-[var(--color-brand-blue)]"
+                  />
+                  {o.label}
+                </span>
+                <span className="pl-6 text-xs text-[var(--color-brand-text-muted)]">
+                  {o.hint}
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <div className="flex flex-wrap items-end gap-3">
+          {kind === "adjust" && (
+            <>
+              <div className="space-y-1">
+                <label htmlFor="bulk-direction" className="text-sm font-medium">
+                  Direction
+                </label>
+                <select
+                  id="bulk-direction"
+                  value={direction}
+                  onChange={(e) => setDirection(e.target.value as "raise" | "lower")}
+                  className="h-11 rounded-md border border-[var(--color-brand-border)] bg-white px-3 text-sm md:h-10"
+                >
+                  <option value="raise">Raise</option>
+                  <option value="lower">Lower</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="bulk-unit" className="text-sm font-medium">
+                  By
+                </label>
+                <select
+                  id="bulk-unit"
+                  value={unit}
+                  onChange={(e) => setUnit(e.target.value as "rm" | "percent")}
+                  className="h-11 rounded-md border border-[var(--color-brand-border)] bg-white px-3 text-sm md:h-10"
+                >
+                  <option value="rm">Amount in RM</option>
+                  <option value="percent">Percent</option>
+                </select>
+              </div>
+            </>
+          )}
+          <div className="space-y-1">
+            <label htmlFor="bulk-value" className="text-sm font-medium">
+              {valueLabel}
+            </label>
+            <input
+              id="bulk-value"
+              type="text"
+              inputMode="decimal"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              className="h-11 w-36 rounded-md border border-[var(--color-brand-border)] bg-white px-3 text-right text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand-blue)]/40 md:h-10"
+              placeholder={kind === "set" ? "e.g. 3.50" : "e.g. 40"}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium">Preview</p>
+            <p className="text-xs text-[var(--color-brand-text-muted)]" aria-live="polite">
+              {mode === null
+                ? "Enter a number to see the preview."
+                : `${willChange} will change, ${rows.length - willChange} stay the same.`}
+            </p>
+          </div>
+
+          {tooHighCount > 0 && (
+            <p
+              className="flex items-center gap-1.5 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900"
+              role="status"
+            >
+              <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {tooHighCount} {tooHighCount === 1 ? "product ends" : "products end"} up
+              with a cost at or above the sell price.
+            </p>
+          )}
+
+          <div className="max-h-[38vh] overflow-auto rounded-md border border-[var(--color-brand-border)]">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead className="sticky top-0 bg-muted/60 text-left text-xs text-[var(--color-brand-text-muted)]">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Product</th>
+                  <th className="px-3 py-2 text-right font-medium">Price</th>
+                  <th className="px-3 py-2 text-right font-medium">Cost before</th>
+                  <th className="px-3 py-2 text-right font-medium">Cost after</th>
+                  <th className="px-3 py-2 text-right font-medium">New margin</th>
+                </tr>
+              </thead>
+              <tbody className="tabular-nums">
+                {preview.map(({ row, next, changes, margin, tooHigh, noBase }) => (
+                  <tr key={row.id} className="border-t border-[var(--color-brand-border)]">
+                    <td className="max-w-[220px] truncate px-3 py-2 font-sans">{row.name}</td>
+                    <td className="px-3 py-2 text-right">
+                      {row.price === null ? "-" : formatRm(row.price)}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      {row.cost === null ? "-" : formatRm(row.cost)}
+                    </td>
+                    <td
+                      className={
+                        "px-3 py-2 text-right " +
+                        (changes ? "font-medium" : "text-[var(--color-brand-text-muted)]")
+                      }
+                    >
+                      {mode === null
+                        ? ""
+                        : noBase
+                          ? "No cost to change"
+                          : next === null
+                            ? "-"
+                            : formatRm(next)}
+                    </td>
+                    <td
+                      className={
+                        "px-3 py-2 text-right " + (tooHigh && changes ? "font-medium text-red-700" : "")
+                      }
+                    >
+                      {changes && margin
+                        ? `${formatPct(margin.pct)}${tooHigh ? " (no profit)" : ""}`
+                        : ""}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {error && (
+          <p className="text-sm text-red-600" role="alert">
+            {error}
+          </p>
+        )}
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={pending}
+            className="h-11 md:h-9"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={apply}
+            disabled={pending || mode === null || willChange === 0}
+            className="h-11 bg-[var(--color-brand-ink)] text-white hover:bg-[var(--color-brand-ink)]/90 md:h-9"
+          >
+            {pending ? "Applying..." : `Apply to ${willChange} ${willChange === 1 ? "product" : "products"}`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

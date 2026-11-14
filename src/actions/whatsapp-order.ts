@@ -1,5 +1,7 @@
 "use server";
 
+import { resolveUnitCosts, costColumns } from "@/lib/product-cost";
+import { deriveUnitCount } from "@/lib/product-cost-math";
 import { db } from "@/lib/db";
 import { orders, orderItems, productVariants, productOptionValues, products } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
@@ -226,7 +228,8 @@ export async function createWhatsAppOrder(
       productImage: firstImage,
       variantLabel,
       unitPrice: effectivePrice,
-      unitCost: v.costPrice ?? null,
+      // Accounting v2: resolved for every line below via resolveUnitCosts().
+      unitCost: null,
       quantity,
       lineTotal: line.toFixed(2),
     };
@@ -249,6 +252,7 @@ export async function createWhatsAppOrder(
             name: products.name,
             priceTiers: products.priceTiers,
             soldOut: products.soldOut,
+            unitField: products.unitField,
           })
           .from(products)
           .where(inArray(products.id, configurableProductIds))
@@ -264,6 +268,8 @@ export async function createWhatsAppOrder(
 
   // quick task 260610-kh3 — T-kh3-01: server re-validation of customInput options.
   // Identical treatment as paypal.ts — WhatsApp orders MUST NOT trust client custom text.
+  // Accounting v2: server-validated unit count per configurable line (cost tiers).
+  const unitCountByLine = new Map<object, number>();
   if (configurableProductIds.length > 0) {
     const configFieldRows = await db
       .select({
@@ -366,6 +372,7 @@ export async function createWhatsAppOrder(
           .filter((s) => s.t === "L" || cfg.allowedIconIds.includes(s.id)) // drop forged icon ids
           .slice(0, cfg.maxSlots); // cap oversized sequences (DoS)
         const slotCount = slots.length;
+        unitCountByLine.set(line, slotCount);
 
         const tiers = ensureTiers(productById.get(pid)?.priceTiers);
         const serverPrice = lookupTierPriceBySlotCount(tiers, slotCount);
@@ -389,9 +396,16 @@ export async function createWhatsAppOrder(
     }
   }
 
-  type ConfigSnap = typeof snapshots[0] & { configurationData: ConfigurationData | null };
+  type ConfigSnap = typeof snapshots[0] & {
+    configurationData: ConfigurationData | null;
+    unitCount: number | null;
+  };
   const allSnapshots: ConfigSnap[] = [
-    ...snapshots.map((s) => ({ ...s, configurationData: null as ConfigurationData | null })),
+    ...snapshots.map((s) => ({
+      ...s,
+      configurationData: null as ConfigurationData | null,
+      unitCount: null as number | null,
+    })),
     ...configurableInputLines.map((line) => {
       const cfg = line.configurationData!;
       const qty = Math.max(1, Math.floor(Number(line.quantity) || 1));
@@ -409,9 +423,21 @@ export async function createWhatsAppOrder(
         quantity: qty,
         lineTotal: (cfg.computedPrice * qty).toFixed(2),
         configurationData: cfg,
+        unitCount:
+          unitCountByLine.get(line) ??
+          deriveUnitCount(product?.unitField ?? null, cfg.values as Record<string, string>),
       };
     }),
   ];
+
+  // Accounting v2 - snapshot per-unit cost for every line.
+  const resolvedCosts = await resolveUnitCosts(
+    allSnapshots.map((s) => ({
+      productId: s.productId,
+      variantId: s.variantId,
+      unitCount: s.unitCount,
+    })),
+  );
 
   const subtotal = allSnapshots.reduce((sum, s) => sum + Number(s.lineTotal), 0);
   const subtotalStr = subtotal.toFixed(2);
@@ -535,7 +561,7 @@ export async function createWhatsAppOrder(
     });
 
     await db.insert(orderItems).values(
-      allSnapshots.map((s) => ({
+      allSnapshots.map((s, idx) => ({
         id: randomUUID(),
         orderId: internalOrderId,
         productId: s.productId,
@@ -545,7 +571,7 @@ export async function createWhatsAppOrder(
         productImage: s.productImage,
         variantLabel: s.variantLabel || null,
         unitPrice: s.unitPrice,
-        unitCost: s.unitCost,
+        ...costColumns(resolvedCosts[idx]),
         quantity: s.quantity,
         lineTotal: s.lineTotal,
         configurationData: s.configurationData

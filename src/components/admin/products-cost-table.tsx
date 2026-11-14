@@ -1,0 +1,638 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { AlertTriangle, ListChecks, Package, Star, Undo2, X } from "lucide-react";
+import { undoBulkCost } from "@/actions/product-costs";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { ProductRowActions } from "@/app/(admin)/admin/products/product-row-actions";
+import { InlineCostInput } from "@/components/admin/inline-cost-input";
+import { BulkCostDialog } from "@/components/admin/bulk-cost-dialog";
+import { computeMargin, formatPct } from "@/lib/product-cost-math";
+import type { BulkCostChange, ProductCostRow } from "@/lib/product-cost-types";
+
+const UNDO_SECONDS = 8;
+
+type Overrides = Record<string, { cost: number | null }>;
+
+/**
+ * Products list with cost, margin, filters, coverage bar, inline cost edit,
+ * row selection (shift-click ranges) and the bulk cost bar with undo.
+ * Desktop shows a table, phones show cards with 44px touch targets.
+ */
+export function ProductsCostTable({
+  rows,
+  cardsOnly = false,
+}: {
+  rows: ProductCostRow[];
+  /** Always render the touch-friendly card list (used by the phone cost screen). */
+  cardsOnly?: boolean;
+}) {
+  const router = useRouter();
+  const [overrides, setOverrides] = useState<Overrides>({});
+  const [missingOnly, setMissingOnly] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const lastClicked = useRef<string | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [undo, setUndo] = useState<{
+    changes: BulkCostChange[];
+    secondsLeft: number;
+    message: string;
+  } | null>(null);
+  const [undoError, setUndoError] = useState<string | null>(null);
+
+  // Server values with local (just saved) edits layered on top.
+  const data = useMemo(
+    () => rows.map((r) => (overrides[r.id] ? { ...r, cost: overrides[r.id].cost } : r)),
+    [rows, overrides],
+  );
+
+  const withCost = data.filter((r) => r.cost !== null).length;
+  const coveragePct = data.length === 0 ? 0 : Math.round((withCost / data.length) * 100);
+
+  const categories = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of rows) if (r.categoryId && r.categoryName) map.set(r.categoryId, r.categoryName);
+    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [rows]);
+  const types = useMemo(() => [...new Set(rows.map((r) => r.productType))].sort(), [rows]);
+
+  const visible = useMemo(
+    () =>
+      data.filter((r) => {
+        if (missingOnly && r.cost !== null) return false;
+        if (categoryFilter === "none" && r.categoryId !== null) return false;
+        if (categoryFilter !== "all" && categoryFilter !== "none" && r.categoryId !== categoryFilter)
+          return false;
+        if (typeFilter !== "all" && r.productType !== typeFilter) return false;
+        return true;
+      }),
+    [data, missingOnly, categoryFilter, typeFilter],
+  );
+  const visibleIds = useMemo(() => visible.map((r) => r.id), [visible]);
+
+  // Drop selections that no longer exist (deleted product).
+  useEffect(() => {
+    setSelected((prev) => {
+      const ids = new Set(rows.map((r) => r.id));
+      const next = new Set([...prev].filter((id) => ids.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [rows]);
+
+  // Undo countdown.
+  useEffect(() => {
+    if (!undo) return;
+    if (undo.secondsLeft <= 0) {
+      setUndo(null);
+      return;
+    }
+    const t = setTimeout(
+      () => setUndo((u) => (u ? { ...u, secondsLeft: u.secondsLeft - 1 } : u)),
+      1000,
+    );
+    return () => clearTimeout(t);
+  }, [undo]);
+
+  const toggleRow = useCallback(
+    (id: string, shift: boolean) => {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        const anchor = lastClicked.current;
+        if (shift && anchor && anchor !== id) {
+          const a = visibleIds.indexOf(anchor);
+          const b = visibleIds.indexOf(id);
+          if (a !== -1 && b !== -1) {
+            const [from, to] = a < b ? [a, b] : [b, a];
+            // Range takes the state of the clicked row's new value.
+            const makeSelected = !prev.has(id);
+            for (let i = from; i <= to; i++) {
+              if (makeSelected) next.add(visibleIds[i]);
+              else next.delete(visibleIds[i]);
+            }
+            return next;
+          }
+        }
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+      lastClicked.current = id;
+    },
+    [visibleIds],
+  );
+
+  const allVisibleSelected =
+    visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
+  const someVisibleSelected = visibleIds.some((id) => selected.has(id));
+
+  function toggleAllVisible() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) visibleIds.forEach((id) => next.delete(id));
+      else visibleIds.forEach((id) => next.add(id));
+      return next;
+    });
+  }
+
+  const selectedRows = useMemo(() => data.filter((r) => selected.has(r.id)), [data, selected]);
+
+  function onSaved(id: string, cost: number | null) {
+    setOverrides((prev) => ({ ...prev, [id]: { cost } }));
+  }
+
+  function focusNext(el: HTMLInputElement) {
+    const all = Array.from(
+      document.querySelectorAll<HTMLInputElement>("input[data-cost-input]"),
+    ).filter((i) => i.offsetParent !== null);
+    const idx = all.indexOf(el);
+    const next = idx >= 0 ? all[idx + 1] : undefined;
+    if (next) next.focus();
+    else el.blur();
+  }
+
+  function handleApplied(changes: BulkCostChange[], skipped: number) {
+    setOverrides((prev) => {
+      const next = { ...prev };
+      for (const c of changes) next[c.id] = { cost: c.newCost };
+      return next;
+    });
+    setSelected(new Set());
+    setUndoError(null);
+    if (changes.length > 0) {
+      setUndo({
+        changes,
+        secondsLeft: UNDO_SECONDS,
+        message: `Updated ${changes.length} ${changes.length === 1 ? "product" : "products"}${
+          skipped > 0 ? `, ${skipped} unchanged` : ""
+        }.`,
+      });
+    }
+    router.refresh();
+  }
+
+  async function handleUndo() {
+    if (!undo) return;
+    const res = await undoBulkCost({ changes: undo.changes });
+    if (!res.ok) {
+      setUndoError(res.error);
+      setUndo(null);
+      return;
+    }
+    setOverrides((prev) => {
+      const next = { ...prev };
+      for (const c of undo.changes) next[c.id] = { cost: c.oldCost };
+      return next;
+    });
+    setUndo(null);
+    router.refresh();
+  }
+
+  const clearFilters = missingOnly || categoryFilter !== "all" || typeFilter !== "all";
+
+  return (
+    <div className="space-y-4 pb-24">
+      {/* Coverage */}
+      <div className="rounded-lg border border-[var(--color-brand-border)] bg-white p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-medium tabular-nums">
+            {withCost} of {data.length} {data.length === 1 ? "product has" : "products have"} a cost
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {cardsOnly ? (
+              <Link
+                href="/admin/products/costs"
+                className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] px-3 text-sm font-medium hover:bg-muted md:h-9"
+              >
+                One product at a time
+              </Link>
+            ) : (
+              <Link
+                href="/admin/products/costs"
+                className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] px-3 text-sm font-medium hover:bg-muted md:h-9"
+              >
+                Enter costs on your phone
+              </Link>
+            )}
+            <Link
+              href="/admin/products/costs-import"
+              className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-[var(--color-brand-border)] px-3 text-sm font-medium hover:bg-muted md:h-9"
+            >
+              Import costs from a file
+            </Link>
+          </div>
+        </div>
+        <div
+          className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={coveragePct}
+          aria-label="Products with a cost"
+        >
+          <div
+            className="h-full rounded-full bg-[var(--color-brand-green)] motion-safe:transition-[width] motion-safe:duration-200"
+            style={{ width: `${coveragePct}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-end gap-3">
+        <button
+          type="button"
+          onClick={() => setMissingOnly((v) => !v)}
+          aria-pressed={missingOnly}
+          className={
+            "inline-flex h-11 items-center rounded-full border px-4 text-sm font-medium md:h-9 " +
+            (missingOnly
+              ? "border-[var(--color-brand-ink)] bg-[var(--color-brand-ink)] text-white"
+              : "border-[var(--color-brand-border)] bg-white hover:bg-muted")
+          }
+        >
+          Missing cost ({data.length - withCost})
+        </button>
+        <div className="space-y-1">
+          <label htmlFor="filter-category" className="block text-xs text-[var(--color-brand-text-muted)]">
+            Category
+          </label>
+          <select
+            id="filter-category"
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="h-11 rounded-md border border-[var(--color-brand-border)] bg-white px-3 text-sm md:h-9"
+          >
+            <option value="all">All categories</option>
+            <option value="none">Uncategorized</option>
+            {categories.map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label htmlFor="filter-type" className="block text-xs text-[var(--color-brand-text-muted)]">
+            Type
+          </label>
+          <select
+            id="filter-type"
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="h-11 rounded-md border border-[var(--color-brand-border)] bg-white px-3 text-sm capitalize md:h-9"
+          >
+            <option value="all">All types</option>
+            {types.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </div>
+        {clearFilters && (
+          <button
+            type="button"
+            onClick={() => {
+              setMissingOnly(false);
+              setCategoryFilter("all");
+              setTypeFilter("all");
+            }}
+            className="h-11 px-2 text-sm underline decoration-dotted md:h-9"
+          >
+            Clear filters
+          </button>
+        )}
+        <p className="ml-auto text-sm tabular-nums text-[var(--color-brand-text-muted)]" aria-live="polite">
+          Showing {visible.length} of {data.length}
+        </p>
+      </div>
+
+      {undoError && (
+        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+          {undoError}
+        </p>
+      )}
+
+      {visible.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-[var(--color-brand-border)] bg-white p-10 text-center">
+          <Package className="h-8 w-8 text-[var(--color-brand-text-muted)]" aria-hidden="true" />
+          <p className="font-medium">No products match these filters</p>
+          <p className="text-sm text-[var(--color-brand-text-muted)]">
+            {missingOnly && !clearFilters
+              ? ""
+              : "Clear the filters to see every product."}
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Desktop table */}
+          <div
+            className={
+              cardsOnly
+                ? "hidden"
+                : "hidden overflow-x-auto rounded-lg border border-[var(--color-brand-border)] bg-white md:block"
+            }
+          >
+            <Table className="min-w-[980px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10">
+                    <input
+                      type="checkbox"
+                      aria-label={
+                        clearFilters
+                          ? `Select all ${visible.length} matching products`
+                          : "Select all products"
+                      }
+                      checked={allVisibleSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = !allVisibleSelected && someVisibleSelected;
+                      }}
+                      onChange={toggleAllVisible}
+                      className="h-4 w-4 accent-[var(--color-brand-blue)]"
+                    />
+                  </TableHead>
+                  <TableHead className="w-16">Image</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead className="w-24">Type</TableHead>
+                  <TableHead className="text-right">Price</TableHead>
+                  <TableHead className="text-right">Cost</TableHead>
+                  <TableHead className="text-right">Margin</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-16 text-center">Featured</TableHead>
+                  <TableHead className="w-16 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visible.map((p) => {
+                  const margin = computeMargin(p.price, p.cost);
+                  const bad = p.cost !== null && p.price !== null && p.cost >= p.price;
+                  return (
+                    <TableRow key={p.id} data-state={selected.has(p.id) ? "selected" : undefined}>
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${p.name}`}
+                          checked={selected.has(p.id)}
+                          onClick={(e) => {
+                            // onChange does not expose shiftKey; handle on click.
+                            e.stopPropagation();
+                            toggleRow(p.id, e.shiftKey);
+                          }}
+                          onChange={() => {}}
+                          className="h-4 w-4 accent-[var(--color-brand-blue)]"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {p.thumbUrl ? (
+                          <Image
+                            src={p.thumbUrl}
+                            alt=""
+                            width={48}
+                            height={48}
+                            className="h-12 w-12 rounded object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-12 w-12 items-center justify-center rounded bg-gray-100">
+                            <Package className="h-5 w-5 text-gray-400" aria-hidden="true" />
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium">{p.name}</TableCell>
+                      <TableCell>
+                        {p.categoryName ?? (
+                          <span className="text-[var(--color-brand-text-muted)]">Uncategorized</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                          {p.productType}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{p.priceLabel}</TableCell>
+                      <TableCell className="text-right">
+                        <InlineCostInput
+                          productId={p.id}
+                          value={p.cost}
+                          label={`Cost for ${p.name}`}
+                          onSaved={(c) => onSaved(p.id, c)}
+                          onEnter={focusNext}
+                        />
+                      </TableCell>
+                      <TableCell
+                        className={
+                          "text-right tabular-nums " + (bad ? "font-medium text-red-700" : "")
+                        }
+                        title={
+                          p.productType === "keychain" ? "Margin of a 1-keycap keychain" : undefined
+                        }
+                      >
+                        {margin === null ? (
+                          <span className="text-[var(--color-brand-text-muted)]">-</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1">
+                            {bad && <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />}
+                            {formatPct(margin.pct)}
+                            {bad && <span className="sr-only">cost is at or above price</span>}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {p.isActive ? (
+                          <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Active</Badge>
+                        ) : (
+                          <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-100">Inactive</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Star
+                          className={
+                            p.isFeatured
+                              ? "mx-auto h-4 w-4 fill-yellow-400 text-yellow-500"
+                              : "mx-auto h-4 w-4 text-gray-300"
+                          }
+                          aria-label={p.isFeatured ? "Featured" : "Not featured"}
+                        />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <ProductRowActions
+                          id={p.id}
+                          name={p.name}
+                          isActive={p.isActive}
+                          isFeatured={p.isFeatured}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Mobile cards */}
+          <div
+            className={
+              "divide-y divide-[var(--color-brand-border)] rounded-lg border border-[var(--color-brand-border)] bg-white" +
+              (cardsOnly ? "" : " md:hidden")
+            }
+          >
+            <label className="flex min-h-[44px] items-center gap-3 px-4 text-sm font-medium">
+              <input
+                type="checkbox"
+                checked={allVisibleSelected}
+                ref={(el) => {
+                  if (el) el.indeterminate = !allVisibleSelected && someVisibleSelected;
+                }}
+                onChange={toggleAllVisible}
+                className="h-6 w-6 accent-[var(--color-brand-blue)]"
+              />
+              {clearFilters ? `Select all ${visible.length} matching` : "Select all"}
+            </label>
+            {visible.map((p) => {
+              const margin = computeMargin(p.price, p.cost);
+              const bad = p.cost !== null && p.price !== null && p.cost >= p.price;
+              return (
+                <div key={p.id} className="flex gap-3 p-4">
+                  <label className="flex h-11 w-11 shrink-0 items-center justify-center">
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${p.name}`}
+                      checked={selected.has(p.id)}
+                      onChange={() => toggleRow(p.id, false)}
+                      className="h-6 w-6 accent-[var(--color-brand-blue)]"
+                    />
+                  </label>
+                  <div className="shrink-0">
+                    {p.thumbUrl ? (
+                      <Image
+                        src={p.thumbUrl}
+                        alt=""
+                        width={56}
+                        height={56}
+                        className="h-14 w-14 rounded object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-14 w-14 items-center justify-center rounded bg-gray-100">
+                        <Package className="h-5 w-5 text-gray-400" aria-hidden="true" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="break-words font-medium leading-snug">{p.name}</p>
+                    <p className="text-xs tabular-nums text-[var(--color-brand-text-muted)]">
+                      {p.categoryName ?? "Uncategorized"} · {p.priceLabel}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <InlineCostInput
+                        productId={p.id}
+                        value={p.cost}
+                        large
+                        label={`Cost for ${p.name}`}
+                        onSaved={(c) => onSaved(p.id, c)}
+                        onEnter={focusNext}
+                      />
+                      <span
+                        className={
+                          "text-sm tabular-nums " + (bad ? "font-medium text-red-700" : "text-[var(--color-brand-text-muted)]")
+                        }
+                      >
+                        {margin === null ? "No margin yet" : `Margin ${formatPct(margin.pct)}`}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex min-h-[44px] shrink-0 items-start">
+                    <ProductRowActions
+                      id={p.id}
+                      name={p.name}
+                      isActive={p.isActive}
+                      isFeatured={p.isFeatured}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* Selection bar */}
+      {selectedRows.length > 0 && !undo && (
+        <div
+          className="fixed inset-x-3 bottom-3 z-40 mx-auto flex max-w-3xl flex-wrap items-center gap-3 rounded-xl bg-[var(--color-brand-ink)] px-4 py-3 text-white shadow-lg"
+          role="region"
+          aria-label="Bulk actions"
+        >
+          <p className="text-sm font-medium tabular-nums">
+            {selectedRows.length} selected
+          </p>
+          {selectedRows.length < visible.length && (
+            <button
+              type="button"
+              onClick={() => setSelected(new Set(visibleIds))}
+              className="min-h-[44px] text-sm underline decoration-dotted md:min-h-0"
+            >
+              Select all {visible.length} {clearFilters ? "matching" : ""}
+            </button>
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              type="button"
+              onClick={() => setBulkOpen(true)}
+              className="h-11 gap-2 bg-white text-[var(--color-brand-ink)] hover:bg-white/90 md:h-9"
+            >
+              <ListChecks className="h-4 w-4" aria-hidden="true" />
+              Edit cost
+            </Button>
+            <button
+              type="button"
+              onClick={() => setSelected(new Set())}
+              aria-label="Clear selection"
+              className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-white/10 md:h-9 md:w-9"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Undo bar */}
+      {undo && (
+        <div
+          className="fixed inset-x-3 bottom-3 z-40 mx-auto flex max-w-3xl items-center gap-3 rounded-xl bg-[var(--color-brand-ink)] px-4 py-3 text-white shadow-lg"
+          role="status"
+        >
+          <p className="text-sm">{undo.message}</p>
+          <Button
+            type="button"
+            onClick={handleUndo}
+            className="ml-auto h-11 gap-2 bg-white text-[var(--color-brand-ink)] hover:bg-white/90 md:h-9"
+          >
+            <Undo2 className="h-4 w-4" aria-hidden="true" />
+            Undo ({undo.secondsLeft}s)
+          </Button>
+        </div>
+      )}
+
+      <BulkCostDialog
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        rows={selectedRows}
+        onApplied={handleApplied}
+      />
+    </div>
+  );
+}

@@ -843,7 +843,11 @@ export async function updateOrderItemCost(
 
   await db
     .update(orderItems)
-    .set({ unitCost: valueToStore })
+    // Accounting v2: a typed cost is 'manual' (never overwritten by backfill).
+    .set({
+      unitCost: valueToStore,
+      unitCostSource: valueToStore === null ? null : "manual",
+    })
     .where(eq(orderItems.id, itemId));
 
   const summary = await recomputeOrderProfit(orderId);
