@@ -44,7 +44,7 @@ type ActionResult = { ok: true } | { ok: false; error: string };
  *
  * Approach (a): persist subtotal first → call refreshOrderShipping which reads
  * the freshly-stored subtotal and recomputes total = subtotal − discount +
- * shipping + extra (mirrors the live-quote path exactly, including markup +
+ * shipping (mirrors the live-quote path exactly, including markup +
  * free-shipping rules). If re-quote fails (courier no longer offered), fall
  * back to a local total calculation using the stored shippingCost.
  */
@@ -66,7 +66,6 @@ async function recomputeOrderTotals(orderId: string): Promise<void> {
       shippingServiceCode: orders.shippingServiceCode,
       discountAmount: orders.discountAmount,
       shippingCost: orders.shippingCost,
-      extraCost: orders.extraCost,
     })
     .from(orders)
     .where(eq(orders.id, orderId))
@@ -94,8 +93,8 @@ async function recomputeOrderTotals(orderId: string): Promise<void> {
   // 5. No courier selected OR re-quote failed — compute total locally.
   const discount = Number(orderRow.discountAmount ?? 0);
   const shipping = Number(orderRow.shippingCost ?? 0);
-  const extra = Number(orderRow.extraCost ?? 0);
-  const total = Math.max(0, Math.round((subtotal - discount + shipping + extra) * 100) / 100);
+  // extraCost is the owner's INTERNAL cost (profit panel / analytics), never a customer charge, so it is not part of the payable total.
+  const total = Math.max(0, Math.round((subtotal - discount + shipping) * 100) / 100);
 
   await db
     .update(orders)
