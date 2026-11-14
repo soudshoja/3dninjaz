@@ -29,7 +29,7 @@ export default async function NewAssetPage() {
           New asset
         </h1>
         <p className="mt-1 mb-6 text-slate-600">
-          Assets are tracked separately and don&apos;t reduce profit.
+          Machines and equipment. They do not reduce profit, but money paid for them leaves the account it came from.
         </p>
         <AssetForm mode="new" />
       </div>
