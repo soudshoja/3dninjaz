@@ -13,8 +13,8 @@ import { parse as parseCsv } from "csv-parse/sync";
 export const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 export const MAX_IMPORT_ROWS = 2000;
 export const MAX_IMPORT_COLS = 64;
-/** Template has up to 12 data columns; only those are read. */
-const READ_COLS = 12;
+/** Template has up to 13 data columns (A-M, M = option key); only those are read. */
+const READ_COLS = 13;
 /** Header / note rows allowed on top of the data rows. */
 const HEADER_ROWS = 12;
 

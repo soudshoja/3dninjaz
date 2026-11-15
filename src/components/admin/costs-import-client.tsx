@@ -344,7 +344,7 @@ export function CostsImportClient() {
                       </p>
                       {r.productType && (
                         <p className="text-xs uppercase tracking-wide text-[var(--color-brand-text-muted)]">
-                          {r.productType}
+                          {r.optionKey ? `${r.productType} option` : r.productType}
                         </p>
                       )}
                     </td>

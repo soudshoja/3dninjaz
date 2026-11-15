@@ -13,10 +13,17 @@ import {
   toCostString,
 } from "@/lib/product-cost-math";
 import { ensureTiers } from "@/lib/config-fields";
+import {
+  readOptionCost,
+  selectOptionPrices,
+  writeOptionCost,
+} from "@/lib/product-option-costs";
 import type {
   BulkCostChange,
   BulkCostMode,
   BulkCostResult,
+  OptionCostResult,
+  OptionTarget,
   SimpleCostResult,
 } from "@/lib/product-cost-types";
 
@@ -53,13 +60,30 @@ const modeSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
-const bulkSchema = z.object({ ids: idList, mode: modeSchema });
+const optionTargetSchema = z.object({
+  productId: z.string().min(1).max(36),
+  fieldId: z.string().min(1).max(36),
+  value: z.string().min(1).max(150),
+});
+
+const bulkSchema = z
+  .object({
+    ids: z.array(z.string().min(1).max(36)).max(MAX_BULK_IDS),
+    options: z.array(optionTargetSchema).max(MAX_BULK_IDS).optional(),
+    mode: modeSchema,
+  })
+  .refine((v) => v.ids.length + (v.options?.length ?? 0) > 0, "Nothing selected");
+
+const optionSingleSchema = optionTargetSchema.extend({ cost: money.nullable() });
 
 const undoSchema = z.object({
   changes: z
     .array(
       z.object({
         id: z.string().min(1).max(36),
+        option: z
+          .object({ fieldId: z.string().min(1).max(36), value: z.string().min(1).max(150) })
+          .optional(),
         oldCost: money.nullable(),
         oldCostPerExtra: money.nullable(),
         oldCostUpdatedAt: z.string().max(40).nullable(),
@@ -74,6 +98,36 @@ function revalidateCostPages() {
   revalidatePath("/admin/products");
   revalidatePath("/admin/products/costs");
   revalidatePath("/admin");
+}
+
+
+/**
+ * Inline edit of ONE option's cost. A blank (null) cost removes the option's
+ * own cost so the product cost applies again. Only options that really exist on
+ * the product's Select field are accepted.
+ */
+export async function updateOptionCost(input: {
+  productId: string;
+  fieldId: string;
+  value: string;
+  cost: number | null;
+}): Promise<OptionCostResult> {
+  await requireAdmin();
+  const parsed = optionSingleSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Enter a cost of RM 0.00 or more." };
+  const { cost, ...target } = parsed.data;
+  try {
+    const prices = await selectOptionPrices(db, target.productId, target.fieldId);
+    if (!prices || !prices.has(target.value)) {
+      return { ok: false, error: "That option no longer exists. Refresh the page." };
+    }
+    await db.transaction((tx) => writeOptionCost(tx, target, cost));
+    revalidateCostPages();
+    return { ok: true, cost };
+  } catch (err) {
+    console.error("[product-costs] updateOptionCost failed:", err);
+    return { ok: false, error: "Could not save that cost. Please try again." };
+  }
 }
 
 /** Inline edit / mobile capture: set (or clear) the cost of ONE product. */
@@ -131,6 +185,8 @@ export async function updateProductCost(input: {
  */
 export async function applyBulkCost(input: {
   ids: string[];
+  /** Individual Select options (a product's variants) to cost. */
+  options?: OptionTarget[];
   mode: BulkCostMode;
 }): Promise<BulkCostResult> {
   await requireAdmin();
@@ -139,7 +195,13 @@ export async function applyBulkCost(input: {
     return { ok: false, error: "That bulk change is not valid. Check the number you entered." };
   }
   const { ids, mode } = parsed.data;
-  const uniqueIds = [...new Set(ids)];
+  const optionTargets = [
+    ...new Map(
+      (parsed.data.options ?? []).map((o) => [`${o.productId}::${o.fieldId}::${o.value}`, o]),
+    ).values(),
+  ];
+  const uniqueIds = [...new Set([...ids, ...optionTargets.map((o) => o.productId)])];
+  const productIdSet = new Set(ids);
 
   try {
     const result = await db.transaction(async (tx) => {
@@ -159,23 +221,25 @@ export async function applyBulkCost(input: {
         .select({ productId: productVariants.productId, price: productVariants.price })
         .from(productVariants)
         .where(inArray(productVariants.productId, uniqueIds));
-      const prices = new Map<string, number[]>();
+      const priceByProduct = new Map<string, number[]>();
       for (const v of variantRows) {
         const n = Number(v.price);
         if (!Number.isFinite(n)) continue;
-        const b = prices.get(v.productId) ?? [];
+        const b = priceByProduct.get(v.productId) ?? [];
         b.push(n);
-        prices.set(v.productId, b);
+        priceByProduct.set(v.productId, b);
       }
 
       const changes: BulkCostChange[] = [];
       let skipped = 0;
       const now = new Date();
+      const rowById = new Map(rows.map((r) => [r.id, r]));
       for (const r of rows) {
+        if (!productIdSet.has(r.id)) continue; // loaded only for its options
         const type = r.productType ?? "stocked";
         const price = representativePrice({
           productType: type,
-          variantPrices: prices.get(r.id) ?? [],
+          variantPrices: priceByProduct.get(r.id) ?? [],
           priceTiers: type === "stocked" ? null : ensureTiers(r.priceTiers),
         });
         const current = costToNumber(r.costPrice);
@@ -196,7 +260,46 @@ export async function applyBulkCost(input: {
           newCost: next,
         });
       }
-      skipped += uniqueIds.length - rows.length;
+      skipped += [...productIdSet].filter((id) => !rowById.has(id)).length;
+
+      // Options: price = option price, else the product's representative price;
+      // "current" for raise/lower = own cost, else the product cost it falls back to.
+      const optionPricesCache = new Map<string, Map<string, number | null> | null>();
+      for (const t of optionTargets) {
+        const product = rowById.get(t.productId);
+        const cacheKey = `${t.productId}::${t.fieldId}`;
+        if (!optionPricesCache.has(cacheKey)) {
+          optionPricesCache.set(cacheKey, await selectOptionPrices(tx, t.productId, t.fieldId));
+        }
+        const optionPrices = optionPricesCache.get(cacheKey);
+        if (!product || !optionPrices || !optionPrices.has(t.value)) {
+          skipped += 1;
+          continue;
+        }
+        const type = product.productType ?? "stocked";
+        const basePrice = representativePrice({
+          productType: type,
+          variantPrices: priceByProduct.get(product.id) ?? [],
+          priceTiers: type === "stocked" ? null : ensureTiers(product.priceTiers),
+        });
+        const price = optionPrices.get(t.value) ?? basePrice;
+        const own = await readOptionCost(tx, t);
+        const productCost = costToNumber(product.costPrice);
+        const next = applyBulkMode(mode, price, own ?? productCost);
+        if (next === null || next === own || (own === null && next === productCost)) {
+          skipped += 1;
+          continue;
+        }
+        await writeOptionCost(tx, t, next);
+        changes.push({
+          id: t.productId,
+          option: { fieldId: t.fieldId, value: t.value },
+          oldCost: own,
+          oldCostPerExtra: null,
+          oldCostUpdatedAt: null,
+          newCost: next,
+        });
+      }
       return { changes, skipped };
     });
     revalidateCostPages();
@@ -223,6 +326,13 @@ export async function undoBulkCost(input: {
     const restored = await db.transaction(async (tx) => {
       let n = 0;
       for (const c of parsed.data.changes) {
+        if (c.option) {
+          const target: OptionTarget = { productId: c.id, ...c.option };
+          if ((await readOptionCost(tx, target)) !== c.newCost) continue; // edited since
+          await writeOptionCost(tx, target, c.oldCost);
+          n += 1;
+          continue;
+        }
         const [cur] = await tx
           .select({ costPrice: products.costPrice })
           .from(products)

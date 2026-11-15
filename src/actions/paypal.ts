@@ -527,6 +527,8 @@ export async function createPayPalOrder(
       productId: s.productId,
       variantId: s.variantId,
       unitCount: s.unitCount,
+      // The chosen Select option can carry its own cost (product_option_costs).
+      configValues: (s.configurationData?.values as Record<string, string> | undefined) ?? null,
     })),
   );
 

@@ -1,6 +1,28 @@
 // Types shared by the product-cost server code and the admin cost UI. Kept out
 // of any "use server" file (those may only export async functions).
 
+/**
+ * One option ("variant") of a product's Select field. Its own cost is
+ * optional: a blank cost means the product cost is used.
+ */
+export type OptionCostRow = {
+  /** Stable key for selection / React: `${productId}::${fieldId}::${value}`. */
+  key: string;
+  fieldId: string;
+  /** The option value stored on order lines (configValues[fieldId]). */
+  value: string;
+  label: string;
+  /** Label of the Select field, shown when a product has more than one. */
+  fieldLabel: string;
+  /** Option price override, else null (the product price applies). */
+  price: number | null;
+  /** Own cost, else null (falls back to the product cost). */
+  cost: number | null;
+};
+
+/** Address of one option, for server actions. */
+export type OptionTarget = { productId: string; fieldId: string; value: string };
+
 /** One product as the cost screens see it (admin-only; carries cost). */
 export type ProductCostRow = {
   id: string;
@@ -21,6 +43,8 @@ export type ProductCostRow = {
   costPerExtra: number | null;
   /** ISO timestamp or null. */
   costUpdatedAt: string | null;
+  /** Options of the product's Select field(s); empty for most products. */
+  options: OptionCostRow[];
 };
 
 export type BulkCostMode =
@@ -31,7 +55,10 @@ export type BulkCostMode =
 
 /** What a bulk apply changed; handed back so the client can offer Undo. */
 export type BulkCostChange = {
+  /** Product id (also for an option change; see `option`). */
   id: string;
+  /** Set when this change is the cost of one Select option, not the product. */
+  option?: { fieldId: string; value: string };
   oldCost: number | null;
   oldCostPerExtra: number | null;
   oldCostUpdatedAt: string | null;
@@ -40,6 +67,10 @@ export type BulkCostChange = {
 
 export type BulkCostResult =
   | { ok: true; changes: BulkCostChange[]; skipped: number }
+  | { ok: false; error: string };
+
+export type OptionCostResult =
+  | { ok: true; cost: number | null }
   | { ok: false; error: string };
 
 export type SimpleCostResult =
@@ -56,6 +87,9 @@ export type CostImportRow = {
   /** 1-based spreadsheet row number, for the report. */
   rowNumber: number;
   productId: string;
+  /** Set on a variant row: the Select option this row costs ("fieldId|value"). */
+  optionKey: string | null;
+  optionLabel: string | null;
   sheetName: string;
   sheetPrice: number | null;
   /** Parsed new cost; null = blank (skipped). */
@@ -97,6 +131,8 @@ export type CostImportPreview = {
 
 export type CostImportChange = {
   productId: string;
+  /** Set when the change is one Select option's cost, not the product's. */
+  optionKey?: string | null;
   name: string;
   oldCost: number | null;
   oldCostPerExtra: number | null;

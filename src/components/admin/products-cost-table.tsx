@@ -1,10 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ListChecks, Package, Star, Undo2, X } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronRight,
+  ListChecks,
+  Package,
+  Star,
+  Undo2,
+  X,
+} from "lucide-react";
 import { undoBulkCost } from "@/actions/product-costs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,9 +27,9 @@ import {
 } from "@/components/ui/table";
 import { ProductRowActions } from "@/app/(admin)/admin/products/product-row-actions";
 import { InlineCostInput } from "@/components/admin/inline-cost-input";
-import { BulkCostDialog } from "@/components/admin/bulk-cost-dialog";
-import { computeMargin, formatPct } from "@/lib/product-cost-math";
-import type { BulkCostChange, ProductCostRow } from "@/lib/product-cost-types";
+import { BulkCostDialog, type BulkOptionItem } from "@/components/admin/bulk-cost-dialog";
+import { computeMargin, formatPct, formatRm, optionKey } from "@/lib/product-cost-math";
+import type { BulkCostChange, OptionCostRow, ProductCostRow } from "@/lib/product-cost-types";
 
 const UNDO_SECONDS = 8;
 
@@ -41,6 +50,9 @@ export function ProductsCostTable({
 }) {
   const router = useRouter();
   const [overrides, setOverrides] = useState<Overrides>({});
+  // Just-saved option costs, by option key (a product's variants are its Select options).
+  const [optionOverrides, setOptionOverrides] = useState<Record<string, number | null>>({});
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [missingOnly, setMissingOnly] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -56,11 +68,24 @@ export function ProductsCostTable({
 
   // Server values with local (just saved) edits layered on top.
   const data = useMemo(
-    () => rows.map((r) => (overrides[r.id] ? { ...r, cost: overrides[r.id].cost } : r)),
-    [rows, overrides],
+    () =>
+      rows.map((r) => {
+        const base = overrides[r.id] ? { ...r, cost: overrides[r.id].cost } : r;
+        if (base.options.length === 0) return base;
+        return {
+          ...base,
+          options: base.options.map((o) =>
+            o.key in optionOverrides ? { ...o, cost: optionOverrides[o.key] } : o,
+          ),
+        };
+      }),
+    [rows, overrides, optionOverrides],
   );
 
-  const withCost = data.filter((r) => r.cost !== null).length;
+  // A product is covered by its own cost, or when every one of its options has one.
+  const hasCost = (r: ProductCostRow) =>
+    r.cost !== null || (r.options.length > 0 && r.options.every((o) => o.cost !== null));
+  const withCost = data.filter(hasCost).length;
   const coveragePct = data.length === 0 ? 0 : Math.round((withCost / data.length) * 100);
 
   const categories = useMemo(() => {
@@ -73,7 +98,7 @@ export function ProductsCostTable({
   const visible = useMemo(
     () =>
       data.filter((r) => {
-        if (missingOnly && r.cost !== null) return false;
+        if (missingOnly && hasCost(r)) return false;
         if (categoryFilter === "none" && r.categoryId !== null) return false;
         if (categoryFilter !== "all" && categoryFilter !== "none" && r.categoryId !== categoryFilter)
           return false;
@@ -87,7 +112,7 @@ export function ProductsCostTable({
   // Drop selections that no longer exist (deleted product).
   useEffect(() => {
     setSelected((prev) => {
-      const ids = new Set(rows.map((r) => r.id));
+      const ids = new Set(rows.flatMap((r) => [r.id, ...r.options.map((o) => o.key)]));
       const next = new Set([...prev].filter((id) => ids.has(id)));
       return next.size === prev.size ? prev : next;
     });
@@ -149,6 +174,37 @@ export function ProductsCostTable({
   }
 
   const selectedRows = useMemo(() => data.filter((r) => selected.has(r.id)), [data, selected]);
+  // Selected options, with the cost they use today (own, else the product's).
+  const selectedOptionItems = useMemo<BulkOptionItem[]>(
+    () =>
+      data.flatMap((p) =>
+        p.options
+          .filter((o) => selected.has(o.key))
+          .map((o) => ({
+            key: o.key,
+            target: { productId: p.id, fieldId: o.fieldId, value: o.value },
+            name: `${p.name} - ${o.label}`,
+            price: o.price ?? p.price,
+            cost: o.cost ?? p.cost,
+            hasOwnCost: o.cost !== null,
+          })),
+      ),
+    [data, selected],
+  );
+  const selectedCount = selectedRows.length + selectedOptionItems.length;
+
+  function toggleExpanded(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function onOptionSaved(key: string, cost: number | null) {
+    setOptionOverrides((prev) => ({ ...prev, [key]: cost }));
+  }
 
   function onSaved(id: string, cost: number | null) {
     setOverrides((prev) => ({ ...prev, [id]: { cost } }));
@@ -167,7 +223,14 @@ export function ProductsCostTable({
   function handleApplied(changes: BulkCostChange[], skipped: number) {
     setOverrides((prev) => {
       const next = { ...prev };
-      for (const c of changes) next[c.id] = { cost: c.newCost };
+      for (const c of changes) if (!c.option) next[c.id] = { cost: c.newCost };
+      return next;
+    });
+    setOptionOverrides((prev) => {
+      const next = { ...prev };
+      for (const c of changes) {
+        if (c.option) next[optionKey(c.id, c.option.fieldId, c.option.value)] = c.newCost;
+      }
       return next;
     });
     setSelected(new Set());
@@ -176,7 +239,7 @@ export function ProductsCostTable({
       setUndo({
         changes,
         secondsLeft: UNDO_SECONDS,
-        message: `Updated ${changes.length} ${changes.length === 1 ? "product" : "products"}${
+        message: `Updated ${changes.length} ${changes.length === 1 ? "item" : "items"}${
           skipped > 0 ? `, ${skipped} unchanged` : ""
         }.`,
       });
@@ -194,7 +257,14 @@ export function ProductsCostTable({
     }
     setOverrides((prev) => {
       const next = { ...prev };
-      for (const c of undo.changes) next[c.id] = { cost: c.oldCost };
+      for (const c of undo.changes) if (!c.option) next[c.id] = { cost: c.oldCost };
+      return next;
+    });
+    setOptionOverrides((prev) => {
+      const next = { ...prev };
+      for (const c of undo.changes) {
+        if (c.option) next[optionKey(c.id, c.option.fieldId, c.option.value)] = c.oldCost;
+      }
       return next;
     });
     setUndo(null);
@@ -202,6 +272,37 @@ export function ProductsCostTable({
   }
 
   const clearFilters = missingOnly || categoryFilter !== "all" || typeFilter !== "all";
+
+  /** "3 options" toggle shown under a product that has Select options. */
+  const optionsToggle = (p: ProductCostRow) => {
+    if (p.options.length === 0) return null;
+    const own = p.options.filter((o) => o.cost !== null).length;
+    const open = expanded.has(p.id);
+    const Chevron = open ? ChevronDown : ChevronRight;
+    return (
+      <button
+        type="button"
+        onClick={() => toggleExpanded(p.id)}
+        aria-expanded={open}
+        className="inline-flex min-h-[44px] items-center gap-1 text-xs font-medium text-[var(--color-brand-blue)] hover:underline md:min-h-0"
+      >
+        <Chevron className="h-3.5 w-3.5" aria-hidden="true" />
+        {p.options.length} {p.options.length === 1 ? "option" : "options"}
+        {own > 0 ? `, ${own} with own cost` : ""}
+      </button>
+    );
+  };
+
+  /** What an option with no cost of its own falls back to. */
+  const fallbackText = (p: ProductCostRow, o: OptionCostRow) =>
+    o.cost !== null
+      ? "Own cost"
+      : p.cost !== null
+        ? `Uses product cost ${formatRm(p.cost)}`
+        : "No cost yet";
+
+  const optionName = (p: ProductCostRow, o: OptionCostRow) =>
+    new Set(p.options.map((x) => x.fieldId)).size > 1 ? `${o.fieldLabel}: ${o.label}` : o.label;
 
   return (
     <div className="space-y-4 pb-24">
@@ -382,7 +483,8 @@ export function ProductsCostTable({
                   const margin = computeMargin(p.price, p.cost);
                   const bad = p.cost !== null && p.price !== null && p.cost >= p.price;
                   return (
-                    <TableRow key={p.id} data-state={selected.has(p.id) ? "selected" : undefined}>
+                    <Fragment key={p.id}>
+                    <TableRow data-state={selected.has(p.id) ? "selected" : undefined}>
                       <TableCell>
                         <input
                           type="checkbox"
@@ -412,7 +514,10 @@ export function ProductsCostTable({
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="font-medium">{p.name}</TableCell>
+                      <TableCell className="font-medium">
+                        {p.name}
+                        {optionsToggle(p) && <div>{optionsToggle(p)}</div>}
+                      </TableCell>
                       <TableCell>
                         {p.categoryName ?? (
                           <span className="text-[var(--color-brand-text-muted)]">Uncategorized</span>
@@ -477,6 +582,60 @@ export function ProductsCostTable({
                         />
                       </TableCell>
                     </TableRow>
+                      {expanded.has(p.id) &&
+                        p.options.map((o) => {
+                          const optMargin = computeMargin(o.price ?? p.price, o.cost ?? p.cost);
+                          return (
+                            <TableRow
+                              key={o.key}
+                              className="bg-slate-50/70"
+                              data-state={selected.has(o.key) ? "selected" : undefined}
+                            >
+                              <TableCell>
+                                <input
+                                  type="checkbox"
+                                  aria-label={`Select option ${o.label} of ${p.name}`}
+                                  checked={selected.has(o.key)}
+                                  onChange={() => toggleRow(o.key, false)}
+                                  className="h-4 w-4 accent-[var(--color-brand-blue)]"
+                                />
+                              </TableCell>
+                              <TableCell />
+                              <TableCell colSpan={3} className="pl-6 text-sm">
+                                <span aria-hidden="true">↳ </span>
+                                {optionName(p, o)}
+                              </TableCell>
+                              <TableCell className="text-right text-sm tabular-nums">
+                                {o.price !== null ? formatRm(o.price) : p.priceLabel}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <InlineCostInput
+                                  productId={p.id}
+                                  option={{ fieldId: o.fieldId, value: o.value }}
+                                  value={o.cost}
+                                  placeholder={p.cost !== null ? p.cost.toFixed(2) : "0.00"}
+                                  label={`Cost for ${o.label} of ${p.name}`}
+                                  onSaved={(c) => onOptionSaved(o.key, c)}
+                                  onEnter={focusNext}
+                                />
+                              </TableCell>
+                              <TableCell className="text-right text-sm tabular-nums">
+                                {optMargin === null ? (
+                                  <span className="text-[var(--color-brand-text-muted)]">-</span>
+                                ) : (
+                                  formatPct(optMargin.pct)
+                                )}
+                              </TableCell>
+                              <TableCell
+                                colSpan={3}
+                                className="text-xs text-[var(--color-brand-text-muted)]"
+                              >
+                                {fallbackText(p, o)}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                    </Fragment>
                   );
                 })}
               </TableBody>
@@ -553,6 +712,43 @@ export function ProductsCostTable({
                         {margin === null ? "No margin yet" : `Margin ${formatPct(margin.pct)}`}
                       </span>
                     </div>
+                    {optionsToggle(p)}
+                    {expanded.has(p.id) && (
+                      <ul className="mt-2 space-y-3 border-t border-[var(--color-brand-border)] pt-3">
+                        {p.options.map((o) => (
+                          <li key={o.key} className="flex items-center gap-3">
+                            <label className="flex h-11 w-11 shrink-0 items-center justify-center">
+                              <input
+                                type="checkbox"
+                                aria-label={`Select option ${o.label} of ${p.name}`}
+                                checked={selected.has(o.key)}
+                                onChange={() => toggleRow(o.key, false)}
+                                className="h-6 w-6 accent-[var(--color-brand-blue)]"
+                              />
+                            </label>
+                            <div className="min-w-0 flex-1">
+                              <p className="break-words text-sm font-medium leading-snug">
+                                {optionName(p, o)}
+                              </p>
+                              <p className="text-xs tabular-nums text-[var(--color-brand-text-muted)]">
+                                {o.price !== null ? formatRm(o.price) : p.priceLabel} ·{" "}
+                                {fallbackText(p, o)}
+                              </p>
+                            </div>
+                            <InlineCostInput
+                              productId={p.id}
+                              option={{ fieldId: o.fieldId, value: o.value }}
+                              value={o.cost}
+                              large
+                              placeholder={p.cost !== null ? p.cost.toFixed(2) : "0.00"}
+                              label={`Cost for ${o.label} of ${p.name}`}
+                              onSaved={(c) => onOptionSaved(o.key, c)}
+                              onEnter={focusNext}
+                            />
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                   <div className="flex min-h-[44px] shrink-0 items-start">
                     <ProductRowActions
@@ -570,16 +766,16 @@ export function ProductsCostTable({
       )}
 
       {/* Selection bar */}
-      {selectedRows.length > 0 && !undo && (
+      {selectedCount > 0 && !undo && (
         <div
           className="fixed inset-x-3 bottom-3 z-40 mx-auto flex max-w-3xl flex-wrap items-center gap-3 rounded-xl bg-[var(--color-brand-ink)] px-4 py-3 text-white shadow-lg"
           role="region"
           aria-label="Bulk actions"
         >
           <p className="text-sm font-medium tabular-nums">
-            {selectedRows.length} selected
+            {selectedCount} selected
           </p>
-          {selectedRows.length < visible.length && (
+          {selectedCount < visible.length && (
             <button
               type="button"
               onClick={() => setSelected(new Set(visibleIds))}
@@ -631,6 +827,7 @@ export function ProductsCostTable({
         open={bulkOpen}
         onOpenChange={setBulkOpen}
         rows={selectedRows}
+        optionItems={selectedOptionItems}
         onApplied={handleApplied}
       />
     </div>

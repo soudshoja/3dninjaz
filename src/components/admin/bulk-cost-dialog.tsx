@@ -20,7 +20,17 @@ import {
   parseMoney,
   type BulkMode,
 } from "@/lib/product-cost-math";
-import type { BulkCostChange, ProductCostRow } from "@/lib/product-cost-types";
+import type { BulkCostChange, OptionTarget, ProductCostRow } from "@/lib/product-cost-types";
+
+/** One selected option (variant). `cost` is what it costs today: its own, else the product cost. */
+export type BulkOptionItem = {
+  key: string;
+  target: OptionTarget;
+  name: string;
+  price: number | null;
+  cost: number | null;
+  hasOwnCost: boolean;
+};
 
 type ModeKind = "set" | "percent_of_price" | "adjust";
 
@@ -48,11 +58,13 @@ export function BulkCostDialog({
   open,
   onOpenChange,
   rows,
+  optionItems = [],
   onApplied,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   rows: ProductCostRow[];
+  optionItems?: BulkOptionItem[];
   onApplied: (changes: BulkCostChange[], skipped: number) => void;
 }) {
   const [kind, setKind] = useState<ModeKind>("set");
@@ -73,9 +85,30 @@ export function BulkCostDialog({
       : { kind: "adjust_percent", percent: sign * n };
   }, [kind, value, direction, unit]);
 
+  // Products and options go through one preview; options carry their own price.
+  const items = useMemo(
+    () => [
+      ...rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        price: r.price,
+        cost: r.cost,
+        target: null as OptionTarget | null,
+      })),
+      ...optionItems.map((o) => ({
+        id: o.key,
+        name: o.name,
+        price: o.price,
+        cost: o.cost,
+        target: o.target as OptionTarget | null,
+      })),
+    ],
+    [rows, optionItems],
+  );
+
   const preview = useMemo(
     () =>
-      rows.map((r) => {
+      items.map((r) => {
         const next = mode ? applyBulkMode(mode, r.price, r.cost) : null;
         const changes = next !== null && next !== r.cost;
         return {
@@ -87,7 +120,7 @@ export function BulkCostDialog({
           noBase: mode !== null && next === null,
         };
       }),
-    [rows, mode],
+    [items, mode],
   );
 
   const willChange = preview.filter((p) => p.changes).length;
@@ -97,7 +130,11 @@ export function BulkCostDialog({
     if (!mode || willChange === 0) return;
     setError(null);
     startTransition(async () => {
-      const res = await applyBulkCost({ ids: rows.map((r) => r.id), mode });
+      const res = await applyBulkCost({
+        ids: rows.map((r) => r.id),
+        options: optionItems.map((o) => o.target),
+        mode,
+      });
       if (!res.ok) {
         setError(res.error);
         return;
@@ -122,11 +159,14 @@ export function BulkCostDialog({
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>
-            Edit cost for {rows.length} {rows.length === 1 ? "product" : "products"}
+            Edit cost for {items.length} {items.length === 1 ? "item" : "items"}
           </DialogTitle>
           <DialogDescription>
             Pick how to change the cost, check the preview, then apply. You can
             undo for 8 seconds afterwards.
+            {optionItems.length > 0
+              ? " An option with no cost of its own uses the product cost."
+              : ""}
           </DialogDescription>
         </DialogHeader>
 
@@ -216,7 +256,7 @@ export function BulkCostDialog({
             <p className="text-xs text-[var(--color-brand-text-muted)]" aria-live="polite">
               {mode === null
                 ? "Enter a number to see the preview."
-                : `${willChange} will change, ${rows.length - willChange} stay the same.`}
+                : `${willChange} will change, ${items.length - willChange} stay the same.`}
             </p>
           </div>
 
@@ -226,7 +266,7 @@ export function BulkCostDialog({
               role="status"
             >
               <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
-              {tooHighCount} {tooHighCount === 1 ? "product ends" : "products end"} up
+              {tooHighCount} {tooHighCount === 1 ? "item ends" : "items end"} up
               with a cost at or above the sell price.
             </p>
           )}
@@ -235,7 +275,7 @@ export function BulkCostDialog({
             <table className="w-full min-w-[560px] text-sm">
               <thead className="sticky top-0 bg-muted/60 text-left text-xs text-[var(--color-brand-text-muted)]">
                 <tr>
-                  <th className="px-3 py-2 font-medium">Product</th>
+                  <th className="px-3 py-2 font-medium">Product / option</th>
                   <th className="px-3 py-2 text-right font-medium">Price</th>
                   <th className="px-3 py-2 text-right font-medium">Cost before</th>
                   <th className="px-3 py-2 text-right font-medium">Cost after</th>
@@ -304,7 +344,7 @@ export function BulkCostDialog({
             disabled={pending || mode === null || willChange === 0}
             className="h-11 bg-[var(--color-brand-ink)] text-white hover:bg-[var(--color-brand-ink)]/90 md:h-9"
           >
-            {pending ? "Applying..." : `Apply to ${willChange} ${willChange === 1 ? "product" : "products"}`}
+            {pending ? "Applying..." : `Apply to ${willChange} ${willChange === 1 ? "item" : "items"}`}
           </Button>
         </DialogFooter>
       </DialogContent>
