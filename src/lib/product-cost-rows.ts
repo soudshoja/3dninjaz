@@ -38,7 +38,8 @@ function priceLabel(
   if (nums.length === 0) return "No price";
   const min = Math.min(...nums);
   const max = Math.max(...nums);
-  return min === max ? formatRm(min) : `${formatRm(min)} to ${formatRm(max)}`;
+  // "RM 7.00 to 30.00": the currency once, so a range stays short in a narrow column.
+  return min === max ? formatRm(min) : `${formatRm(min)} to ${formatRm(max).replace(/^RM /, "")}`;
 }
 
 export async function loadProductCostRows(): Promise<ProductCostRow[]> {

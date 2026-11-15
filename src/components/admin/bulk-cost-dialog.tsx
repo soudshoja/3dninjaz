@@ -212,7 +212,7 @@ export function BulkCostDialog({
                   id="bulk-direction"
                   value={direction}
                   onChange={(e) => setDirection(e.target.value as "raise" | "lower")}
-                  className="h-11 rounded-md border border-[var(--color-brand-border)] bg-white px-3 text-sm md:h-10"
+                  className="h-12 rounded-md border border-[var(--color-brand-border)] bg-white px-3 text-base md:h-10 md:text-sm"
                 >
                   <option value="raise">Raise</option>
                   <option value="lower">Lower</option>
@@ -226,7 +226,7 @@ export function BulkCostDialog({
                   id="bulk-unit"
                   value={unit}
                   onChange={(e) => setUnit(e.target.value as "rm" | "percent")}
-                  className="h-11 rounded-md border border-[var(--color-brand-border)] bg-white px-3 text-sm md:h-10"
+                  className="h-12 rounded-md border border-[var(--color-brand-border)] bg-white px-3 text-base md:h-10 md:text-sm"
                 >
                   <option value="rm">Amount in RM</option>
                   <option value="percent">Percent</option>
@@ -235,7 +235,7 @@ export function BulkCostDialog({
             </>
           )}
           <div className="space-y-1">
-            <label htmlFor="bulk-value" className="text-sm font-medium">
+            <label htmlFor="bulk-value" className="block text-sm font-medium">
               {valueLabel}
             </label>
             <input
@@ -244,7 +244,7 @@ export function BulkCostDialog({
               inputMode="decimal"
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              className="h-11 w-36 rounded-md border border-[var(--color-brand-border)] bg-white px-3 text-right text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand-blue)]/40 md:h-10"
+              className="h-12 w-full rounded-md border sm:w-36 border-[var(--color-brand-border)] bg-white px-3 text-right text-base tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand-blue)]/40 md:h-10 md:text-sm"
               placeholder={kind === "set" ? "e.g. 3.50" : "e.g. 40"}
             />
           </div>
@@ -271,7 +271,37 @@ export function BulkCostDialog({
             </p>
           )}
 
-          <div className="max-h-[38vh] overflow-auto rounded-md border border-[var(--color-brand-border)]">
+          {/* Phone: one line per item instead of a wide table */}
+          <ul className="max-h-[34vh] divide-y divide-[var(--color-brand-border)] overflow-auto rounded-md border border-[var(--color-brand-border)] sm:hidden">
+            {preview.map(({ row, next, changes, margin, tooHigh, noBase }) => (
+              <li key={row.id} className="space-y-0.5 px-3 py-2.5">
+                <p className="break-words text-base leading-snug">{row.name}</p>
+                <p className="text-sm tabular-nums text-[var(--color-brand-text-muted)]">
+                  {mode === null
+                    ? row.cost === null
+                      ? "No cost yet"
+                      : `Cost ${formatRm(row.cost)}`
+                    : noBase
+                      ? "Nothing to change, it has no cost yet"
+                      : next === null
+                        ? ""
+                        : `${row.cost === null ? "Was empty" : `Was ${formatRm(row.cost)}`}, now ${formatRm(next)}`}
+                </p>
+                {changes && margin && (
+                  <p
+                    className={
+                      "text-sm tabular-nums " + (tooHigh ? "font-medium text-red-700" : "text-[var(--color-brand-text-muted)]")
+                    }
+                  >
+                    New margin {formatPct(margin.pct)}
+                    {tooHigh ? " (no profit)" : ""}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+
+          <div className="hidden max-h-[38vh] overflow-auto rounded-md border border-[var(--color-brand-border)] sm:block">
             <table className="w-full min-w-[560px] text-sm">
               <thead className="sticky top-0 bg-muted/60 text-left text-xs text-[var(--color-brand-text-muted)]">
                 <tr>
@@ -334,7 +364,7 @@ export function BulkCostDialog({
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={pending}
-            className="h-11 md:h-9"
+            className="h-12 text-base md:h-9 md:text-sm"
           >
             Cancel
           </Button>
@@ -342,7 +372,7 @@ export function BulkCostDialog({
             type="button"
             onClick={apply}
             disabled={pending || mode === null || willChange === 0}
-            className="h-11 bg-[var(--color-brand-ink)] text-white hover:bg-[var(--color-brand-ink)]/90 md:h-9"
+            className="h-12 bg-[var(--color-brand-ink)] text-base text-white hover:bg-[var(--color-brand-ink)]/90 md:h-9 md:text-sm"
           >
             {pending ? "Applying..." : `Apply to ${willChange} ${willChange === 1 ? "item" : "items"}`}
           </Button>

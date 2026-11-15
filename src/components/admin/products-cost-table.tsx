@@ -10,6 +10,7 @@ import {
   ChevronRight,
   ListChecks,
   Package,
+  Search,
   Star,
   Undo2,
   X,
@@ -53,6 +54,10 @@ export function ProductsCostTable({
   // Just-saved option costs, by option key (a product's variants are its Select options).
   const [optionOverrides, setOptionOverrides] = useState<Record<string, number | null>>({});
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // Phone UI: search, a Filters drawer, and a Select mode (checkboxes only when asked for).
+  const [query, setQuery] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
   const [missingOnly, setMissingOnly] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -103,9 +108,11 @@ export function ProductsCostTable({
         if (categoryFilter !== "all" && categoryFilter !== "none" && r.categoryId !== categoryFilter)
           return false;
         if (typeFilter !== "all" && r.productType !== typeFilter) return false;
+        const q = query.trim().toLowerCase();
+        if (q && !r.name.toLowerCase().includes(q)) return false;
         return true;
       }),
-    [data, missingOnly, categoryFilter, typeFilter],
+    [data, missingOnly, categoryFilter, typeFilter, query],
   );
   const visibleIds = useMemo(() => visible.map((r) => r.id), [visible]);
 
@@ -273,6 +280,13 @@ export function ProductsCostTable({
 
   const clearFilters = missingOnly || categoryFilter !== "all" || typeFilter !== "all";
 
+  /** Phone filter chip: same pill as the desktop "Missing cost" button, at thumb size. */
+  const chip = (on: boolean) =>
+    "h-11 rounded-full border px-4 text-base font-medium transition-colors " +
+    (on
+      ? "border-[var(--color-brand-ink)] bg-[var(--color-brand-ink)] text-white"
+      : "border-[var(--color-brand-border)] bg-white text-[var(--color-brand-ink)]");
+
   /** "3 options" toggle shown under a product that has Select options. */
   const optionsToggle = (p: ProductCostRow) => {
     if (p.options.length === 0) return null;
@@ -302,6 +316,117 @@ export function ProductsCostTable({
 
   return (
     <div className="space-y-4 pb-24">
+      {/* Phone controls: search, To do / All, Filters, Select */}
+      <div className={cardsOnly ? "space-y-3" : "space-y-3 md:hidden"}>
+        <label className="relative block">
+          <span className="sr-only">Search products</span>
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--color-brand-text-muted)]"
+            aria-hidden="true"
+          />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search products"
+            autoComplete="off"
+            className="h-12 w-full rounded-lg border border-[var(--color-brand-border)] bg-white pl-10 pr-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-brand-blue)]/50"
+          />
+        </label>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            aria-pressed={missingOnly}
+            onClick={() => setMissingOnly((v) => !v)}
+            className={chip(missingOnly) + " tabular-nums"}
+          >
+            To do ({data.length - withCost})
+          </button>
+          <button
+            type="button"
+            aria-expanded={filtersOpen}
+            onClick={() => setFiltersOpen((v) => !v)}
+            className={chip(categoryFilter !== "all" || typeFilter !== "all")}
+          >
+            Filters
+          </button>
+          <button
+            type="button"
+            aria-pressed={selectMode}
+            onClick={() => {
+              setSelectMode((v) => !v);
+              setSelected(new Set());
+            }}
+            className={chip(selectMode) + " ml-auto"}
+          >
+            {selectMode ? "Done" : "Select"}
+          </button>
+        </div>
+        {filtersOpen && (
+          <div className="grid grid-cols-2 gap-2">
+            <label className="space-y-1">
+              <span className="block text-sm text-[var(--color-brand-text-muted)]">Category</span>
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="h-12 w-full rounded-lg border border-[var(--color-brand-border)] bg-white px-3 text-base"
+              >
+                <option value="all">All categories</option>
+                <option value="none">Uncategorized</option>
+                {categories.map(([id, name]) => (
+                  <option key={id} value={id}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1">
+              <span className="block text-sm text-[var(--color-brand-text-muted)]">Type</span>
+              <select
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                className="h-12 w-full rounded-lg border border-[var(--color-brand-border)] bg-white px-3 text-base capitalize"
+              >
+                <option value="all">All types</option>
+                {types.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
+        <div>
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-sm font-medium tabular-nums">
+              {withCost} of {data.length} have a cost
+            </p>
+            <Link
+              href="/admin/products/costs-import"
+              className="inline-flex min-h-[44px] items-center text-sm underline decoration-dotted"
+            >
+              Import from a file
+            </Link>
+          </div>
+          <div
+            className="h-2 overflow-hidden rounded-full bg-slate-200"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={coveragePct}
+            aria-label="Products with a cost"
+          >
+            <div
+              className="h-full rounded-full bg-[var(--color-brand-green)] motion-safe:transition-[width] motion-safe:duration-200"
+              style={{ width: `${coveragePct}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop controls */}
+      <div className={cardsOnly ? "hidden" : "hidden space-y-4 md:block"}>
       {/* Coverage */}
       <div className="rounded-lg border border-[var(--color-brand-border)] bg-white p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -417,6 +542,8 @@ export function ProductsCostTable({
         </p>
       </div>
 
+      </div>
+
       {undoError && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
           {undoError}
@@ -432,6 +559,9 @@ export function ProductsCostTable({
               ? ""
               : "Clear the filters to see every product."}
           </p>
+          <p className="text-sm text-[var(--color-brand-text-muted)] md:hidden">
+            {query.trim() ? "Try a shorter search." : missingOnly && withCost === data.length ? "Every product has a cost." : ""}
+          </p>
         </div>
       ) : (
         <>
@@ -443,7 +573,7 @@ export function ProductsCostTable({
                 : "hidden overflow-x-auto rounded-lg border border-[var(--color-brand-border)] bg-white md:block"
             }
           >
-            <Table className="min-w-[980px]">
+            <Table className="min-w-[820px]">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10">
@@ -462,9 +592,8 @@ export function ProductsCostTable({
                       className="h-4 w-4 accent-[var(--color-brand-blue)]"
                     />
                   </TableHead>
-                  <TableHead className="w-16">Image</TableHead>
+                  <TableHead className="w-14">Image</TableHead>
                   <TableHead>Name</TableHead>
-                  <TableHead>Category</TableHead>
                   <TableHead className="w-24">Type</TableHead>
                   <TableHead className="text-right">Price</TableHead>
                   <TableHead className="text-right">Cost</TableHead>
@@ -510,21 +639,19 @@ export function ProductsCostTable({
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="font-medium">
-                        {p.name}
-                        {optionsToggle(p) && <div>{optionsToggle(p)}</div>}
-                      </TableCell>
                       <TableCell>
-                        {p.categoryName ?? (
-                          <span className="text-[var(--color-brand-text-muted)]">Uncategorized</span>
-                        )}
+                        <p className="font-medium">{p.name}</p>
+                        <p className="text-xs text-[var(--color-brand-text-muted)]">
+                          {p.categoryName ?? "Uncategorized"}
+                        </p>
+                        {optionsToggle(p) && <div>{optionsToggle(p)}</div>}
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
                           {p.productType}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{p.priceLabel}</TableCell>
+                      <TableCell className="whitespace-nowrap text-right tabular-nums">{p.priceLabel}</TableCell>
                       <TableCell className="text-right">
                         <InlineCostInput
                           productId={p.id}
@@ -597,7 +724,7 @@ export function ProductsCostTable({
                                 />
                               </TableCell>
                               <TableCell />
-                              <TableCell colSpan={3} className="pl-6 text-sm">
+                              <TableCell colSpan={2} className="pl-6 text-sm">
                                 <span aria-hidden="true">↳ </span>
                                 {optionName(p, o)}
                               </TableCell>
@@ -638,60 +765,61 @@ export function ProductsCostTable({
             </Table>
           </div>
 
-          {/* Mobile cards */}
+          {/* Phone list: flat rows, big cost boxes, options always visible */}
           <div
             className={
-              "divide-y divide-[var(--color-brand-border)] rounded-lg border border-[var(--color-brand-border)] bg-white" +
+              "overflow-hidden rounded-xl border border-[var(--color-brand-border)] bg-white" +
               (cardsOnly ? "" : " md:hidden")
             }
           >
-            <label className="flex min-h-[44px] items-center gap-3 px-4 text-sm font-medium">
-              <input
-                type="checkbox"
-                checked={allVisibleSelected}
-                ref={(el) => {
-                  if (el) el.indeterminate = !allVisibleSelected && someVisibleSelected;
-                }}
-                onChange={toggleAllVisible}
-                className="h-6 w-6 accent-[var(--color-brand-blue)]"
-              />
-              {clearFilters ? `Select all ${visible.length} matching` : "Select all"}
-            </label>
-            {visible.map((p) => {
-              const margin = computeMargin(p.price, p.cost);
-              const bad = p.cost !== null && p.price !== null && p.cost >= p.price;
-              return (
-                <div key={p.id} className="flex gap-3 p-4">
-                  <label className="flex h-11 w-11 shrink-0 items-center justify-center">
-                    <input
-                      type="checkbox"
-                      aria-label={`Select ${p.name}`}
-                      checked={selected.has(p.id)}
-                      onChange={() => toggleRow(p.id, false)}
-                      className="h-6 w-6 accent-[var(--color-brand-blue)]"
-                    />
-                  </label>
-                  <div className="shrink-0">
-                    {p.thumbUrl ? (
-                      <Image
-                        src={p.thumbUrl}
-                        alt=""
-                        width={56}
-                        height={56}
-                        className="h-14 w-14 rounded object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-14 w-14 items-center justify-center rounded bg-gray-100">
-                        <Package className="h-5 w-5 text-gray-400" aria-hidden="true" />
+            {selectMode && (
+              <label className="flex min-h-[48px] items-center gap-3 border-b border-[var(--color-brand-border)] px-4 text-base font-medium">
+                <input
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = !allVisibleSelected && someVisibleSelected;
+                  }}
+                  onChange={toggleAllVisible}
+                  className="h-6 w-6 accent-[var(--color-brand-blue)]"
+                />
+                {clearFilters || query.trim() ? `Select all ${visible.length} shown` : "Select all"}
+              </label>
+            )}
+            <ul className="divide-y divide-[var(--color-brand-border)]">
+              {visible.map((p) => {
+                const margin = computeMargin(p.price, p.cost);
+                const bad = p.cost !== null && p.price !== null && p.cost >= p.price;
+                return (
+                  <li key={p.id}>
+                    <div className="flex items-center gap-3 px-4 py-3">
+                      {selectMode && (
+                        <label className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center">
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${p.name}`}
+                            checked={selected.has(p.id)}
+                            onChange={() => toggleRow(p.id, false)}
+                            className="h-6 w-6 accent-[var(--color-brand-blue)]"
+                          />
+                        </label>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="break-words text-base font-medium leading-snug">{p.name}</p>
+                        <p
+                          className={
+                            "text-sm tabular-nums " +
+                            (bad ? "font-medium text-red-700" : "text-[var(--color-brand-text-muted)]")
+                          }
+                        >
+                          {p.priceLabel}
+                          {margin !== null
+                            ? bad
+                              ? " · Cost is at or above the price"
+                              : ` · Margin ${formatPct(margin.pct)}`
+                            : ""}
+                        </p>
                       </div>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <p className="break-words font-medium leading-snug">{p.name}</p>
-                    <p className="text-xs tabular-nums text-[var(--color-brand-text-muted)]">
-                      {p.categoryName ?? "Uncategorized"} · {p.priceLabel}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2 pt-1">
                       <InlineCostInput
                         productId={p.id}
                         value={p.cost}
@@ -700,63 +828,47 @@ export function ProductsCostTable({
                         onSaved={(c) => onSaved(p.id, c)}
                         onEnter={focusNext}
                       />
-                      <span
-                        className={
-                          "text-sm tabular-nums " + (bad ? "font-medium text-red-700" : "text-[var(--color-brand-text-muted)]")
-                        }
-                      >
-                        {margin === null ? "No margin yet" : `Margin ${formatPct(margin.pct)}`}
-                      </span>
                     </div>
-                    {optionsToggle(p)}
-                    {expanded.has(p.id) && (
-                      <ul className="mt-2 space-y-3 border-t border-[var(--color-brand-border)] pt-3">
+                    {p.options.length > 0 && (
+                      <ul className="divide-y divide-[var(--color-brand-border)] border-t border-[var(--color-brand-border)] bg-gray-50">
                         {p.options.map((o) => (
-                          <li key={o.key} className="space-y-1.5">
-                            <label className="flex items-start gap-2">
-                              <input
-                                type="checkbox"
-                                aria-label={`Select option ${o.label} of ${p.name}`}
-                                checked={selected.has(o.key)}
-                                onChange={() => toggleRow(o.key, false)}
-                                className="mt-0.5 h-6 w-6 shrink-0 accent-[var(--color-brand-blue)]"
-                              />
-                              <span className="min-w-0 break-words text-sm font-medium leading-snug">
-                                {optionName(p, o)}
-                              </span>
-                            </label>
-                            <div className="space-y-1.5 pl-8">
-                              <p className="text-xs tabular-nums text-[var(--color-brand-text-muted)]">
-                                {o.price !== null ? formatRm(o.price) : p.priceLabel} ·{" "}
+                          <li key={o.key} className="flex items-center gap-3 py-2.5 pl-8 pr-4">
+                            {selectMode && (
+                              <label className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center">
+                                <input
+                                  type="checkbox"
+                                  aria-label={`Select option ${o.label} of ${p.name}`}
+                                  checked={selected.has(o.key)}
+                                  onChange={() => toggleRow(o.key, false)}
+                                  className="h-6 w-6 accent-[var(--color-brand-blue)]"
+                                />
+                              </label>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="break-words text-base leading-snug">{optionName(p, o)}</p>
+                              <p className="text-sm tabular-nums text-[var(--color-brand-text-muted)]">
+                                {o.price !== null ? formatRm(o.price) : "Same price"} ·{" "}
                                 {fallbackText(p, o)}
                               </p>
-                              <InlineCostInput
-                                productId={p.id}
-                                option={{ fieldId: o.fieldId, value: o.value }}
-                                value={o.cost}
-                                large
-                                placeholder={p.cost !== null ? p.cost.toFixed(2) : "0.00"}
-                                label={`Cost for ${o.label} of ${p.name}`}
-                                onSaved={(c) => onOptionSaved(o.key, c)}
-                                onEnter={focusNext}
-                              />
                             </div>
+                            <InlineCostInput
+                              productId={p.id}
+                              option={{ fieldId: o.fieldId, value: o.value }}
+                              value={o.cost}
+                              large
+                              placeholder={p.cost !== null ? p.cost.toFixed(2) : "0.00"}
+                              label={`Cost for ${o.label} of ${p.name}`}
+                              onSaved={(c) => onOptionSaved(o.key, c)}
+                              onEnter={focusNext}
+                            />
                           </li>
                         ))}
                       </ul>
                     )}
-                  </div>
-                  <div className="flex min-h-[44px] shrink-0 items-start">
-                    <ProductRowActions
-                      id={p.id}
-                      name={p.name}
-                      isActive={p.isActive}
-                      isFeatured={p.isFeatured}
-                    />
-                  </div>
-                </div>
-              );
-            })}
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         </>
       )}
@@ -764,7 +876,7 @@ export function ProductsCostTable({
       {/* Selection bar */}
       {selectedCount > 0 && !undo && (
         <div
-          className="fixed inset-x-3 bottom-3 z-40 mx-auto flex max-w-3xl flex-wrap items-center gap-3 rounded-xl bg-[var(--color-brand-ink)] px-4 py-3 text-white shadow-lg"
+          className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-3xl flex-wrap items-center gap-3 rounded-xl bg-[var(--color-brand-ink)] px-4 py-3 text-white shadow-lg"
           role="region"
           aria-label="Bulk actions"
         >
@@ -784,7 +896,7 @@ export function ProductsCostTable({
             <Button
               type="button"
               onClick={() => setBulkOpen(true)}
-              className="h-11 gap-2 bg-white text-[var(--color-brand-ink)] hover:bg-white/90 md:h-9"
+              className="h-12 gap-2 bg-white text-base text-[var(--color-brand-ink)] hover:bg-white/90 md:h-9 md:text-sm"
             >
               <ListChecks className="h-4 w-4" aria-hidden="true" />
               Edit cost
