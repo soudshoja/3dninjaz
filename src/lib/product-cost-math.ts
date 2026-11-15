@@ -200,3 +200,16 @@ export function applyBulkMode(
   if (next === null || !Number.isFinite(next)) return null;
   return round2(Math.min(COST_MAX, Math.max(0, next)));
 }
+
+/** Key of one Select option (a product's variant): stable, safe for React keys and selection sets. */
+export function optionKey(productId: string, fieldId: string, value: string): string {
+  return `${productId}::${fieldId}::${value}`;
+}
+
+/**
+ * The value of the template's "Option key" column: field id and option value
+ * joined by "|" (a field id is a UUID, so the FIRST "|" always separates them).
+ */
+export function optionSheetKey(fieldId: string, value: string): string {
+  return `${fieldId}|${value}`;
+}

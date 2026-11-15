@@ -48,6 +48,11 @@ describe("extractCostRows", () => {
     expect(rows[0].productId).toBe("a");
     expect(rows[0].costCell).toBe(3);
   });
+  it("ignores the template's 'Filled so far' footer row", () => {
+    const rows = extractCostRows(grid(["a", "Alpha", "simple", "", 10, "", 4, ""], [null, "Filled so far:", "3 of 80"]));
+    expect(rows).toHaveLength(1);
+  });
+
   it("ignores fully blank rows", () => {
     expect(extractCostRows(grid([], ["", "", "", "", "", "", "", ""]))).toHaveLength(0);
   });
@@ -122,6 +127,84 @@ describe("validateCostRows", () => {
     );
     const c = summariseRows(rows);
     expect(c).toMatchObject({ total: 3, update: 1, skip: 1, error: 1 });
+  });
+});
+
+describe("option (variant) rows, column M", () => {
+  const FIELD = "11111111-1111-1111-1111-111111111111";
+  const LARGE = `${FIELD}|large`;
+  const SMALL = `${FIELD}|small`;
+  const products = new Map<string, ProductSnapshot>([
+    [
+      "a",
+      snap({
+        id: "a",
+        name: "Alpha",
+        price: 10,
+        cost: 4,
+        options: new Map([
+          [LARGE, { label: "Large", price: 15, cost: null }],
+          [SMALL, { label: "Small", price: null, cost: 3 }],
+        ]),
+      }),
+    ],
+    ["b", snap({ id: "b", name: "Beta", price: 10, cost: 2 })],
+  ]);
+  // A..M: M (index 12) is the option key.
+  const optRow = (id: string, key: string, cost: unknown, price: unknown = null) => [
+    id, "  option", "", "", price, "", cost, "", "", "", "", "", key,
+  ];
+  const run = (...rows: unknown[][]) => validateCostRows(extractCostRows(grid(...rows)), products);
+
+  it("reads column M as the option key and keeps product rows apart", () => {
+    const raw = extractCostRows(grid(["a", "Alpha", "simple", "", 10, "", 4, ""], optRow("a", LARGE, 6)));
+    expect(raw.map((r) => r.optionKeyCell)).toEqual(["", LARGE]);
+  });
+
+  it("a product row and its option rows may share one product id", () => {
+    const rows = run(
+      ["a", "Alpha", "simple", "", 10, "", 5, ""],
+      optRow("a", LARGE, 6),
+      optRow("a", SMALL, 3.5),
+    );
+    expect(rows.map((r) => r.action)).toEqual(["update", "update", "update"]);
+    expect(rows[1]).toMatchObject({ optionKey: LARGE, optionLabel: "Large", oldCost: null, newCost: 6 });
+    expect(rows[1].productName).toBe("Alpha - Large");
+  });
+
+  it("a blank option cost is a skip (the product cost keeps applying)", () => {
+    const [r] = run(optRow("a", LARGE, ""));
+    expect(r.action).toBe("skip");
+  });
+
+  it("the same option cost again is unchanged; a different one updates", () => {
+    expect(run(optRow("a", SMALL, 3))[0].action).toBe("unchanged");
+    expect(run(optRow("a", SMALL, 3.25))[0].action).toBe("update");
+  });
+
+  it("errors on an option that is not on the product, or on a product with no options", () => {
+    const rows = run(optRow("a", `${FIELD}|gone`, 2), optRow("b", LARGE, 2));
+    expect(rows[0].action).toBe("error");
+    expect(rows[0].issues.map((i) => i.message).join()).toMatch(/Unknown option/);
+    expect(rows[1].action).toBe("error");
+  });
+
+  it("errors on a duplicate option row and on a bad number", () => {
+    const rows = run(optRow("a", LARGE, 2), optRow("a", LARGE, 3), optRow("a", SMALL, "abc"));
+    expect(rows.map((r) => r.action)).toEqual(["error", "error", "error"]);
+  });
+
+  it("compares the sheet price with the option's own price and warns cost >= price", () => {
+    const [r] = run(optRow("a", LARGE, 15, 99));
+    const msgs = r.issues.map((i) => i.message).join(" | ");
+    expect(msgs).toMatch(/Sell price differs from the store \(RM 15\.00\)/);
+    expect(msgs).toMatch(/at or above/);
+    expect(r.action).toBe("update");
+  });
+
+  it("margin uses the option price and the new cost", () => {
+    const [r] = run(optRow("a", LARGE, 6));
+    expect(r.newMarginPct).toBe(60); // (15 - 6) / 15
   });
 });
 

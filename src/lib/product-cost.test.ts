@@ -3,11 +3,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("server-only", () => ({}));
 
 const queue: unknown[][] = [];
+/** Queue this to make the next query reject (e.g. a table that is not there yet). */
+const FAIL = Object.assign([], { fail: true }) as unknown as unknown[];
 vi.mock("@/lib/db", () => {
   const makeChain = () => {
     const chain: Record<string, unknown> = {};
     for (const m of ["from", "where", "orderBy", "limit"]) chain[m] = () => chain;
-    chain.then = (resolve: (v: unknown) => unknown) => resolve(queue.shift() ?? []);
+    chain.then = (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) => {
+      const next = queue.shift() ?? [];
+      if ((next as unknown as { fail?: boolean }).fail) return reject(new Error("boom"));
+      return resolve(next);
+    };
     return chain;
   };
   return { db: { select: () => makeChain() } };
@@ -86,6 +92,76 @@ describe("resolveUnitCost", () => {
       { productId: "s1" },
     ]);
     expect(out.map((o) => o.unitCost)).toEqual([3.8, 5]);
+  });
+
+  describe("option (variant) costs", () => {
+    const opt = (fieldId: string, optionValue: string, costPrice: string) => ({
+      productId: "s1",
+      fieldId,
+      optionValue,
+      costPrice,
+    });
+
+    it("uses the chosen Select option's own cost instead of the product cost", async () => {
+      queue.push([simple], [opt("f9", "large", "8.50")]);
+      const r = await resolveUnitCost({ productId: "s1", configValues: { f9: "large" } });
+      expect(r).toEqual({ unitCost: 8.5, source: "snapshot" });
+    });
+
+    it("falls back to the product cost when the chosen option has no cost", async () => {
+      queue.push([simple], [opt("f9", "large", "8.50")]);
+      const r = await resolveUnitCost({ productId: "s1", configValues: { f9: "small" } });
+      expect(r.unitCost).toBe(5);
+    });
+
+    it("falls back to the product cost when the product has no option costs at all", async () => {
+      queue.push([simple], []);
+      const r = await resolveUnitCost({ productId: "s1", configValues: { f9: "small" } });
+      expect(r.unitCost).toBe(5);
+    });
+
+    it("an option cost works even when the product itself has no cost", async () => {
+      queue.push([{ ...simple, costPrice: null }], [opt("f9", "large", "8.50")]);
+      const r = await resolveUnitCost({ productId: "s1", configValues: { f9: "large" } });
+      expect(r.unitCost).toBe(8.5);
+    });
+
+    it("keeps the keychain extra-keycap add-on on top of an option base cost", async () => {
+      queue.push([keychain], [{ ...opt("f9", "gold", "4.00"), productId: "k1" }]);
+      const r = await resolveUnitCost({
+        productId: "k1",
+        unitCount: 3,
+        configValues: { f9: "gold" },
+      });
+      expect(r.unitCost).toBe(5.6); // 4.00 + 2 * 0.80
+    });
+
+    it("never breaks checkout when the option cost table is unavailable", async () => {
+      queue.push([simple], FAIL);
+      const r = await resolveUnitCost({ productId: "s1", configValues: { f9: "large" } });
+      expect(r.unitCost).toBe(5);
+    });
+
+    it("does not look up option costs for lines without a configuration", async () => {
+      queue.push([simple], [opt("f9", "large", "8.50")]);
+      const r = await resolveUnitCost({ productId: "s1" });
+      expect(r.unitCost).toBe(5);
+      expect(queue.length).toBe(1); // the option query never ran
+    });
+
+    it("a real variant cost still wins over an option cost", async () => {
+      queue.push(
+        [simple],
+        [{ id: "v1", productId: "s1", costPrice: "2.20" }],
+        [opt("f9", "large", "8.50")],
+      );
+      const r = await resolveUnitCost({
+        productId: "s1",
+        variantId: "v1",
+        configValues: { f9: "large" },
+      });
+      expect(r.unitCost).toBe(2.2);
+    });
   });
 
   it("costColumns returns strings and a source only when a cost exists", () => {
