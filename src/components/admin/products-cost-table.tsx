@@ -293,13 +293,9 @@ export function ProductsCostTable({
     );
   };
 
-  /** What an option with no cost of its own falls back to. */
+  /** What an option with no cost of its own falls back to (the amount shows in the input). */
   const fallbackText = (p: ProductCostRow, o: OptionCostRow) =>
-    o.cost !== null
-      ? "Own cost"
-      : p.cost !== null
-        ? `Uses product cost ${formatRm(p.cost)}`
-        : "No cost yet";
+    o.cost !== null ? "Own cost" : p.cost !== null ? "Uses product cost" : "No cost yet";
 
   const optionName = (p: ProductCostRow, o: OptionCostRow) =>
     new Set(p.options.map((x) => x.fieldId)).size > 1 ? `${o.fieldLabel}: ${o.label}` : o.label;
@@ -628,7 +624,7 @@ export function ProductsCostTable({
                               </TableCell>
                               <TableCell
                                 colSpan={3}
-                                className="text-xs text-[var(--color-brand-text-muted)]"
+                                className="whitespace-nowrap text-xs text-[var(--color-brand-text-muted)]"
                               >
                                 {fallbackText(p, o)}
                               </TableCell>
@@ -716,35 +712,36 @@ export function ProductsCostTable({
                     {expanded.has(p.id) && (
                       <ul className="mt-2 space-y-3 border-t border-[var(--color-brand-border)] pt-3">
                         {p.options.map((o) => (
-                          <li key={o.key} className="flex items-center gap-3">
-                            <label className="flex h-11 w-11 shrink-0 items-center justify-center">
+                          <li key={o.key} className="space-y-1.5">
+                            <label className="flex items-start gap-2">
                               <input
                                 type="checkbox"
                                 aria-label={`Select option ${o.label} of ${p.name}`}
                                 checked={selected.has(o.key)}
                                 onChange={() => toggleRow(o.key, false)}
-                                className="h-6 w-6 accent-[var(--color-brand-blue)]"
+                                className="mt-0.5 h-6 w-6 shrink-0 accent-[var(--color-brand-blue)]"
                               />
-                            </label>
-                            <div className="min-w-0 flex-1">
-                              <p className="break-words text-sm font-medium leading-snug">
+                              <span className="min-w-0 break-words text-sm font-medium leading-snug">
                                 {optionName(p, o)}
-                              </p>
-                              <p className="text-xs tabular-nums text-[var(--color-brand-text-muted)]">
-                                {o.price !== null ? formatRm(o.price) : p.priceLabel} ·{" "}
+                              </span>
+                            </label>
+                            <div className="flex items-center justify-between gap-2 pl-8">
+                              <p className="min-w-0 text-xs tabular-nums text-[var(--color-brand-text-muted)]">
+                                {o.price !== null ? formatRm(o.price) : p.priceLabel}
+                                <br />
                                 {fallbackText(p, o)}
                               </p>
+                              <InlineCostInput
+                                productId={p.id}
+                                option={{ fieldId: o.fieldId, value: o.value }}
+                                value={o.cost}
+                                large
+                                placeholder={p.cost !== null ? p.cost.toFixed(2) : "0.00"}
+                                label={`Cost for ${o.label} of ${p.name}`}
+                                onSaved={(c) => onOptionSaved(o.key, c)}
+                                onEnter={focusNext}
+                              />
                             </div>
-                            <InlineCostInput
-                              productId={p.id}
-                              option={{ fieldId: o.fieldId, value: o.value }}
-                              value={o.cost}
-                              large
-                              placeholder={p.cost !== null ? p.cost.toFixed(2) : "0.00"}
-                              label={`Cost for ${o.label} of ${p.name}`}
-                              onSaved={(c) => onOptionSaved(o.key, c)}
-                              onEnter={focusNext}
-                            />
                           </li>
                         ))}
                       </ul>
