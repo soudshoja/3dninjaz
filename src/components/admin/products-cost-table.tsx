@@ -725,10 +725,9 @@ export function ProductsCostTable({
                                 {optionName(p, o)}
                               </span>
                             </label>
-                            <div className="flex items-center justify-between gap-2 pl-8">
-                              <p className="min-w-0 text-xs tabular-nums text-[var(--color-brand-text-muted)]">
-                                {o.price !== null ? formatRm(o.price) : p.priceLabel}
-                                <br />
+                            <div className="space-y-1.5 pl-8">
+                              <p className="text-xs tabular-nums text-[var(--color-brand-text-muted)]">
+                                {o.price !== null ? formatRm(o.price) : p.priceLabel} ·{" "}
                                 {fallbackText(p, o)}
                               </p>
                               <InlineCostInput
