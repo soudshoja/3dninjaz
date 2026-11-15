@@ -11,6 +11,9 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+const tab =
+  "flex h-11 items-center justify-center rounded-lg px-3 text-base font-medium transition-colors ";
+
 export default async function ProductCostsCapturePage({
   searchParams,
 }: {
@@ -22,24 +25,50 @@ export default async function ProductCostsCapturePage({
   const listView = view === "list";
 
   return (
-    <div className="space-y-4">
-      <div>
+    <div className="mx-auto max-w-2xl space-y-3">
+      <div className="flex items-center gap-1">
         <Link
           href="/admin/products"
-          className="inline-flex min-h-[44px] items-center gap-1.5 text-sm text-[var(--color-brand-text-muted)] hover:underline"
+          aria-label="Back to products"
+          className="-ml-2 flex h-11 w-11 items-center justify-center rounded-lg text-[var(--color-brand-text-muted)] hover:bg-white"
         >
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          Products
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
         </Link>
         <h1 className="font-heading text-2xl text-[var(--color-brand-text-primary)] md:text-3xl">
-          Enter product costs
+          Product costs
         </h1>
-        <p className="text-sm text-[var(--color-brand-text-muted)]">
-          {listView
-            ? "Type a cost into each product. Press Enter or tap away to save."
-            : "One product at a time. Type what it costs you to make, then tap Save and next."}
-        </p>
       </div>
+
+      <nav
+        aria-label="How to enter costs"
+        className="grid grid-cols-2 gap-1 rounded-xl bg-slate-200/70 p-1"
+      >
+        <Link
+          href="/admin/products/costs"
+          aria-current={listView ? undefined : "page"}
+          className={
+            tab +
+            (listView
+              ? "text-[var(--color-brand-text-muted)]"
+              : "bg-white font-semibold text-[var(--color-brand-ink)] shadow-sm")
+          }
+        >
+          One by one
+        </Link>
+        <Link
+          href="/admin/products/costs?view=list"
+          aria-current={listView ? "page" : undefined}
+          className={
+            tab +
+            (listView
+              ? "bg-white font-semibold text-[var(--color-brand-ink)] shadow-sm"
+              : "text-[var(--color-brand-text-muted)]")
+          }
+        >
+          All products
+        </Link>
+      </nav>
+
       {listView ? <ProductsCostTable rows={rows} cardsOnly /> : <CostCapture rows={rows} />}
     </div>
   );

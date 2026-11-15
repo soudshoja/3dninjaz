@@ -22,6 +22,7 @@ import type {
   BulkCostChange,
   BulkCostMode,
   BulkCostResult,
+  CaptureCostResult,
   OptionCostResult,
   OptionTarget,
   SimpleCostResult,
@@ -100,6 +101,91 @@ function revalidateCostPages() {
   revalidatePath("/admin");
 }
 
+
+const captureSchema = z.object({
+  productId: z.string().min(1).max(36),
+  cost: money.nullable(),
+  // undefined = leave unchanged, null = clear
+  costPerExtra: money.nullable().optional(),
+  options: z
+    .array(
+      z.object({
+        fieldId: z.string().min(1).max(36),
+        value: z.string().min(1).max(150),
+        cost: money.nullable(),
+      }),
+    )
+    .max(200)
+    .optional(),
+});
+
+/**
+ * Phone capture: save a product's cost AND the cost of each of its options in
+ * one transaction. A blank option (null) removes its own cost so the product
+ * cost applies again. Options that no longer exist are refused as a whole.
+ */
+export async function saveCaptureCosts(input: {
+  productId: string;
+  cost: number | null;
+  costPerExtra?: number | null;
+  options?: Array<{ fieldId: string; value: string; cost: number | null }>;
+}): Promise<CaptureCostResult> {
+  await requireAdmin();
+  const parsed = captureSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Enter costs of RM 0.00 or more." };
+  const { productId, cost, costPerExtra, options = [] } = parsed.data;
+
+  try {
+    return await db.transaction(async (tx): Promise<CaptureCostResult> => {
+      const [cur] = await tx
+        .select({
+          costPrice: products.costPrice,
+          costPerExtraUnit: products.costPerExtraUnit,
+        })
+        .from(products)
+        .where(eq(products.id, productId))
+        .limit(1);
+      if (!cur) return { ok: false, error: "Product not found." };
+
+      const nextCost = toCostString(cost);
+      const nextExtra =
+        costPerExtra === undefined ? cur.costPerExtraUnit : toCostString(costPerExtra);
+      if ((cur.costPrice ?? null) !== nextCost || (cur.costPerExtraUnit ?? null) !== nextExtra) {
+        await tx
+          .update(products)
+          .set({ costPrice: nextCost, costPerExtraUnit: nextExtra, costUpdatedAt: new Date() })
+          .where(eq(products.id, productId));
+      }
+
+      const fieldPrices = new Map<string, Map<string, number | null> | null>();
+      for (const o of options) {
+        if (!fieldPrices.has(o.fieldId)) {
+          fieldPrices.set(o.fieldId, await selectOptionPrices(tx, productId, o.fieldId));
+        }
+        const known = fieldPrices.get(o.fieldId);
+        if (!known || !known.has(o.value)) {
+          return { ok: false, error: "An option changed since this page loaded. Refresh and try again." };
+        }
+        await writeOptionCost(tx, { productId, fieldId: o.fieldId, value: o.value }, o.cost);
+      }
+      return {
+        ok: true,
+        cost: costToNumber(nextCost),
+        costPerExtra: costToNumber(nextExtra),
+        options: options.map((o) => ({ fieldId: o.fieldId, value: o.value, cost: o.cost })),
+      };
+    }).then((r) => {
+      if (r.ok) {
+        revalidateCostPages();
+        revalidatePath(`/admin/products/${productId}/edit`);
+      }
+      return r;
+    });
+  } catch (err) {
+    console.error("[product-costs] saveCaptureCosts failed:", err);
+    return { ok: false, error: "Could not save these costs. Nothing was changed. Please try again." };
+  }
+}
 
 /**
  * Inline edit of ONE option's cost. A blank (null) cost removes the option's

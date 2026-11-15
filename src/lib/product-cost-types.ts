@@ -73,6 +73,17 @@ export type OptionCostResult =
   | { ok: true; cost: number | null }
   | { ok: false; error: string };
 
+/** Result of saving one product and all its options from the phone capture screen. */
+export type CaptureCostResult =
+  | {
+      ok: true;
+      cost: number | null;
+      costPerExtra: number | null;
+      /** Saved cost of every option sent (null = blank, uses the product cost). */
+      options: Array<{ fieldId: string; value: string; cost: number | null }>;
+    }
+  | { ok: false; error: string };
+
 export type SimpleCostResult =
   | { ok: true; cost: number | null; costPerExtra: number | null }
   | { ok: false; error: string };
