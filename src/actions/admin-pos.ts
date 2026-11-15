@@ -1088,6 +1088,7 @@ export async function createPosOrder(
           productId: l.productId,
           variantId: l.variantId,
           unitCount: l.unitCount,
+          configValues: parseConfigValues(l.configurationData),
         })),
         tx,
       );

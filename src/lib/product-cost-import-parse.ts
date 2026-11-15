@@ -5,11 +5,18 @@
 // Template (owner's file 3DNinjaz_Product_Cost_Template.xlsx): header on row 4,
 // data from row 5. Columns: A Product ID, B name, C type, D category,
 // E sell price, F other price tiers, G Cost (RM), H Cost per extra keycap
-// (keychains only), I margin, J margin %, K active, L notes. A blank cost means
-// "skip this product".
+// (keychains only), I margin, J margin %, K active, L notes, M option key.
+// A blank cost means "skip this row".
+//
+// Variants: a product's variants are the options of its Select field. A row
+// with an Option key in column M costs that ONE option (column A repeats the
+// product id, column G is the option's own cost, blank = no own cost, so the
+// product row's cost is used). Rows without an Option key are product rows.
 
-import { computeMargin, round2 } from "@/lib/product-cost-math";
+import { computeMargin, optionSheetKey, round2 } from "@/lib/product-cost-math";
 import type { CostImportIssue, CostImportRow } from "@/lib/product-cost-types";
+
+export { optionSheetKey };
 
 export const COL = {
   id: 0,
@@ -20,6 +27,7 @@ export const COL = {
   tiers: 5,
   cost: 6,
   extra: 7,
+  option: 12,
 } as const;
 
 /** What the import needs to know about a product that already exists. */
@@ -30,6 +38,16 @@ export type ProductSnapshot = {
   price: number | null;
   cost: number | null;
   costPerExtra: number | null;
+  /** Select options by sheet key (see optionSheetKey). Empty for most products. */
+  options?: Map<string, SnapshotOption>;
+};
+
+export type SnapshotOption = {
+  label: string;
+  /** Option price override, else null. */
+  price: number | null;
+  /** The option's own cost, else null. */
+  cost: number | null;
 };
 
 export type RawCostRow = {
@@ -39,6 +57,8 @@ export type RawCostRow = {
   sheetPrice: number | null;
   costCell: unknown;
   extraCell: unknown;
+  /** Column M, trimmed; "" on a product row. */
+  optionKeyCell: string;
 };
 
 export type CellMoney =
@@ -107,8 +127,12 @@ export function extractCostRows(grid: unknown[][]): RawCostRow[] {
     const id = cellText(r[COL.id]);
     const costCell = r[COL.cost];
     const extraCell = r[COL.extra];
+    const optionKeyCell = cellText(r[COL.option]);
+    // The template's "Filled so far" footer is not a data row.
+    if (id === "" && /^filled so far/i.test(cellText(r[COL.name]))) continue;
     const nothing =
       id === "" &&
+      optionKeyCell === "" &&
       cellText(costCell) === "" &&
       cellText(extraCell) === "" &&
       cellText(r[COL.name]) === "";
@@ -120,6 +144,7 @@ export function extractCostRows(grid: unknown[][]): RawCostRow[] {
       sheetPrice: cellNumber(r[COL.price]),
       costCell,
       extraCell,
+      optionKeyCell,
     });
   }
   return out;
@@ -135,14 +160,18 @@ export function validateCostRows(
   raw: RawCostRow[],
   products: Map<string, ProductSnapshot>,
 ): CostImportRow[] {
+  // One row per product, and one per (product, option).
+  const rowKey = (r: RawCostRow) => `${r.productId}\u0000${r.optionKeyCell}`;
   const seen = new Map<string, number>();
   for (const r of raw) {
-    if (r.productId) seen.set(r.productId, (seen.get(r.productId) ?? 0) + 1);
+    if (r.productId) seen.set(rowKey(r), (seen.get(rowKey(r)) ?? 0) + 1);
   }
 
   return raw.map((r): CostImportRow => {
     const issues: CostImportIssue[] = [];
     const snap = r.productId ? products.get(r.productId) : undefined;
+    const isOption = r.optionKeyCell !== "";
+    const opt = isOption ? snap?.options?.get(r.optionKeyCell) : undefined;
     const costParsed = parseCostCell(r.costCell);
     const extraParsed = parseCostCell(r.extraCell);
 
@@ -151,10 +180,18 @@ export function validateCostRows(
     } else if (!snap) {
       issues.push({ level: "error", message: "Unknown product ID (not in the store)" });
     }
-    if (r.productId && (seen.get(r.productId) ?? 0) > 1) {
+    if (isOption && snap && !opt) {
       issues.push({
         level: "error",
-        message: "Product ID appears more than once in the file. Keep one row per product.",
+        message: "Unknown option (it is not on this product any more). Download a fresh template.",
+      });
+    }
+    if (r.productId && (seen.get(rowKey(r)) ?? 0) > 1) {
+      issues.push({
+        level: "error",
+        message: isOption
+          ? "This option appears more than once in the file. Keep one row per option."
+          : "Product ID appears more than once in the file. Keep one row per product.",
       });
     }
     if (costParsed.kind === "error") {
@@ -167,7 +204,31 @@ export function validateCostRows(
     const newCost = costParsed.kind === "ok" ? costParsed.value : null;
     let newExtra = extraParsed.kind === "ok" ? extraParsed.value : null;
 
-    if (snap) {
+    if (snap && isOption) {
+      // Option (variant) row: its own cost; blank = leave as it is.
+      if (extraParsed.kind === "ok") {
+        issues.push({
+          level: "warning",
+          message: "Cost per extra keycap is not used on an option row, so it was ignored",
+        });
+        newExtra = null;
+      }
+      const price = opt?.price ?? snap.price;
+      if (
+        r.sheetPrice !== null &&
+        price !== null &&
+        Math.abs(r.sheetPrice - price) > 0.005
+      ) {
+        issues.push({
+          level: "warning",
+          message: `Sell price differs from the store (RM ${price.toFixed(2)})`,
+        });
+      }
+      const effectiveCost = newCost ?? opt?.cost ?? snap.cost;
+      if (effectiveCost !== null && price !== null && effectiveCost >= price) {
+        issues.push({ level: "warning", message: "Cost is at or above the sell price" });
+      }
+    } else if (snap) {
       if (r.sheetName && norm(r.sheetName) !== norm(snap.name)) {
         issues.push({
           level: "warning",
@@ -210,7 +271,11 @@ export function validateCostRows(
     const hasError = issues.some((i) => i.level === "error");
     let action: CostImportRow["action"];
     if (hasError) action = "error";
-    else if (newCost === null && newExtra === null) action = "skip";
+    else if (isOption) {
+      if (newCost === null) action = "skip";
+      else if (opt && newCost === opt.cost) action = "unchanged";
+      else action = "update";
+    } else if (newCost === null && newExtra === null) action = "skip";
     else if (
       snap &&
       (newCost === null || newCost === snap.cost) &&
@@ -219,10 +284,36 @@ export function validateCostRows(
       action = "unchanged";
     } else action = "update";
 
+    if (isOption) {
+      // What the option costs today and after: its own cost, else the product's.
+      const price = opt?.price ?? snap?.price ?? null;
+      const shown = newCost ?? opt?.cost ?? snap?.cost ?? null;
+      return {
+        rowNumber: r.rowNumber,
+        productId: r.productId,
+        optionKey: r.optionKeyCell,
+        optionLabel: opt?.label ?? null,
+        sheetName: r.sheetName,
+        sheetPrice: r.sheetPrice,
+        newCost,
+        newCostPerExtra: null,
+        productName: snap ? `${snap.name} - ${opt?.label ?? "option"}` : null,
+        productType: snap?.productType ?? null,
+        currentPrice: price,
+        oldCost: opt?.cost ?? null,
+        oldCostPerExtra: null,
+        action,
+        newMarginPct: snap ? (computeMargin(price, shown)?.pct ?? null) : null,
+        issues,
+      };
+    }
+
     const shownCost = newCost ?? snap?.cost ?? null;
     return {
       rowNumber: r.rowNumber,
       productId: r.productId,
+      optionKey: null,
+      optionLabel: null,
       sheetName: r.sheetName,
       sheetPrice: r.sheetPrice,
       newCost,

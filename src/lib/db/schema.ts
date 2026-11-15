@@ -2560,6 +2560,31 @@ export const assets = mysqlTable(
 
 // Payments made against an asset (one row per instalment, or one row for an
 // outright purchase). ON DELETE CASCADE with the parent asset.
+/**
+ * Accounting v2 - per-option ("variant") cost. A product's variants are the
+ * options of its Select config field (product_variants is unused for these), so
+ * the cost lives here, keyed by (product, field, option value). Kept OUT of
+ * configJson on purpose: configJson is shipped to the storefront and a cost in
+ * it would be public. A missing row means "use the product cost".
+ */
+export const productOptionCosts = mysqlTable(
+  "product_option_costs",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    productId: varchar("product_id", { length: 36 })
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    fieldId: varchar("field_id", { length: 36 }).notNull(),
+    optionValue: varchar("option_value", { length: 150 }).notNull(),
+    costPrice: decimal("cost_price", { precision: 10, scale: 2 }).notNull(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({
+    optionUq: unique("uq_product_option_costs_option").on(t.productId, t.fieldId, t.optionValue),
+    productIdx: index("idx_product_option_costs_product").on(t.productId),
+  }),
+);
+
 export const assetPayments = mysqlTable(
   "asset_payments",
   {

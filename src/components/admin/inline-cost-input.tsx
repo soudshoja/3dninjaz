@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Check, Loader2 } from "lucide-react";
-import { updateProductCost } from "@/actions/product-costs";
+import { updateOptionCost, updateProductCost } from "@/actions/product-costs";
 import { parseMoney } from "@/lib/product-cost-math";
 
 /**
@@ -19,8 +19,14 @@ export function InlineCostInput({
   onEnter,
   large = false,
   label,
+  option,
+  placeholder = "0.00",
 }: {
   productId: string;
+  /** Set to edit the cost of one Select option (variant) instead of the product. */
+  option?: { fieldId: string; value: string };
+  /** Shown when empty, e.g. the product cost an option falls back to. */
+  placeholder?: string;
   value: number | null;
   onSaved: (cost: number | null) => void;
   /** Called after Enter so the parent can focus the next row. */
@@ -64,7 +70,9 @@ export function InlineCostInput({
     }
     setStatus("saving");
     setError(null);
-    const res = await updateProductCost({ productId, cost: parsed });
+    const res = option
+      ? await updateOptionCost({ productId, fieldId: option.fieldId, value: option.value, cost: parsed })
+      : await updateProductCost({ productId, cost: parsed });
     if (!res.ok) {
       setStatus("error");
       setError(res.error);
@@ -95,7 +103,7 @@ export function InlineCostInput({
           aria-label={label}
           aria-invalid={status === "error"}
           value={text}
-          placeholder="0.00"
+          placeholder={placeholder}
           onFocus={(e) => {
             focused.current = true;
             e.currentTarget.select();

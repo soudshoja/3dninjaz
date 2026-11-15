@@ -182,15 +182,47 @@ function addKey(table, name, cols) {
   };
 }
 
-function createTable(table, ddl) {
+function createTable(table, ddl, buildSql) {
   return {
     desc: `CREATE TABLE ${table}`,
     async needed(conn, db) {
       return !(await tableExists(conn, db, table));
     },
     sql: ddl,
+    // Optional: build the real SQL from the live schema (collation-dependent FKs).
+    buildSql,
   };
 }
+
+/** Live charset + collation of a column, as a "CHARACTER SET x COLLATE y" fragment. */
+async function columnCharset(conn, db, table, column) {
+  const [rows] = await conn.query(
+    `SELECT CHARACTER_SET_NAME AS cs, COLLATION_NAME AS co FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+    [db, table, column],
+  );
+  if (!rows.length || !rows[0].cs || !rows[0].co) {
+    throw new Error(`cannot read the charset of ${table}.${column}`);
+  }
+  // Values come from INFORMATION_SCHEMA, but still refuse anything odd.
+  if (!/^[a-z0-9_]+$/i.test(rows[0].cs) || !/^[a-z0-9_]+$/i.test(rows[0].co)) {
+    throw new Error(`unexpected charset on ${table}.${column}`);
+  }
+  return `CHARACTER SET ${rows[0].cs} COLLATE ${rows[0].co}`;
+}
+
+const productOptionCostsSql = (idCharset) => `CREATE TABLE \`product_option_costs\` (
+        \`id\` VARCHAR(36) NOT NULL,
+        \`product_id\` VARCHAR(36) ${idCharset} NOT NULL,
+        \`field_id\` VARCHAR(36) ${idCharset} NOT NULL,
+        \`option_value\` VARCHAR(150) NOT NULL,
+        \`cost_price\` DECIMAL(10,2) NOT NULL,
+        \`updated_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        UNIQUE KEY \`uq_product_option_costs_option\` (\`product_id\`, \`field_id\`, \`option_value\`),
+        KEY \`idx_product_option_costs_product\` (\`product_id\`),
+        CONSTRAINT \`fk_product_option_costs_product\` FOREIGN KEY (\`product_id\`) REFERENCES \`products\` (\`id\`) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`;
 
 function buildSteps() {
   const steps = [];
@@ -248,6 +280,13 @@ function buildSteps() {
         KEY \`idx_asset_payments_date\` (\`payment_date\`),
         CONSTRAINT \`fk_asset_payments_asset\` FOREIGN KEY (\`asset_id\`) REFERENCES \`assets\` (\`id\`) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+    ),
+    // product_id must match products.id's charset or the FK is rejected (errno 150);
+    // products.id is latin1 here, so read it from the live schema instead of guessing.
+    createTable(
+      "product_option_costs",
+      productOptionCostsSql("CHARACTER SET <products.id charset>"),
+      async (conn, db) => productOptionCostsSql(await columnCharset(conn, db, "products", "id")),
     ),
     createTable(
       "income_entries",
@@ -325,6 +364,7 @@ const VERIFY_TABLES = [
   "assets",
   "asset_payments",
   "income_entries",
+  "product_option_costs",
   "payouts",
   "products",
   "order_items",
@@ -390,7 +430,7 @@ async function run() {
         console.log(`${TAG} WOULD  ${step.desc}\n        ${step.sql.replace(/\s+/g, " ")}`);
         continue;
       }
-      await conn.query(step.sql);
+      await conn.query(step.buildSql ? await step.buildSql(conn, db) : step.sql);
       applied++;
       console.log(`${TAG} done   ${step.desc}`);
     }
@@ -445,7 +485,7 @@ async function run() {
         throw new Error(`post-check failed: ${t}.${c} is missing`);
       }
     }
-    for (const t of ["asset_payments", "income_entries"]) {
+    for (const t of ["asset_payments", "income_entries", "product_option_costs"]) {
       if (!(await tableExists(conn, db, t))) throw new Error(`post-check failed: ${t} missing`);
     }
     const pm = await columnType(conn, db, "orders", "payment_method");

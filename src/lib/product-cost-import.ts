@@ -8,21 +8,30 @@ import "server-only";
 
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { orderItems, productVariants, products } from "@/lib/db/schema";
-import { ensureTiers } from "@/lib/config-fields";
+import {
+  orderItems,
+  productConfigFields,
+  productOptionCosts,
+  productVariants,
+  products,
+} from "@/lib/db/schema";
+import { ensureConfigJson, ensureTiers, type SelectFieldConfig } from "@/lib/config-fields";
 import {
   extractCostRows,
   summariseRows,
   validateCostRows,
   type ProductSnapshot,
+  type SnapshotOption,
 } from "@/lib/product-cost-import-parse";
 import { resolveUnitCosts } from "@/lib/product-cost";
 import {
   costToNumber,
   deriveUnitCount,
+  optionSheetKey,
   representativePrice,
   toCostString,
 } from "@/lib/product-cost-math";
+import { writeOptionCost } from "@/lib/product-option-costs";
 import type {
   CostImportBackfill,
   CostImportChange,
@@ -85,6 +94,7 @@ async function loadSnapshots(
     b.push(n);
     prices.set(v.productId, b);
   }
+  const optionsByProduct = await loadOptionSnapshots(tx, ids);
   for (const r of rows) {
     const type = r.productType ?? "stocked";
     map.set(r.id, {
@@ -98,9 +108,67 @@ async function loadSnapshots(
       }),
       cost: costToNumber(r.costPrice),
       costPerExtra: costToNumber(r.costPerExtraUnit),
+      options: optionsByProduct.get(r.id),
     });
   }
   return map;
+}
+
+/** Select options of each product with their own cost (if any), by sheet key. */
+async function loadOptionSnapshots(
+  tx: Tx,
+  ids: string[],
+): Promise<Map<string, Map<string, SnapshotOption>>> {
+  const out = new Map<string, Map<string, SnapshotOption>>();
+  const fields = await tx
+    .select({
+      id: productConfigFields.id,
+      productId: productConfigFields.productId,
+      configJson: productConfigFields.configJson,
+    })
+    .from(productConfigFields)
+    .where(and(inArray(productConfigFields.productId, ids), eq(productConfigFields.fieldType, "select")));
+  if (fields.length === 0) return out;
+
+  const costs = new Map<string, number>();
+  try {
+    const rows = await tx
+      .select({
+        productId: productOptionCosts.productId,
+        fieldId: productOptionCosts.fieldId,
+        optionValue: productOptionCosts.optionValue,
+        costPrice: productOptionCosts.costPrice,
+      })
+      .from(productOptionCosts)
+      .where(inArray(productOptionCosts.productId, ids));
+    for (const c of rows) {
+      const n = costToNumber(c.costPrice);
+      if (n !== null) costs.set(`${c.productId}\u0000${optionSheetKey(c.fieldId, c.optionValue)}`, n);
+    }
+  } catch {
+    // table not there yet: options simply have no own cost
+  }
+
+  for (const f of fields) {
+    let cfg: SelectFieldConfig;
+    try {
+      cfg = ensureConfigJson("select", f.configJson) as SelectFieldConfig;
+    } catch {
+      continue;
+    }
+    const bucket = out.get(f.productId) ?? new Map<string, SnapshotOption>();
+    for (const o of cfg.options ?? []) {
+      if (typeof o?.value !== "string" || o.value === "") continue;
+      const key = optionSheetKey(f.id, o.value);
+      bucket.set(key, {
+        label: (o.label ?? o.value).trim() || o.value,
+        price: typeof o.price === "number" && Number.isFinite(o.price) ? o.price : null,
+        cost: costs.get(`${f.productId}\u0000${key}`) ?? null,
+      });
+    }
+    out.set(f.productId, bucket);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -241,6 +309,27 @@ async function runImportInTx(
     if (r.action !== "update") continue;
     const snap = snapshots.get(r.productId);
     if (!snap) continue;
+    if (r.optionKey) {
+      // Variant row: the option's own cost (blank cells were skipped earlier).
+      const sep = r.optionKey.indexOf("|");
+      const opt = snap.options?.get(r.optionKey);
+      if (sep <= 0 || !opt || r.newCost === null) continue;
+      await writeOptionCost(
+        tx,
+        { productId: r.productId, fieldId: r.optionKey.slice(0, sep), value: r.optionKey.slice(sep + 1) },
+        r.newCost,
+      );
+      changes.push({
+        productId: r.productId,
+        optionKey: r.optionKey,
+        name: `${snap.name} - ${opt.label}`,
+        oldCost: opt.cost,
+        oldCostPerExtra: null,
+        newCost: r.newCost,
+        newCostPerExtra: null,
+      });
+      continue;
+    }
     const nextCost = r.newCost ?? snap.cost;
     const nextExtra = r.newCostPerExtra ?? snap.costPerExtra;
     await tx
