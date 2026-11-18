@@ -3,7 +3,10 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
-import { getAccountingSummary, getAccountBalances } from "@/lib/accounting";
+import { getAccountingOverview, getAccountBalances, getSstEnabled } from "@/lib/accounting";
+import { resolveRange } from "@/lib/date-range";
+import { DateRangePicker } from "@/components/admin/date-range-picker";
+import { StatCard, Notice } from "@/components/admin/accounting-ui";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -11,70 +14,31 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-/** Default range: first day of current month → today (YYYY-MM-DD). */
-function defaultRange(): { from: string; to: string } {
-  const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1);
-  const iso = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-      d.getDate(),
-    ).padStart(2, "0")}`;
-  return { from: iso(from), to: iso(now) };
-}
-
-function Card({
-  label,
-  value,
-  accent,
-  big,
-}: {
-  label: string;
-  value: string;
-  accent?: string;
-  big?: boolean;
-}) {
-  return (
-    <div className="rounded-2xl p-4" style={{ backgroundColor: "#ffffff" }}>
-      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-      <p
-        className={`mt-1 font-bold tabular-nums ${big ? "text-3xl" : "text-xl"}`}
-        style={{ color: accent ?? BRAND.ink }}
-      >
-        {value}
-      </p>
-    </div>
-  );
-}
-
 const subLinks = [
+  ["/admin/accounting/summary", "Net position"],
   ["/admin/accounting/sales", "Sales report"],
   ["/admin/accounting/expenses", "Expenses"],
+  ["/admin/accounting/income", "Income"],
   ["/admin/accounting/assets", "Assets"],
-  ["/admin/accounting/payouts", "Payouts"],
+  ["/admin/accounting/payouts", "Transfers"],
+  ["/admin/accounting/paypal", "PayPal ledger"],
   ["/admin/accounting/import", "Import invoice"],
 ] as const;
 
 export default async function AccountingOverviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string }>;
+  searchParams: Promise<{ range?: string; from?: string; to?: string }>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
-  const def = defaultRange();
-  // Only accept well-formed YYYY-MM-DD; ignore junk so a crafted ?from=foo
-  // can't reach new Date() in the query builder.
-  const dateRe = /^\d{4}-\d{2}-\d{2}$/;
-  const from = sp.from && dateRe.test(sp.from) ? sp.from : def.from;
-  const to = sp.to && dateRe.test(sp.to) ? sp.to : def.to;
-  const range = { from, to };
+  const range = resolveRange(sp, { defaultPreset: "this_month" });
 
-  const [summary, balances] = await Promise.all([
-    getAccountingSummary(range),
+  const [{ cash, margin }, balances, sstEnabled] = await Promise.all([
+    getAccountingOverview(range),
     getAccountBalances(),
+    getSstEnabled(),
   ]);
-
-  const profitColor = summary.profit >= 0 ? BRAND.green : "#dc2626";
 
   return (
     <main className="min-h-screen" style={{ backgroundColor: BRAND.cream, color: BRAND.ink }}>
@@ -82,122 +46,130 @@ export default async function AccountingOverviewPage({
         <header className="mb-4">
           <h1 className="font-[var(--font-heading)] text-3xl md:text-4xl">Accounting</h1>
           <p className="mt-1 text-slate-600">
-            Cash-basis profit from paid orders, minus expenses. Assets are tracked
-            separately and don&apos;t affect profit.
+            {range.label}. Cash-basis profit from paid orders, other income and expenses.
+            Shipping is passed through to the courier, so it is left out of sales and cost.
           </p>
         </header>
 
-        {/* Date-range filter (server-side; no client JS → no hydration risk) */}
-        <form method="get" className="mb-6 flex flex-wrap items-end gap-3">
-          <div>
-            <label htmlFor="from" className="block text-xs font-semibold mb-1">
-              From
-            </label>
-            <input
-              id="from"
-              name="from"
-              type="date"
-              defaultValue={from}
-              className="rounded-xl border-2 px-3 py-2 text-sm min-h-[44px]"
-              style={{ borderColor: `${BRAND.ink}33` }}
-            />
-          </div>
-          <div>
-            <label htmlFor="to" className="block text-xs font-semibold mb-1">
-              To
-            </label>
-            <input
-              id="to"
-              name="to"
-              type="date"
-              defaultValue={to}
-              className="rounded-xl border-2 px-3 py-2 text-sm min-h-[44px]"
-              style={{ borderColor: `${BRAND.ink}33` }}
-            />
-          </div>
-          <button
-            type="submit"
-            className="rounded-full px-5 py-2 font-semibold text-white min-h-[44px]"
-            style={{ backgroundColor: BRAND.ink }}
-          >
-            Apply
-          </button>
-        </form>
+        <div className="mb-6">
+          <DateRangePicker current={range} />
+        </div>
 
-        {/* Profit cards */}
-        <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <Card label="Sales" value={formatMYR(summary.sales)} />
-          <Card label="COGS" value={formatMYR(summary.cogs)} />
-          <Card label="Shipping" value={formatMYR(summary.shipping)} />
-          <Card label="PayPal fees" value={formatMYR(summary.paypalFees)} />
-          <Card label="Expenses" value={formatMYR(summary.expensesTotal)} />
-          <Card label="Net profit" value={formatMYR(summary.profit)} accent={profitColor} big />
+        {sstEnabled ? (
+          <Notice>
+            SST is switched on in store settings. These figures do not model SST, so treat
+            sales and profit as before-tax approximations.
+          </Notice>
+        ) : null}
+
+        {/* View A: Net profit (cash) */}
+        <h2 className="mt-4 mb-3 font-bold text-xl">Net profit (cash)</h2>
+        <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <StatCard
+            label="Sales excl. shipping"
+            value={formatMYR(cash.productSales)}
+            sub={`${cash.orderCount} paid order${cash.orderCount === 1 ? "" : "s"}`}
+          />
+          <StatCard label="Other income" value={formatMYR(cash.otherIncome)} />
+          <StatCard label="PayPal fees" value={formatMYR(cash.paypalFees)} />
+          <StatCard label="Expenses" value={formatMYR(cash.expensesTotal)} />
+          <StatCard
+            label="Net profit (cash)"
+            value={formatMYR(cash.netProfit)}
+            accent={cash.netProfit >= 0 ? BRAND.green : "#dc2626"}
+            big
+          />
         </section>
-
-        <p className="mt-2 text-xs text-slate-500">
-          {summary.orderCount} paid order{summary.orderCount === 1 ? "" : "s"} in range.
+        <p className="mt-2 text-xs text-slate-500 tabular-nums">
+          Net profit = sales + other income − PayPal fees − expenses. Product cost is not
+          subtracted here. Shipping collected {formatMYR(cash.shippingCollected)} is not counted.
         </p>
-        {summary.missingShippingCostCount > 0 ? (
-          <p
-            className="mt-2 rounded-xl px-3 py-2 text-sm"
-            style={{ backgroundColor: "#fef3c7", color: "#92400e" }}
-          >
-            {summary.missingShippingCostCount} order
-            {summary.missingShippingCostCount === 1 ? "" : "s"}: courier cost
-            estimated from the markup config (no exact quote stored).
-          </p>
+        {cash.estimatedDateAmount > 0 ? (
+          <Notice>
+            Includes {formatMYR(cash.estimatedDateAmount)} at estimated dates. Those rows may
+            move between periods once the real dates are known.
+          </Notice>
         ) : null}
-        {summary.missingItemCostCount > 0 ? (
-          <p
-            className="mt-2 rounded-xl px-3 py-2 text-sm"
-            style={{ backgroundColor: "#fef3c7", color: "#92400e" }}
-          >
-            {summary.missingItemCostCount} line item
-            {summary.missingItemCostCount === 1 ? "" : "s"} have no cost price
-            recorded — COGS is understated (profit looks higher than it is).
-          </p>
+        {cash.missingPaypalFeeCount > 0 ? (
+          <Notice>
+            {cash.missingPaypalFeeCount} paid order{cash.missingPaypalFeeCount === 1 ? "" : "s"}:
+            PayPal fee not captured yet, so fees are understated until the order payment page
+            is opened or its next webhook lands.
+          </Notice>
         ) : null}
-        {summary.missingPaypalFeeCount > 0 ? (
-          <p
-            className="mt-2 rounded-xl px-3 py-2 text-sm"
-            style={{ backgroundColor: "#fef3c7", color: "#92400e" }}
-          >
-            {summary.missingPaypalFeeCount} paid order
-            {summary.missingPaypalFeeCount === 1 ? "" : "s"}: PayPal fee not
-            captured yet — fees are understated until each order&apos;s payment
-            page is opened or its next webhook lands.
-          </p>
+        {cash.unknownMethodCount > 0 ? (
+          <Notice>
+            {cash.unknownMethodCount} paid order{cash.unknownMethodCount === 1 ? "" : "s"} with
+            unknown payment method. {cash.unknownMethodCount === 1 ? "It counts" : "They count"}{" "}
+            as sales but reach no balance.{" "}
+            <Link href="/admin/orders" className="underline">
+              Open orders to tag the payment method
+            </Link>
+            .
+          </Notice>
         ) : null}
 
-        {/* Account balances + assets */}
-        <h2 className="mt-8 mb-3 font-bold text-xl">Balances (all-time)</h2>
-        <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Card label="PayPal" value={formatMYR(balances.paypal)} accent={BRAND.blue} />
-          <Card label="Bank" value={formatMYR(balances.bank)} />
-          <Card label="Cash" value={formatMYR(balances.cash)} />
-          <Card label="Total assets" value={formatMYR(balances.totalAssets)} accent={BRAND.purple} />
+        {/* View B: Gross margin */}
+        <h2 className="mt-8 mb-3 font-bold text-xl">Gross margin</h2>
+        <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <StatCard label="Sales excl. shipping" value={formatMYR(margin.productSales)} />
+          <StatCard label="Product cost" value={formatMYR(margin.productCost)} />
+          <StatCard label="Extra order cost" value={formatMYR(margin.extraCost)} />
+          <StatCard label="PayPal fees" value={formatMYR(margin.paypalFees)} />
+          {margin.enoughData ? (
+            <StatCard
+              label="Gross margin"
+              value={formatMYR(margin.margin)}
+              sub={margin.marginPercent != null ? `${margin.marginPercent.toFixed(1)}% of sales` : undefined}
+              accent={margin.margin >= 0 ? BRAND.green : "#dc2626"}
+              big
+            />
+          ) : (
+            <StatCard
+              label="Gross margin"
+              value="Not enough cost data"
+              sub={`${Math.round(margin.coverage * 100)}% of order lines have a cost, 90% needed`}
+            />
+          )}
         </section>
-        {balances.paypalNetMissingCount > 0 ? (
-          <p
-            className="mt-2 rounded-xl px-3 py-2 text-sm"
-            style={{ backgroundColor: "#fef3c7", color: "#92400e" }}
-          >
-            PayPal balance excludes {balances.paypalNetMissingCount} paid order
-            {balances.paypalNetMissingCount === 1 ? "" : "s"} whose net amount
-            isn&apos;t captured yet — it will rise as those orders settle/are
-            opened.
-          </p>
-        ) : null}
+        <p className="mt-2 text-xs text-slate-500 tabular-nums">
+          Gross margin = sales − product cost − extra order cost − PayPal fees. Expenses are
+          not subtracted here. Cost coverage {Math.round(margin.coverage * 100)}% (
+          {margin.linesWithCost} of {margin.linesTotal} order lines).
+        </p>
+        <p className="mt-1 text-xs text-slate-500 tabular-nums">
+          Memo: materials bought {formatMYR(margin.materialsBought)}, materials used in orders{" "}
+          {formatMYR(margin.materialsUsed)}. For information only.
+        </p>
+
+        {/* Balances */}
+        <h2 className="mt-8 mb-1 font-bold text-xl">Balances</h2>
+        <p className="mb-3 text-xs text-slate-500">
+          Net movement since records began. These ignore the date range.
+        </p>
+        <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatCard label="PayPal" value={formatMYR(balances.paypal)} accent={BRAND.blue} />
+          <StatCard label="Bank" value={formatMYR(balances.bank)} />
+          <StatCard label="Cash" value={formatMYR(balances.cash)} />
+          <StatCard
+            label="Credit card owed"
+            value={formatMYR(balances.creditCard)}
+            accent={BRAND.purple}
+          />
+        </section>
+        {balances.notes.map((n) => (
+          <Notice key={n}>{n}</Notice>
+        ))}
 
         {/* Sub-section links */}
         <h2 className="mt-8 mb-3 font-bold text-xl">Manage</h2>
-        <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {subLinks.map(([href, label]) => (
             <Link
               key={href}
               href={href}
-              className="rounded-2xl p-4 text-center font-semibold min-h-[64px] flex items-center justify-center"
-              style={{ backgroundColor: "#ffffff", color: BRAND.ink }}
+              className="rounded-2xl p-4 text-center font-semibold min-h-[64px] flex items-center justify-center focus-visible:outline-2 focus-visible:outline-offset-2"
+              style={{ backgroundColor: "#ffffff", color: BRAND.ink, outlineColor: BRAND.blue }}
             >
               {label}
             </Link>

@@ -4,12 +4,13 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { BRAND } from "@/lib/brand";
 import { createPayout, updatePayout } from "@/actions/admin-accounting";
-import type { PayoutRow } from "@/lib/accounting-types";
+import { ACCOUNT_KEYS, ACCOUNT_LABELS, type PayoutRow } from "@/lib/accounting-types";
+import { ErrorBanner, Field, SubmitRow, border, inputCls, selectCls } from "./form-bits";
 
-const inputCls = "w-full rounded-xl border-2 px-4 py-3 text-sm min-h-[48px]";
-const border = { borderColor: `${BRAND.ink}33` };
-
-/** PayPal→Bank/Cash withdrawal. Reduces PayPal balance, adds to destination. */
+/**
+ * Transfer between two of our own accounts (for example PayPal to bank).
+ * Money leaves `from` and lands in `into`. It is not income and not an expense.
+ */
 export function PayoutForm({
   mode,
   initial,
@@ -20,10 +21,16 @@ export function PayoutForm({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [from, setFrom] = useState(initial?.fromAccount ?? "paypal");
+  const [into, setInto] = useState(initial?.paidInto ?? "bank");
 
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
+    if (from === into) {
+      setError("Transfer must go between two different accounts");
+      return;
+    }
     const fd = new FormData(e.currentTarget);
     startTransition(async () => {
       const res = mode === "new" ? await createPayout(fd) : await updatePayout(initial!.id, fd);
@@ -39,10 +46,7 @@ export function PayoutForm({
   return (
     <form onSubmit={onSubmit} className="space-y-4 max-w-xl" style={{ color: BRAND.ink }}>
       <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label htmlFor="pf-date" className="block text-sm font-semibold mb-1">
-            Date
-          </label>
+        <Field id="pf-date" label="Date">
           <input
             id="pf-date"
             name="payoutDate"
@@ -52,11 +56,8 @@ export function PayoutForm({
             className={inputCls}
             style={border}
           />
-        </div>
-        <div>
-          <label htmlFor="pf-amount" className="block text-sm font-semibold mb-1">
-            Amount withdrawn (MYR)
-          </label>
+        </Field>
+        <Field id="pf-amount" label="Amount moved (MYR)">
           <input
             id="pf-amount"
             name="amount"
@@ -65,36 +66,51 @@ export function PayoutForm({
             inputMode="decimal"
             pattern="\d+(\.\d{1,2})?"
             defaultValue={initial?.amount ?? ""}
-            className={inputCls}
+            className={`${inputCls} tabular-nums`}
             style={border}
-            placeholder="1000.00"
           />
-        </div>
+        </Field>
       </div>
 
-      <div>
-        <label htmlFor="pf-into" className="block text-sm font-semibold mb-1">
-          Withdrawn into
-        </label>
-        <select
-          id="pf-into"
-          name="paidInto"
-          defaultValue={initial?.paidInto ?? "bank"}
-          className={`${inputCls} bg-white`}
-          style={border}
-        >
-          <option value="bank">Bank</option>
-          <option value="cash">Cash</option>
-        </select>
-        <p className="mt-1 text-xs text-slate-500">
-          Money moves out of PayPal into this account.
-        </p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field id="pf-from" label="Moved from">
+          <select
+            id="pf-from"
+            name="fromAccount"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            className={selectCls}
+            style={border}
+          >
+            {ACCOUNT_KEYS.map((v) => (
+              <option key={v} value={v}>
+                {ACCOUNT_LABELS[v]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field id="pf-into" label="Moved into">
+          <select
+            id="pf-into"
+            name="paidInto"
+            value={into}
+            onChange={(e) => setInto(e.target.value)}
+            className={selectCls}
+            style={border}
+          >
+            {ACCOUNT_KEYS.map((v) => (
+              <option key={v} value={v}>
+                {ACCOUNT_LABELS[v]}
+              </option>
+            ))}
+          </select>
+        </Field>
       </div>
+      <p className="-mt-2 text-xs text-slate-500">
+        Moving money into the credit card account pays down what you owe on it.
+      </p>
 
-      <div>
-        <label htmlFor="pf-note" className="block text-sm font-semibold mb-1">
-          Note (optional)
-        </label>
+      <Field id="pf-note" label="Note (optional)">
         <input
           id="pf-note"
           name="note"
@@ -103,39 +119,16 @@ export function PayoutForm({
           defaultValue={initial?.note ?? ""}
           className={inputCls}
           style={border}
-          placeholder="Maybank transfer ref…"
         />
-      </div>
+      </Field>
 
-      {error ? (
-        <p
-          role="alert"
-          className="rounded-xl px-3 py-2 text-sm"
-          style={{ backgroundColor: "#fee2e2", color: "#991b1b" }}
-        >
-          {error}
-        </p>
-      ) : null}
+      <ErrorBanner error={error} />
 
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-full px-6 py-3 font-bold text-white min-h-[48px] disabled:opacity-50"
-          style={{ backgroundColor: BRAND.ink }}
-        >
-          {pending ? "Saving…" : mode === "new" ? "Add payout" : "Save changes"}
-        </button>
-        <button
-          type="button"
-          onClick={() => router.push("/admin/accounting/payouts")}
-          disabled={pending}
-          className="rounded-full px-6 py-3 font-semibold border-2 min-h-[48px]"
-          style={{ borderColor: `${BRAND.ink}33`, color: BRAND.ink }}
-        >
-          Cancel
-        </button>
-      </div>
+      <SubmitRow
+        pending={pending}
+        label={mode === "new" ? "Add transfer" : "Save changes"}
+        onCancel={() => router.push("/admin/accounting/payouts")}
+      />
     </form>
   );
 }

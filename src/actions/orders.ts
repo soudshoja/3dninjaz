@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { orders, orderItems } from "@/lib/db/schema";
 import { eq, desc, inArray } from "drizzle-orm";
 import { getSessionUser } from "@/lib/auth-helpers";
+import { redactOrderItemCost } from "@/lib/order-item-redact";
 import { sendOrderConfirmationEmail } from "@/lib/email/order-confirmation";
 
 /**
@@ -53,7 +54,7 @@ export async function listMyOrders() {
   const itemsByOrder = new Map<string, typeof itemRows>();
   for (const it of itemRows) {
     const bucket = itemsByOrder.get(it.orderId) ?? [];
-    bucket.push(it);
+    bucket.push(redactOrderItemCost(it)); // never expose cost to the customer
     itemsByOrder.set(it.orderId, bucket);
   }
   return rows.map((r) => ({ ...r, items: itemsByOrder.get(r.id) ?? [] }));
@@ -81,7 +82,7 @@ export async function getMyOrder(orderId: string) {
     .select()
     .from(orderItems)
     .where(eq(orderItems.orderId, row.id));
-  return { ...row, items };
+  return { ...row, items: items.map(redactOrderItemCost) };
 }
 
 export async function resendOrderConfirmationEmail(

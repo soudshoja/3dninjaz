@@ -181,6 +181,12 @@ export const products = mysqlTable("products", {
   // but cannot be bought, regardless of variant stock / productType. Stock
   // quantities are untouched so un-ticking restores the prior availability.
   soldOut: boolean("sold_out").notNull().default(false),
+  // Accounting v2 - ONE flat manual cost per product (admin-only; must never
+  // reach the storefront payload). Keychains: costPrice = cost of a 1-keycap
+  // keychain, plus (keycaps-1) * costPerExtraUnit.
+  costPrice: decimal("cost_price", { precision: 10, scale: 2 }),
+  costPerExtraUnit: decimal("cost_per_extra_unit", { precision: 10, scale: 2 }),
+  costUpdatedAt: timestamp("cost_updated_at"),
   categoryId: varchar("category_id", { length: 36 }).references(
     () => categories.id
   ),
@@ -529,7 +535,7 @@ export const orders = mysqlTable("orders", {
   // Phase 20 (20-01) — payment method used (NULL for legacy rows, 'paypal' for
   // existing captured orders after back-fill in scripts/phase20-migrate.cjs).
   // D-21: set at status-transition time by the checkout/slip-upload actions.
-  paymentMethod: mysqlEnum("payment_method", ["paypal", "bank_transfer"]),
+  paymentMethod: mysqlEnum("payment_method", ["paypal", "bank_transfer", "cash", "other"]),
   // Money (MYR) — decimal(10,2) stores up to 99,999,999.99
   subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
   shippingCost: decimal("shipping_cost", { precision: 10, scale: 2 })
@@ -610,6 +616,8 @@ export const orders = mysqlTable("orders", {
   updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
 });
 
+export const unitCostSourceValues = ["snapshot", "estimate", "manual"] as const;
+
 export const orderItems = mysqlTable("order_items", {
   id: varchar("id", { length: 36 })
     .primaryKey()
@@ -639,6 +647,10 @@ export const orderItems = mysqlTable("order_items", {
   // not been filled in retroactively stay NULL. Profit helper treats NULL as 0
   // but flags it via hasMissingCosts so admin can see which lines need input.
   unitCost: decimal("unit_cost", { precision: 10, scale: 2 }),
+  // Accounting v2 - how unit_cost was obtained. 'snapshot' = resolved from the
+  // product cost at order creation; 'estimate' = backfilled onto an old line
+  // (may be overwritten by a later backfill); 'manual' = typed by an admin.
+  unitCostSource: mysqlEnum("unit_cost_source", unitCostSourceValues),
   quantity: int("quantity").notNull(),
   lineTotal: decimal("line_total", { precision: 10, scale: 2 }).notNull(),
   // Production board (admin fulfilment). productionDone flips when the admin
@@ -2458,9 +2470,25 @@ export const expenseCategoryValues = [
   "shipping",
   "equipment",
   "other",
+  // Accounting v2 (2026-11) - widened, additive.
+  "packaging",
+  "consumables",
+  "design",
+  "fees",
 ] as const;
 
-export const accountValues = ["paypal", "bank", "cash"] as const;
+// Accounting v2: credit_card added. Order matches the DDL enum.
+export const accountValues = ["paypal", "bank", "cash", "credit_card"] as const;
+
+export const bankMatchValues = ["unchecked", "matched", "check", "not_found"] as const;
+
+export const incomeKindValues = [
+  "project",
+  "event",
+  "other",
+  "capital_in",
+  "capital_out",
+] as const;
 
 export const expenses = mysqlTable(
   "expenses",
@@ -2468,19 +2496,39 @@ export const expenses = mysqlTable(
     id: varchar("id", { length: 36 }).primaryKey(),
     expenseDate: varchar("expense_date", { length: 10 }).notNull(), // YYYY-MM-DD
     category: mysqlEnum("category", expenseCategoryValues).notNull(),
+    // Accounting v2 - free-text sheet category, e.g. "Filament", "Lanyard".
+    subcategory: varchar("subcategory", { length: 64 }),
     note: varchar("note", { length: 500 }),
+    // Negative amounts are allowed (refund / credit); zero is not.
     amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
     paidFrom: mysqlEnum("paid_from", accountValues).notNull().default("bank"),
+    // 1 = card charge that went through PayPal but hit a card, NOT the PayPal
+    // balance. Never touches the PayPal balance.
+    viaPaypal: tinyint("via_paypal").notNull().default(0),
     supplierName: varchar("supplier_name", { length: 200 }),
     // Relative URL to the archived invoice/receipt (PDF or image) when the
     // expense was created via invoice import. NULL for hand-entered rows.
     sourceDocUrl: varchar("source_doc_url", { length: 500 }),
+    // Foreign-currency purchases: `amount` stays the MYR figure.
+    currency: varchar("currency", { length: 3 }).notNull().default("MYR"),
+    amountOriginal: decimal("amount_original", { precision: 12, scale: 2 }),
+    fxRate: decimal("fx_rate", { precision: 14, scale: 8 }),
+    projectTag: varchar("project_tag", { length: 64 }),
+    bankMatch: mysqlEnum("bank_match", bankMatchValues).notNull().default("unchecked"),
+    bankAmount: decimal("bank_amount", { precision: 10, scale: 2 }),
+    externalRef: varchar("external_ref", { length: 100 }),
+    dateIsEstimate: tinyint("date_is_estimate").notNull().default(0),
+    // Sheet-import idempotency: 'ct26:<Tab>:<#>' + sha256 of canonical row.
+    importKey: varchar("import_key", { length: 100 }),
+    importHash: char("import_hash", { length: 64 }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
   },
   (t) => ({
     dateIdx: index("idx_expenses_date").on(t.expenseDate),
     categoryIdx: index("idx_expenses_category").on(t.category),
+    projectIdx: index("idx_expenses_project").on(t.projectTag),
+    importKeyUq: unique("uq_expenses_import_key").on(t.importKey),
   }),
 );
 
@@ -2490,12 +2538,102 @@ export const assets = mysqlTable(
     id: varchar("id", { length: 36 }).primaryKey(),
     assetDate: varchar("asset_date", { length: 10 }).notNull(),
     name: varchar("name", { length: 200 }).notNull(),
+    // Accounting v2: TOTAL cost of the asset (e.g. Snapmaker 3798.96).
+    // assetDate = purchase / first payment date.
     amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
     note: varchar("note", { length: 500 }),
+    seller: varchar("seller", { length: 200 }),
+    paidFrom: mysqlEnum("paid_from", accountValues).notNull().default("bank"),
+    // Instalment plan (NULL for assets paid in one go).
+    instalmentAmount: decimal("instalment_amount", { precision: 10, scale: 2 }),
+    instalmentCount: int("instalment_count"),
+    importKey: varchar("import_key", { length: 100 }),
+    importHash: char("import_hash", { length: 64 }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
   },
-  (t) => ({ dateIdx: index("idx_assets_date").on(t.assetDate) }),
+  (t) => ({
+    dateIdx: index("idx_assets_date").on(t.assetDate),
+    importKeyUq: unique("uq_assets_import_key").on(t.importKey),
+  }),
+);
+
+// Payments made against an asset (one row per instalment, or one row for an
+// outright purchase). ON DELETE CASCADE with the parent asset.
+/**
+ * Accounting v2 - per-option ("variant") cost. A product's variants are the
+ * options of its Select config field (product_variants is unused for these), so
+ * the cost lives here, keyed by (product, field, option value). Kept OUT of
+ * configJson on purpose: configJson is shipped to the storefront and a cost in
+ * it would be public. A missing row means "use the product cost".
+ */
+export const productOptionCosts = mysqlTable(
+  "product_option_costs",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    productId: varchar("product_id", { length: 36 })
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    fieldId: varchar("field_id", { length: 36 }).notNull(),
+    optionValue: varchar("option_value", { length: 150 }).notNull(),
+    costPrice: decimal("cost_price", { precision: 10, scale: 2 }).notNull(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({
+    optionUq: unique("uq_product_option_costs_option").on(t.productId, t.fieldId, t.optionValue),
+    productIdx: index("idx_product_option_costs_product").on(t.productId),
+  }),
+);
+
+export const assetPayments = mysqlTable(
+  "asset_payments",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    assetId: varchar("asset_id", { length: 36 })
+      .notNull()
+      .references(() => assets.id, { onDelete: "cascade" }),
+    paymentDate: varchar("payment_date", { length: 10 }).notNull(),
+    amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+    paidFrom: mysqlEnum("paid_from", accountValues).notNull().default("bank"),
+    instalmentNo: int("instalment_no"),
+    bankMatch: mysqlEnum("bank_match", bankMatchValues).notNull().default("unchecked"),
+    note: varchar("note", { length: 500 }),
+    importKey: varchar("import_key", { length: 100 }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({
+    importKeyUq: unique("uq_asset_payments_import_key").on(t.importKey),
+    assetIdx: index("idx_asset_payments_asset").on(t.assetId),
+    dateIdx: index("idx_asset_payments_date").on(t.paymentDate),
+  }),
+);
+
+// Manually-entered income that is NOT website sales (website sales are always
+// derived from orders). capital_in / capital_out are funding, not profit.
+export const incomeEntries = mysqlTable(
+  "income_entries",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    entryDate: varchar("entry_date", { length: 10 }).notNull(),
+    dateIsEstimate: tinyint("date_is_estimate").notNull().default(0),
+    kind: mysqlEnum("kind", incomeKindValues).notNull(),
+    sourceName: varchar("source_name", { length: 200 }).notNull(),
+    amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+    account: mysqlEnum("account", accountValues).notNull().default("bank"),
+    projectTag: varchar("project_tag", { length: 64 }),
+    bankMatch: mysqlEnum("bank_match", bankMatchValues).notNull().default("unchecked"),
+    note: varchar("note", { length: 500 }),
+    importKey: varchar("import_key", { length: 100 }),
+    importHash: char("import_hash", { length: 64 }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+  },
+  (t) => ({
+    importKeyUq: unique("uq_income_import_key").on(t.importKey),
+    dateIdx: index("idx_income_date").on(t.entryDate),
+    kindIdx: index("idx_income_kind").on(t.kind),
+  }),
 );
 
 export const payouts = mysqlTable(
@@ -2504,9 +2642,12 @@ export const payouts = mysqlTable(
     id: varchar("id", { length: 36 }).primaryKey(),
     payoutDate: varchar("payout_date", { length: 10 }).notNull(),
     amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
-    // Money leaves PayPal and lands here — models a PayPal→Bank/Cash transfer.
-    // Gives the Bank/Cash balances an inflow source.
-    paidInto: mysqlEnum("paid_into", ["bank", "cash"]).notNull().default("bank"),
+    // Accounting v2 - transfer source. Defaults to paypal (the original
+    // PayPal to Bank/Cash payout meaning); must differ from paidInto.
+    fromAccount: mysqlEnum("from_account", accountValues).notNull().default("paypal"),
+    // Money leaves `fromAccount` and lands here. Gives the destination balance
+    // an inflow source. Enum order matches the DDL (bank, cash, credit_card, paypal).
+    paidInto: mysqlEnum("paid_into", ["bank", "cash", "credit_card", "paypal"]).notNull().default("bank"),
     note: varchar("note", { length: 500 }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
@@ -2517,6 +2658,8 @@ export const payouts = mysqlTable(
 export type Expense = typeof expenses.$inferSelect;
 export type Asset = typeof assets.$inferSelect;
 export type Payout = typeof payouts.$inferSelect;
+export type AssetPayment = typeof assetPayments.$inferSelect;
+export type IncomeEntry = typeof incomeEntries.$inferSelect;
 
 /**
  * Quotations (2026-08-18). The quotation is the FIRST document sent to a

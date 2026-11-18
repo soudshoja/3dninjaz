@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { BRAND } from "@/lib/brand";
+import { getExpenseFacets } from "@/actions/admin-accounting";
 import { ExpenseForm } from "@/components/admin/accounting/expense-form";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +13,7 @@ export const metadata: Metadata = {
 
 export default async function NewExpensePage() {
   await requireAdmin();
+  const facets = await getExpenseFacets();
   return (
     <main
       className="min-h-screen"
@@ -30,9 +32,11 @@ export default async function NewExpensePage() {
         </h1>
         <p className="mt-1 mb-6 text-slate-600">
           Record a business cost. Amounts are stored in MYR and feed the
-          accounting overview and profit calculations.
+          accounting overview and profit calculations. Website sales, shipping
+          collected from customers and PayPal fees are tracked automatically,
+          so leave those out.
         </p>
-        <ExpenseForm mode="new" />
+        <ExpenseForm mode="new" facets={facets} />
       </div>
     </main>
   );

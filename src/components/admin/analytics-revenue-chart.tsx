@@ -11,15 +11,14 @@ import {
 } from "recharts";
 import { BRAND } from "@/lib/brand";
 
-type Point = { day: string; revenue: number };
+type Point = { day: string; label: string; revenue: number };
 
 /**
- * Revenue line chart for /admin. Daily buckets, brand-green line.
+ * Revenue line chart for /admin. Daily, weekly or monthly buckets (see date-range.ts), brand-green line.
  * `ResponsiveContainer` makes the chart fill its parent — the parent must
  * have an explicit height for the container to compute its size.
  */
 export function AnalyticsRevenueChart({ data }: { data: Point[] }) {
-  const formatTick = (v: string) => v.slice(5); // "MM-DD"
   const formatY = (v: number) => `RM${Math.round(v)}`;
 
   return (
@@ -31,8 +30,7 @@ export function AnalyticsRevenueChart({ data }: { data: Point[] }) {
         >
           <CartesianGrid strokeDasharray="3 3" stroke={`${BRAND.ink}11`} />
           <XAxis
-            dataKey="day"
-            tickFormatter={formatTick}
+            dataKey="label"
             tick={{ fontSize: 11, fill: BRAND.ink }}
             interval="preserveStartEnd"
           />
@@ -44,7 +42,7 @@ export function AnalyticsRevenueChart({ data }: { data: Point[] }) {
           <Tooltip
             formatter={(value) => {
               const n = typeof value === "number" ? value : Number(value);
-              return [Number.isFinite(n) ? `RM ${n.toFixed(2)}` : "RM 0.00", "Revenue"];
+              return [Number.isFinite(n) ? `RM ${n.toFixed(2)}` : "RM 0.00", "Sales (excl. shipping)"];
             }}
             labelStyle={{ color: BRAND.ink }}
           />

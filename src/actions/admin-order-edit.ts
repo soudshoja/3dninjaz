@@ -25,6 +25,7 @@
 
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
+import { resolveUnitCost, costColumns } from "@/lib/product-cost";
 import { orders, orderItems, products, productVariants } from "@/lib/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { canSettleBalance } from "@/lib/balance-settle";
@@ -43,7 +44,7 @@ type ActionResult = { ok: true } | { ok: false; error: string };
  *
  * Approach (a): persist subtotal first → call refreshOrderShipping which reads
  * the freshly-stored subtotal and recomputes total = subtotal − discount +
- * shipping + extra (mirrors the live-quote path exactly, including markup +
+ * shipping (mirrors the live-quote path exactly, including markup +
  * free-shipping rules). If re-quote fails (courier no longer offered), fall
  * back to a local total calculation using the stored shippingCost.
  */
@@ -65,7 +66,6 @@ async function recomputeOrderTotals(orderId: string): Promise<void> {
       shippingServiceCode: orders.shippingServiceCode,
       discountAmount: orders.discountAmount,
       shippingCost: orders.shippingCost,
-      extraCost: orders.extraCost,
     })
     .from(orders)
     .where(eq(orders.id, orderId))
@@ -93,8 +93,8 @@ async function recomputeOrderTotals(orderId: string): Promise<void> {
   // 5. No courier selected OR re-quote failed — compute total locally.
   const discount = Number(orderRow.discountAmount ?? 0);
   const shipping = Number(orderRow.shippingCost ?? 0);
-  const extra = Number(orderRow.extraCost ?? 0);
-  const total = Math.max(0, Math.round((subtotal - discount + shipping + extra) * 100) / 100);
+  // extraCost is the owner's INTERNAL cost (profit panel / analytics), never a customer charge, so it is not part of the payable total.
+  const total = Math.max(0, Math.round((subtotal - discount + shipping) * 100) / 100);
 
   await db
     .update(orders)
@@ -255,6 +255,12 @@ export async function addCatalogLineItem(
 
   const lineTotal = (unitPrice * qty).toFixed(2);
 
+  // Accounting v2 - snapshot per-unit cost (variant cost, then product cost).
+  const resolvedCost = await resolveUnitCost({
+    productId: input.productId,
+    variantId: input.variantId,
+  });
+
   await db.insert(orderItems).values({
     id: randomUUID(),
     orderId,
@@ -269,7 +275,7 @@ export async function addCatalogLineItem(
     variantLabel: variantRow.labelCache ?? null,
     configurationData: null,
     unitPrice: unitPrice.toFixed(2),
-    unitCost: variantRow.costPrice ?? null,
+    ...costColumns(resolvedCost),
     quantity: qty,
     lineTotal,
   });
@@ -343,7 +349,9 @@ export async function addManualLineItem(
     variantLabel: null,
     configurationData: null,
     unitPrice: unitPrice.toFixed(2),
+    // Accounting v2: free-text lines have no product cost to snapshot.
     unitCost: null,
+    unitCostSource: null,
     quantity: qty,
     lineTotal,
   });
@@ -640,6 +648,11 @@ export async function addPosLineToOrder(
 
       const lineTotal = (unitPrice * qty).toFixed(2);
 
+      const resolvedCost = await resolveUnitCost({
+        productId: line.productId,
+        variantId: line.variantId as string,
+      });
+
       await db.insert(orderItems).values({
         id: randomUUID(),
         orderId,
@@ -651,7 +664,7 @@ export async function addPosLineToOrder(
         variantLabel: variantRow.labelCache ?? null,
         configurationData: null,
         unitPrice: unitPrice.toFixed(2),
-        unitCost: variantRow.costPrice ?? null,
+        ...costColumns(resolvedCost),
         quantity: qty,
         lineTotal,
       });
@@ -696,6 +709,14 @@ export async function addPosLineToOrder(
 
       const lineTotal = (unitPrice * qty).toFixed(2);
 
+      // Accounting v2 - the keycap/character count comes from the stored config
+      // values via the product's unit field (never a separate client number).
+      const resolvedCost = await resolveUnitCost({
+        productId: line.productId,
+        variantId: null,
+        configValues: line.configurationData?.values ?? null,
+      });
+
       await db.insert(orderItems).values({
         id: randomUUID(),
         orderId,
@@ -709,7 +730,7 @@ export async function addPosLineToOrder(
           ? JSON.stringify(line.configurationData)
           : null,
         unitPrice: unitPrice.toFixed(2),
-        unitCost: null,
+        ...costColumns(resolvedCost),
         quantity: qty,
         lineTotal,
       });

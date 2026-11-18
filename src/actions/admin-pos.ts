@@ -21,6 +21,8 @@ import { applyCouponToSubtotal, type CouponSnapshot } from "@/lib/pricing";
 import { redeemCoupon } from "@/actions/coupons";
 import { pickImage } from "@/lib/image-manifest";
 import { hydrateProductVariants } from "@/lib/variants";
+import { resolveUnitCosts, costColumns } from "@/lib/product-cost";
+import { deriveUnitCount } from "@/lib/product-cost-math";
 import { getConfigurableProductData } from "@/lib/configurable-product-data";
 import { renderDescription } from "@/lib/render-description";
 import {
@@ -574,6 +576,8 @@ export async function createPosOrder(
     unitPrice: number;
     quantity: number;
     configurationData: string | null;
+    /** Accounting v2: server-validated keycap/character count (cost tiers). */
+    unitCount: number | null;
   };
 
   const resolvedLines: ResolvedLine[] = [];
@@ -599,6 +603,7 @@ export async function createPosOrder(
         unitPrice: line.unitPrice,
         quantity: line.quantity,
         configurationData: null,
+        unitCount: null,
       });
       continue;
     }
@@ -690,6 +695,7 @@ export async function createPosOrder(
         unitPrice,
         quantity: line.quantity,
         configurationData: null,
+        unitCount: null,
       });
       continue;
     }
@@ -702,6 +708,7 @@ export async function createPosOrder(
           images: products.images,
           thumbnailIndex: products.thumbnailIndex,
           priceTiers: products.priceTiers,
+          unitField: products.unitField,
         })
         .from(products)
         .where(eq(products.id, line.productId))
@@ -710,6 +717,9 @@ export async function createPosOrder(
       if (!productRow) {
         return { ok: false, error: `Product ${line.productId} not found.` };
       }
+
+      // Accounting v2: validated keycap/character count for cost tiers.
+      let validatedUnitCount: number | null = null;
 
       // Base unit price. For keycapseq lines the client-computed price is NOT
       // trusted — it is replaced below by a server re-derive from slot count
@@ -852,6 +862,7 @@ export async function createPosOrder(
               .filter((s) => s.t === "L" || cfg.allowedIconIds.includes(s.id)) // drop forged icon ids
               .slice(0, cfg.maxSlots); // cap oversized sequences
             const slotCount = slots.length;
+            validatedUnitCount = slotCount;
 
             const tiers = ensureTiers(productRow.priceTiers);
             const serverPrice = lookupTierPriceBySlotCount(tiers, slotCount);
@@ -875,6 +886,12 @@ export async function createPosOrder(
             parsedCfg.computedSummary = parts.filter((p) => p.length > 0).join(" · ");
           }
 
+          // Name-based tiers: length of the unit field value (keycapseq lines
+          // already set validatedUnitCount from the validated slot count).
+          if (validatedUnitCount === null) {
+            validatedUnitCount = deriveUnitCount(productRow.unitField ?? null, values);
+          }
+
           sanitizedConfigData = JSON.stringify(parsedCfg);
         }
       }
@@ -889,6 +906,7 @@ export async function createPosOrder(
         unitPrice,
         quantity: line.quantity,
         configurationData: sanitizedConfigData,
+        unitCount: validatedUnitCount,
       });
       continue;
     }
@@ -1064,8 +1082,19 @@ export async function createPosOrder(
         customImages: null,
       });
 
+      // Accounting v2 - snapshot per-unit cost (free-text lines resolve to NULL).
+      const resolvedCosts = await resolveUnitCosts(
+        resolvedLines.map((l) => ({
+          productId: l.productId,
+          variantId: l.variantId,
+          unitCount: l.unitCount,
+          configValues: parseConfigValues(l.configurationData),
+        })),
+        tx,
+      );
+
       // Insert one order_items row per POS line
-      for (const line of resolvedLines) {
+      for (const [lineIdx, line] of resolvedLines.entries()) {
         const lineTotal = (line.unitPrice * line.quantity).toFixed(2);
         await tx.insert(orderItems).values({
           id: randomUUID(),
@@ -1077,6 +1106,7 @@ export async function createPosOrder(
           productImage: line.productImage ?? null,
           variantLabel: line.variantLabel ?? null,
           unitPrice: line.unitPrice.toFixed(2),
+          ...costColumns(resolvedCosts[lineIdx]),
           quantity: line.quantity,
           lineTotal,
           configurationData: line.configurationData ?? null,

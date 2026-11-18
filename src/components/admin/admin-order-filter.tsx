@@ -41,22 +41,50 @@ const FILTERS: { value: FilterValue; label: string }[] = [
 
 export function AdminOrderFilter({
   pendingProofCount = 0,
+  methodUnknownCount = 0,
 }: {
   /** Count of orders in awaiting_payment_review status — drives amber badge. */
   pendingProofCount?: number;
+  /** Paid orders with no payment method (accounting v2) — drives the extra chip. */
+  methodUnknownCount?: number;
 }) {
   const path = usePathname();
   const params = useSearchParams();
+  const methodUnknownActive = params.get("method") === "unknown";
   const raw = params.get("status") ?? "all";
   const current = (FILTERS.some((f) => f.value === raw) ? raw : "all") as FilterValue;
+
+  const methodChip = (
+      <Link
+        key="method-unknown"
+        href={`${path}?method=unknown`}
+        aria-current={methodUnknownActive ? "page" : undefined}
+        className="inline-flex items-center gap-1.5 rounded-full border-2 px-4 py-2 text-sm font-semibold whitespace-nowrap min-h-[40px]"
+        style={
+          methodUnknownActive
+            ? { backgroundColor: "#f59e0b", borderColor: "#f59e0b", color: "#ffffff" }
+            : { backgroundColor: "#fffbeb", borderColor: "#fcd34d", color: "#b45309" }
+        }
+      >
+        Paid, method unknown
+        {methodUnknownCount > 0 && (
+          <span
+            className="inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full bg-amber-500 text-white text-xs font-bold"
+            aria-label={`${methodUnknownCount} paid orders with no payment method`}
+          >
+            {methodUnknownCount}
+          </span>
+        )}
+      </Link>
+  );
 
   return (
     <nav
       aria-label="Filter orders by status"
       className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1"
     >
-      {FILTERS.map((f) => {
-        const selected = current === f.value;
+      {FILTERS.flatMap((f) => {
+        const selected = !methodUnknownActive && current === f.value;
         const href = f.value === "all" ? path : `${path}?status=${f.value}`;
         const isPaymentReview = f.value === "awaiting_payment_review";
 
@@ -74,7 +102,7 @@ export function AdminOrderFilter({
           };
         }
 
-        return (
+        const link = (
           <Link
             key={f.value}
             href={href}
@@ -93,6 +121,9 @@ export function AdminOrderFilter({
             )}
           </Link>
         );
+        return f.value === "all"
+          ? [link, methodChip]
+          : [link];
       })}
     </nav>
   );

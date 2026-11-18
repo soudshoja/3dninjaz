@@ -26,6 +26,7 @@ export function ManualOrderForm() {
     itemName: "",
     itemDescription: "",
     amount: "",
+    yourCost: "",
     recipientName: "",
     phone: "",
     addressLine1: "",
@@ -55,6 +56,8 @@ export function ManualOrderForm() {
         itemName: form.itemName,
         itemDescription: form.itemDescription,
         amount: amountNum,
+        yourCost:
+          form.yourCost.trim() === "" ? undefined : parseFloat(form.yourCost),
         images,
         shipping: {
           recipientName: form.recipientName || form.customerName,
@@ -189,6 +192,22 @@ export function ManualOrderForm() {
             onChange={(e) => set("amount", e.target.value)}
             placeholder="e.g. 120.00"
           />
+        </div>
+        <div className="md:max-w-xs">
+          <label className="block text-sm font-medium mb-1">
+            Your cost (MYR), optional
+          </label>
+          <input
+            className={inputClass + " font-mono"}
+            inputMode="decimal"
+            value={form.yourCost}
+            onChange={(e) => set("yourCost", e.target.value)}
+            placeholder="e.g. 45.00"
+          />
+          <p className="mt-1 text-xs text-[var(--color-brand-text-muted)]">
+            What this job costs you to make. Used for margin reports only and
+            never shown to the customer.
+          </p>
         </div>
       </section>
 

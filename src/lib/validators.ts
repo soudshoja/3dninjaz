@@ -215,6 +215,27 @@ export const productSchema = z.object({
   // Quick task 260705-azw — keychain preview body shape. Only meaningful
   // when productType === "keychain"; default preserves existing behavior.
   keychainShape: z.enum(["square", "round"]).optional().default("square"),
+  // Accounting v2 - flat manual cost per product (RM, admin-only). undefined =
+  // leave as is; "" or null = clear; "12.50" = set. costPerExtraUnit only
+  // matters for keychains (cost per additional keycap).
+  costPrice: z
+    .union([
+      z.literal(""),
+      z.null(),
+      z
+        .string()
+        .regex(/^\d+(\.\d{1,2})?$/, "Cost must be a number with up to 2 decimal places"),
+    ])
+    .optional(),
+  costPerExtraUnit: z
+    .union([
+      z.literal(""),
+      z.null(),
+      z
+        .string()
+        .regex(/^\d+(\.\d{1,2})?$/, "Cost must be a number with up to 2 decimal places"),
+    ])
+    .optional(),
 });
 
 export type ProductInput = z.infer<typeof productSchema>;
@@ -326,6 +347,12 @@ export const manualOrderSchema = z.object({
     .number()
     .positive("Amount must be greater than 0")
     .max(99_999_999.99, "Amount exceeds the per-order maximum"),
+  // Accounting v2: optional own cost of this custom job (writes orders.extra_cost).
+  yourCost: z.coerce
+    .number()
+    .min(0, "Cost cannot be negative")
+    .max(99_999_999.99, "Cost exceeds the per-order maximum")
+    .optional(),
   images: z
     .array(
       z
@@ -569,6 +596,14 @@ export type CouponInput = z.infer<typeof couponSchema>;
 const accountingMoneyRe = /^\d+(\.\d{1,2})?$/;
 const accountingDateRe = /^\d{4}-\d{2}-\d{2}$/;
 
+// Accounting v2: signed money (negative = refund / credit, zero rejected).
+const accountingSignedMoneyRe = /^-?\d+(\.\d{1,2})?$/;
+const accountingFxRe = /^\d+(\.\d{1,8})?$/;
+const accountingAccounts = ["paypal", "bank", "cash", "credit_card"] as const;
+const accountingBankMatch = ["unchecked", "matched", "check", "not_found"] as const;
+
+const optionalText = (max: number) => z.string().max(max).optional().nullable();
+
 export const expenseSchema = z.object({
   expenseDate: z.string().regex(accountingDateRe, "Date must be YYYY-MM-DD"),
   category: z.enum([
@@ -578,36 +613,134 @@ export const expenseSchema = z.object({
     "shipping",
     "equipment",
     "other",
+    "packaging",
+    "consumables",
+    "design",
+    "fees",
   ]),
+  subcategory: optionalText(64),
   note: z.string().max(500).optional().nullable(),
   amount: z
     .string()
-    .regex(accountingMoneyRe, "Amount: decimal with up to 2 places"),
-  paidFrom: z.enum(["paypal", "bank", "cash"]).default("bank"),
+    .regex(accountingSignedMoneyRe, "Amount: decimal with up to 2 places (negative for a refund)")
+    .refine((v) => Number(v) !== 0, "Amount cannot be 0"),
+  paidFrom: z.enum(accountingAccounts).default("bank"),
+  viaPaypal: z.boolean().default(false),
   supplierName: z.string().max(200).optional().nullable(),
   sourceDocUrl: z.string().max(500).optional().nullable(),
+  currency: z
+    .string()
+    .regex(/^[A-Z]{3}$/, "Currency must be a 3-letter code")
+    .default("MYR"),
+  amountOriginal: z
+    .string()
+    .regex(accountingSignedMoneyRe, "Original amount: decimal with up to 2 places")
+    .optional()
+    .nullable(),
+  fxRate: z
+    .string()
+    .regex(accountingFxRe, "FX rate: decimal with up to 8 places")
+    .optional()
+    .nullable(),
+  projectTag: optionalText(64),
+  bankMatch: z.enum(accountingBankMatch).default("unchecked"),
+  bankAmount: z
+    .string()
+    .regex(accountingSignedMoneyRe, "Bank amount: decimal with up to 2 places")
+    .optional()
+    .nullable(),
+  externalRef: optionalText(100),
+  dateIsEstimate: z.boolean().default(false),
 });
 export type ExpenseInput = z.infer<typeof expenseSchema>;
 
 export const assetSchema = z.object({
   assetDate: z.string().regex(accountingDateRe, "Date must be YYYY-MM-DD"),
   name: z.string().min(1, "Name is required").max(200),
+  // Accounting v2: amount is the TOTAL cost of the asset.
   amount: z
     .string()
     .regex(accountingMoneyRe, "Amount: decimal with up to 2 places"),
   note: z.string().max(500).optional().nullable(),
+  seller: optionalText(200),
+  paidFrom: z.enum(accountingAccounts).default("bank"),
+  instalmentAmount: z
+    .string()
+    .regex(accountingMoneyRe, "Instalment: decimal with up to 2 places")
+    .optional()
+    .nullable(),
+  instalmentCount: z.coerce.number().int().min(1).max(600).optional().nullable(),
 });
 export type AssetInput = z.infer<typeof assetSchema>;
 
-export const payoutSchema = z.object({
-  payoutDate: z.string().regex(accountingDateRe, "Date must be YYYY-MM-DD"),
+export const payoutSchema = z
+  .object({
+    payoutDate: z.string().regex(accountingDateRe, "Date must be YYYY-MM-DD"),
+    amount: z
+      .string()
+      .regex(accountingMoneyRe, "Amount: decimal with up to 2 places"),
+    // Accounting v2: transfers between any two accounts. fromAccount defaults
+    // to paypal so the original PayPal payout form keeps working.
+    fromAccount: z.enum(accountingAccounts).default("paypal"),
+    paidInto: z.enum(accountingAccounts).default("bank"),
+    note: z.string().max(500).optional().nullable(),
+  })
+  .refine((v) => v.fromAccount !== v.paidInto, {
+    path: ["paidInto"],
+    message: "Transfer must go between two different accounts",
+  });
+export type PayoutInput = z.infer<typeof payoutSchema>;
+
+// Accounting v2 - payment against an asset (one instalment or an outright buy).
+export const assetPaymentSchema = z.object({
+  assetId: z.string().min(1).max(36),
+  paymentDate: z.string().regex(accountingDateRe, "Date must be YYYY-MM-DD"),
   amount: z
     .string()
-    .regex(accountingMoneyRe, "Amount: decimal with up to 2 places"),
-  paidInto: z.enum(["bank", "cash"]).default("bank"),
+    .regex(accountingMoneyRe, "Amount: decimal with up to 2 places")
+    .refine((v) => Number(v) > 0, "Amount must be more than 0"),
+  paidFrom: z.enum(accountingAccounts).default("bank"),
+  instalmentNo: z.coerce.number().int().min(1).max(600).optional().nullable(),
+  bankMatch: z.enum(accountingBankMatch).default("unchecked"),
   note: z.string().max(500).optional().nullable(),
 });
-export type PayoutInput = z.infer<typeof payoutSchema>;
+export type AssetPaymentInput = z.infer<typeof assetPaymentSchema>;
+
+/**
+ * True when an income "source" is really the online store's own sales (which are
+ * derived from orders). Normalises (trim, lowercase, collapse whitespace) and
+ * rejects anything that contains "website", "online store" or "online sales".
+ */
+export function isWebsiteSalesSource(raw: string): boolean {
+  const v = raw.trim().toLowerCase().replace(/\s+/g, " ");
+  return v.includes("website") || v.includes("online store") || v.includes("online sales");
+}
+
+// Accounting v2 - non-website income. Website sales are ALWAYS derived from
+// orders, so a source named "Website" is rejected here.
+export const incomeEntrySchema = z.object({
+  entryDate: z.string().regex(accountingDateRe, "Date must be YYYY-MM-DD"),
+  dateIsEstimate: z.boolean().default(false),
+  kind: z.enum(["project", "event", "other", "capital_in", "capital_out"]),
+  sourceName: z
+    .string()
+    .trim()
+    .min(1, "Source is required")
+    .max(200)
+    .refine(
+      (v) => !isWebsiteSalesSource(v),
+      "Website sales are calculated from orders, do not enter them here. Record only income that is not an online-store sale.",
+    ),
+  amount: z
+    .string()
+    .regex(accountingMoneyRe, "Amount: decimal with up to 2 places")
+    .refine((v) => Number(v) > 0, "Amount must be more than 0"),
+  account: z.enum(accountingAccounts).default("bank"),
+  projectTag: optionalText(64),
+  bankMatch: z.enum(accountingBankMatch).default("unchecked"),
+  note: z.string().max(500).optional().nullable(),
+});
+export type IncomeEntryInput = z.infer<typeof incomeEntrySchema>;
 
 /**
  * Customer-side coupon redemption — only the code is supplied; the server

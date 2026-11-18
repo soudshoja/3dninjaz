@@ -24,6 +24,8 @@ import { PaymentLinkCard } from "@/components/admin/payment-link-card";
 // Phase 7 (07-04) — PayPal financials mirror for paid orders.
 import { getPaymentDetail } from "@/actions/admin-payments";
 import { PaymentFinancialsPanel } from "@/components/admin/payment-financials-panel";
+// Accounting v2 — tag how a paid order was paid (feeds account balances).
+import { OrderPaymentMethod } from "@/components/admin/order-payment-method";
 // Phase 9 (09-01) — Delyva shipment panel (book / print label / track).
 // Phase 9 (09-02) — live tracking view shared with the customer page.
 import { getOrderShipment, getAdminOrderTracking } from "@/actions/shipping";
@@ -791,6 +793,18 @@ export default async function AdminOrderDetailPage({
                 }
                 itemName={row.customItemName}
                 totalAmount={row.totalAmount}
+              />
+            </AdminCard>
+          ) : null}
+
+          {/* Payment method tag (paid orders only) — feeds account balances */}
+          {amountPaidNum > 0 ? (
+            <AdminCard>
+              <SectionHeader icon={CreditCard} label="Payment method" accent={BRAND.blue} />
+              <OrderPaymentMethod
+                orderId={row.id}
+                current={row.paymentMethod ?? null}
+                locked={Boolean(row.paypalCaptureId)}
               />
             </AdminCard>
           ) : null}

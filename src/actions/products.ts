@@ -71,6 +71,62 @@ async function generateUniqueProductSlug(name: string): Promise<string> {
   return candidate;
 }
 
+/** "12.5" -> "12.50"; "" / null / undefined -> null. Input is regex-validated. */
+function costToDecimal(v: string | null | undefined): string | null {
+  if (v === null || v === undefined) return null;
+  const t = v.trim();
+  if (t === "") return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n.toFixed(2) : null;
+}
+
+function costFieldsForInsert(
+  costPrice: string | null | undefined,
+  costPerExtraUnit: string | null | undefined,
+) {
+  const cost = costToDecimal(costPrice);
+  const extra = costToDecimal(costPerExtraUnit);
+  return {
+    costPrice: cost,
+    costPerExtraUnit: extra,
+    costUpdatedAt: cost !== null || extra !== null ? new Date() : null,
+  };
+}
+
+async function costFieldsForUpdate(
+  productId: string,
+  costPrice: string | null | undefined,
+  costPerExtraUnit: string | null | undefined,
+) {
+  if (costPrice === undefined && costPerExtraUnit === undefined) return {};
+  const [cur] = await db
+    .select({
+      costPrice: products.costPrice,
+      costPerExtraUnit: products.costPerExtraUnit,
+    })
+    .from(products)
+    .where(eq(products.id, productId))
+    .limit(1);
+  const next: {
+    costPrice?: string | null;
+    costPerExtraUnit?: string | null;
+    costUpdatedAt?: Date;
+  } = {};
+  let changed = false;
+  if (costPrice !== undefined) {
+    const v = costToDecimal(costPrice);
+    next.costPrice = v;
+    if ((cur?.costPrice ?? null) !== v) changed = true;
+  }
+  if (costPerExtraUnit !== undefined) {
+    const v = costToDecimal(costPerExtraUnit);
+    next.costPerExtraUnit = v;
+    if ((cur?.costPerExtraUnit ?? null) !== v) changed = true;
+  }
+  if (changed) next.costUpdatedAt = new Date();
+  return next;
+}
+
 function toDecimalOrNull(v: string | undefined | null): string | null {
   if (!v) return null;
   const trimmed = v.toString().trim();
@@ -347,6 +403,8 @@ export async function createProduct(
     hideBasePrice: productData.hideBasePrice ?? false,
     // Quick task 260705-azw — keychain preview body shape.
     keychainShape: productData.keychainShape ?? "square",
+    // Accounting v2 - flat product cost (admin-only).
+    ...costFieldsForInsert(productData.costPrice, productData.costPerExtraUnit),
   });
 
   if (variants.length > 0) {
@@ -562,6 +620,13 @@ export async function updateProduct(
       hideBasePrice: productData.hideBasePrice ?? false,
       // Quick task 260705-azw — keychain preview body shape.
       keychainShape: productData.keychainShape ?? "square",
+      // Accounting v2 - flat product cost; cost_updated_at only moves when a
+      // cost value actually changed.
+      ...(await costFieldsForUpdate(
+        id,
+        productData.costPrice,
+        productData.costPerExtraUnit,
+      )),
     })
     .where(eq(products.id, id));
 
@@ -762,6 +827,8 @@ export async function toggleProductFeatured(
 // relations via extra SELECTs instead — small N, so no N+1 concern.
 
 export async function getProduct(id: string) {
+  // Accounting v2: the row now carries admin-only cost columns.
+  await requireAdmin();
   const [row] = await db
     .select()
     .from(products)
@@ -809,6 +876,8 @@ export async function getProduct(id: string) {
 }
 
 export async function getProducts() {
+  // Accounting v2: rows carry admin-only cost columns.
+  await requireAdmin();
   const list = await db
     .select()
     .from(products)
@@ -1126,6 +1195,10 @@ export async function duplicateProduct(productId: string): Promise<ProductAction
     shippingHeightCm: src.shippingHeightCm,
     hideBasePrice: src.hideBasePrice,
     keychainShape: src.keychainShape,
+    // Accounting v2 - a copy starts with the same cost.
+    costPrice: src.costPrice,
+    costPerExtraUnit: src.costPerExtraUnit,
+    costUpdatedAt: src.costPrice !== null || src.costPerExtraUnit !== null ? new Date() : null,
   });
 
   const fieldIdMap = await cloneConfigFields(productId, newId);
