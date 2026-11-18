@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/table";
 import { ProductRowActions } from "@/app/(admin)/admin/products/product-row-actions";
 import { InlineCostInput } from "@/components/admin/inline-cost-input";
-import { BulkCostDialog, type BulkOptionItem } from "@/components/admin/bulk-cost-dialog";
+import { BulkCostDialog, type BulkGroup } from "@/components/admin/bulk-cost-dialog";
 import { computeMargin, formatPct, formatRm, optionKey } from "@/lib/product-cost-math";
 import type { BulkCostChange, OptionCostRow, ProductCostRow } from "@/lib/product-cost-types";
 
@@ -181,24 +181,40 @@ export function ProductsCostTable({
   }
 
   const selectedRows = useMemo(() => data.filter((r) => selected.has(r.id)), [data, selected]);
-  // Selected options, with the cost they use today (own, else the product's).
-  const selectedOptionItems = useMemo<BulkOptionItem[]>(
+  // What the bulk dialog edits: each ticked product with ALL its options (variants) under
+  // it, plus any option ticked on its own. An option shows the cost it uses today
+  // (its own, else the product's).
+  const bulkGroups = useMemo<BulkGroup[]>(
     () =>
-      data.flatMap((p) =>
-        p.options
-          .filter((o) => selected.has(o.key))
-          .map((o) => ({
-            key: o.key,
-            target: { productId: p.id, fieldId: o.fieldId, value: o.value },
-            name: `${p.name} - ${o.label}`,
-            price: o.price ?? p.price,
-            cost: o.cost ?? p.cost,
-            hasOwnCost: o.cost !== null,
-          })),
-      ),
+      data.flatMap((p) => {
+        const whole = selected.has(p.id);
+        const opts = p.options.filter((o) => whole || selected.has(o.key));
+        if (!whole && opts.length === 0) return [];
+        return [
+          {
+            productId: p.id,
+            name: p.name,
+            product: whole
+              ? { id: p.id, name: p.name, price: p.price, cost: p.cost, hasOwnCost: true, target: null }
+              : null,
+            options: opts.map((o) => ({
+              id: o.key,
+              name: o.label,
+              price: o.price ?? p.price,
+              cost: o.cost ?? p.cost,
+              hasOwnCost: o.cost !== null,
+              target: { productId: p.id, fieldId: o.fieldId, value: o.value },
+            })),
+          },
+        ];
+      }),
     [data, selected],
   );
-  const selectedCount = selectedRows.length + selectedOptionItems.length;
+  const selectedOptionCount = data.reduce(
+    (n, p) => n + p.options.filter((o) => selected.has(o.key)).length,
+    0,
+  );
+  const selectedCount = selectedRows.length + selectedOptionCount;
 
   function toggleExpanded(id: string) {
     setExpanded((prev) => {
@@ -934,8 +950,7 @@ export function ProductsCostTable({
       <BulkCostDialog
         open={bulkOpen}
         onOpenChange={setBulkOpen}
-        rows={selectedRows}
-        optionItems={selectedOptionItems}
+        groups={bulkGroups}
         onApplied={handleApplied}
       />
     </div>

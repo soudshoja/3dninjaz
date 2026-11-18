@@ -95,6 +95,24 @@ const undoSchema = z.object({
     .max(MAX_BULK_IDS),
 });
 
+const MAX_LIST_ITEMS = 2000;
+
+/** An explicit cost for each row the admin saw in the bulk dialog. */
+const listSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        productId: z.string().min(1).max(36),
+        option: z
+          .object({ fieldId: z.string().min(1).max(36), value: z.string().min(1).max(150) })
+          .optional(),
+        cost: money,
+      }),
+    )
+    .min(1)
+    .max(MAX_LIST_ITEMS),
+});
+
 function revalidateCostPages() {
   revalidatePath("/admin/products");
   revalidatePath("/admin/products/costs");
@@ -392,6 +410,123 @@ export async function applyBulkCost(input: {
     return { ok: true, ...result };
   } catch (err) {
     console.error("[product-costs] applyBulkCost failed:", err);
+    return { ok: false, error: "Could not save the new costs. Nothing was changed. Please try again." };
+  }
+}
+
+/**
+ * Apply an explicit cost to each listed product or option (the bulk dialog sends
+ * one number per row, so every row can differ). Same result shape as
+ * applyBulkCost, so the caller offers the same 8-second Undo. A row is skipped
+ * when its cost is already that value, or when the option does not exist.
+ */
+export async function applyCostList(input: {
+  items: Array<{ productId: string; option?: { fieldId: string; value: string }; cost: number }>;
+}): Promise<BulkCostResult> {
+  await requireAdmin();
+  const parsed = listSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "One of the costs is not valid. Use RM 0.00 or more." };
+  }
+  // Last one wins if the same row is listed twice.
+  const byKey = new Map<string, (typeof parsed.data.items)[number]>();
+  for (const it of parsed.data.items) {
+    byKey.set(
+      it.option ? `${it.productId}::${it.option.fieldId}::${it.option.value}` : it.productId,
+      it,
+    );
+  }
+  const items = [...byKey.values()];
+  const ids = [...new Set(items.map((i) => i.productId))];
+
+  try {
+    const result = await db.transaction(async (tx) => {
+      const rows = await tx
+        .select({
+          id: products.id,
+          costPrice: products.costPrice,
+          costPerExtraUnit: products.costPerExtraUnit,
+          costUpdatedAt: products.costUpdatedAt,
+        })
+        .from(products)
+        .where(inArray(products.id, ids));
+      const rowById = new Map(rows.map((r) => [r.id, r]));
+
+      const changes: BulkCostChange[] = [];
+      let skipped = 0;
+      const now = new Date();
+      const optionPricesCache = new Map<string, Map<string, number | null> | null>();
+
+      for (const it of items) {
+        const product = rowById.get(it.productId);
+        if (!product) {
+          skipped += 1;
+          continue;
+        }
+        const next = costToNumber(toCostString(it.cost));
+        if (next === null) {
+          skipped += 1;
+          continue;
+        }
+
+        if (!it.option) {
+          const current = costToNumber(product.costPrice);
+          if (next === current) {
+            skipped += 1;
+            continue;
+          }
+          await tx
+            .update(products)
+            .set({ costPrice: toCostString(next), costUpdatedAt: now })
+            .where(eq(products.id, product.id));
+          changes.push({
+            id: product.id,
+            oldCost: current,
+            oldCostPerExtra: costToNumber(product.costPerExtraUnit),
+            oldCostUpdatedAt: product.costUpdatedAt ? product.costUpdatedAt.toISOString() : null,
+            newCost: next,
+          });
+          continue;
+        }
+
+        const target: OptionTarget = {
+          productId: it.productId,
+          fieldId: it.option.fieldId,
+          value: it.option.value,
+        };
+        const cacheKey = `${target.productId}::${target.fieldId}`;
+        if (!optionPricesCache.has(cacheKey)) {
+          optionPricesCache.set(
+            cacheKey,
+            await selectOptionPrices(tx, target.productId, target.fieldId),
+          );
+        }
+        const optionPrices = optionPricesCache.get(cacheKey);
+        if (!optionPrices || !optionPrices.has(target.value)) {
+          skipped += 1; // not a real option of this product
+          continue;
+        }
+        const own = await readOptionCost(tx, target);
+        if (next === own) {
+          skipped += 1;
+          continue;
+        }
+        await writeOptionCost(tx, target, next);
+        changes.push({
+          id: target.productId,
+          option: { fieldId: target.fieldId, value: target.value },
+          oldCost: own,
+          oldCostPerExtra: null,
+          oldCostUpdatedAt: null,
+          newCost: next,
+        });
+      }
+      return { changes, skipped };
+    });
+    revalidateCostPages();
+    return { ok: true, ...result };
+  } catch (err) {
+    console.error("[product-costs] applyCostList failed:", err);
     return { ok: false, error: "Could not save the new costs. Nothing was changed. Please try again." };
   }
 }
