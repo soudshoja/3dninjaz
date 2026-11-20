@@ -13,7 +13,6 @@ import { BUSINESS } from "@/lib/business-info";
 import type { CategoryTreeNode } from "@/lib/catalog";
 
 const INTENT_DELAY_MS = 200;
-const MAX_DISPLAY = 8;
 
 function ShopNavItem({
   activeCategories,
@@ -76,18 +75,27 @@ function ShopNavItem({
 
       {isOpen && (
         <div
-          className="absolute top-full left-0 z-50 mt-1 min-w-[180px] rounded-lg border border-zinc-200 bg-white shadow-sm py-1"
+          className="absolute top-full left-0 z-50 mt-1 w-[600px] max-w-[calc(100vw-3rem)] rounded-xl border border-zinc-200 bg-white p-2 shadow-lg"
           onMouseEnter={clearLeave}
           onMouseLeave={scheduleClose}
           onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
         >
-          <ul role="list">
+          <Link
+            href="/shop"
+            onClick={onClose}
+            className="mb-1 flex items-center justify-between rounded-md border-b border-zinc-100 px-3 py-2.5 text-sm font-bold hover:bg-zinc-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset"
+            style={{ color: BRAND.ink, "--tw-ring-color": BRAND.blue } as React.CSSProperties}
+          >
+            Shop all
+            <ChevronRight className="h-4 w-4" aria-hidden />
+          </Link>
+          <ul role="list" className="grid grid-cols-3 gap-x-1">
             {showChristmas && (
               <li>
                 <Link
                   href="/christmas"
                   onClick={onClose}
-                  className="block px-4 py-2.5 text-sm font-bold hover:bg-zinc-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset"
+                  className="block rounded-md px-3 py-2 text-sm font-bold hover:bg-zinc-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset"
                   style={{ color: "#E0242B", "--tw-ring-color": BRAND.blue } as React.CSSProperties}
                 >
                   Christmas
@@ -99,7 +107,7 @@ function ShopNavItem({
                 <Link
                   href={`/shop?category=${encodeURIComponent(cat.slug)}`}
                   onClick={onClose}
-                  className="block px-4 py-2.5 text-sm hover:bg-zinc-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset"
+                  className="block rounded-md px-3 py-2 text-sm leading-snug hover:bg-zinc-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset"
                   style={{ color: BRAND.ink, "--tw-ring-color": BRAND.blue } as React.CSSProperties}
                 >
                   {cat.name}
@@ -110,86 +118,6 @@ function ShopNavItem({
         </div>
       )}
     </div>
-  );
-}
-
-function MobileCategoryAccordion({
-  cat,
-  isExpanded,
-  onToggle,
-  onNavigate,
-}: {
-  cat: CategoryTreeNode;
-  isExpanded: boolean;
-  onToggle: () => void;
-  onNavigate: () => void;
-}) {
-  return (
-    <li className="border-b border-zinc-100">
-      <button
-        type="button"
-        className="flex items-center justify-between w-full py-4 min-h-[48px] font-semibold text-left"
-        style={{ color: BRAND.ink }}
-        onClick={onToggle}
-        aria-expanded={isExpanded}
-      >
-        <Link
-          href={`/shop?category=${encodeURIComponent(cat.slug)}`}
-          onClick={(e) => { e.stopPropagation(); onNavigate(); }}
-          className="flex-1 hover:opacity-70 transition-opacity"
-          style={{ color: BRAND.ink }}
-        >
-          {cat.name}
-        </Link>
-        {cat.products.length > 0 && (
-          <span
-            onClick={(e) => { e.stopPropagation(); onToggle(); }}
-            role="button"
-            tabIndex={0}
-            aria-label={isExpanded ? "Collapse" : "Expand"}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }}
-            className="p-1"
-          >
-            <ChevronRight
-              className={`h-4 w-4 shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
-              aria-hidden
-            />
-          </span>
-        )}
-      </button>
-
-      {isExpanded && cat.products.length > 0 && (
-        <div className="pb-3 px-1">
-          <ul role="list" className="flex flex-col">
-            {cat.products.slice(0, MAX_DISPLAY).map((product) => (
-              <li key={product.id}>
-                <Link
-                  href={`/products/${product.slug}`}
-                  onClick={onNavigate}
-                  className="block px-2 py-2 text-sm rounded-lg hover:bg-zinc-50 transition-colors"
-                  style={{ color: BRAND.ink }}
-                >
-                  {product.name}
-                </Link>
-              </li>
-            ))}
-          </ul>
-
-          {cat.productCount > MAX_DISPLAY && (
-            <div className="mt-2 px-2">
-              <Link
-                href={`/shop?category=${encodeURIComponent(cat.slug)}`}
-                onClick={onNavigate}
-                className="text-xs font-semibold"
-                style={{ color: BRAND.blue }}
-              >
-                View all {cat.productCount} &rarr;
-              </Link>
-            </div>
-          )}
-        </div>
-      )}
-    </li>
   );
 }
 
@@ -206,7 +134,6 @@ export function SiteNav({
   const [portalMounted, setPortalMounted] = useState(false);
   const [shopOpen, setShopOpen] = useState(false);
   const [mobileShopOpen, setMobileShopOpen] = useState(false);
-  const [openMobileCategoryId, setOpenMobileCategoryId] = useState<string | null>(null);
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -236,7 +163,6 @@ export function SiteNav({
     setOpen(false);
     setShopOpen(false);
     setMobileShopOpen(false);
-    setOpenMobileCategoryId(null);
     setSearchVisible(false);
     setSearchQuery("");
   }, [pathname]);
@@ -499,13 +425,24 @@ export function SiteNav({
               </button>
 
               {mobileShopOpen && (
-                <ul className="flex flex-col pl-4 pb-2">
+                <ul className="grid grid-cols-2 gap-2 pb-4">
+                  <li className="col-span-2">
+                    <Link
+                      href="/shop"
+                      onClick={() => setOpen(false)}
+                      className="flex min-h-[48px] items-center justify-between rounded-xl px-4 text-sm font-bold active:opacity-80"
+                      style={{ backgroundColor: BRAND.ink, color: "#FFFFFF" }}
+                    >
+                      Shop all
+                      <ChevronRight className="h-4 w-4" aria-hidden />
+                    </Link>
+                  </li>
                   {showChristmas && (
-                    <li className="border-b border-zinc-100">
+                    <li>
                       <Link
                         href="/christmas"
                         onClick={() => setOpen(false)}
-                        className="flex items-center py-4 min-h-[48px] font-bold"
+                        className="flex h-full min-h-[48px] items-center rounded-xl border border-zinc-200 px-3 py-2 text-sm font-bold leading-snug active:bg-zinc-50"
                         style={{ color: "#E0242B" }}
                       >
                         Christmas
@@ -513,15 +450,16 @@ export function SiteNav({
                     </li>
                   )}
                   {activeCategories.map((cat) => (
-                    <MobileCategoryAccordion
-                      key={cat.id}
-                      cat={cat}
-                      isExpanded={openMobileCategoryId === cat.id}
-                      onToggle={() =>
-                        setOpenMobileCategoryId((prev) => (prev === cat.id ? null : cat.id))
-                      }
-                      onNavigate={() => setOpen(false)}
-                    />
+                    <li key={cat.id}>
+                      <Link
+                        href={`/shop?category=${encodeURIComponent(cat.slug)}`}
+                        onClick={() => setOpen(false)}
+                        className="flex h-full min-h-[48px] items-center rounded-xl border border-zinc-200 px-3 py-2 text-sm font-semibold leading-snug active:bg-zinc-50"
+                        style={{ color: BRAND.ink }}
+                      >
+                        {cat.name}
+                      </Link>
+                    </li>
                   ))}
                 </ul>
               )}
