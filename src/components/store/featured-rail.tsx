@@ -12,7 +12,15 @@ import { getWishlistedProductIds } from "@/actions/wishlist";
  * Phase 6 06-04 — server-side batch fetch of wishlist state for the
  * visible products so heart overlays render with correct initial state.
  */
-export async function FeaturedRail({ products }: { products: CatalogProduct[] }) {
+export async function FeaturedRail({
+  products,
+  title = "FEATURED DROPS",
+  subtitle = "Fresh off the printer. Limited runs, ninja fast delivery.",
+}: {
+  products: CatalogProduct[];
+  title?: string;
+  subtitle?: string;
+}) {
   if (!products.length) return null;
   const wishedIds = await getWishlistedProductIds(products.map((p) => p.id));
   return (
@@ -30,10 +38,10 @@ export async function FeaturedRail({ products }: { products: CatalogProduct[] })
           <h2
             className="font-[var(--font-heading)] text-4xl md:text-6xl text-center mb-3 text-zinc-900"
           >
-            FEATURED DROPS
+            {title}
           </h2>
           <p className="text-center text-lg text-zinc-600">
-            Fresh off the printer. Limited runs, ninja fast delivery.
+            {subtitle}
           </p>
         </div>
         {/* 320px phones (iPhone SE landscape, older Androids) can't fit
