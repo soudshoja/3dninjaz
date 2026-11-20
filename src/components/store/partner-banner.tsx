@@ -53,6 +53,13 @@ const PARTNERS: readonly Partner[] = [
     h: 28,
     kind: "image",
   },
+  {
+    name: "Dunkin'",
+    src: "/partners/dunkin.png",
+    w: 88,
+    h: 17,
+    kind: "image",
+  },
 ];
 
 /** Sets per half of the track. 12 sets is wider than any screen, so the
@@ -126,7 +133,7 @@ export function PartnerBanner() {
       <div aria-hidden className="min-w-0 flex-1 overflow-hidden">
         <div
           className="flex w-max animate-marquee"
-          style={{ animationDuration: "108s" }}
+          style={{ animationDuration: "150s" }}
         >
           <Half />
           <Half />
