@@ -369,22 +369,6 @@ export async function getActiveFeaturedProducts(
   return hydrateProducts(rows);
 }
 
-/**
- * Newest active products, capped. Home page fallback for when no product is
- * flagged featured, so the home page never renders without products.
- */
-export async function getNewestActiveProducts(
-  limit = 8
-): Promise<CatalogProduct[]> {
-  const rows = await db
-    .select()
-    .from(products)
-    .where(eq(products.isActive, true))
-    .orderBy(desc(products.createdAt))
-    .limit(limit);
-  return hydrateProducts(rows);
-}
-
 export async function getActiveProductBySlug(
   slug: string
 ): Promise<CatalogProduct | null> {
