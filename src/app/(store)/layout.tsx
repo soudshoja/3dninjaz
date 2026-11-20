@@ -6,6 +6,8 @@ import { BRAND } from "@/lib/brand";
 import { getActiveCategoryTree } from "@/lib/catalog";
 import { FontFaceLoader } from "@/components/store/font-face-loader";
 import { isChristmasSeason } from "@/lib/seasonal";
+import { HomeOnly } from "@/components/store/home-only";
+import { PartnerBanner } from "@/components/store/partner-banner";
 
 /**
  * Customer-facing route-group layout. Lightened (2026-04-20): mostly-white
@@ -34,6 +36,10 @@ export default async function StoreLayout({ children }: { children: ReactNode })
       className="min-h-screen flex flex-col"
     >
       <FontFaceLoader />
+      {/* "Worked with" logo strip: home page only. */}
+      <HomeOnly>
+        <PartnerBanner />
+      </HomeOnly>
       <SiteNav categoryTree={categoryTree} showChristmas={isChristmasSeason()} />
       {/* overflow-x: clip (NOT hidden) — clips horizontal overflow without
           creating a scroll container, so storefront `position: sticky`
