@@ -8,6 +8,8 @@ import { FontFaceLoader } from "@/components/store/font-face-loader";
 import { isChristmasSeason } from "@/lib/seasonal";
 import { HomeOnly } from "@/components/store/home-only";
 import { PartnerBanner } from "@/components/store/partner-banner";
+import { BlackFridayStrip } from "@/components/store/black-friday-strip";
+import { isBlackFridayOn } from "@/lib/black-friday";
 
 /**
  * Customer-facing route-group layout. Lightened (2026-04-20): mostly-white
@@ -36,6 +38,8 @@ export default async function StoreLayout({ children }: { children: ReactNode })
       className="min-h-screen flex flex-col"
     >
       <FontFaceLoader />
+      {/* Black Friday strip (home + shop). Renders nothing once the sale ends. */}
+      {isBlackFridayOn() ? <BlackFridayStrip /> : null}
       {/* "Worked with" logo strip: home page only. */}
       <HomeOnly>
         <PartnerBanner />
