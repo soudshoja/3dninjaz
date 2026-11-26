@@ -62,7 +62,7 @@ export function BlackFridayStrip() {
           BLACK FRIDAY
         </span>{" "}
         15% off everything
-        <span className="hidden md:inline">, Fri 8:00pm to Sat midnight</span>
+        <span className="hidden md:inline">, {BLACK_FRIDAY.when}</span>
       </p>
       <button
         type="button"

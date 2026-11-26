@@ -7,10 +7,14 @@
  */
 export const BLACK_FRIDAY = {
   code: "BLACKFRIDAY",
-  /** Fri 27 Nov 2026, 8:00pm Malaysia time */
-  startsAt: Date.parse("2026-11-27T20:00:00+08:00"),
-  /** Saturday midnight = end of Sat 28 Nov 2026, Malaysia time */
-  endsAt: Date.parse("2026-11-29T00:00:00+08:00"),
+  // Same window as the BLACKFRIDAY coupon in Admin > Coupons (stored in UTC
+  // as 2026-11-26 12:00 to 2026-11-27 16:00). Keep the two in step.
+  /** Thu 26 Nov 2026, 8:00pm Malaysia time */
+  startsAt: Date.parse("2026-11-26T20:00:00+08:00"),
+  /** Sat 28 Nov 2026, 12:00am Malaysia time (midnight after Friday) */
+  endsAt: Date.parse("2026-11-28T00:00:00+08:00"),
+  /** Shown next to the offer on wider screens. */
+  when: "Thu 8:00pm till Sat 12:00am",
 } as const;
 
 /** True until the sale has ended (covers the teaser period and the sale). */
