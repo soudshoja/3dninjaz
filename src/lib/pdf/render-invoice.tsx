@@ -138,6 +138,7 @@ export async function renderInvoicePdfBuffer(
       shippingCountry: order.shippingCountry,
       subtotal: order.subtotal,
       shippingCost: order.shippingCost,
+      shippingServiceName: order.shippingServiceName ?? null,
       totalAmount: order.totalAmount,
       amountPaid: order.amountPaid ?? "0.00",
       discountAmount: order.discountAmount ?? null,
