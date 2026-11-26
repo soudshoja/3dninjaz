@@ -2,6 +2,8 @@ import Link from "next/link";
 import { BRAND } from "@/lib/brand";
 import { Logo } from "@/components/brand/logo";
 import { Shuriken } from "@/components/brand/shuriken";
+import { SaleTagline } from "@/components/store/sale-tagline";
+import { isBlackFridayOn } from "@/lib/black-friday";
 
 /**
  * Homepage hero — lightened (2026-04-20). White background with dark text,
@@ -39,7 +41,9 @@ export function Hero() {
           className="inline-block rounded-full px-4 py-1 text-xs md:text-sm font-bold mb-8"
           style={{ backgroundColor: BRAND.green, color: BRAND.ink }}
         >
-          Kids by day, 3D printing Ninjas by Night
+          <SaleTagline saleOn={isBlackFridayOn()}>
+            Kids by day, 3D printing Ninjas by Night
+          </SaleTagline>
         </p>
         <div className="flex justify-center mb-6">
           {/* Responsive logo: 200px on phones, 280px on sm+, 320px on md+ */}
