@@ -804,9 +804,18 @@ export function ProductsCostTable({
                           />
                         </label>
                       )}
-                      <div className="min-w-0 flex-1">
-                        <p className="break-words text-base font-medium leading-snug">{p.name}</p>
-                        <p
+                      {/* Tapping the name opens the product editor. Without this
+                          link the phone list had no way in: Edit lived only in
+                          the desktop table's actions menu. */}
+                      <Link
+                        href={`/admin/products/${p.id}/edit`}
+                        aria-label={`Edit ${p.name}`}
+                        className="flex min-h-[44px] min-w-0 flex-1 flex-col justify-center rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-brand-blue)]"
+                      >
+                        <span className="break-words text-base font-medium leading-snug text-[var(--color-brand-blue)]">
+                          {p.name}
+                        </span>
+                        <span
                           className={
                             "text-sm tabular-nums " +
                             (bad ? "font-medium text-red-700" : "text-[var(--color-brand-text-muted)]")
@@ -818,8 +827,8 @@ export function ProductsCostTable({
                               ? " · Cost is at or above the price"
                               : ` · Margin ${formatPct(margin.pct)}`
                             : ""}
-                        </p>
-                      </div>
+                        </span>
+                      </Link>
                       <InlineCostInput
                         productId={p.id}
                         value={p.cost}
@@ -828,6 +837,15 @@ export function ProductsCostTable({
                         onSaved={(c) => onSaved(p.id, c)}
                         onEnter={focusNext}
                       />
+                      {!selectMode && (
+                        <ProductRowActions
+                          id={p.id}
+                          name={p.name}
+                          isActive={p.isActive}
+                          isFeatured={p.isFeatured}
+                          large
+                        />
+                      )}
                     </div>
                     {p.options.length > 0 && (
                       <ul className="divide-y divide-[var(--color-brand-border)] border-t border-[var(--color-brand-border)] bg-gray-50">
