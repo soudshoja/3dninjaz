@@ -306,6 +306,9 @@ export function PosBuilder() {
   const [shippingOverride, setShippingOverride] = useState<string>("");
   const [editingShipping, setEditingShipping] = useState(false);
   const [shippingCourier, setShippingCourier] = useState<{ serviceCode: string; serviceName: string } | null>(null);
+  // Hand delivery: admin gives the order to the customer in person. No
+  // courier and no shipping charge.
+  const [handDelivery, setHandDelivery] = useState(false);
 
   // ── Product grid / search ──────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState("");
@@ -447,7 +450,7 @@ export function PosBuilder() {
     return sum + getLineUnitPrice(line) * line.quantity;
   }, 0);
 
-  const shippingCost = shippingOverride !== "" ? parseFloat(shippingOverride) || 0 : 0;
+  const shippingCost = handDelivery ? 0 : shippingOverride !== "" ? parseFloat(shippingOverride) || 0 : 0;
   const total = subtotal + shippingCost;
 
   // ── Cart items for shipping quote ──────────────────────────────────────────
@@ -485,6 +488,15 @@ export function PosBuilder() {
   ) {
     setShippingOverride(price === 0 ? "0" : price.toFixed(2));
     setShippingCourier(courier);
+  }
+
+  function handleHandDeliveryChange(on: boolean) {
+    setHandDelivery(on);
+    if (on) {
+      setShippingOverride("0");
+      setShippingCourier(null);
+      setEditingShipping(false);
+    }
   }
 
   // ── Create order → customer step → submit ─────────────────────────────────
@@ -534,9 +546,14 @@ export function PosBuilder() {
           postcode: customerForm.postcode,
           country: "Malaysia",
         },
+        // A typed 0 is a real override (free shipping), so keep it. Only an
+        // empty or non-numeric box falls back to the live quote.
         shippingOverride:
-          shippingOverride !== "" ? parseFloat(shippingOverride) || undefined : undefined,
-        shippingCourier: shippingCourier ?? null,
+          shippingOverride !== "" && Number.isFinite(parseFloat(shippingOverride))
+            ? parseFloat(shippingOverride)
+            : undefined,
+        shippingCourier: handDelivery ? null : shippingCourier ?? null,
+        handDelivery,
       });
 
       if (!result.ok) {
@@ -775,7 +792,11 @@ export function PosBuilder() {
             <div className="flex items-center justify-between text-[14px] text-slate-500 tabular-nums">
               <span>Shipping</span>
               <div className="flex items-center gap-1.5">
-                {editingShipping ? (
+                {handDelivery ? (
+                  <span className="font-semibold" style={{ color: BRAND.ink }}>
+                    Hand delivery
+                  </span>
+                ) : editingShipping ? (
                   <input
                     type="number"
                     min="0"
@@ -911,6 +932,8 @@ export function PosBuilder() {
                 onChange={setCustomerForm}
                 items={quoteItems}
                 onShippingChange={handleShippingFromCustomerStep}
+                handDelivery={handDelivery}
+                onHandDeliveryChange={handleHandDeliveryChange}
               />
               {submitError && (
                 <div
