@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { isBlackFridayOn } from "@/lib/black-friday";
+import { BLACK_FRIDAY, isBlackFridayOn } from "@/lib/black-friday";
 
 /**
  * Hero pill text. Shows the sale line while Black Friday is on and the usual
@@ -17,7 +17,7 @@ export function SaleTagline({ saleOn, children }: { saleOn: boolean; children: s
   return (
     <>
       Black Friday: 15% off everything
-      <span className="hidden sm:inline">, Fri 8:00pm to Sat midnight</span>
+      <span className="hidden sm:inline">, {BLACK_FRIDAY.when}</span>
     </>
   );
 }
