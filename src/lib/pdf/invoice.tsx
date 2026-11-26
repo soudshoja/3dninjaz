@@ -9,6 +9,7 @@ import { BRAND } from "@/lib/brand";
 import { formatMYR } from "@/lib/format";
 import { formatOrderNumber, isManualLine } from "@/lib/orders";
 import { ensureOrderItemConfigData } from "@/lib/config-fields";
+import { HAND_DELIVERY_NAME, isHandDelivery } from "@/lib/hand-delivery";
 
 /**
  * Phase 6 06-06 — invoice PDF document.
@@ -120,6 +121,8 @@ export type InvoiceOrder = {
   shippingCountry: string;
   subtotal: string;
   shippingCost: string;
+  /** Courier service name, or "Hand delivery" when the admin hands it over. */
+  shippingServiceName?: string | null;
   totalAmount: string;
   /** Amount paid so far — drives the "Balance Due" line when < totalAmount. */
   amountPaid?: string | null;
@@ -240,7 +243,11 @@ export function InvoiceDocument({
           </View>
           <View style={styles.row}>
             <Text style={styles.label}>Shipping</Text>
-            <Text>{formatMYR(order.shippingCost)}</Text>
+            <Text>
+              {isHandDelivery(order.shippingServiceName)
+                ? HAND_DELIVERY_NAME
+                : formatMYR(order.shippingCost)}
+            </Text>
           </View>
           <View style={styles.totalRow}>
             <Text>{isPaid ? "Total Paid" : "Total Amount Due"}</Text>
