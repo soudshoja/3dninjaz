@@ -32,11 +32,14 @@ export function ProductRowActions({
   name,
   isActive,
   isFeatured,
+  large = false,
 }: {
   id: string;
   name: string;
   isActive: boolean;
   isFeatured: boolean;
+  /** 44px touch target for the phone list. */
+  large?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -91,8 +94,9 @@ export function ProductRowActions({
               size="icon"
               aria-label={`Actions for ${name}`}
               disabled={pending}
+              className={large ? "h-11 w-11 shrink-0" : undefined}
             >
-              <MoreHorizontal className="h-4 w-4" />
+              <MoreHorizontal className={large ? "h-5 w-5" : "h-4 w-4"} />
             </Button>
           }
         />
