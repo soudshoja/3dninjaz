@@ -11,6 +11,7 @@ import {
 import { formatMYR } from "@/lib/format";
 import { formatOrderNumber, isManualLine } from "@/lib/orders";
 import { ensureOrderItemConfigData } from "@/lib/config-fields";
+import { HAND_DELIVERY_NAME, isHandDelivery } from "@/lib/hand-delivery";
 import type { InvoiceOrder } from "./invoice";
 
 /**
@@ -505,7 +506,9 @@ export function NinjazInvoiceDocument({
   const hasBreakdown =
     Number.isFinite(rawSubtotal) && Number.isFinite(rawShipping);
   const shippingFormatted =
-    hasBreakdown && rawShipping === 0
+    hasBreakdown && isHandDelivery(order.shippingServiceName)
+      ? HAND_DELIVERY_NAME
+      : hasBreakdown && rawShipping === 0
       ? "FREE"
       : hasBreakdown
         ? formatMYR(rawShipping)

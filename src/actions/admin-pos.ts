@@ -17,6 +17,7 @@ import { revalidatePath } from "next/cache";
 import { formatOrderNumber } from "@/lib/orders";
 import { assertValidTransition } from "@/lib/orders";
 import { autoQuoteShipping } from "@/lib/shipping-auto";
+import { HAND_DELIVERY_NAME } from "@/lib/hand-delivery";
 import { applyCouponToSubtotal, type CouponSnapshot } from "@/lib/pricing";
 import { redeemCoupon } from "@/actions/coupons";
 import { pickImage } from "@/lib/image-manifest";
@@ -119,6 +120,8 @@ export type PosOrderInput = {
   shippingOverride?: number;
   couponCode?: string;
   shippingCourier?: { serviceCode: string; serviceName: string } | null;
+  /** Admin hands the order over in person: no courier, no shipping charge. */
+  handDelivery?: boolean;
 };
 
 export type CreatePosOrderResult =
@@ -558,7 +561,7 @@ export async function createPosOrder(
 ): Promise<CreatePosOrderResult> {
   const session = await requireAdmin();
 
-  const { lines, customer, shippingOverride, couponCode, shippingCourier } = input;
+  const { lines, customer, shippingOverride, couponCode, shippingCourier, handDelivery } = input;
 
   if (!lines || lines.length === 0) {
     return { ok: false, error: "At least one line is required." };
@@ -988,7 +991,12 @@ export async function createPosOrder(
   let quotedServiceCode = shippingCourier?.serviceCode ?? null;
   let quotedServiceName = shippingCourier?.serviceName ?? null;
 
-  if (typeof shippingOverride === "number") {
+  if (handDelivery) {
+    // Hand delivery: nothing to quote, nothing to book.
+    shippingCost = 0;
+    quotedServiceCode = null;
+    quotedServiceName = HAND_DELIVERY_NAME;
+  } else if (typeof shippingOverride === "number") {
     shippingCost = shippingOverride;
   } else {
     const auto = await autoQuoteShipping(

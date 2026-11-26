@@ -56,6 +56,9 @@ type Props = {
     price: number,
     courier: { serviceCode: string; serviceName: string } | null,
   ) => void;
+  /** Admin hands the order over in person: no courier, no shipping charge. */
+  handDelivery: boolean;
+  onHandDeliveryChange: (on: boolean) => void;
 };
 
 export type PosCustomerStepHandle = {
@@ -65,7 +68,7 @@ export type PosCustomerStepHandle = {
 type Tab = "returning" | "new";
 
 export const PosCustomerStep = forwardRef<PosCustomerStepHandle, Props>(function PosCustomerStep(
-  { customerForm, onChange, items, onShippingChange }: Props,
+  { customerForm, onChange, items, onShippingChange, handDelivery, onHandDeliveryChange }: Props,
   ref,
 ) {
   const [tab, setTab] = useState<Tab>("returning");
@@ -127,7 +130,9 @@ export const PosCustomerStep = forwardRef<PosCustomerStepHandle, Props>(function
     const state = customerForm.state;
     const addressValid = /^\d{5}$/.test(postcode) && !!state;
 
-    if (!addressValid || items.length === 0) {
+    // Hand delivery needs no courier quote. Clearing the quote key makes the
+    // rates load again if the admin switches back to a courier.
+    if (handDelivery || !addressValid || items.length === 0) {
       if (shippingDebounceRef.current) clearTimeout(shippingDebounceRef.current);
       setShippingOptions([]);
       setSelectedServiceCode(null);
@@ -193,9 +198,10 @@ export const PosCustomerStep = forwardRef<PosCustomerStepHandle, Props>(function
       if (shippingDebounceRef.current) clearTimeout(shippingDebounceRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customerForm.postcode, customerForm.state, customerForm.addressLine1, items]);
+  }, [customerForm.postcode, customerForm.state, customerForm.addressLine1, items, handDelivery]);
 
   function handleSelectShippingOption(opt: QuoteOption) {
+    if (handDelivery) onHandDeliveryChange(false);
     setSelectedServiceCode(opt.serviceCode);
     onShippingChange(opt.finalPrice, {
       serviceCode: opt.serviceCode,
@@ -543,8 +549,35 @@ export const PosCustomerStep = forwardRef<PosCustomerStepHandle, Props>(function
         </div>
       ) : null}
 
+      {/* ── Hand delivery (admin only: POS is an admin screen) ── */}
+      <label
+        className="flex items-center gap-3 rounded-[4px] border-2 px-3 py-3 cursor-pointer transition-colors duration-150 min-h-[52px]"
+        style={{
+          borderColor: handDelivery ? "#0080ff" : "#e2e8f0",
+          backgroundColor: handDelivery ? "#0080ff0d" : "#ffffff",
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={handDelivery}
+          onChange={(e) => onHandDeliveryChange(e.target.checked)}
+          className="h-4 w-4 shrink-0"
+        />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold leading-tight" style={{ color: BRAND.ink }}>
+            Hand delivery
+          </p>
+          <p className="text-xs text-slate-500">
+            I will hand this order over myself. No courier, no shipping charge.
+          </p>
+        </div>
+        <span className="text-sm font-bold tabular-nums shrink-0" style={{ color: BRAND.ink }}>
+          {formatMYR(0)}
+        </span>
+      </label>
+
       {/* ── Shipping rate picker ── */}
-      {/^\d{5}$/.test(customerForm.postcode.trim()) && customerForm.state ? (
+      {!handDelivery && /^\d{5}$/.test(customerForm.postcode.trim()) && customerForm.state ? (
         <div
           className="rounded-[4px] border-2 border-slate-200 p-4 space-y-3"
           aria-label="Shipping options"
